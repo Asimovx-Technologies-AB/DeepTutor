@@ -27,28 +27,28 @@ export default function ChatMessage({ role, content, isStreaming, sources }: Pro
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className={`flex gap-3 group ${isAssistant ? '' : 'flex-row-reverse'}`}
+      className={`flex gap-4 group ${isAssistant ? '' : 'flex-row-reverse'}`}
     >
       {/* Avatar */}
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-1 ${
+      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 mt-1 shadow-md ${
         isAssistant
-          ? 'bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg animate-pulse-glow'
-          : 'bg-gradient-to-br from-slate-600 to-slate-700'
+          ? 'bg-gradient-to-br from-indigo-500 to-violet-600 shadow-indigo-500/20 animate-pulse-glow'
+          : 'bg-gradient-to-br from-slate-700 to-slate-800'
       }`}>
         {isAssistant ? (
-          <Bot size={14} className="text-white" />
+          <Bot size={18} className="text-white" />
         ) : (
-          <User size={14} className="text-white" />
+          <User size={18} className="text-white" />
         )}
       </div>
 
       {/* Content column */}
-      <div className={`max-w-[78%] relative ${isAssistant ? '' : 'items-end'}`}>
+      <div className={`max-w-[85%] relative ${isAssistant ? '' : 'items-end'}`}>
         {/* Message bubble */}
-        <div className={`rounded-2xl px-4 py-3 ${
+        <div className={`rounded-3xl px-5 py-4 shadow-sm ${
           isAssistant
-            ? 'glass border border-[rgba(99,102,241,0.15)] rounded-tl-sm'
-            : 'bg-gradient-to-br from-indigo-600 to-violet-600 rounded-tr-sm shadow-lg'
+            ? 'glass border border-[rgba(99,102,241,0.18)] rounded-tl-sm'
+            : 'bg-gradient-to-br from-indigo-600 to-violet-600 rounded-tr-sm shadow-lg text-white'
         }`}>
           {isAssistant ? (
             <div className="markdown-content">
@@ -56,7 +56,7 @@ export default function ChatMessage({ role, content, isStreaming, sources }: Pro
                 {content}
               </ReactMarkdown>
               {isStreaming && (
-                <span className="inline-flex gap-1 ml-1 align-middle">
+                <span className="inline-flex gap-1.5 ml-1.5 align-middle">
                   <span className="typing-dot" />
                   <span className="typing-dot" />
                   <span className="typing-dot" />
@@ -64,7 +64,7 @@ export default function ChatMessage({ role, content, isStreaming, sources }: Pro
               )}
             </div>
           ) : (
-            <p className="text-white text-sm leading-relaxed">{content}</p>
+            <p className="text-white text-base font-medium leading-relaxed">{content}</p>
           )}
         </div>
 
@@ -77,9 +77,9 @@ export default function ChatMessage({ role, content, isStreaming, sources }: Pro
         {isAssistant && content && !isStreaming && (
           <button
             onClick={handleCopy}
-            className="absolute -bottom-5 left-1 opacity-0 group-hover:opacity-100 transition-opacity text-slate-600 hover:text-slate-400 flex items-center gap-1 text-[10px]"
+            className="absolute -bottom-6 left-2 opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 hover:text-indigo-600 flex items-center gap-1.5 text-xs font-semibold bg-white/80 backdrop-blur-sm px-2 py-0.5 rounded-lg border border-slate-200/60 shadow-sm"
           >
-            {copied ? <><Check size={10} className="text-emerald-400" /> Copied</> : <><Copy size={10} /> Copy</>}
+            {copied ? <><Check size={12} className="text-emerald-500" /> Copied</> : <><Copy size={12} /> Copy</>}
           </button>
         )}
       </div>

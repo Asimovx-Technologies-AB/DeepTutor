@@ -36,7 +36,7 @@ interface StudyPlan {
   user_id: string
   topic_id: string
   title: string
-  target_date: str
+  target_date: string
   total_days: number
   hours_per_day: number
   schedule: ScheduleDay[]

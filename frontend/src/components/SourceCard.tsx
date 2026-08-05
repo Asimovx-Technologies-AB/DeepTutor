@@ -38,12 +38,12 @@ export default function SourceCard({ sources }: Props) {
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="mt-3 space-y-1.5"
+      className="mt-4 space-y-2"
     >
       {/* Header */}
-      <div className="flex items-center gap-1.5">
-        <FileText size={11} className="text-indigo-400" />
-        <span className="text-[11px] font-semibold text-indigo-400 uppercase tracking-wider">
+      <div className="flex items-center gap-2">
+        <FileText size={15} className="text-indigo-600" />
+        <span className="text-xs font-extrabold text-indigo-600 uppercase tracking-wider">
           Sources ({sources.length})
         </span>
       </div>
@@ -52,25 +52,25 @@ export default function SourceCard({ sources }: Props) {
       {displayed.map((src, i) => (
         <div
           key={i}
-          className="rounded-xl border border-[rgba(99,102,241,0.12)] bg-[rgba(15,15,26,0.6)] overflow-hidden"
+          className="rounded-2xl border border-indigo-100 bg-white/90 shadow-sm overflow-hidden transition-all hover:border-indigo-200"
         >
           {/* Source header */}
           <button
             onClick={() => setExpanded(expanded === i ? null : i)}
-            className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/3 transition-colors"
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-indigo-50/40 transition-colors"
           >
-            <div className="w-6 h-6 rounded-lg bg-indigo-500/15 flex items-center justify-center flex-shrink-0">
-              <FileText size={11} className="text-indigo-400" />
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
+              <FileText size={15} className="text-indigo-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-semibold text-slate-300 truncate">{src.doc}</p>
-              <p className="text-[10px] text-slate-600">Page {src.page}</p>
+              <p className="text-xs font-bold text-slate-800 truncate">{src.doc}</p>
+              <p className="text-[11px] font-medium text-slate-500">Page {src.page}</p>
             </div>
             <ScoreBadge score={src.score} />
             {expanded === i ? (
-              <ChevronUp size={12} className="text-slate-500 flex-shrink-0" />
+              <ChevronUp size={15} className="text-slate-400 flex-shrink-0" />
             ) : (
-              <ChevronDown size={12} className="text-slate-500 flex-shrink-0" />
+              <ChevronDown size={15} className="text-slate-400 flex-shrink-0" />
             )}
           </button>
 
@@ -84,9 +84,9 @@ export default function SourceCard({ sources }: Props) {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="px-3 pb-3 pt-0">
-                  <div className="bg-[rgba(99,102,241,0.05)] border border-[rgba(99,102,241,0.1)] rounded-lg p-2.5">
-                    <p className="text-[11px] text-slate-400 leading-relaxed">{src.text}</p>
+                <div className="px-3.5 pb-3.5 pt-0">
+                  <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-3">
+                    <p className="text-xs text-slate-700 leading-relaxed font-medium">{src.text}</p>
                   </div>
                 </div>
               </motion.div>
@@ -99,9 +99,9 @@ export default function SourceCard({ sources }: Props) {
       {sources.length > 3 && (
         <button
           onClick={() => setShowAll(!showAll)}
-          className="text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 px-1"
+          className="text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors flex items-center gap-1.5 px-1 py-1"
         >
-          {showAll ? <><ChevronUp size={11} /> Show less</> : <><ChevronDown size={11} /> {sources.length - 3} more source(s)</>}
+          {showAll ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> {sources.length - 3} more source(s)</>}
         </button>
       )}
     </motion.div>

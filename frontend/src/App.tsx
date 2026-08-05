@@ -5,6 +5,8 @@ import { useAuthStore } from './stores/authStore'
 import { useChatStore } from './stores/chatStore'
 import { chatApi } from './services/api'
 import Layout from './components/Layout'
+import MouseSpotlight from './components/MouseSpotlight'
+import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
@@ -76,15 +78,22 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        {/* Global Mouse Tracking Hover Animation across ALL pages */}
+        <MouseSpotlight />
+
         <GlobalSessionLoader />
         <Routes>
-          {/* Public */}
+          {/* Public Hero Landing Page */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/hero" element={<LandingPage />} />
+
+          {/* Auth */}
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
 
-          {/* Protected */}
-          <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
+          {/* Protected Application Routes */}
+          <Route path="/app" element={<PrivateRoute><Layout /></PrivateRoute>}>
+            <Route index element={<Navigate to="/app/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="study-plan" element={<StudyPlanPage />} />
             <Route path="chat/:sessionId?" element={<ChatPage />} />
@@ -94,7 +103,21 @@ export default function App() {
             <Route path="progress" element={<ProgressPage />} />
           </Route>
 
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          {/* Root-level redirects for convenience */}
+          <Route path="/dashboard" element={<PrivateRoute><Layout /></PrivateRoute>}>
+            <Route index element={<DashboardPage />} />
+          </Route>
+          <Route path="/study-plan" element={<PrivateRoute><Layout /></PrivateRoute>}>
+            <Route index element={<StudyPlanPage />} />
+          </Route>
+          <Route path="/chat/:sessionId?" element={<PrivateRoute><Layout /></PrivateRoute>}>
+            <Route index element={<ChatPage />} />
+          </Route>
+          <Route path="/progress" element={<PrivateRoute><Layout /></PrivateRoute>}>
+            <Route index element={<ProgressPage />} />
+          </Route>
+
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

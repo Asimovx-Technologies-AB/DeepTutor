@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Send, Paperclip, Plus, MessageSquare,
   Bot, Sparkles, BookOpen, Brain, X, Network,
-  CheckCircle, AlertCircle, Loader2, FileText, Trophy
+  CheckCircle, AlertCircle, Loader2, FileText, Trophy, Trash2
 } from 'lucide-react'
 import { useChatStore } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
@@ -96,9 +96,28 @@ export default function ChatPage() {
 
   const {
     sessions, activeSession, messages, isStreaming, streamingContent,
-    setSessions, setActiveSession, setMessages, addMessage,
+    setSessions, setActiveSession, setMessages, addMessage, removeSession,
     setStreaming, appendStreamToken, clearStreamingContent, commitStreamedMessage,
   } = useChatStore()
+
+  const handleDeleteSession = async (e: React.MouseEvent, sId: string) => {
+    e.stopPropagation()
+    if (!confirm('Are you sure you want to delete this chat session?')) return
+    try {
+      await chatApi.deleteSession(sId)
+      removeSession(sId)
+      if (activeSession?.id === sId) {
+        const remaining = sessions.filter((s) => s.id !== sId)
+        if (remaining.length > 0) {
+          navigate(`/chat/${remaining[0].id}`)
+        } else {
+          navigate('/chat')
+        }
+      }
+    } catch (err) {
+      console.error('Failed to delete session:', err)
+    }
+  }
 
   const [input, setInput] = useState('')
   const [newSessionTitle, setNewSessionTitle] = useState('')
@@ -323,11 +342,11 @@ export default function ChatPage() {
   return (
     <div className="flex h-full overflow-hidden">
       {/* Sessions sidebar */}
-      <aside className="w-56 flex-shrink-0 glass border-r border-[rgba(99,102,241,0.12)] flex flex-col overflow-hidden">
-        <div className="p-3 border-b border-[rgba(99,102,241,0.12)]">
+      <aside className="w-64 flex-shrink-0 glass border-r border-[rgba(99,102,241,0.12)] flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-[rgba(99,102,241,0.12)]">
           <button onClick={() => setShowNewSession(true)}
-            className="btn-primary w-full flex items-center justify-center gap-2 text-xs py-2">
-            <Plus size={14} /> New Chat
+            className="btn-primary w-full flex items-center justify-center gap-2 text-sm font-bold py-2.5 shadow-md hover:scale-[1.02]">
+            <Plus size={16} /> New Chat
           </button>
         </div>
 
@@ -338,11 +357,11 @@ export default function ChatPage() {
               <div className="p-3 border-b border-[rgba(99,102,241,0.12)] space-y-2">
                 <input type="text" value={newSessionTitle} onChange={(e) => setNewSessionTitle(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && createNewSession()}
-                  className="input-base text-xs py-2" placeholder="Session title..." autoFocus />
+                  className="input-base text-sm py-2.5" placeholder="Session title..." autoFocus />
                 <div className="flex gap-2">
-                  <button onClick={createNewSession} className="btn-primary flex-1 py-1.5 text-xs">Create</button>
-                  <button onClick={() => setShowNewSession(false)} className="btn-ghost py-1.5 text-xs px-2">
-                    <X size={13} />
+                  <button onClick={createNewSession} className="btn-primary flex-1 py-2 text-xs font-bold">Create</button>
+                  <button onClick={() => setShowNewSession(false)} className="btn-ghost py-2 text-xs px-3">
+                    <X size={15} />
                   </button>
                 </div>
               </div>
@@ -350,21 +369,32 @@ export default function ChatPage() {
           )}
         </AnimatePresence>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          <p className="text-[10px] font-semibold text-slate-600 uppercase tracking-widest px-2 py-1">Recent Chats</p>
-          {sessions.length === 0 && <p className="text-xs text-slate-600 px-2 py-3">No sessions yet</p>}
+        <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+          <p className="text-xs font-extrabold text-slate-500 uppercase tracking-widest px-2 py-1">Recent Chats</p>
+          {sessions.length === 0 && <p className="text-xs font-semibold text-slate-500 px-2 py-3">No sessions yet</p>}
           {sessions.map((session) => (
-            <button key={session.id} onClick={() => navigate(`/chat/${session.id}`)}
-              className={`w-full text-left p-2.5 rounded-xl text-xs transition-all ${
+            <div
+              key={session.id}
+              onClick={() => navigate(`/chat/${session.id}`)}
+              className={`group w-full flex items-center justify-between p-3 rounded-2xl text-sm transition-all cursor-pointer ${
                 activeSession?.id === session.id
-                  ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/20'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-300'
-              }`}>
-              <div className="flex items-center gap-2">
-                <MessageSquare size={12} className="flex-shrink-0" />
-                <span className="truncate font-medium">{session.session_title}</span>
+                  ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/20'
+                  : 'text-slate-700 hover:bg-indigo-50/80 hover:text-indigo-600 font-semibold'
+              }`}
+            >
+              <div className="flex items-center gap-2.5 min-w-0 pr-1">
+                <MessageSquare size={16} className="flex-shrink-0" />
+                <span className="truncate">{session.session_title}</span>
               </div>
-            </button>
+
+              <button
+                onClick={(e) => handleDeleteSession(e, session.id)}
+                className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all flex-shrink-0"
+                title="Delete session"
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
           ))}
         </div>
       </aside>
@@ -372,15 +402,15 @@ export default function ChatPage() {
       {/* Main chat area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Chat header */}
-        <div className="flex-shrink-0 px-5 py-3 glass border-b border-[rgba(99,102,241,0.12)] flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center animate-pulse-glow">
-            <Bot size={15} className="text-white" />
+        <div className="flex-shrink-0 px-6 py-3.5 glass border-b border-[rgba(99,102,241,0.12)] flex items-center gap-4">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center animate-pulse-glow shadow-md">
+            <Bot size={18} className="text-white" />
           </div>
           <div className="flex-1">
-            <p className="font-semibold text-slate-200 text-sm">{activeSession?.session_title ?? 'AI Tutor'}</p>
-            <div className="flex items-center gap-2">
-              <div className={`w-1.5 h-1.5 rounded-full ${isStreaming ? 'bg-indigo-400 animate-pulse' : 'bg-emerald-400'}`} />
-              <span className="text-[11px] text-slate-500">
+            <p className="font-extrabold text-slate-900 text-base">{activeSession?.session_title ?? 'AI Tutor'}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <div className={`w-2 h-2 rounded-full ${isStreaming ? 'bg-indigo-500 animate-pulse' : 'bg-emerald-500'}`} />
+              <span className="text-xs font-semibold text-slate-500">
                 {isStreaming ? 'Thinking with GraphRAG...' : 'GraphRAG + Local LLM'}
               </span>
             </div>
@@ -388,22 +418,22 @@ export default function ChatPage() {
 
           {/* Study Actions */}
           {activeSession && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <button
                 onClick={() => setShowFlashcards(true)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-[rgba(99,102,241,0.15)] text-slate-500 hover:text-indigo-500 hover:border-indigo-200 transition-all bg-white/40"
+                className="flex items-center gap-2 text-xs font-extrabold px-3.5 py-2 rounded-xl border border-indigo-200 text-indigo-700 hover:bg-indigo-50 transition-all bg-white shadow-sm hover:scale-[1.02]"
                 title="Review Flashcards generated from documents"
               >
-                <BookOpen size={13} className="text-indigo-500" />
+                <BookOpen size={15} className="text-indigo-600" />
                 <span className="hidden md:inline">Flashcards</span>
               </button>
 
               <button
                 onClick={() => setShowQuizGame(true)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-[rgba(99,102,241,0.15)] text-slate-500 hover:text-yellow-600 hover:border-yellow-200 transition-all bg-white/40"
+                className="flex items-center gap-2 text-xs font-extrabold px-3.5 py-2 rounded-xl border border-amber-200 text-amber-800 hover:bg-amber-50 transition-all bg-white shadow-sm hover:scale-[1.02]"
                 title="Play Quiz game generated from documents"
               >
-                <Trophy size={13} className="text-yellow-500" />
+                <Trophy size={15} className="text-amber-500" />
                 <span className="hidden md:inline">Play Quiz</span>
               </button>
             </div>
@@ -412,16 +442,16 @@ export default function ChatPage() {
           {/* Graph toggle button */}
           <button
             onClick={() => setShowGraphPanel(!showGraphPanel)}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border transition-all ${
+            className={`flex items-center gap-2 text-xs font-extrabold px-3.5 py-2 rounded-xl border transition-all ${
               showGraphPanel
-                ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300'
-                : 'border-[rgba(99,102,241,0.15)] text-slate-500 hover:text-slate-300 hover:border-[rgba(99,102,241,0.3)]'
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                : 'border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
             }`}
           >
-            <Network size={13} />
+            <Network size={15} />
             <span className="hidden sm:inline">Knowledge Graph</span>
             {liveGraphContext.entities.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-indigo-500 text-white text-[9px] flex items-center justify-center font-bold">
+              <span className="w-4 h-4 rounded-full bg-indigo-500 text-white text-[10px] flex items-center justify-center font-bold">
                 {liveGraphContext.entities.length}
               </span>
             )}
@@ -430,7 +460,7 @@ export default function ChatPage() {
 
         {/* Upload status bars */}
         {uploadStatuses.length > 0 && (
-          <div className="px-4 py-2 space-y-1.5 border-b border-[rgba(99,102,241,0.1)]">
+          <div className="px-5 py-2.5 space-y-2 border-b border-[rgba(99,102,241,0.1)]">
             <AnimatePresence>
               {uploadStatuses.map((docId) => (
                 <UploadStatus
@@ -448,40 +478,40 @@ export default function ChatPage() {
         {/* Content area: messages + optional graph panel */}
         <div className="flex-1 flex overflow-hidden">
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-6">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {allMessages.length === 0 && !activeSession && (
-              <div className="flex flex-col items-center justify-center h-full text-center max-w-lg mx-auto">
-                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-500/20 flex items-center justify-center mb-5 animate-float">
-                  <Brain size={36} className="text-indigo-400" />
+              <div className="flex flex-col items-center justify-center h-full text-center max-w-xl mx-auto">
+                <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 flex items-center justify-center mb-6 animate-float shadow-xl shadow-indigo-500/10">
+                  <Brain size={42} className="text-indigo-600" />
                 </div>
-                <h2 className="text-2xl font-bold text-white mb-2">GraphRAG AI Tutor</h2>
-                <p className="text-slate-400 text-sm mb-3 leading-relaxed">
-                  Powered by a <span className="text-indigo-400 font-semibold">local knowledge graph</span> + vector search + Ollama LLM.
+                <h2 className="text-3xl font-black text-slate-900 mb-3">GraphRAG AI Tutor</h2>
+                <p className="text-slate-600 text-base mb-4 leading-relaxed font-medium">
+                  Powered by a <span className="text-indigo-600 font-bold">local knowledge graph</span> + vector search + Ollama LLM.
                   Upload PDFs to build a knowledge graph, then ask questions with graph-aware context.
                 </p>
-                <div className="glass-card p-3 mb-5 text-xs text-slate-400 space-y-1 text-left w-full">
-                  <p className="font-semibold text-indigo-400 mb-1.5">How GraphRAG works:</p>
+                <div className="glass-card p-4 mb-6 text-sm text-slate-700 space-y-2 text-left w-full border border-indigo-100 shadow-sm">
+                  <p className="font-extrabold text-indigo-700 mb-2">How GraphRAG works:</p>
                   <p>1. 📄 Upload a PDF → chunks extracted</p>
                   <p>2. 🧠 LLM extracts entities & relationships → knowledge graph built</p>
                   <p>3. 🔍 Your question → vector + graph search → rich context</p>
                   <p>4. 💬 Ollama LLM answers with graph-aware context + citations</p>
                 </div>
-                <p className="text-xs text-slate-600">👆 Create a new chat session to begin →</p>
+                <p className="text-sm font-bold text-slate-500">👈 Create a new chat session to begin</p>
               </div>
             )}
 
             {allMessages.length === 0 && activeSession && (
-              <div className="flex flex-col items-center justify-center h-full text-center max-w-lg mx-auto">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-500/20 flex items-center justify-center mb-4 animate-float">
-                  <MessageSquare size={28} className="text-indigo-400" />
+              <div className="flex flex-col items-center justify-center h-full text-center max-w-xl mx-auto">
+                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 flex items-center justify-center mb-5 animate-float shadow-lg">
+                  <MessageSquare size={34} className="text-indigo-600" />
                 </div>
-                <p className="text-slate-300 font-semibold mb-1">Start the conversation</p>
-                <p className="text-slate-500 text-sm mb-4">Upload a PDF first for GraphRAG, or ask any question directly</p>
-                <div className="grid grid-cols-2 gap-2 w-full">
+                <p className="text-slate-900 font-black text-xl mb-1">Start the conversation</p>
+                <p className="text-slate-500 text-base mb-6">Upload a PDF first for GraphRAG, or ask any question directly</p>
+                <div className="grid grid-cols-2 gap-3 w-full">
                   {WELCOME_PROMPTS.map((prompt) => (
                     <button key={prompt} onClick={() => handleSend(prompt)}
-                      className="glass-card p-3 text-left text-xs text-slate-400 hover:text-slate-200 transition-colors">
-                      <BookOpen size={11} className="text-indigo-400 mb-1.5" />
+                      className="glass-card p-4 text-left text-sm font-bold text-slate-700 hover:text-indigo-600 hover:border-indigo-200 hover:scale-[1.02] transition-all shadow-sm">
+                      <BookOpen size={14} className="text-indigo-500 mb-2" />
                       {prompt}
                     </button>
                   ))}
@@ -500,16 +530,16 @@ export default function ChatPage() {
             ))}
 
             {isStreaming && !streamingContent && (
-              <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center flex-shrink-0">
-                  <Bot size={14} className="text-white" />
+              <div className="flex gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center flex-shrink-0 shadow-md">
+                  <Bot size={18} className="text-white" />
                 </div>
-                <div className="glass border border-[rgba(99,102,241,0.15)] rounded-2xl rounded-tl-sm px-4 py-3">
-                  <div className="flex items-center gap-2 mb-1">
+                <div className="glass border border-[rgba(99,102,241,0.2)] rounded-3xl rounded-tl-sm px-5 py-4">
+                  <div className="flex items-center gap-2.5">
                     <span className="flex gap-1.5">
                       <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
                     </span>
-                    <span className="text-[11px] text-slate-600">Searching knowledge graph...</span>
+                    <span className="text-xs font-bold text-slate-600">Searching knowledge graph...</span>
                   </div>
                 </div>
               </div>
@@ -520,8 +550,8 @@ export default function ChatPage() {
         </div>
 
         {/* Input area */}
-        <div className="flex-shrink-0 p-4">
-          <div className="glass border border-[rgba(99,102,241,0.2)] rounded-2xl p-3 focus-within:border-[rgba(99,102,241,0.4)] transition-colors">
+        <div className="flex-shrink-0 p-5">
+          <div className="glass border border-slate-200 rounded-3xl p-4 focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-100 transition-all shadow-md">
             <textarea
               ref={textareaRef}
               id="chat-input"
@@ -530,53 +560,53 @@ export default function ChatPage() {
               onKeyDown={handleKeyDown}
               disabled={isStreaming || !activeSession}
               rows={1}
-              className="w-full bg-transparent resize-none outline-none text-slate-200 text-sm placeholder-slate-600 leading-relaxed"
+              className="w-full bg-transparent resize-none outline-none text-slate-900 font-medium text-base placeholder-slate-400 leading-relaxed"
               placeholder={
                 activeSession
                   ? 'Ask anything — GraphRAG will search your documents and knowledge graph...'
                   : 'Create a chat session first →'
               }
-              style={{ minHeight: '24px', maxHeight: '160px' }}
+              style={{ minHeight: '30px', maxHeight: '180px' }}
             />
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-[rgba(99,102,241,0.1)]">
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
               <div className="flex items-center gap-2">
                 <input ref={fileInputRef} type="file" accept=".pdf,.txt,.md"
                   className="hidden" onChange={handleFileUpload} id="file-upload" />
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={!activeSession || uploadingFile}
-                  className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-[rgba(99,102,241,0.2)] text-slate-500 hover:text-slate-300 hover:border-[rgba(99,102,241,0.4)] transition-all disabled:opacity-40"
+                  className="flex items-center gap-2 text-xs font-extrabold px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all disabled:opacity-40"
                   title="Upload PDF for GraphRAG indexing"
                 >
                   {uploadingFile ? (
-                    <Loader2 size={13} className="animate-spin text-indigo-400" />
+                    <Loader2 size={15} className="animate-spin text-indigo-600" />
                   ) : (
-                    <FileText size={13} />
+                    <FileText size={15} />
                   )}
                   <span>Upload for GraphRAG</span>
                 </button>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 {isStreaming && liveSources.length > 0 && (
-                  <span className="text-[11px] text-indigo-400 flex items-center gap-1">
-                    <Sparkles size={11} /> {liveSources.length} sources found
+                  <span className="text-xs font-bold text-indigo-600 flex items-center gap-1">
+                    <Sparkles size={13} /> {liveSources.length} sources found
                   </span>
                 )}
                 <button
                   onClick={() => handleSend()}
                   disabled={!input.trim() || isStreaming || !activeSession}
                   id="send-message"
-                  className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-lg transition-all hover:shadow-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
+                  className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-lg transition-all hover:shadow-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
                 >
                   {isStreaming
-                    ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    : <Send size={14} />}
+                    ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <Send size={16} />}
                 </button>
               </div>
             </div>
           </div>
-          <p className="text-center text-[11px] text-slate-700 mt-2">
+          <p className="text-center text-xs font-bold text-slate-400 mt-2.5">
             🧠 GraphRAG · 📊 Knowledge Graph · 🦙 Ollama Local LLM · 🔍 Vector Search
           </p>
         </div>

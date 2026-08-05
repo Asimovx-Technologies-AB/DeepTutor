@@ -61,6 +61,7 @@ class VectorStore:
         topic_id: str,
         query_embedding: List[float],
         top_k: int = 5,
+        where: Optional[Dict] = None,
     ) -> List[Dict]:
         """
         Return top_k most similar chunks.
@@ -71,13 +72,28 @@ class VectorStore:
         if collection.count() == 0:
             return []
 
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=min(top_k, collection.count()),
-            include=["documents", "metadatas", "distances"],
-        )
+        query_kwargs = {
+            "query_embeddings": [query_embedding],
+            "n_results": min(top_k, collection.count()),
+            "include": ["documents", "metadatas", "distances"],
+        }
+        if where:
+            query_kwargs["where"] = where
+
+        try:
+            results = collection.query(**query_kwargs)
+        except Exception:
+            # Fallback to unrestricted search if filter fails
+            results = collection.query(
+                query_embeddings=[query_embedding],
+                n_results=min(top_k, collection.count()),
+                include=["documents", "metadatas", "distances"],
+            )
 
         chunks = []
+        if not results or not results.get("documents") or not results["documents"][0]:
+            return []
+
         docs = results["documents"][0]
         metas = results["metadatas"][0]
         distances = results["distances"][0]
@@ -88,6 +104,33 @@ class VectorStore:
             chunks.append({"text": doc, "metadata": meta, "score": score})
 
         return chunks
+
+    def get_chunks_by_pages(
+        self,
+        topic_id: str,
+        pages: List[int],
+    ) -> List[Dict]:
+        """
+        Retrieve chunks that belong to specific page numbers using metadata filter.
+        Returns list of chunks with text, metadata, score.
+        """
+        collection = self._collection(topic_id)
+        if collection.count() == 0 or not pages:
+            return []
+
+        where_clause = {"page": pages[0]} if len(pages) == 1 else {"page": {"$in": pages}}
+        try:
+            results = collection.get(
+                where=where_clause,
+                include=["documents", "metadatas"],
+            )
+            chunks = []
+            if results and results.get("documents"):
+                for doc, meta in zip(results["documents"], results["metadatas"]):
+                    chunks.append({"text": doc, "metadata": meta, "score": 1.0})
+            return chunks
+        except Exception:
+            return []
 
     def count(self, topic_id: str) -> int:
         return self._collection(topic_id).count()

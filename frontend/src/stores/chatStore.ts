@@ -25,6 +25,7 @@ interface ChatState {
   setActiveSession: (session: ChatSession | null) => void
   setMessages: (messages: Message[]) => void
   addMessage: (message: Message) => void
+  removeSession: (sessionId: string) => void
   setStreaming: (streaming: boolean) => void
   appendStreamToken: (token: string) => void
   clearStreamingContent: () => void
@@ -45,6 +46,16 @@ export const useChatStore = create<ChatState>()(
       setMessages: (messages) => set({ messages }),
       addMessage: (message) =>
         set((state) => ({ messages: [...state.messages, message] })),
+      removeSession: (sessionId) =>
+        set((state) => {
+          const updatedSessions = state.sessions.filter((s) => s.id !== sessionId)
+          const isDeletingActive = state.activeSession?.id === sessionId
+          return {
+            sessions: updatedSessions,
+            activeSession: isDeletingActive ? (updatedSessions[0] || null) : state.activeSession,
+            messages: isDeletingActive ? [] : state.messages,
+          }
+        }),
       setStreaming: (streaming) => set({ isStreaming: streaming }),
       appendStreamToken: (token) =>
         set((state) => ({ streamingContent: state.streamingContent + token })),

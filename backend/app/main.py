@@ -17,11 +17,11 @@ async def lifespan(app: FastAPI):
     # Startup: create required directories
     for dir_path in [settings.UPLOAD_DIR, settings.CHROMA_PERSIST_DIR, settings.GRAPH_DATA_DIR]:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
-    print(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION} started")
-    print(f"📡 Ollama: {settings.OLLAMA_BASE_URL} | Model: {settings.OLLAMA_CHAT_MODEL}")
-    print(f"🧠 GraphRAG: ChromaDB @ {settings.CHROMA_PERSIST_DIR} | Graph @ {settings.GRAPH_DATA_DIR}")
+    print(f"[START] {settings.APP_NAME} v{settings.APP_VERSION} started")
+    print(f"[OLLAMA] Base URL: {settings.OLLAMA_BASE_URL} | Model: {settings.OLLAMA_CHAT_MODEL}")
+    print(f"[GRAPHRAG] ChromaDB @ {settings.CHROMA_PERSIST_DIR} | Graph @ {settings.GRAPH_DATA_DIR}")
     yield
-    print("👋 Shutting down...")
+    print("[STOP] Shutting down...")
 
 
 app = FastAPI(

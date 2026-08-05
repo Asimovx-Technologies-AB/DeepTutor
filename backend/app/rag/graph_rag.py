@@ -8,6 +8,7 @@ Query phase:
   question → vector search + graph search → context assembly → Ollama stream
 """
 import json
+import re
 from typing import List, Dict, AsyncGenerator, Optional
 from app.rag.ollama_client import ollama
 from app.rag.document_processor import process_document
@@ -26,10 +27,51 @@ Guidelines:
 - Be educational, clear, and encouraging
 - Use the provided context to answer accurately
 - When explaining concepts, break them down step by step
-- If you reference information from the context, mention the source
+- Strict Rule for Page Numbers:
+  * Pay strict attention to the source page numbers [doc p.X] in the Document Context.
+  * If the student asks about specific page numbers (e.g., page 94 and 95), answer ONLY using context from those requested page numbers.
+  * If the requested page numbers are NOT present in the Document Context or marked as missing, explicitly state: "The requested page number(s) were not found in the uploaded document context."
+  * NEVER hallucinate or claim that content from other pages comes from the requested page numbers.
+- If you reference information from the context, mention the source and page number
 - Use markdown formatting for clarity (headers, bullets, code blocks, formulas)
-- If context doesn't cover the question, use your general knowledge but indicate this
+- If context doesn't cover the question, use your general knowledge but indicate this clearly
 """
+
+CONVERSED_PROMPT = SYSTEM_PROMPT
+
+
+def extract_requested_pages(text: str) -> List[int]:
+    """
+    Extract page numbers requested in user question.
+    Handles:
+    - 'page number 94 and 95' -> [94, 95]
+    - 'pages 94-96' or 'pages 94 to 96' -> [94, 95, 96]
+    - 'page 94' -> [94]
+    - 'p. 94', 'p94' -> [94]
+    """
+    pages = set()
+    text_lower = text.lower()
+
+    # Match ranges: pages 94-96, pages 94 to 96
+    range_pattern = r'(?:pages?|p\.?)\s*(?:numbers?|no\.?|nums?)?\s*(\d+)\s*(?:-|to)\s*(\d+)'
+    for match in re.finditer(range_pattern, text_lower):
+        start, end = int(match.group(1)), int(match.group(2))
+        if start <= end and (end - start) <= 50:
+            pages.update(range(start, end + 1))
+
+    # Match lists: page number 94 and 95, pages 94, 95, 96
+    list_pattern = r'(?:pages?|p\.?)\s*(?:numbers?|no\.?|nums?)?\s*(\d+(?:\s*(?:,|and|&)\s*\d+)+)'
+    for match in re.finditer(list_pattern, text_lower):
+        nums = re.findall(r'\d+', match.group(1))
+        pages.update([int(n) for n in nums])
+
+    # Match single page: page 94, p.94, page number 94
+    single_pattern = r'(?:pages?|p\.?)\s*(?:numbers?|no\.?|nums?)?\s*(\d+)'
+    for match in re.finditer(single_pattern, text_lower):
+        pages.add(int(match.group(1)))
+
+    return sorted(list(pages))
+
 
 CONTEXT_TEMPLATE = """## Knowledge Graph Context
 Relevant entities and relationships retrieved from the knowledge graph:
@@ -158,11 +200,36 @@ class GraphRAGPipeline:
 
         # ── Step 1: Retrieval (only if topic has indexed data) ─────────────────
         if effective_topic_id and vector_store.count(effective_topic_id) > 0:
+            requested_pages = extract_requested_pages(question)
+            page_chunks = []
+            if requested_pages:
+                page_chunks = vector_store.get_chunks_by_pages(effective_topic_id, requested_pages)
+
             # Vector search
             query_emb = await ollama.embed(question)
             vector_chunks = vector_store.search(
                 effective_topic_id, query_emb, top_k=settings.TOP_K_CHUNKS
             )
+
+            if requested_pages:
+                if page_chunks:
+                    # Combine exact page_chunks first, then vector_chunks without duplicates
+                    seen_texts = set()
+                    combined = []
+                    for c in page_chunks + vector_chunks:
+                        t = c["text"]
+                        if t not in seen_texts:
+                            seen_texts.add(t)
+                            combined.append(c)
+                    vector_chunks = combined
+                else:
+                    # System notice if requested pages do not exist in document
+                    missing_str = ", ".join([str(p) for p in requested_pages])
+                    vector_chunks.insert(0, {
+                        "text": f"[SYSTEM NOTICE: The student explicitly asked about page(s) {missing_str}, but no content for page(s) {missing_str} was found in the indexed document.]",
+                        "metadata": {"source": "System", "page": f"Missing ({missing_str})"},
+                        "score": 1.0,
+                    })
 
             # Graph search
             query_entities = await extract_query_entities(question)

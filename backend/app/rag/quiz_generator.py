@@ -1,6 +1,6 @@
 """
 AI Quiz Generator using local Ollama LLM.
-Draws context from indexed document chunks in ChromaDB.
+Draws context from indexed document chunks in ChromaDB, with smart general knowledge fallback.
 """
 import json
 import re
@@ -9,7 +9,7 @@ from app.rag.ollama_client import ollama
 from app.rag.vector_store import vector_store
 from app.core import database as db
 
-QUIZ_PROMPT_TEMPLATE = """You are an expert educator. Create a multiple choice quiz of exactly {num_questions} questions based on the provided document context.
+QUIZ_PROMPT_TEMPLATE = """You are an expert educator. Create a multiple choice quiz of exactly {num_questions} questions based on the provided study topic and context.
 {topic_instruction}
 
 Return ONLY valid JSON in this exact structure:
@@ -17,7 +17,7 @@ Return ONLY valid JSON in this exact structure:
   "title": "{title_hint}",
   "questions": [
     {{
-      "question_text": "Clear, concise question based on the text",
+      "question_text": "Clear, concise question testing core concepts",
       "options": [
         "First option",
         "Second option",
@@ -34,10 +34,10 @@ Rules:
 - Generate exactly {num_questions} questions.
 - Each question must have exactly 4 options.
 - The "correct_answer" must be one of: "A", "B", "C", "D".
-- The questions should test understanding, facts, or concepts directly found in the context.
+- The questions should test key understanding, principles, or concepts.
 - The response MUST contain only the JSON block.
 
-DOCUMENT CONTEXT:
+STUDY CONTEXT / TOPIC MATERIAL:
 {context}
 
 JSON:"""
@@ -49,44 +49,61 @@ async def generate_quiz_for_topic(
     difficulty: str = "medium",
     time_limit_mins: int = 10,
     num_questions: int = 5,
+    user_id: Optional[str] = None,
 ) -> Optional[dict]:
     """
-    Generate a quiz for the given topic using document chunks.
-    Saves and returns the generated quiz dict.
+    Generate a quiz for the given topic using document chunks or general AI knowledge.
     """
-    # 1. Fetch text chunks from ChromaDB
-    try:
-        collection = vector_store._collection(topic_id)
-        if collection.count() == 0:
-            return None
-        
-        context_docs = []
-        if focus_topic and focus_topic.strip() and focus_topic.lower() != "all topics (entire pdf)":
-            # Target chunks matching the specific focus topic via embedding search
-            try:
-                emb = await ollama.get_embedding(focus_topic)
-                if emb:
-                    search_res = vector_store.search(topic_id, emb, top_k=8)
-                    context_docs = [c["text"] for c in search_res if c.get("text")]
-            except Exception:
-                pass
-        
-        if not context_docs:
-            data = collection.get(include=["documents"])
-            documents = data.get("documents", [])
-            if not documents:
-                return None
-            import random
-            shuffled_docs = list(documents)
-            random.shuffle(shuffled_docs)
-            context_docs = shuffled_docs
+    context_docs = []
+    
+    # 1. Try to find matching collection in ChromaDB
+    candidate_keys = []
+    if user_id:
+        safe_uid = user_id.replace("-", "_")
+        safe_tid = (topic_id or "general").replace("-", "_")
+        candidate_keys.append(f"{safe_uid}_{safe_tid}")
+    candidate_keys.append(topic_id)
+    candidate_keys.append("general")
 
+    for ckey in candidate_keys:
+        try:
+            col = vector_store._collection(ckey)
+            if col.count() > 0:
+                if focus_topic and focus_topic.strip() and focus_topic.lower() != "all topics (entire pdf)":
+                    emb = await ollama.get_embedding(focus_topic)
+                    if emb:
+                        search_res = vector_store.search(ckey, emb, top_k=8)
+                        context_docs = [c["text"] for c in search_res if c.get("text")]
+                
+                if not context_docs:
+                    data = col.get(include=["documents"])
+                    docs = data.get("documents", [])
+                    if docs:
+                        import random
+                        shuffled = list(docs)
+                        random.shuffle(shuffled)
+                        context_docs = shuffled[:6]
+                break
+        except Exception:
+            continue
+
+    # Fallback to general knowledge topic summary if no document collection exists yet
+    if context_docs:
         context = "\n\n".join(context_docs)[:4000]
-    except Exception:
-        return None
+    else:
+        topic_name = focus_topic if (focus_topic and focus_topic.lower() != "all topics (entire pdf)") else topic_id.replace("_", " ").title()
+        context = f"Subject: {topic_name}. Please test core concepts, fundamental principles, definitions, and key applications related to {topic_name}."
 
-    topic_instruction = f"FOCUS TOPIC: The quiz MUST focus specifically on '{focus_topic}' and its related concepts." if (focus_topic and focus_topic.lower() != "all topics (entire pdf)") else "Scope: Comprehensive quiz covering all main topics across the document."
-    title_hint = f"Quiz: {focus_topic}" if (focus_topic and focus_topic.lower() != "all topics (entire pdf)") else "Comprehensive Quiz: All Topics"
+    topic_instruction = (
+        f"FOCUS TOPIC: The quiz MUST focus specifically on '{focus_topic}'."
+        if (focus_topic and focus_topic.lower() != "all topics (entire pdf)")
+        else f"Scope: Comprehensive quiz on {topic_id.replace('_', ' ').title()}."
+    )
+    title_hint = (
+        f"Quiz: {focus_topic}"
+        if (focus_topic and focus_topic.lower() != "all topics (entire pdf)")
+        else f"Quiz: {topic_id.replace('_', ' ').title()}"
+    )
 
     # 2. Call Ollama to generate quiz
     prompt = QUIZ_PROMPT_TEMPLATE.format(
@@ -104,7 +121,6 @@ async def generate_quiz_for_topic(
         
         response = await ollama.chat(messages, temperature=0.7)
         
-        # Clean JSON string
         json_str = response.strip()
         json_match = re.search(r'\{.*\}', json_str, re.DOTALL)
         if json_match:
@@ -123,7 +139,6 @@ async def generate_quiz_for_topic(
         
         for q in quiz_data.get("questions", []):
             options = q.get("options", [])
-            # Pad options if less than 4
             while len(options) < 4:
                 options.append(f"Option {len(options) + 1}")
             options = options[:4]
