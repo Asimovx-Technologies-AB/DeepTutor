@@ -65,7 +65,7 @@ function GlobalSessionLoader() {
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />
+  return isAuthenticated ? <>{children}</> : <Navigate to="/" replace />
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
@@ -78,9 +78,6 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        {/* Global Mouse Tracking Hover Animation across ALL pages */}
-        <MouseSpotlight />
-
         <GlobalSessionLoader />
         <Routes>
           {/* Public Hero Landing Page */}

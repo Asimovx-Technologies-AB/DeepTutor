@@ -22,7 +22,6 @@ const NAV_ITEMS = [
   { to: '/study-plan', icon: Calendar, label: 'Study Plan', badge: 'AI' },
   { to: '/chat', icon: MessageSquare, label: 'AI Tutor', badge: 'Live' },
   { to: '/progress', icon: BarChart3, label: 'Progress', badge: null },
-  { to: '/hero', icon: Sparkles, label: 'AI Hero Page', badge: 'Overview' },
 ]
 
 export default function Layout() {
@@ -34,7 +33,7 @@ export default function Layout() {
 
   const handleLogout = () => {
     logout()
-    navigate('/login')
+    navigate('/')
   }
 
   return (
