@@ -1,0 +1,542 @@
+import { useState, useRef } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Calendar,
+  Sparkles,
+  Clock,
+  CheckCircle2,
+  BookOpen,
+  FileText,
+  RefreshCw,
+  Plus,
+  Trash2,
+  ChevronRight,
+  Brain,
+  Target,
+  UploadCloud,
+  CheckSquare,
+  AlertCircle
+} from 'lucide-react'
+import axios from 'axios'
+import { useAuthStore } from '../stores/authStore'
+import { useChatStore } from '../stores/chatStore'
+
+interface ScheduleDay {
+  day: number
+  topic: string
+  focus: string
+  estimated_hours: number
+  recommended_action: string
+  key_concepts: string[]
+}
+
+interface StudyPlan {
+  id: string
+  user_id: string
+  topic_id: string
+  title: string
+  target_date: str
+  total_days: number
+  hours_per_day: number
+  schedule: ScheduleDay[]
+  completed_days: number[]
+  created_at: string
+}
+
+export default function StudyPlanPage() {
+  const token = useAuthStore((s) => s.token)
+  const sessions = useChatStore((s) => s.sessions)
+  const queryClient = useQueryClient()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Generator form state
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [selectedSessionId, setSelectedSessionId] = useState<string>('')
+  const [targetDate, setTargetDate] = useState<string>(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 10)
+    return d.toISOString().split('T')[0]
+  })
+  const [hoursPerDay, setHoursPerDay] = useState<number>(2.0)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+
+  // Loading / generating state
+  const [generating, setGenerating] = useState(false)
+  const [activePlanId, setActivePlanId] = useState<string | null>(null)
+
+  // Fetch my study plans
+  const { data: plans = [], isLoading } = useQuery<StudyPlan[]>({
+    queryKey: ['study-plans'],
+    queryFn: async () => {
+      const res = await axios.get('/api/study-plan/my-plans', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return res.data || []
+    },
+  })
+
+  // Selected plan to view
+  const currentPlan = plans.find((p) => p.id === activePlanId) || plans[0] || null
+
+  // Toggle day completed mutation
+  const toggleDayMutation = useMutation({
+    mutationFn: async ({ planId, dayNumber }: { planId: string; dayNumber: number }) => {
+      const res = await axios.post(
+        `/api/study-plan/${planId}/toggle-day`,
+        { day_number: dayNumber },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['study-plans'] })
+    },
+  })
+
+  // Delete plan mutation
+  const deletePlanMutation = useMutation({
+    mutationFn: async (planId: string) => {
+      await axios.delete(`/api/study-plan/${planId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['study-plans'] })
+      setActivePlanId(null)
+    },
+  })
+
+  // Generate new study plan
+  const handleGeneratePlan = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setGenerating(true)
+
+    try {
+      let topicId = 'general'
+
+      // If user uploaded a new file directly in the Study Plan generator
+      if (selectedFile) {
+        topicId = `plan_${Date.now()}`
+        const formData = new FormData()
+        formData.append('file', selectedFile)
+        formData.append('topic_id', topicId)
+        await axios.post('/api/documents/upload', formData, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data',
+          },
+        })
+      } else if (selectedSessionId) {
+        const foundS = sessions.find((s) => s.id === selectedSessionId)
+        if (foundS?.topic_id) topicId = foundS.topic_id
+      }
+
+      // Generate Study Plan
+      const res = await axios.post(
+        '/api/study-plan/generate',
+        {
+          topic_id: topicId,
+          target_date: targetDate,
+          hours_per_day: hoursPerDay,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+
+      queryClient.invalidateQueries({ queryKey: ['study-plans'] })
+      setActivePlanId(res.data.id)
+      setShowCreateModal(false)
+      setSelectedFile(null)
+    } catch (err: any) {
+      alert(err.response?.data?.detail ?? 'Failed to generate study plan. Please make sure a PDF is selected.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const completedCount = currentPlan?.completed_days?.length ?? 0
+  const totalScheduleDays = currentPlan?.schedule?.length ?? 1
+  const completionPct = Math.round((completedCount / totalScheduleDays) * 100)
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto space-y-8">
+      {/* ─── HEADER ─── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Calendar size={18} className="text-indigo-600" />
+            <span className="text-xs font-extrabold text-indigo-600 uppercase tracking-widest">
+              AI Study Plan Engine
+            </span>
+          </div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Study Roadmap</h1>
+          <p className="text-slate-500 text-sm mt-0.5">
+            Upload document material + set target completion date to generate a personalized day-by-day study plan.
+          </p>
+        </div>
+
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="btn-primary flex items-center gap-2 py-2.5 px-5 text-xs shadow-lg shadow-indigo-500/20 self-start md:self-auto"
+        >
+          <Plus size={16} /> Create New Study Plan
+        </button>
+      </div>
+
+      {isLoading ? (
+        <div className="p-12 text-center">
+          <RefreshCw size={28} className="animate-spin text-indigo-600 mx-auto mb-3" />
+          <p className="text-xs font-semibold text-slate-600">Loading study plans...</p>
+        </div>
+      ) : plans.length === 0 ? (
+        /* ─── EMPTY STATE ─── */
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="glass-card p-12 text-center border border-slate-200/80 max-w-xl mx-auto space-y-5"
+        >
+          <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 mx-auto shadow-sm border border-indigo-100">
+            <Calendar size={32} />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">No Active Study Plans</h2>
+            <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
+              Analyze your PDF documents against your target completion date. Ollama AI will calculate your days remaining and build a custom daily schedule.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="btn-primary flex items-center gap-2 mx-auto py-2.5 px-6 text-xs shadow-md shadow-indigo-500/20"
+          >
+            <Sparkles size={15} /> Analyze Material & Generate Plan
+          </button>
+        </motion.div>
+      ) : (
+        /* ─── ACTIVE STUDY PLAN DASHBOARD ─── */
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Left: Saved Plans Sidebar */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
+              Your Saved Plans ({plans.length})
+            </h3>
+            <div className="space-y-2">
+              {plans.map((p) => {
+                const isSel = (currentPlan?.id ?? plans[0]?.id) === p.id
+                const pct = Math.round(((p.completed_days?.length ?? 0) / (p.schedule?.length || 1)) * 100)
+
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => setActivePlanId(p.id)}
+                    className={`w-full text-left p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col gap-2 ${
+                      isSel
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
+                        : 'bg-white text-slate-800 border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md ${
+                        isSel ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-600'
+                      }`}>
+                        Target: {p.target_date}
+                      </span>
+                      <span className={`text-xs font-bold ${isSel ? 'text-white' : 'text-slate-500'}`}>
+                        {pct}%
+                      </span>
+                    </div>
+
+                    <p className="text-xs font-bold truncate leading-snug">{p.title}</p>
+
+                    <div className="flex items-center justify-between text-[10px] opacity-80 mt-1">
+                      <span>{p.total_days} Days Schedule</span>
+                      <span>{p.hours_per_day} hrs/day</span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Right: Detailed Plan Timeline */}
+          {currentPlan && (
+            <div className="lg:col-span-3 space-y-6">
+              {/* Plan Overview Card */}
+              <div className="glass-card p-6 border border-slate-200/80 bg-gradient-to-r from-indigo-50/40 via-white to-violet-50/40 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-md">
+                      Target Finish Date: {currentPlan.target_date}
+                    </span>
+                    <h2 className="text-xl font-extrabold text-slate-900 mt-2">{currentPlan.title}</h2>
+                  </div>
+
+                  <button
+                    onClick={() => deletePlanMutation.mutate(currentPlan.id)}
+                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors self-start sm:self-auto"
+                    title="Delete Study Plan"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+
+                {/* Progress bar */}
+                <div className="space-y-1.5 pt-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-600">
+                    <span>Overall Study Completion</span>
+                    <span className="text-indigo-600">
+                      {completedCount} of {currentPlan.total_days} Days Completed ({completionPct}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-2">
+                    <motion.div
+                      className="bg-indigo-600 h-2 rounded-full"
+                      animate={{ width: `${completionPct}%` }}
+                      transition={{ duration: 0.5 }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Day-by-Day Timeline Schedule */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Clock size={16} className="text-indigo-600" />
+                  Day-by-Day Study Schedule ({currentPlan.schedule?.length ?? 0} Days)
+                </h3>
+
+                <div className="space-y-3">
+                  {currentPlan.schedule?.map((dayItem) => {
+                    const isDone = currentPlan.completed_days?.includes(dayItem.day)
+
+                    return (
+                      <motion.div
+                        key={dayItem.day}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`p-5 rounded-2xl border transition-all ${
+                          isDone
+                            ? 'bg-emerald-50/40 border-emerald-200/80 shadow-sm'
+                            : 'bg-white border-slate-200/80 shadow-sm hover:border-indigo-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start gap-3.5">
+                            {/* Checkbox Button */}
+                            <button
+                              onClick={() =>
+                                toggleDayMutation.mutate({
+                                  planId: currentPlan.id,
+                                  dayNumber: dayItem.day,
+                                })
+                              }
+                              className={`w-7 h-7 rounded-xl border flex items-center justify-center transition-all cursor-pointer mt-0.5 flex-shrink-0 ${
+                                isDone
+                                  ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm'
+                                  : 'bg-slate-50 border-slate-300 text-transparent hover:border-indigo-400'
+                              }`}
+                              title={isDone ? 'Mark as Incomplete' : 'Mark as Completed'}
+                            >
+                              <CheckCircle2 size={18} />
+                            </button>
+
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+                                  Day {dayItem.day}
+                                </span>
+                                <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
+                                  <Clock size={11} /> {dayItem.estimated_hours} hrs
+                                </span>
+                              </div>
+
+                              <h4 className={`text-sm font-bold mt-1.5 ${isDone ? 'line-through text-slate-500' : 'text-slate-900'}`}>
+                                {dayItem.topic}
+                              </h4>
+
+                              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                                {dayItem.focus}
+                              </p>
+
+                              {/* Recommended Action */}
+                              {dayItem.recommended_action && (
+                                <div className="mt-3 p-2.5 bg-slate-50 border border-slate-200/60 rounded-xl text-xs text-slate-700 flex items-center gap-2">
+                                  <Brain size={13} className="text-indigo-600 flex-shrink-0" />
+                                  <span><strong className="text-indigo-600">Action:</strong> {dayItem.recommended_action}</span>
+                                </div>
+                              )}
+
+                              {/* Key Concepts Pills */}
+                              {dayItem.key_concepts && dayItem.key_concepts.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-3">
+                                  {dayItem.key_concepts.map((concept, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="text-[10px] font-semibold bg-indigo-50/70 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-lg"
+                                    >
+                                      {concept}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── CREATE / GENERATE STUDY PLAN MODAL ─── */}
+      <AnimatePresence>
+        {showCreateModal && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-lg bg-white rounded-3xl p-7 shadow-2xl border border-slate-100 relative overflow-hidden"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100">
+                  <Sparkles size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Generate AI Study Plan</h3>
+                  <p className="text-xs text-slate-500">Analyze PDF context & calculate date schedule</p>
+                </div>
+              </div>
+
+              <form onSubmit={handleGeneratePlan} className="space-y-4">
+                {/* PDF File Upload */}
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    1. Upload PDF Document (or Select Existing Session)
+                  </label>
+                  
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.txt,.md"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) {
+                        setSelectedFile(e.target.files[0])
+                        setSelectedSessionId('')
+                      }
+                    }}
+                  />
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`flex-1 p-3 border rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                        selectedFile
+                          ? 'bg-indigo-50 border-indigo-400 text-indigo-900'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <UploadCloud size={16} className="text-indigo-600" />
+                      <span className="truncate">{selectedFile ? selectedFile.name : 'Upload Document PDF'}</span>
+                    </button>
+
+                    {sessions.length > 0 && (
+                      <select
+                        value={selectedSessionId}
+                        onChange={(e) => {
+                          setSelectedSessionId(e.target.value)
+                          setSelectedFile(null)
+                        }}
+                        className="bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 rounded-2xl px-3 py-2.5 focus:outline-none"
+                      >
+                        <option value="">Or pick chat session...</option>
+                        {sessions.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.session_title}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+
+                {/* Target Date Picker */}
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    2. Target Completion / Exam Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={targetDate}
+                    onChange={(e) => setTargetDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-indigo-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    AI will automatically calculate days remaining until this date to construct your schedule.
+                  </p>
+                </div>
+
+                {/* Hours Per Day */}
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    3. Daily Study Time Available
+                  </label>
+                  <div className="flex gap-2">
+                    {[1.0, 2.0, 3.0, 4.0].map((hrs) => (
+                      <button
+                        key={hrs}
+                        type="button"
+                        onClick={() => setHoursPerDay(hrs)}
+                        className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                          hoursPerDay === hrs
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {hrs} hr{hrs > 1 ? 's' : ''}/day
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Buttons */}
+                <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="btn-ghost py-2.5 px-4 text-xs text-slate-600"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={generating}
+                    className="btn-primary py-2.5 px-6 text-xs flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+                  >
+                    {generating ? (
+                      <>
+                        <RefreshCw size={15} className="animate-spin" /> Analyzing & Planning...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={15} /> Generate Schedule
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
