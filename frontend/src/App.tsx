@@ -16,6 +16,7 @@ import QuizPage from './pages/QuizPage'
 import QuizResultPage from './pages/QuizResultPage'
 import ProgressPage from './pages/ProgressPage'
 import FlashcardsPage from './pages/FlashcardsPage'
+import LeaderboardPage from './pages/LeaderboardPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -94,6 +95,7 @@ export default function App() {
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="study-plan" element={<StudyPlanPage />} />
             <Route path="chat/:sessionId?" element={<ChatPage />} />
+            <Route path="leaderboard" element={<LeaderboardPage />} />
             <Route path="quiz/:topicId" element={<QuizPage />} />
             <Route path="quiz/:topicId/result" element={<QuizResultPage />} />
             <Route path="flashcards/:topicId" element={<FlashcardsPage />} />
@@ -109,6 +111,9 @@ export default function App() {
           </Route>
           <Route path="/chat/:sessionId?" element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<ChatPage />} />
+          </Route>
+          <Route path="/leaderboard" element={<PrivateRoute><Layout /></PrivateRoute>}>
+            <Route index element={<LeaderboardPage />} />
           </Route>
           <Route path="/progress" element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<ProgressPage />} />

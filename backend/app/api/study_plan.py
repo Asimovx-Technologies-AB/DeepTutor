@@ -1,9 +1,9 @@
+from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional
 from app.api.auth import get_current_user
 from app.core import database as db
-from app.rag.study_plan_generator import generate_study_plan
+from app.rag.study_plan_generator import generate_study_plan, generate_day_study_notes
 
 router = APIRouter(prefix="/study-plan", tags=["study-plan"])
 
@@ -17,6 +17,26 @@ class GenerateStudyPlanRequest(BaseModel):
 
 class ToggleDayRequest(BaseModel):
     day_number: int
+
+
+class DayNotesRequest(BaseModel):
+    topic_id: Optional[str] = "general"
+    day_topic: str
+    key_concepts: Optional[List[str]] = []
+
+
+@router.post("/day-notes")
+async def get_day_notes(
+    body: DayNotesRequest,
+    user: dict = Depends(get_current_user),
+):
+    notes = await generate_day_study_notes(
+        topic_id=body.topic_id or "general",
+        day_topic=body.day_topic,
+        key_concepts=body.key_concepts or [],
+        user_id=user["id"],
+    )
+    return {"day_topic": body.day_topic, "notes": notes}
 
 
 @router.post("/generate")

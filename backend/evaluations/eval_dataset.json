@@ -1,0 +1,42 @@
+[
+  {
+    "id": "tc_001",
+    "category": "concept_explanation",
+    "question": "What are Support Vector Machines and how do they work?",
+    "ground_truth": "Support Vector Machines (SVM) are supervised learning models that construct an optimal hyper-plane to separate data classes with maximum margin in high dimensional space.",
+    "expected_entities": ["Support Vector Machines", "hyper-plane", "maximum margin"],
+    "target_page": null
+  },
+  {
+    "id": "tc_002",
+    "category": "feature_selection",
+    "question": "Explain Feature Selection techniques in Machine Learning.",
+    "ground_truth": "Feature selection techniques include Filter methods, Wrapper methods, and Embedded methods such as SVM-RFE to reduce dataset dimensionality.",
+    "expected_entities": ["Feature selection", "Filter methods", "Wrapper methods", "Embedded methods"],
+    "target_page": null
+  },
+  {
+    "id": "tc_003",
+    "category": "page_constrained",
+    "question": "What is discussed on page 42 of the document?",
+    "ground_truth": "Page 42 details Support Vector Machines (SVM) and finding optimal hyper-planes.",
+    "expected_entities": ["Support Vector Machines"],
+    "target_page": 42
+  },
+  {
+    "id": "tc_004",
+    "category": "graph_multihop",
+    "question": "How are SVM-RFE and Feature Selection related?",
+    "ground_truth": "SVM-RFE (Recursive Feature Elimination) is an embedded feature selection technique that uses Support Vector Machines to iteratively remove weak features.",
+    "expected_entities": ["SVM-RFE", "Feature selection", "Support Vector Machines"],
+    "target_page": null
+  },
+  {
+    "id": "tc_005",
+    "category": "out_of_domain",
+    "question": "What is the recipe for making Neapolitan pizza?",
+    "ground_truth": "This topic is outside the scope of the provided Machine Learning document.",
+    "expected_entities": [],
+    "target_page": null
+  }
+]

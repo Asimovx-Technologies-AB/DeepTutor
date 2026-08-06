@@ -32,11 +32,15 @@ async def generate_flashcards(
     if not topic_id:
         topic_id = "general"
 
-    cards = await generate_flashcards_for_topic(topic_id, focus_topic=body.focus_topic)
+    cards = await generate_flashcards_for_topic(
+        topic_id=topic_id,
+        focus_topic=body.focus_topic,
+        user_id=user["id"]
+    )
     if not cards:
         raise HTTPException(
             status_code=500,
-            detail="Failed to generate flashcards. Make sure documents are uploaded and Ollama is online."
+            detail="Failed to generate flashcards from your uploaded documents. Please upload a PDF document first."
         )
     return cards
 
@@ -48,7 +52,10 @@ async def list_session_flashcards(
 ):
     session = db.get_session(session_id)
     topic_id = session.get("topic_id") if session else "general"
-    return db.get_flashcards_by_topic(topic_id or "general")
+    cards = db.get_flashcards_by_topic(topic_id or "general")
+    if not cards:
+        cards = await generate_flashcards_for_topic(topic_id or "general", user_id=user["id"])
+    return cards
 
 
 @router.get("/topic/{topic_id}")
@@ -57,6 +64,8 @@ async def list_flashcards(
     user: dict = Depends(get_current_user),
 ):
     cards = db.get_flashcards_by_topic(topic_id)
+    if not cards:
+        cards = await generate_flashcards_for_topic(topic_id, user_id=user["id"])
     return cards
 
 

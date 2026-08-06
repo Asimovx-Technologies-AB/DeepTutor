@@ -1,6 +1,8 @@
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   Calendar,
   Sparkles,
@@ -16,7 +18,11 @@ import {
   Target,
   UploadCloud,
   CheckSquare,
-  AlertCircle
+  AlertCircle,
+  Volume2,
+  Copy,
+  Check,
+  X
 } from 'lucide-react'
 import axios from 'axios'
 import { useAuthStore } from '../stores/authStore'
@@ -29,6 +35,7 @@ interface ScheduleDay {
   estimated_hours: number
   recommended_action: string
   key_concepts: string[]
+  study_notes?: string
 }
 
 interface StudyPlan {
@@ -60,6 +67,16 @@ export default function StudyPlanPage() {
   })
   const [hoursPerDay, setHoursPerDay] = useState<number>(2.0)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+
+  // Study Notes Modal State
+  const [activeNotesModal, setActiveNotesModal] = useState<{
+    dayNum: number
+    topic: string
+    notes: string
+    loading: boolean
+  } | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
 
   // Loading / generating state
   const [generating, setGenerating] = useState(false)
@@ -93,6 +110,61 @@ export default function StudyPlanPage() {
       queryClient.invalidateQueries({ queryKey: ['study-plans'] })
     },
   })
+
+  const handleOpenStudyNotes = async (dayItem: ScheduleDay) => {
+    setActiveNotesModal({
+      dayNum: dayItem.day,
+      topic: dayItem.topic,
+      notes: dayItem.study_notes || `### 📌 ${dayItem.topic}\n\nLoading AI Study Notes...`,
+      loading: true,
+    })
+
+    try {
+      const res = await axios.post(
+        '/api/study-plan/day-notes',
+        {
+          topic_id: currentPlan?.topic_id || 'general',
+          day_topic: dayItem.topic,
+          key_concepts: dayItem.key_concepts || [],
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (res.data?.notes) {
+        setActiveNotesModal({
+          dayNum: dayItem.day,
+          topic: dayItem.topic,
+          notes: res.data.notes,
+          loading: false,
+        })
+      } else {
+        setActiveNotesModal((prev) => prev ? { ...prev, loading: false } : null)
+      }
+    } catch {
+      setActiveNotesModal((prev) => prev ? { ...prev, loading: false } : null)
+    }
+  }
+
+  const copyNotes = (text: string) => {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const speakNotes = (text: string) => {
+    if (!('speechSynthesis' in window)) return
+    if (isSpeaking) {
+      window.speechSynthesis.cancel()
+      setIsSpeaking(false)
+      return
+    }
+    const cleanText = text.replace(/[#*`_~]/g, '')
+    const utterance = new SpeechSynthesisUtterance(cleanText)
+    utterance.rate = 0.95
+    utterance.onend = () => setIsSpeaking(false)
+    utterance.onerror = () => setIsSpeaking(false)
+    setIsSpeaking(true)
+    window.speechSynthesis.speak(utterance)
+  }
 
   // Delete plan mutation
   const deletePlanMutation = useMutation({
@@ -378,6 +450,17 @@ export default function StudyPlanPage() {
                                   ))}
                                 </div>
                               )}
+
+                              {/* View AI Study Notes Button */}
+                              <div className="pt-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenStudyNotes(dayItem)}
+                                  className="py-2 px-4 rounded-xl bg-[#111111] text-white hover:bg-[#27272a] text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95"
+                                >
+                                  <BookOpen size={14} /> View AI Study Notes
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -533,6 +616,96 @@ export default function StudyPlanPage() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── AI STUDY NOTES MODAL ─── */}
+      <AnimatePresence>
+        {activeNotesModal && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-2xl bg-white rounded-3xl p-7 shadow-2xl border border-slate-200 relative overflow-hidden flex flex-col max-h-[85vh]"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-[#111111] text-white flex items-center justify-center font-black">
+                    {activeNotesModal.dayNum}
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-indigo-600 tracking-wider bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
+                      Day {activeNotesModal.dayNum} AI Study Notes
+                    </span>
+                    <h3 className="text-lg font-black text-slate-900 leading-snug">
+                      {activeNotesModal.topic}
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => speakNotes(activeNotesModal.notes)}
+                    className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors"
+                    title="Audio Reader"
+                  >
+                    <Volume2 size={18} className={isSpeaking ? 'text-indigo-600 animate-pulse' : ''} />
+                  </button>
+
+                  <button
+                    onClick={() => copyNotes(activeNotesModal.notes)}
+                    className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors"
+                    title="Copy Notes"
+                  >
+                    {copied ? <Check size={18} className="text-emerald-600" /> : <Copy size={18} />}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (isSpeaking) window.speechSynthesis.cancel()
+                      setIsSpeaking(false)
+                      setActiveNotesModal(null)
+                    }}
+                    className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Notes Body Content */}
+              <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+                {activeNotesModal.loading ? (
+                  <div className="py-12 text-center space-y-3">
+                    <RefreshCw size={24} className="animate-spin text-indigo-600 mx-auto" />
+                    <p className="text-xs font-bold text-slate-500">Generating AI Study Notes from PDF...</p>
+                  </div>
+                ) : (
+                  <div className="markdown-content text-slate-800 leading-relaxed text-sm">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {activeNotesModal.notes}
+                    </ReactMarkdown>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-slate-100 pt-4 mt-4 flex items-center justify-between">
+                <span className="text-xs text-slate-400 font-medium">✨ Derived from your uploaded PDF text</span>
+                <button
+                  onClick={() => {
+                    if (isSpeaking) window.speechSynthesis.cancel()
+                    setIsSpeaking(false)
+                    setActiveNotesModal(null)
+                  }}
+                  className="bg-[#111111] text-white hover:bg-[#27272a] px-6 py-2.5 rounded-full text-xs font-bold"
+                >
+                  Done Reading
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

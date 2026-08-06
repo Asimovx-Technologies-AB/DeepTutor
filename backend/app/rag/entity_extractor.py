@@ -7,24 +7,24 @@ import re
 from typing import List, Dict, Tuple
 from app.rag.ollama_client import ollama
 
-EXTRACTION_PROMPT = """You are a knowledge graph extraction expert. Extract entities and relationships from the given text.
+EXTRACTION_PROMPT = """You are a technical knowledge graph extraction expert. Extract key domain concepts, algorithms, methods, formulas, and relationships from the given text.
 
 Return ONLY valid JSON in this exact format:
 {{
   "entities": [
-    {{"name": "Entity Name", "type": "concept|person|place|event|formula|law|theorem", "description": "brief description"}}
+    {{"name": "Entity Name", "type": "concept|algorithm|method|formula|law|theorem", "description": "brief description"}}
   ],
   "relationships": [
     {{"source": "Entity A", "target": "Entity B", "type": "relationship_type", "description": "how they relate"}}
   ]
 }}
 
-Rules:
-- Extract 3-8 important entities per chunk
-- Extract meaningful relationships between entities
-- Entity names should be concise (1-4 words)
-- Relationship types: "is_a", "part_of", "causes", "defines", "requires", "opposes", "related_to", "formula_for", "example_of"
-- If no clear entities exist, return {{"entities": [], "relationships": []}}
+Strict Rules:
+- Extract 3-6 important TECHNICAL CONCEPTS or ALGORITHMS per chunk (e.g. "Support Vector Machines", "Feature Selection", "Bayesian Classifiers")
+- DO NOT extract author names (e.g. "Zhang", "Hinton", "H. T. Abbas"), countries/cities ("France"), or metadata headers ("Keywords Plus", "Institution", "Page 8")
+- Fix typos in entity names if obvious (e.g., "cikit-learn" -> "Scikit-Learn")
+- Entity names must be concise (1-4 words)
+- If no clear technical entities exist, return {{"entities": [], "relationships": []}}
 
 TEXT:
 {text}

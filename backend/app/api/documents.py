@@ -92,6 +92,10 @@ async def upload_document(
         file_type=ext.lstrip("."),
     )
 
+    # Clear any stale old flashcards so fresh cards are generated from this PDF
+    db.delete_flashcards_for_topic(topic_id)
+    db.delete_flashcards_for_topic("general")
+
     # Start background indexing — pass user_id for per-user namespacing
     background_tasks.add_task(_run_indexing, doc["id"], topic_id, file_path, user["id"])
 

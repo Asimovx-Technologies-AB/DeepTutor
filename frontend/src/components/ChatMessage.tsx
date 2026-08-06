@@ -30,10 +30,10 @@ export default function ChatMessage({ role, content, isStreaming, sources }: Pro
       className={`flex gap-4 group ${isAssistant ? '' : 'flex-row-reverse'}`}
     >
       {/* Avatar */}
-      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 mt-1 shadow-md ${
+      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 mt-1 shadow-sm ${
         isAssistant
-          ? 'bg-gradient-to-br from-indigo-500 to-violet-600 shadow-indigo-500/20 animate-pulse-glow'
-          : 'bg-gradient-to-br from-slate-700 to-slate-800'
+          ? 'bg-[#111111] text-white'
+          : 'bg-[#27272a] text-white'
       }`}>
         {isAssistant ? (
           <Bot size={18} className="text-white" />
@@ -47,8 +47,8 @@ export default function ChatMessage({ role, content, isStreaming, sources }: Pro
         {/* Message bubble */}
         <div className={`rounded-3xl px-5 py-4 shadow-sm ${
           isAssistant
-            ? 'glass border border-[rgba(99,102,241,0.18)] rounded-tl-sm'
-            : 'bg-gradient-to-br from-indigo-600 to-violet-600 rounded-tr-sm shadow-lg text-white'
+            ? 'bg-white border border-[#e4e4e7] rounded-tl-sm text-[#111111]'
+            : 'bg-[#111111] text-white rounded-tr-sm shadow-md'
         }`}>
           {isAssistant ? (
             <div className="markdown-content">

@@ -205,8 +205,12 @@ class GraphRAGPipeline:
             if requested_pages:
                 page_chunks = vector_store.get_chunks_by_pages(effective_topic_id, requested_pages)
 
-            # Vector search
-            query_emb = await ollama.embed(question)
+            # Run embedding and query entity extraction concurrently in parallel
+            import asyncio
+            query_emb_task = ollama.embed(question)
+            query_entities_task = extract_query_entities(question)
+            query_emb, query_entities = await asyncio.gather(query_emb_task, query_entities_task)
+
             vector_chunks = vector_store.search(
                 effective_topic_id, query_emb, top_k=settings.TOP_K_CHUNKS
             )
@@ -232,7 +236,6 @@ class GraphRAGPipeline:
                     })
 
             # Graph search
-            query_entities = await extract_query_entities(question)
             all_graph_nodes = []
             all_graph_edges = []
 

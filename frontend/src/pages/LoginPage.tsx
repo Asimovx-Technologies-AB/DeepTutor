@@ -41,18 +41,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-mesh flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background orbs */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl animate-float" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-violet-600/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '1.5s' }} />
-        <div className="absolute top-1/2 right-1/3 w-64 h-64 bg-cyan-600/6 rounded-full blur-3xl animate-float" style={{ animationDelay: '3s' }} />
-      </div>
-
-      {/* Spinning ring decoration */}
-      <div className="absolute top-20 right-20 w-32 h-32 border border-indigo-500/20 rounded-full animate-spin-slow opacity-50" />
-      <div className="absolute bottom-32 left-16 w-20 h-20 border border-violet-500/20 rounded-full animate-spin-slow opacity-30" style={{ animationDirection: 'reverse' }} />
-
+    <div className="min-h-screen bg-[#fafafa] flex items-center justify-center p-4 relative overflow-hidden">
       <motion.div
         initial={{ opacity: 0, y: 24, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -60,21 +49,21 @@ export default function LoginPage() {
         className="w-full max-w-md"
       >
         {/* Card */}
-        <div className="glass-strong rounded-2xl p-8 shadow-2xl">
+        <div className="bg-white rounded-3xl p-8 border border-[#e5e7eb] shadow-xl">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 mb-4 shadow-xl glow-brand animate-float">
-              <GraduationCap size={28} className="text-white" />
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#111111] text-white mb-4 shadow-sm">
+              <GraduationCap size={30} />
             </div>
-            <h1 className="text-2xl font-bold text-white mb-1">Welcome back</h1>
-            <p className="text-slate-400 text-sm">Sign in to continue your learning journey</p>
+            <h1 className="text-2xl font-black text-[#111111] mb-1">Welcome back</h1>
+            <p className="text-slate-500 text-sm font-medium">Sign in to continue your learning journey</p>
           </div>
 
           {/* Demo hint */}
-          <div className="mb-6 p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-start gap-2">
-            <Sparkles size={14} className="text-indigo-400 mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-indigo-300">
-              <span className="font-semibold">Demo:</span> Use any email & password to explore the UI
+          <div className="mb-6 p-3.5 rounded-2xl bg-[#f4f4f5] border border-[#e4e4e7] flex items-start gap-2.5">
+            <Sparkles size={15} className="text-[#111111] mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-[#18181b] font-medium">
+              <span className="font-bold">Demo Mode:</span> Use any email & password to enter the system.
             </p>
           </div>
 

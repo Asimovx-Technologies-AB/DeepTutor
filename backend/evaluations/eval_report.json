@@ -1,0 +1,67 @@
+{
+  "timestamp": "2026-08-05 15:44:22",
+  "aggregate_scores": {
+    "faithfulness": 0.66,
+    "relevancy": 0.6,
+    "graph_entity_recall": 0.516,
+    "page_accuracy": 1.0,
+    "mean_latency_seconds": 9.9254
+  },
+  "detailed_results": [
+    {
+      "id": "tc_001",
+      "category": "concept_explanation",
+      "question": "What are Support Vector Machines and how do they work?",
+      "actual_output": "**Support Vector Machines (SVM) Overview**\n=====================================\n\n### What are Suppo...",
+      "faithfulness": 0.8,
+      "relevancy": 1.0,
+      "graph_entity_recall": 0.33,
+      "page_accuracy": 1.0,
+      "latency_seconds": 10.26
+    },
+    {
+      "id": "tc_002",
+      "category": "feature_selection",
+      "question": "Explain Feature Selection techniques in Machine Learning.",
+      "actual_output": "**Feature Selection Techniques in Machine Learning**\n===============================================...",
+      "faithfulness": 0.8,
+      "relevancy": 1.0,
+      "graph_entity_recall": 0.25,
+      "page_accuracy": 1.0,
+      "latency_seconds": 9.862
+    },
+    {
+      "id": "tc_003",
+      "category": "page_constrained",
+      "question": "What is discussed on page 42 of the document?",
+      "actual_output": "**Answering Your Question About Page 42**\n\nGiven that page 42 of the uploaded document, `ML_Textbook...",
+      "faithfulness": 0.8,
+      "relevancy": 0.0,
+      "graph_entity_recall": 0.0,
+      "page_accuracy": 1.0,
+      "latency_seconds": 9.516
+    },
+    {
+      "id": "tc_004",
+      "category": "graph_multihop",
+      "question": "How are SVM-RFE and Feature Selection related?",
+      "actual_output": "**Relationship Between SVM-RFE and Feature Selection**\n=============================================...",
+      "faithfulness": 0.8,
+      "relevancy": 1.0,
+      "graph_entity_recall": 1.0,
+      "page_accuracy": 1.0,
+      "latency_seconds": 10.038
+    },
+    {
+      "id": "tc_005",
+      "category": "out_of_domain",
+      "question": "What is the recipe for making Neapolitan pizza?",
+      "actual_output": "I'm happy to help you with your question, but I need to point out that the topic of Neapolitan pizza...",
+      "faithfulness": 0.1,
+      "relevancy": 0.0,
+      "graph_entity_recall": 1.0,
+      "page_accuracy": 1.0,
+      "latency_seconds": 9.951
+    }
+  ]
+}

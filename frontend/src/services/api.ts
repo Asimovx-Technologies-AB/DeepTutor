@@ -102,7 +102,9 @@ export const documentsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
-  list: (topicId: string) => api.get(`/documents/topic/${topicId}`),
+  status: (topicId: string) => api.get(`/documents/status/${topicId}`),
+  list: () => api.get('/documents'),
+  delete: (docId: string) => api.delete(`/documents/${docId}`),
 }
 
 // ─── Study Plan ───────────────────────────────────────────────
@@ -114,6 +116,11 @@ export const studyPlanApi = {
   toggleDay: (planId: string, dayNumber: number) =>
     api.post(`/study-plan/${planId}/toggle-day`, { day_number: dayNumber }),
   delete: (planId: string) => api.delete(`/study-plan/${planId}`),
+}
+
+// ─── Leaderboard ──────────────────────────────────────────────
+export const leaderboardApi = {
+  getRankings: () => api.get('/leaderboard'),
 }
 
 export default api

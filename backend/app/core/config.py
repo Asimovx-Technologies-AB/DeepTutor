@@ -35,9 +35,9 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE_MB: int = 50
 
     # RAG settings
-    CHUNK_SIZE: int = 512
-    CHUNK_OVERLAP: int = 64
-    TOP_K_CHUNKS: int = 5
+    CHUNK_SIZE: int = 384
+    CHUNK_OVERLAP: int = 80
+    TOP_K_CHUNKS: int = 4
     GRAPH_HOP_DEPTH: int = 2
 
 

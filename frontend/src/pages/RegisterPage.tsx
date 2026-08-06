@@ -49,32 +49,27 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-mesh flex items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl animate-float" />
-        <div className="absolute bottom-1/3 left-1/4 w-80 h-80 bg-cyan-600/8 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }} />
-      </div>
-
+    <div className="min-h-screen bg-[#fafafa] flex items-center justify-center p-4 relative overflow-hidden">
       <motion.div
         initial={{ opacity: 0, y: 24, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.5, ease: 'easeOut' }}
         className="w-full max-w-md"
       >
-        <div className="glass-strong rounded-2xl p-8 shadow-2xl">
+        <div className="bg-white rounded-3xl p-8 border border-[#e5e7eb] shadow-xl">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-cyan-500 mb-4 shadow-xl glow-accent animate-float">
-              <GraduationCap size={28} className="text-white" />
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#111111] text-white mb-4 shadow-sm">
+              <GraduationCap size={30} />
             </div>
-            <h1 className="text-2xl font-bold text-white mb-1">Create Account</h1>
-            <p className="text-slate-400 text-sm">Start your AI-powered learning journey</p>
+            <h1 className="text-2xl font-black text-[#111111] mb-1">Create Account</h1>
+            <p className="text-slate-500 text-sm font-medium">Start your AI-powered learning journey</p>
           </div>
 
           {/* Demo hint */}
-          <div className="mb-6 p-3 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-start gap-2">
-            <Sparkles size={14} className="text-violet-400 mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-violet-300">
-              <span className="font-semibold">Demo Mode:</span> Works without a backend — just fill in any details to explore the app
+          <div className="mb-6 p-3.5 rounded-2xl bg-[#f4f4f5] border border-[#e4e4e7] flex items-start gap-2.5">
+            <Sparkles size={15} className="text-[#111111] mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-[#18181b] font-medium">
+              <span className="font-bold">Demo Mode:</span> Fill in any details to create an account and explore.
             </p>
           </div>
 

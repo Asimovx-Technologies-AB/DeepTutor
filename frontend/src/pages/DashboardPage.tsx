@@ -92,81 +92,81 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* ─── INTERACTIVE STAT CARDS ─── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
         {/* Stat 1: Chat Sessions */}
         <motion.div
           whileHover={{ y: -3, scale: 1.01 }}
           onClick={() => setActiveModal('sessions')}
-          className="glass-card p-5 cursor-pointer relative overflow-hidden group border border-slate-200/70"
+          className="glass-card p-6 cursor-pointer relative overflow-hidden group border border-slate-200/80"
         >
-          <div className="flex items-start justify-between mb-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-md shadow-indigo-500/20">
-              <MessageSquare size={18} className="text-white" />
+          <div className="flex items-start justify-between mb-4">
+            <div className="w-12 h-12 rounded-2xl bg-[#111111] text-white flex items-center justify-center shadow-sm">
+              <MessageSquare size={22} />
             </div>
-            <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full group-hover:bg-indigo-100 transition-colors">
+            <span className="text-xs font-bold text-[#18181b] bg-[#f4f4f5] border border-[#e4e4e7] px-2.5 py-1 rounded-full group-hover:bg-[#e4e4e7] transition-colors">
               Details →
             </span>
           </div>
-          <p className="text-2xl font-black text-slate-900 mb-0.5">{progress?.total_sessions ?? 0}</p>
-          <p className="text-xs font-bold text-slate-500">Chat Sessions</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Total conversations</p>
+          <p className="text-3xl font-black text-[#111111] mb-1">{progress?.total_sessions ?? 0}</p>
+          <p className="text-sm font-bold text-slate-700">Chat Sessions</p>
+          <p className="text-xs text-slate-500 mt-0.5">Total conversations</p>
         </motion.div>
 
         {/* Stat 2: Avg Quiz Score */}
         <motion.div
           whileHover={{ y: -3, scale: 1.01 }}
           onClick={() => setActiveModal('score')}
-          className="glass-card p-5 cursor-pointer relative overflow-hidden group border border-slate-200/70"
+          className="glass-card p-6 cursor-pointer relative overflow-hidden group border border-slate-200/80"
         >
-          <div className="flex items-start justify-between mb-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500 to-pink-600 flex items-center justify-center shadow-md shadow-violet-500/20">
-              <Star size={18} className="text-white" />
+          <div className="flex items-start justify-between mb-4">
+            <div className="w-12 h-12 rounded-2xl bg-[#111111] text-white flex items-center justify-center shadow-sm">
+              <Star size={22} />
             </div>
-            <span className="text-[10px] font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full group-hover:bg-violet-100 transition-colors">
+            <span className="text-xs font-bold text-[#18181b] bg-[#f4f4f5] border border-[#e4e4e7] px-2.5 py-1 rounded-full group-hover:bg-[#e4e4e7] transition-colors">
               Details →
             </span>
           </div>
-          <p className="text-2xl font-black text-slate-900 mb-0.5">{progress?.avg_score ?? 0}%</p>
-          <p className="text-xs font-bold text-slate-500">Avg Quiz Score</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Across all quizzes</p>
+          <p className="text-3xl font-black text-[#111111] mb-1">{progress?.avg_score ?? 0}%</p>
+          <p className="text-sm font-bold text-slate-700">Avg Quiz Score</p>
+          <p className="text-xs text-slate-500 mt-0.5">Across all quizzes</p>
         </motion.div>
 
         {/* Stat 3: Topics Explored */}
         <motion.div
           whileHover={{ y: -3, scale: 1.01 }}
           onClick={() => setActiveModal('topics')}
-          className="glass-card p-5 cursor-pointer relative overflow-hidden group border border-slate-200/70"
+          className="glass-card p-6 cursor-pointer relative overflow-hidden group border border-slate-200/80"
         >
-          <div className="flex items-start justify-between mb-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-md shadow-cyan-500/20">
-              <BookOpen size={18} className="text-white" />
+          <div className="flex items-start justify-between mb-4">
+            <div className="w-12 h-12 rounded-2xl bg-[#111111] text-white flex items-center justify-center shadow-sm">
+              <BookOpen size={22} />
             </div>
-            <span className="text-[10px] font-bold text-cyan-600 bg-cyan-50 px-2 py-0.5 rounded-full group-hover:bg-cyan-100 transition-colors">
+            <span className="text-xs font-bold text-[#18181b] bg-[#f4f4f5] border border-[#e4e4e7] px-2.5 py-1 rounded-full group-hover:bg-[#e4e4e7] transition-colors">
               Details →
             </span>
           </div>
-          <p className="text-2xl font-black text-slate-900 mb-0.5">{progress?.topics_studied ?? 0}</p>
-          <p className="text-xs font-bold text-slate-500">Topics Explored</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Unique topics</p>
+          <p className="text-3xl font-black text-[#111111] mb-1">{progress?.topics_studied ?? 0}</p>
+          <p className="text-sm font-bold text-slate-700">Topics Explored</p>
+          <p className="text-xs text-slate-500 mt-0.5">Unique topics</p>
         </motion.div>
 
         {/* Stat 4: Day Streak */}
         <motion.div
           whileHover={{ y: -3, scale: 1.01 }}
           onClick={() => setActiveModal('streak')}
-          className="glass-card p-5 cursor-pointer relative overflow-hidden group border border-slate-200/70"
+          className="glass-card p-6 cursor-pointer relative overflow-hidden group border border-slate-200/80"
         >
-          <div className="flex items-start justify-between mb-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shadow-md shadow-orange-500/20">
-              <Flame size={18} className="text-white animate-pulse" />
+          <div className="flex items-start justify-between mb-4">
+            <div className="w-12 h-12 rounded-2xl bg-[#111111] text-white flex items-center justify-center shadow-sm">
+              <Flame size={22} className="text-orange-400" />
             </div>
-            <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full group-hover:bg-orange-100 transition-colors">
+            <span className="text-xs font-bold text-[#18181b] bg-[#f4f4f5] border border-[#e4e4e7] px-2.5 py-1 rounded-full group-hover:bg-[#e4e4e7] transition-colors">
               Details →
             </span>
           </div>
-          <p className="text-2xl font-black text-slate-900 mb-0.5">{progress?.streak_days ?? 0}</p>
-          <p className="text-xs font-bold text-slate-500">Day Streak</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Keep it up!</p>
+          <p className="text-3xl font-black text-[#111111] mb-1">{progress?.streak_days ?? 0}</p>
+          <p className="text-sm font-bold text-slate-700">Day Streak</p>
+          <p className="text-xs text-slate-500 mt-0.5">Keep it up!</p>
         </motion.div>
       </div>
 

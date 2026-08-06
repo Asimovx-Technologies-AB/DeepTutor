@@ -249,6 +249,26 @@ def get_documents_for_topic(topic_id: str) -> List[dict]:
         ]
 
 
+def get_documents_for_user(user_id: str) -> List[dict]:
+    with DBContext() as db:
+        docs = db.query(Document).filter(Document.user_id == user_id).order_by(Document.created_at.desc()).all()
+        return [
+            {
+                "id": d.id,
+                "user_id": d.user_id,
+                "topic_id": d.topic_id,
+                "file_name": d.file_name,
+                "file_path": d.file_path,
+                "file_type": d.file_type,
+                "indexed": d.indexed,
+                "entity_count": d.entity_count,
+                "chunk_count": d.chunk_count,
+                "created_at": d.created_at,
+            }
+            for d in docs
+        ]
+
+
 def update_document_stats(doc_id: str, indexed: bool, entity_count: int, chunk_count: int) -> bool:
     with DBContext() as db:
         doc = db.query(Document).filter(Document.id == doc_id).first()
@@ -546,4 +566,66 @@ def delete_study_plan(plan_id: str) -> bool:
             db.delete(p)
             return True
     return False
+
+
+# ─── Leaderboard Helper ────────────────────────────────────────────────────────
+def get_leaderboard_rankings(current_user_id: str) -> dict:
+    with DBContext() as db:
+        users = db.query(User).all()
+        rankings = []
+
+        for user in users:
+            attempts = db.query(QuizAttempt).filter(QuizAttempt.user_id == user.id).all()
+            docs = db.query(Document).filter(Document.user_id == user.id).all()
+
+            quizzes_taken = len(attempts)
+            total_correct = sum(a.score for a in attempts)
+            total_questions = sum(a.total_questions for a in attempts)
+            avg_accuracy = round((total_correct / total_questions * 100), 1) if total_questions > 0 else 0.0
+            docs_count = len(docs)
+
+            # Calculate XP points
+            total_xp = (total_correct * 100) + (quizzes_taken * 50) + (docs_count * 30)
+
+            # Assign badges
+            badges = []
+            if total_xp >= 1000:
+                badges.append("Grandmaster")
+            elif total_xp >= 500:
+                badges.append("Scholar")
+            elif total_xp >= 200:
+                badges.append("Apprentice")
+            
+            if quizzes_taken >= 5:
+                badges.append("Quiz Whiz")
+            if docs_count >= 2:
+                badges.append("PDF Pioneer")
+
+            rankings.append({
+                "user_id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "total_xp": total_xp,
+                "quizzes_taken": quizzes_taken,
+                "avg_accuracy": avg_accuracy,
+                "docs_uploaded": docs_count,
+                "badges": badges,
+                "is_current_user": (user.id == current_user_id)
+            })
+
+        # Sort by XP descending
+        rankings.sort(key=lambda x: (x["total_xp"], x["avg_accuracy"]), reverse=True)
+
+        # Assign rank numbers
+        for idx, item in enumerate(rankings):
+            item["rank"] = idx + 1
+
+        top_3 = rankings[:3]
+        user_rank_info = next((r for r in rankings if r["user_id"] == current_user_id), None)
+
+        return {
+            "rankings": rankings,
+            "top_3": top_3,
+            "current_user_rank": user_rank_info
+        }
 

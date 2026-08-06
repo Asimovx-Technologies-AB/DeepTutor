@@ -12,7 +12,8 @@ import {
   X,
   Zap,
   Bot,
-  Sparkles
+  Sparkles,
+  Trophy
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', badge: null },
   { to: '/study-plan', icon: Calendar, label: 'Study Plan', badge: 'AI' },
   { to: '/chat', icon: MessageSquare, label: 'AI Tutor', badge: 'Live' },
+  { to: '/leaderboard', icon: Trophy, label: 'Leaderboard', badge: 'TOP' },
   { to: '/progress', icon: BarChart3, label: 'Progress', badge: null },
 ]
 
@@ -48,7 +50,7 @@ export default function Layout() {
 
       {/* ─── LEFT SIDEBAR NAV ─── */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200/80 flex flex-col justify-between transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-80 bg-white border-r border-slate-200/80 flex flex-col justify-between transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
           }`}
       >
         {/* Top Header / Logo */}
@@ -57,13 +59,13 @@ export default function Layout() {
             className="flex items-center gap-3.5 cursor-pointer group"
             onClick={() => navigate('/dashboard')}
           >
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-transform">
-              <GraduationCap size={24} className="text-white" />
+            <div className="w-12 h-12 rounded-2xl bg-[#111111] flex items-center justify-center text-white shadow-sm transition-transform active:scale-95">
+              <GraduationCap size={24} />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-black text-lg text-slate-900 tracking-tight">DeepTutor</span>
-                <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-md border border-indigo-100">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider bg-[#f4f4f5] text-[#18181b] px-2 py-0.5 rounded-full border border-[#e4e4e7]">
                   AI
                 </span>
               </div>
@@ -94,14 +96,14 @@ export default function Layout() {
                     to={to}
                     onClick={() => setMobileOpen(false)}
                     className={`flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-extrabold transition-all group ${isActive
-                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 scale-[1.02]'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/90 hover:scale-[1.01]'
+                        ? 'bg-[#111111] text-white shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-[#f4f4f5]'
                       }`}
                   >
                     <div className="flex items-center gap-3.5">
                       <Icon
                         size={20}
-                        className={isActive ? 'text-white' : 'text-slate-400 group-hover:text-indigo-600 transition-colors'}
+                        className={isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-900 transition-colors'}
                       />
                       <span>{label}</span>
                     </div>
@@ -110,7 +112,7 @@ export default function Layout() {
                       <span
                         className={`text-xs font-extrabold px-2 py-0.5 rounded-full ${isActive
                             ? 'bg-white/20 text-white'
-                            : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                            : 'bg-[#f4f4f5] text-[#18181b] border border-[#e4e4e7]'
                           }`}
                       >
                         {badge}
@@ -125,10 +127,10 @@ export default function Layout() {
           </div>
 
           {/* Quick Action Widget in Sidebar */}
-          <div className="p-4 bg-gradient-to-br from-indigo-50/90 via-slate-50 to-violet-50/90 border border-indigo-100 rounded-2xl space-y-3 shadow-sm">
+          <div className="p-4 bg-[#fafafa] border border-[#e4e4e7] rounded-2xl space-y-3 shadow-sm">
             <div className="flex items-center gap-2">
-              <Zap size={16} className="text-indigo-600" />
-              <span className="text-sm font-extrabold text-slate-800">Quick Tutor Chat</span>
+              <Zap size={16} className="text-[#111111]" />
+              <span className="text-sm font-extrabold text-slate-900">Quick Tutor Chat</span>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed font-medium">
               Have a study question? Ask Ollama AI tutor directly.
@@ -138,7 +140,7 @@ export default function Layout() {
                 setMobileOpen(false)
                 navigate('/chat')
               }}
-              className="w-full btn-primary py-2.5 text-xs font-extrabold flex items-center justify-center gap-2 shadow-md hover:scale-[1.02]"
+              className="w-full btn-primary py-2.5 text-xs font-extrabold flex items-center justify-center gap-2 shadow-sm active:scale-95"
             >
               <Bot size={15} /> Start New Chat
             </button>
@@ -146,10 +148,10 @@ export default function Layout() {
         </div>
 
         {/* Bottom User Profile Section */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50/60">
-          <div className="flex items-center justify-between p-2.5 rounded-2xl bg-white border border-slate-200/80 shadow-sm">
+        <div className="p-4 border-t border-slate-100 bg-[#fafafa]">
+          <div className="flex items-center justify-between p-2.5 rounded-2xl bg-white border border-[#e4e4e7] shadow-sm">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center font-black text-sm shadow-inner flex-shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-[#111111] text-white flex items-center justify-center font-black text-sm shadow-sm flex-shrink-0">
                 {user?.username?.[0]?.toUpperCase() ?? 'U'}
               </div>
               <div className="min-w-0">

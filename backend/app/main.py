@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 import os
 from pathlib import Path
 from app.core.config import get_settings
-from app.api import auth, chat, documents, quiz, flashcards, progress, study_plan
+from app.api import auth, chat, documents, quiz, flashcards, progress, study_plan, leaderboard
 
 settings = get_settings()
 
@@ -48,6 +48,7 @@ app.include_router(quiz.router, prefix="/api")
 app.include_router(flashcards.router, prefix="/api")
 app.include_router(progress.router, prefix="/api")
 app.include_router(study_plan.router, prefix="/api")
+app.include_router(leaderboard.router, prefix="/api")
 
 
 @app.get("/")
