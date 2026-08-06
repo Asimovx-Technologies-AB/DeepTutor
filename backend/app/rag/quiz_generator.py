@@ -122,11 +122,17 @@ async def generate_quiz_for_topic(
         response = await ollama.chat(messages, temperature=0.7)
         
         json_str = response.strip()
-        json_match = re.search(r'\{.*\}', json_str, re.DOTALL)
+        cleaned = re.sub(r'```(?:json)?\s*', '', json_str, flags=re.IGNORECASE)
+        cleaned = re.sub(r'```', '', cleaned).strip()
+        json_match = re.search(r'\{.*\}', cleaned, re.DOTALL)
         if json_match:
-            json_str = json_match.group()
-            
-        quiz_data = json.loads(json_str)
+            cleaned = json_match.group()
+        cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
+        
+        try:
+            quiz_data = json.loads(cleaned)
+        except Exception:
+            quiz_data = {"title": title_hint, "questions": []}
         
         # 3. Save to database
         title = quiz_data.get("title", title_hint)

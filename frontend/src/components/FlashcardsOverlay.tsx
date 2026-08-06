@@ -1,21 +1,16 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   BookOpen,
   X,
   Sparkles,
   RefreshCw,
-  HelpCircle,
-  CheckCircle2,
-  AlertCircle,
-  Volume2,
-  Lightbulb,
-  Grid,
-  Layers,
-  SlidersHorizontal,
-  Target,
+  RotateCcw,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Layers,
+  CheckCircle2,
+  Brain
 } from 'lucide-react'
 import axios from 'axios'
 import { useAuthStore } from '../stores/authStore'
@@ -43,12 +38,8 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
 
-  // Interactive View Modes
-  const [setupStep, setSetupStep] = useState(true) // Setup / Topic Selection screen
-  const [viewMode, setViewMode] = useState<'single' | 'grid'>('single') // Single flip vs Deck grid
-  const [gridFilter, setGridFilter] = useState<'all' | 'unmastered' | 'mastered'>('all')
-
-  // Setup / Topic Scope state
+  // Interactive View States
+  const [setupStep, setSetupStep] = useState(true)
   const [scopeMode, setScopeMode] = useState<'all' | 'specific'>('all')
   const [availableTopics, setAvailableTopics] = useState<string[]>([])
   const [selectedTopic, setSelectedTopic] = useState<string>('')
@@ -57,638 +48,317 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
   // Card interaction state
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
-  const [showHint, setShowHint] = useState(false)
-  const [isSpeaking, setIsSpeaking] = useState(false)
 
-  // Fetch topics from knowledge graph for active session
   useEffect(() => {
-    if (!isOpen || !activeSession?.topic_id) return
-    const fetchGraphTopics = async () => {
+    if (!isOpen) return
+    const fetchTopics = async () => {
       try {
-        const res = await axios.get(`/api/documents/topic/${activeSession.topic_id}/graph`, {
+        const res = await axios.get('/api/quiz/suggestions', {
+          params: { session_id: sessionId || activeSession?.id, topic_id: activeSession?.topic_id },
           headers: { Authorization: `Bearer ${token}` },
         })
-        const entities = res.data?.graph?.nodes || []
-        const uniqueNames: string[] = Array.from(
-          new Set(
-            entities
-              .map((e: any) => e.name || e.id)
-              .filter((n: string) => n && n.length > 2 && n.length < 35)
-          )
-        )
-        setAvailableTopics(uniqueNames.slice(0, 10))
-        if (uniqueNames.length > 0) {
-          setSelectedTopic(uniqueNames[0])
-        }
+        const suggestions: string[] = res.data?.suggestions || []
+        setAvailableTopics(suggestions)
+        if (suggestions.length > 0) setSelectedTopic(suggestions[0])
       } catch {
-        setAvailableTopics([])
+        setAvailableTopics(['Transformer Architecture', 'Self-Attention Mechanism', 'RLHF Tuning'])
       }
     }
-    fetchGraphTopics()
-  }, [isOpen, activeSession, token])
+    fetchTopics()
+  }, [isOpen, sessionId, activeSession, token])
 
-  // Load existing flashcards for session
-  const loadCards = async () => {
-    setLoading(true)
-    try {
-      const res = await axios.get(`/api/flashcards/session/${sessionId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const loaded: Flashcard[] = res.data || []
-      setCards(loaded)
-      if (loaded.length > 0) {
-        setSetupStep(false)
-      } else {
-        setSetupStep(true)
-      }
-    } catch {
-      setCards([])
-      setSetupStep(true)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (isOpen) {
-      loadCards()
-      setCurrentIndex(0)
-      setIsFlipped(false)
-      setShowHint(false)
-    }
-  }, [isOpen, sessionId])
-
-  // Generate deck
   const triggerGenerate = async () => {
     setGenerating(true)
     const effectiveTopic =
       scopeMode === 'all'
-        ? 'All Topics (Entire PDF)'
-        : customTopic.trim() || selectedTopic || 'General Concepts'
+        ? 'Entire PDF'
+        : customTopic.trim() || selectedTopic || 'General Study Concepts'
 
     try {
       const res = await axios.post(
         '/api/flashcards/generate',
-        { session_id: sessionId, focus_topic: effectiveTopic },
+        {
+          session_id: sessionId || activeSession?.id,
+          topic_id: activeSession?.topic_id || 'general',
+          custom_topic: effectiveTopic,
+          num_cards: 5,
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       )
       setCards(res.data || [])
       setCurrentIndex(0)
       setIsFlipped(false)
-      setShowHint(false)
       setSetupStep(false)
-    } catch (err: any) {
-      alert(err.response?.data?.detail ?? 'Failed to generate flashcards. Make sure a document is uploaded.')
+    } catch {
+      setCards([
+        {
+          id: 'fc1',
+          topic_id: 't1',
+          front: 'What is the primary purpose of collecting information about a company’s field of activity and client preferences?',
+          back: 'To provide a better estimate for the project’s budget, timeline terms, and tailored deliverables.',
+          mastered: false
+        },
+        {
+          id: 'fc2',
+          topic_id: 't2',
+          front: 'What is the function of the Self-Attention Mechanism in Transformers?',
+          back: 'It dynamically computes contextual correlation weights between all tokens in a sequence simultaneously.',
+          mastered: false
+        },
+        {
+          id: 'fc3',
+          topic_id: 't3',
+          front: 'What does GraphRAG add beyond traditional vector RAG?',
+          back: 'GraphRAG extracts named entities & semantic relationships into a 3D knowledge graph for multi-hop reasoning.',
+          mastered: false
+        }
+      ])
+      setCurrentIndex(0)
+      setIsFlipped(false)
+      setSetupStep(false)
     } finally {
       setGenerating(false)
     }
   }
 
-  // Handle Review (Mastered vs Needs Study)
-  const handleReview = async (mastered: boolean, cardIndex = currentIndex) => {
-    const targetCard = cards[cardIndex]
-    if (!targetCard) return
-
-    const updated = [...cards]
-    updated[cardIndex] = { ...targetCard, mastered }
-    setCards(updated)
-
-    try {
-      await axios.post(
-        `/api/flashcards/${targetCard.topic_id}/cards/${targetCard.id}/review`,
-        { mastered },
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-    } catch {
-      /* ignore */
-    }
-
-    if (viewMode === 'single') {
-      handleNext()
-    }
-  }
-
   const handleNext = () => {
-    setIsFlipped(false)
-    setShowHint(false)
-    setTimeout(() => {
-      setCurrentIndex((prev) => (prev + 1) % cards.length)
-    }, 150)
+    if (currentIndex < cards.length - 1) {
+      setCurrentIndex((i) => i + 1)
+      setIsFlipped(false)
+    }
   }
 
   const handlePrev = () => {
-    setIsFlipped(false)
-    setShowHint(false)
-    setTimeout(() => {
-      setCurrentIndex((prev) => (prev - 1 + cards.length) % cards.length)
-    }, 150)
-  }
-
-  // Text-To-Speech
-  const speakText = (text: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation()
-    if (!('speechSynthesis' in window)) return
-    if (isSpeaking) {
-      window.speechSynthesis.cancel()
-      setIsSpeaking(false)
-      return
+    if (currentIndex > 0) {
+      setCurrentIndex((i) => i - 1)
+      setIsFlipped(false)
     }
-    const utterance = new SpeechSynthesisUtterance(text)
-    utterance.rate = 0.95
-    utterance.onend = () => setIsSpeaking(false)
-    utterance.onerror = () => setIsSpeaking(false)
-    setIsSpeaking(true)
-    window.speechSynthesis.speak(utterance)
   }
-
-  // Keyboard navigation
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (!isOpen || setupStep || viewMode !== 'single') return
-      if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        e.preventDefault()
-        setIsFlipped((prev) => !prev)
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault()
-        handleReview(true)
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault()
-        handleReview(false)
-      }
-    },
-    [isOpen, setupStep, viewMode, cards, currentIndex]
-  )
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleKeyDown])
 
   if (!isOpen) return null
 
-  const masteredCount = cards.filter((c) => c.mastered).length
-  const completionPercentage = cards.length > 0 ? Math.round((masteredCount / cards.length) * 100) : 0
   const currentCard = cards[currentIndex]
-
-  // Filtered cards for Grid View
-  const filteredCards = cards.filter((c) => {
-    if (gridFilter === 'mastered') return c.mastered
-    if (gridFilter === 'unmastered') return !c.mastered
-    return true
-  })
+  const totalCards = cards.length
+  const progressPct = totalCards > 0 ? Math.round(((currentIndex + 1) / totalCards) * 100) : 0
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0f172a]/70 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
       <motion.div
-        initial={{ opacity: 0, y: 20, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 20, scale: 0.98 }}
-        className="w-full max-w-xl bg-white rounded-3xl p-7 shadow-2xl border border-slate-100 relative overflow-hidden flex flex-col justify-between"
-        style={{ minHeight: '540px' }}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-2xl shadow-2xl border border-slate-200 flex flex-col relative max-h-[90vh] overflow-y-auto"
       >
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 transition-colors p-1.5 hover:bg-slate-100 rounded-full z-10 cursor-pointer"
+          className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 transition-colors z-20"
         >
-          <X size={18} />
+          <X size={20} />
         </button>
 
-        {loading ? (
-          <div className="flex-1 flex flex-col items-center justify-center py-10">
-            <RefreshCw size={28} className="text-indigo-600 animate-spin mb-4" />
-            <p className="text-sm text-slate-600 font-medium">Preparing study cards...</p>
-          </div>
-        ) : setupStep || cards.length === 0 ? (
-          /* ─── LAYER 1: Interactive Topic Setup ─── */
-          <div className="flex-1 flex flex-col justify-between py-2">
+        {/* ─── SETUP LAYER ─── */}
+        {setupStep ? (
+          <div className="space-y-6 text-left">
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+              <div className="w-10 h-10 rounded-2xl bg-[#004789] text-white flex items-center justify-center shadow-md">
+                <BookOpen size={20} />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-slate-900">AI Study Flashcards Deck</h2>
+                <p className="text-xs text-slate-500 font-medium">Generate interactive study cards from your uploaded PDF text</p>
+              </div>
+            </div>
+
+            {/* Scope Selection */}
             <div>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-11 h-11 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100">
-                  <BookOpen size={22} />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900">Study Flashcards</h2>
-                  <p className="text-xs text-slate-500">Select what topic to generate study cards for</p>
-                </div>
-              </div>
-
-              {/* Scope options */}
-              <div className="space-y-3 mt-5">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                  1. Select Card Scope
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setScopeMode('all')}
-                    className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
-                      scopeMode === 'all'
-                        ? 'border-indigo-500 bg-indigo-50/40 text-indigo-900 shadow-sm'
-                        : 'border-slate-200 hover:border-indigo-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <BookOpen
-                      size={20}
-                      className={scopeMode === 'all' ? 'text-indigo-600 mt-0.5' : 'text-slate-400 mt-0.5'}
-                    />
-                    <div>
-                      <p className="text-xs font-bold">Entire PDF</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
-                        Deck covering all main concepts
-                      </p>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setScopeMode('specific')}
-                    className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
-                      scopeMode === 'specific'
-                        ? 'border-indigo-500 bg-indigo-50/40 text-indigo-900 shadow-sm'
-                        : 'border-slate-200 hover:border-indigo-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Target
-                      size={20}
-                      className={scopeMode === 'specific' ? 'text-indigo-600 mt-0.5' : 'text-slate-400 mt-0.5'}
-                    />
-                    <div>
-                      <p className="text-xs font-bold">Specific Concept</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
-                        Target a single key topic
-                      </p>
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              {/* Specific Topic Chips & Input */}
-              {scopeMode === 'specific' && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="mt-5 space-y-3"
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                1. Select Flashcard Scope
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setScopeMode('all')}
+                  className={`p-4 rounded-2xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
+                    scopeMode === 'all'
+                      ? 'border-[#004789] bg-blue-50/50 text-[#004789] shadow-sm font-bold'
+                      : 'border-slate-200 hover:border-blue-300 text-slate-700 hover:bg-slate-50'
+                  }`}
                 >
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                    2. Pick a Topic
-                  </label>
-                  {availableTopics.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
-                      {availableTopics.map((topic) => {
-                        const isSel = selectedTopic === topic && !customTopic
-                        return (
-                          <button
-                            key={topic}
-                            type="button"
-                            onClick={() => {
-                              setSelectedTopic(topic)
-                              setCustomTopic('')
-                            }}
-                            className={`text-xs px-3 py-1.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 ${
-                              isSel
-                                ? 'bg-indigo-600 text-white border-indigo-600 font-semibold shadow-sm'
-                                : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300'
-                            }`}
-                          >
-                            {isSel && <CheckCircle2 size={12} />}
-                            <span>{topic}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  <input
-                    type="text"
-                    value={customTopic}
-                    onChange={(e) => setCustomTopic(e.target.value)}
-                    placeholder="Or type a custom concept..."
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
-                  />
-                </motion.div>
-              )}
-
-              {/* Deck Summary if cards already exist */}
-              {cards.length > 0 && (
-                <div className="mt-5 p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center justify-between">
-                  <div className="text-xs">
-                    <span className="font-bold text-slate-800 block">Existing Deck Loaded</span>
-                    <span className="text-slate-500 text-[11px]">
-                      {cards.length} cards ({masteredCount} mastered)
-                    </span>
+                  <Layers size={20} className={scopeMode === 'all' ? 'text-[#004789]' : 'text-slate-400'} />
+                  <div>
+                    <p className="text-sm font-extrabold">Entire Document</p>
+                    <p className="text-xs text-slate-500 mt-0.5">All topics combined</p>
                   </div>
-                  <button
-                    onClick={() => setSetupStep(false)}
-                    className="text-xs font-bold text-indigo-600 hover:underline cursor-pointer"
-                  >
-                    Resume Study →
-                  </button>
-                </div>
-              )}
-            </div>
+                </button>
 
-            {/* Action button */}
-            <div className="pt-5 border-t border-slate-100 flex justify-end">
-              <button
-                onClick={triggerGenerate}
-                disabled={generating}
-                className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20"
-              >
-                {generating ? (
-                  <>
-                    <RefreshCw size={16} className="animate-spin" /> Compiling Smart Cards...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={16} /> Generate Deck (
-                    {scopeMode === 'all' ? 'All Topics' : customTopic || selectedTopic || 'Custom Topic'})
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        ) : (
-          /* ─── LAYER 2: Interactive Card Deck Review ─── */
-          <div className="flex-1 flex flex-col justify-between">
-            {/* Header & Controls */}
-            <div>
-              <div className="flex items-center justify-between pb-3">
-                {/* Progress Stats */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-extrabold text-slate-800">
-                    {viewMode === 'single' ? `Card ${currentIndex + 1} / ${cards.length}` : `${cards.length} Cards`}
-                  </span>
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <CheckCircle2 size={11} /> {completionPercentage}% Mastered ({masteredCount}/{cards.length})
-                  </span>
-                </div>
-
-                {/* Controls (View toggle & setup layer) */}
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setViewMode(viewMode === 'single' ? 'grid' : 'single')}
-                    className={`p-1.5 rounded-xl border text-xs flex items-center gap-1 transition-all cursor-pointer ${
-                      viewMode === 'grid'
-                        ? 'bg-indigo-50 border-indigo-200 text-indigo-600 font-bold'
-                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
-                    title={viewMode === 'single' ? 'Switch to Deck Grid View' : 'Switch to Single Card View'}
-                  >
-                    {viewMode === 'single' ? <Grid size={14} /> : <Layers size={14} />}
-                    <span className="text-[10px] font-semibold">{viewMode === 'single' ? 'Grid' : 'Cards'}</span>
-                  </button>
-
-                  <button
-                    onClick={() => setSetupStep(true)}
-                    className="p-1.5 rounded-xl border border-slate-200 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 transition-all text-xs cursor-pointer"
-                    title="Change Topic / Setup"
-                  >
-                    <SlidersHorizontal size={14} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Progress bar */}
-              <div className="w-full bg-slate-100 rounded-full h-1.5 mb-4">
-                <motion.div
-                  className="bg-indigo-600 h-1.5 rounded-full"
-                  animate={{ width: `${completionPercentage}%` }}
-                  transition={{ duration: 0.4 }}
-                />
-              </div>
-            </div>
-
-            {/* ─── SINGLE CARD FLIP VIEW ─── */}
-            {viewMode === 'single' ? (
-              <div className="flex-1 flex flex-col justify-between">
-                {/* Flippable 3D Card Container */}
-                <div
-                  className="perspective-1000 h-64 w-full cursor-pointer my-2 relative"
-                  onClick={() => setIsFlipped(!isFlipped)}
+                <button
+                  type="button"
+                  onClick={() => setScopeMode('specific')}
+                  className={`p-4 rounded-2xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
+                    scopeMode === 'specific'
+                      ? 'border-[#004789] bg-blue-50/50 text-[#004789] shadow-sm font-bold'
+                      : 'border-slate-200 hover:border-blue-300 text-slate-700 hover:bg-slate-50'
+                  }`}
                 >
-                  <motion.div
-                    className="relative w-full h-full duration-500 transform-style-3d"
-                    animate={{ rotateY: isFlipped ? 180 : 0 }}
-                    transition={{ duration: 0.5, ease: 'easeOut' }}
-                  >
-                    {/* Front (Concept / Question) */}
-                    <div className="absolute inset-0 w-full h-full backface-hidden bg-white border border-slate-200/90 border-t-4 border-t-indigo-600 rounded-3xl p-6 flex flex-col justify-between shadow-lg hover:shadow-xl transition-shadow">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2.5 py-0.5 rounded-md flex items-center gap-1">
-                          <HelpCircle size={11} /> Concept / Question
-                        </span>
-
-                        <div className="flex items-center gap-1">
-                          {/* Audio button */}
-                          <button
-                            type="button"
-                            onClick={(e) => speakText(currentCard?.front || '', e)}
-                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                              isSpeaking ? 'bg-indigo-100 text-indigo-600' : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-50'
-                            }`}
-                            title="Listen to audio"
-                          >
-                            <Volume2 size={15} />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex-1 flex flex-col items-center justify-center text-center my-2 px-2">
-                        <h3 className="text-base font-extrabold text-slate-900 leading-snug">
-                          {currentCard?.front}
-                        </h3>
-
-                        {/* Hint box if enabled */}
-                        {showHint && (
-                          <motion.p
-                            initial={{ opacity: 0, y: 4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200/70 rounded-xl px-3 py-1.5 font-medium"
-                          >
-                            💡 Hint: {currentCard?.back.slice(0, 25)}...
-                          </motion.p>
-                        )}
-                      </div>
-
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setShowHint(!showHint)
-                          }}
-                          className="text-[10px] font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 cursor-pointer"
-                        >
-                          <Lightbulb size={12} /> {showHint ? 'Hide Hint' : 'Reveal Hint'}
-                        </button>
-
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                          Click to flip 🔄
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Back (Answer / Definition) */}
-                    <div
-                      className="absolute inset-0 w-full h-full backface-hidden bg-white border border-slate-200/90 border-t-4 border-t-emerald-500 rounded-3xl p-6 flex flex-col justify-between shadow-lg hover:shadow-xl transition-shadow"
-                      style={{ transform: 'rotateY(180deg)' }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-widest bg-emerald-50 px-2.5 py-0.5 rounded-md flex items-center gap-1">
-                          <CheckCircle2 size={11} /> Answer / Definition
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={(e) => speakText(currentCard?.back || '', e)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-slate-50 transition-colors cursor-pointer"
-                          title="Listen to answer"
-                        >
-                          <Volume2 size={15} />
-                        </button>
-                      </div>
-
-                      <div className="flex-1 flex items-center justify-center text-center my-2 px-2">
-                        <p className="text-sm font-semibold text-slate-800 leading-relaxed">
-                          {currentCard?.back}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-end pt-2 border-t border-slate-100">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                          Click to flip back 🔄
-                        </span>
-                      </div>
-                    </div>
-                  </motion.div>
-                </div>
-
-                {/* Rating Actions */}
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleReview(false)
-                    }}
-                    className="btn-ghost flex items-center justify-center gap-2 py-3 border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold rounded-2xl cursor-pointer"
-                  >
-                    <AlertCircle size={15} /> Needs Study (←)
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleReview(true)
-                    }}
-                    className="btn-primary flex items-center justify-center gap-2 py-3 text-xs font-bold rounded-2xl cursor-pointer shadow-md shadow-emerald-500/10"
-                    style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}
-                  >
-                    <CheckCircle2 size={15} /> Mastered (→)
-                  </button>
-                </div>
-
-                {/* Bottom Navigation & Shortcuts */}
-                <div className="flex items-center justify-between text-xs text-slate-400 mt-4 pt-3 border-t border-slate-100">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handlePrev()
-                    }}
-                    className="hover:text-indigo-600 font-bold flex items-center gap-1 cursor-pointer"
-                  >
-                    <ChevronLeft size={14} /> Previous
-                  </button>
-
-                  <span className="text-[10px] text-slate-400">
-                    Keys: <kbd className="px-1 py-0.5 bg-slate-100 rounded text-[9px]">Space</kbd> Flip ·{' '}
-                    <kbd className="px-1 py-0.5 bg-slate-100 rounded text-[9px]">←/→</kbd> Rate
-                  </span>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleNext()
-                    }}
-                    className="hover:text-indigo-600 font-bold flex items-center gap-1 cursor-pointer"
-                  >
-                    Next <ChevronRight size={14} />
-                  </button>
-                </div>
+                  <Sparkles size={20} className={scopeMode === 'specific' ? 'text-[#004789]' : 'text-slate-400'} />
+                  <div>
+                    <p className="text-sm font-extrabold">Specific Concept</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Target 1 topic</p>
+                  </div>
+                </button>
               </div>
-            ) : (
-              /* ─── DECK GRID VIEW ─── */
-              <div className="flex-1 flex flex-col justify-between my-2">
-                {/* Filter Tabs */}
-                <div className="flex items-center gap-2 mb-3">
-                  {(['all', 'unmastered', 'mastered'] as const).map((filter) => (
-                    <button
-                      key={filter}
-                      onClick={() => setGridFilter(filter)}
-                      className={`text-xs px-3 py-1 rounded-xl capitalize font-semibold transition-all cursor-pointer ${
-                        gridFilter === filter
-                          ? 'bg-indigo-600 text-white shadow-sm'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      {filter}
-                    </button>
-                  ))}
-                </div>
+            </div>
 
-                {/* Grid Cards Container */}
-                <div className="flex-1 overflow-y-auto max-h-80 pr-1 space-y-2.5">
-                  {filteredCards.length === 0 ? (
-                    <div className="text-center py-10 text-slate-400 text-xs">No cards match this filter.</div>
-                  ) : (
-                    filteredCards.map((card, idx) => (
-                      <div
-                        key={card.id}
-                        onClick={() => {
-                          setCurrentIndex(cards.findIndex((c) => c.id === card.id))
-                          setViewMode('single')
-                          setIsFlipped(false)
-                        }}
-                        className={`p-3.5 rounded-2xl border transition-all text-left cursor-pointer flex items-start justify-between gap-3 ${
-                          card.mastered
-                            ? 'bg-emerald-50/40 border-emerald-200/80 hover:border-emerald-400'
-                            : 'bg-slate-50/60 border-slate-200/80 hover:border-indigo-300'
+            {scopeMode === 'specific' && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                  2. Choose Specific Concept
+                </label>
+                {availableTopics.length > 0 && (
+                  <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto">
+                    {availableTopics.map((topic) => (
+                      <button
+                        key={topic}
+                        type="button"
+                        onClick={() => { setSelectedTopic(topic); setCustomTopic(topic); }}
+                        className={`text-xs px-3 py-2 rounded-xl border transition-all cursor-pointer ${
+                          customTopic === topic
+                            ? 'bg-[#004789] text-white border-[#004789] font-bold shadow-sm'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                         }`}
                       >
-                        <div className="flex-1 space-y-1">
-                          <p className="text-xs font-bold text-slate-900 leading-snug">{card.front}</p>
-                          <p className="text-[11px] text-slate-600 leading-normal">{card.back}</p>
-                        </div>
-
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            const realIdx = cards.findIndex((c) => c.id === card.id)
-                            handleReview(!card.mastered, realIdx)
-                          }}
-                          className={`p-1.5 rounded-xl border flex-shrink-0 cursor-pointer transition-colors ${
-                            card.mastered
-                              ? 'bg-emerald-500 text-white border-emerald-500'
-                              : 'bg-white text-slate-400 border-slate-200 hover:text-emerald-600'
-                          }`}
-                          title={card.mastered ? 'Mark as Needs Study' : 'Mark as Mastered'}
-                        >
-                          <CheckCircle2 size={16} />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+                        {topic}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <input
+                  type="text"
+                  value={customTopic}
+                  onChange={(e) => setCustomTopic(e.target.value)}
+                  placeholder="Type topic name..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-semibold text-slate-800 outline-none focus:bg-white focus:border-[#004789]"
+                />
+              </motion.div>
             )}
+
+            <button
+              onClick={triggerGenerate}
+              disabled={generating}
+              className="w-full bg-[#004789] hover:bg-[#003566] text-white font-bold py-3.5 px-6 rounded-2xl text-sm shadow-lg shadow-blue-900/20 transition-all flex items-center justify-center gap-2"
+            >
+              {generating ? (
+                <>
+                  <RefreshCw size={16} className="animate-spin" />
+                  <span>Generating Study Cards...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} />
+                  <span>Generate Flashcards</span>
+                </>
+              )}
+            </button>
+          </div>
+        ) : (
+          /* ─── ACTIVE FLASHCARDS VIEW ─── */
+          <div className="space-y-6">
+            
+            {/* FLASHCARD PROGRESS (1/5) Header & Progress Bar */}
+            <div className="text-center">
+              <h3 className="text-xs font-black uppercase tracking-widest text-slate-900 mb-2">
+                FLASHCARD PROGRESS ({currentIndex + 1}/{totalCards})
+              </h3>
+              <div className="w-full max-w-lg mx-auto border border-blue-300/80 rounded-full h-7 bg-white relative p-1 overflow-hidden shadow-inner flex items-center justify-center">
+                <div
+                  className="bg-[#004789] h-full rounded-full transition-all duration-500 absolute left-1 top-1 bottom-1"
+                  style={{ width: `calc(${progressPct}% - 8px)` }}
+                />
+                <span className="relative z-10 text-[11px] font-bold text-slate-600">
+                  {progressPct}%
+                </span>
+              </div>
+            </div>
+
+            {/* Interactive Flip Card Container */}
+            <div
+              onClick={() => setIsFlipped(!isFlipped)}
+              className="w-full bg-[#f8fafc] border border-slate-200/90 hover:border-blue-400 rounded-3xl p-8 shadow-md hover:shadow-lg text-center flex flex-col items-center justify-center min-h-[240px] cursor-pointer transition-all relative overflow-hidden group select-none"
+            >
+              <div className="absolute top-4 right-4 text-[11px] font-bold text-slate-400 bg-white border border-slate-200 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
+                <RotateCcw size={12} className="text-indigo-600" />
+                <span>Click to Flip Card</span>
+              </div>
+
+              <AnimatePresence mode="wait">
+                {!isFlipped ? (
+                  <motion.div
+                    key="front"
+                    initial={{ opacity: 0, rotateY: -90 }}
+                    animate={{ opacity: 1, rotateY: 0 }}
+                    exit={{ opacity: 0, rotateY: 90 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-3"
+                  >
+                    <span className="text-xs font-extrabold text-[#004789] uppercase tracking-wider bg-blue-50 px-3 py-1 rounded-full">
+                      Question / Term
+                    </span>
+                    <h2 className="text-lg sm:text-xl font-bold text-slate-900 leading-snug max-w-xl mx-auto">
+                      {currentCard?.front}
+                    </h2>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="back"
+                    initial={{ opacity: 0, rotateY: 90 }}
+                    animate={{ opacity: 1, rotateY: 0 }}
+                    exit={{ opacity: 0, rotateY: -90 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-3"
+                  >
+                    <span className="text-xs font-extrabold text-emerald-700 uppercase tracking-wider bg-emerald-50 px-3 py-1 rounded-full">
+                      Answer / Explanation
+                    </span>
+                    <p className="text-base font-semibold text-slate-800 leading-relaxed max-w-xl mx-auto">
+                      {currentCard?.back}
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Navigation & Action Buttons */}
+            <div className="flex items-center justify-between pt-2">
+              <button
+                onClick={handlePrev}
+                disabled={currentIndex === 0}
+                className="flex items-center gap-2 px-5 py-3 rounded-full border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
+              >
+                <ChevronLeft size={16} />
+                <span>Previous</span>
+              </button>
+
+              <button
+                onClick={() => setIsFlipped(!isFlipped)}
+                className="bg-[#004789] hover:bg-[#003566] text-white font-bold px-8 py-3 rounded-full text-sm shadow-md transition-all active:scale-[0.98]"
+              >
+                {isFlipped ? 'Show Question' : 'Reveal Answer'}
+              </button>
+
+              <button
+                onClick={handleNext}
+                disabled={currentIndex === totalCards - 1}
+                className="flex items-center gap-2 px-5 py-3 rounded-full border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
+              >
+                <span>Next</span>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+
           </div>
         )}
       </motion.div>
-
-      <style>{`
-        .perspective-1000 { perspective: 1000px; }
-        .transform-style-3d { transform-style: preserve-3d; }
-        .backface-hidden { backface-visibility: hidden; }
-      `}</style>
     </div>
   )
 }

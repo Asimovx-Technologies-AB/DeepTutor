@@ -1,5 +1,5 @@
 """
-Add a user directly to the deep_tutor.db database.
+a user directly to the deep_tutor.db database.
 Edit the USER_DATA section below, then run:
   .venv\Scripts\python.exe add_user.py
 """
@@ -11,12 +11,12 @@ import bcrypt
 # ─── EDIT THESE ──────────────────────────────────────────────────────────────
 USER_DATA = [
     {
-        "username": "sreehari",
+        "username": "i",
         "email":    "sreeharips385@gmail.com",
         "password": "mypassword123",
         "role":     "student",   # or "admin"
     },
-    # Add more users here if needed:
+    # more users here if needed:
     # {
     #     "username": "admin",
     #     "email":    "admin@deeptutor.ai",

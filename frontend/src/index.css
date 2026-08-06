@@ -29,8 +29,20 @@
 }
 
 html {
-  font-size: 19px;
+  font-size: 15px;
   scroll-behavior: smooth;
+}
+
+@media (min-width: 640px) {
+  html {
+    font-size: 16.5px;
+  }
+}
+
+@media (min-width: 1024px) {
+  html {
+    font-size: 18px;
+  }
 }
 
 body {

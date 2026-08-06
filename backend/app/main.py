@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 import os
 from pathlib import Path
 from app.core.config import get_settings
-from app.api import auth, chat, documents, quiz, flashcards, progress, study_plan, leaderboard
+from app.api import auth, chat, documents, quiz, flashcards, progress, study_plan, leaderboard, mcp
 
 settings = get_settings()
 
@@ -20,21 +20,22 @@ async def lifespan(app: FastAPI):
     print(f"[START] {settings.APP_NAME} v{settings.APP_VERSION} started")
     print(f"[OLLAMA] Base URL: {settings.OLLAMA_BASE_URL} | Model: {settings.OLLAMA_CHAT_MODEL}")
     print(f"[GRAPHRAG] ChromaDB @ {settings.CHROMA_PERSIST_DIR} | Graph @ {settings.GRAPH_DATA_DIR}")
+    print(f"[MCP] FastMCP Server & Client Manager initialized")
     yield
     print("[STOP] Shutting down...")
 
 
 app = FastAPI(
     title="Deep Tutor API",
-    description="AI Tutor backend with GraphRAG + Local LLM",
+    description="AI Tutor backend with GraphRAG + Local LLM + MCP",
     version="1.0.0",
     lifespan=lifespan,
 )
 
-# CORS — allow frontend dev server
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "*"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -49,6 +50,7 @@ app.include_router(flashcards.router, prefix="/api")
 app.include_router(progress.router, prefix="/api")
 app.include_router(study_plan.router, prefix="/api")
 app.include_router(leaderboard.router, prefix="/api")
+app.include_router(mcp.router)
 
 
 @app.get("/")

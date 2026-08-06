@@ -30,3 +30,6 @@ aiofiles>=23.2.1
 # Utilities
 python-dotenv>=1.0.0
 tenacity>=8.3.0
+
+# Model Context Protocol
+mcp>=1.0.0

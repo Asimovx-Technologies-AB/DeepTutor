@@ -66,17 +66,17 @@ export default function LandingPage() {
     <div className="min-h-screen bg-[#ffffff] text-[#111111] font-sans selection:bg-[#111111] selection:text-white relative">
       {/* ─── EASLO MINIMAL HEADER ─── */}
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-[#e5e7eb]">
-        <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           <div
-            className="flex items-center gap-3 cursor-pointer group"
+            className="flex items-center gap-2 sm:gap-3 cursor-pointer group"
             onClick={() => navigate('/')}
           >
-            <div className="w-10 h-10 rounded-2xl bg-[#111111] flex items-center justify-center text-white shadow-sm transition-transform active:scale-95">
-              <GraduationCap size={22} />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#111111] flex items-center justify-center text-white shadow-sm transition-transform active:scale-95 flex-shrink-0">
+              <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div className="flex items-center gap-2">
-              <span className="font-black text-xl text-[#111111] tracking-tight">DeepTutor</span>
-              <span className="text-[10px] font-extrabold uppercase tracking-wider bg-[#f4f4f5] text-[#18181b] px-2 py-0.5 rounded-full border border-[#e4e4e7]">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="font-black text-base sm:text-xl text-[#111111] tracking-tight">DeepTutor</span>
+              <span className="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wider bg-[#f4f4f5] text-[#18181b] px-1.5 sm:px-2 py-0.5 rounded-full border border-[#e4e4e7]">
                 AI
               </span>
             </div>
@@ -88,27 +88,27 @@ export default function LandingPage() {
             <a href="#how-it-works" className="hover:text-[#111111] transition-colors">How It Works</a>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {isAuthenticated ? (
               <button
                 onClick={() => navigate('/dashboard')}
-                className="bg-[#111111] text-white hover:bg-[#27272a] py-2.5 px-6 rounded-full text-sm font-bold flex items-center gap-2 transition-all active:scale-95"
+                className="bg-[#111111] text-white hover:bg-[#27272a] py-2 sm:py-2.5 px-4 sm:px-6 rounded-full text-xs sm:text-sm font-bold flex items-center gap-1.5 sm:gap-2 transition-all active:scale-95 whitespace-nowrap"
               >
-                Go to Dashboard <ArrowRight size={16} />
+                <span>Dashboard</span> <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             ) : (
               <>
                 <button
                   onClick={() => navigate('/login')}
-                  className="text-sm font-bold text-[#52525b] hover:text-[#111111] px-4 py-2 rounded-full transition-colors"
+                  className="text-xs sm:text-sm font-bold text-[#52525b] hover:text-[#111111] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full transition-colors whitespace-nowrap"
                 >
                   Sign In
                 </button>
                 <button
                   onClick={() => navigate('/register')}
-                  className="bg-[#111111] text-white hover:bg-[#27272a] py-2.5 px-6 rounded-full text-sm font-bold shadow-sm transition-all active:scale-95"
+                  className="bg-[#111111] text-white hover:bg-[#27272a] py-1.5 sm:py-2.5 px-3.5 sm:px-6 rounded-full text-xs sm:text-sm font-bold shadow-sm transition-all active:scale-95 whitespace-nowrap"
                 >
-                  Get Started Free
+                  Get Started
                 </button>
               </>
             )}

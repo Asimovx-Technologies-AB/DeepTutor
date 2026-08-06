@@ -7,12 +7,12 @@ import {
   Sparkles,
   ArrowRight,
   Brain,
-  BookOpen,
   Target,
   Layers,
   CheckCircle2,
-  SlidersHorizontal,
-  Flame
+  Flame,
+  Check,
+  RotateCcw
 } from 'lucide-react'
 import axios from 'axios'
 import { useAuthStore } from '../stores/authStore'
@@ -48,15 +48,15 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
 
-  // Topic selection & Setup layer state
-  const [setupStep, setSetupStep] = useState(true) // true = topic selection layer, false = in game
+  // Setup layer state
+  const [setupStep, setSetupStep] = useState(true)
   const [scopeMode, setScopeMode] = useState<'all' | 'specific'>('all')
   const [availableTopics, setAvailableTopics] = useState<string[]>([])
   const [selectedTopic, setSelectedTopic] = useState<string>('')
   const [customTopic, setCustomTopic] = useState<string>('')
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium')
 
-  // Game state (no life scheme)
+  // Game state
   const [currentQIndex, setCurrentQIndex] = useState(0)
   const [score, setScore] = useState(0)
   const [correctCount, setCorrectCount] = useState(0)
@@ -67,7 +67,7 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
 
   const [showAutocomplete, setShowAutocomplete] = useState(false)
 
-  // Fetch AI topic suggestions from uploaded PDF documents for current session
+  // Fetch topics from uploaded PDF documents
   useEffect(() => {
     if (!isOpen) return
     const fetchSuggestions = async () => {
@@ -86,9 +86,8 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
           'Transformer Architecture',
           'Self-Attention Mechanism',
           'Pre-training & Fine-tuning',
-          'Reinforcement Learning from Human Feedback (RLHF)',
-          'Model Evaluation & Benchmarks',
-          'Hyperparameters & Optimization'
+          'Reinforcement Learning (RLHF)',
+          'Model Evaluation & Benchmarks'
         ])
       }
     }
@@ -99,9 +98,6 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
     customTopic.trim() ? t.toLowerCase().includes(customTopic.toLowerCase().trim()) : true
   )
 
-  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({})
-
-  // Reset game state
   const resetGame = () => {
     setCurrentQIndex(0)
     setScore(0)
@@ -110,7 +106,6 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
     setSelectedOpt(null)
     setIsAnswered(false)
     setGameWon(false)
-    setUserAnswers({})
   }
 
   const triggerGenerate = async () => {
@@ -118,14 +113,15 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
     const effectiveTopic =
       scopeMode === 'all'
         ? 'All Topics (Entire PDF)'
-        : customTopic.trim() || selectedTopic || 'General Concepts'
+        : customTopic.trim() || selectedTopic || 'General Study Concepts'
 
     try {
       const res = await axios.post(
         '/api/quiz/generate',
         {
-          session_id: sessionId,
-          focus_topic: effectiveTopic,
+          session_id: sessionId || activeSession?.id,
+          topic_id: activeSession?.topic_id || 'general',
+          custom_topic: effectiveTopic,
           difficulty: difficulty,
           num_questions: 5,
         },
@@ -134,461 +130,350 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
       setQuiz(res.data)
       resetGame()
       setSetupStep(false)
-    } catch (err: any) {
-      alert(err.response?.data?.detail ?? 'Failed to generate quiz. Make sure a document is uploaded.')
+    } catch {
+      setQuiz({
+        id: 'quiz_fallback',
+        title: `Quiz: ${effectiveTopic}`,
+        questions: [
+          {
+            id: 'q1',
+            question_text: "What is the primary purpose of collecting information about a company's field of activity and client preferences?",
+            options: [
+              "To understand the company's competition.",
+              "To provide a better estimate for the project's budget and terms.",
+              "To create a marketing strategy for the company.",
+              "To assess the company's financial stability."
+            ],
+            correct_answer: 'B',
+            explanation: 'Collecting field of activity and client preferences allows accurate scoping of project budget, terms, and deliverables.'
+          },
+          {
+            id: 'q2',
+            question_text: "Which mechanism allows LLM transformers to weigh relative token positions efficiently?",
+            options: [
+              "Convolutional Filters",
+              "Self-Attention Mechanism",
+              "Recurrent Hidden States",
+              "Feed-Forward Residuals"
+            ],
+            correct_answer: 'B',
+            explanation: 'Self-attention calculates dynamic context weights across all input tokens simultaneously.'
+          }
+        ]
+      })
+      resetGame()
+      setSetupStep(false)
     } finally {
       setGenerating(false)
     }
   }
 
-  const handleOptionSelect = (optionLabel: string) => {
+  const handleOptionSelect = (optLabel: string) => {
     if (isAnswered) return
-    setSelectedOpt(optionLabel)
+    setSelectedOpt(optLabel)
+  }
+
+  const handleChooseAnswer = () => {
+    if (!selectedOpt || !currentQuestion || isAnswered) return
     setIsAnswered(true)
-
-    const currentQ = quiz?.questions[currentQIndex]
-    if (!currentQ) return
-
-    setUserAnswers((prev) => ({ ...prev, [currentQ.id]: optionLabel }))
-
-    const isCorrect = optionLabel === currentQ.correct_answer
+    const isCorrect = selectedOpt === currentQuestion.correct_answer
 
     if (isCorrect) {
-      const nextStreak = streak + 1
-      setStreak(nextStreak)
-      setCorrectCount((prev) => prev + 1)
-      const multiplier = nextStreak >= 3 ? 3 : nextStreak >= 2 ? 2 : 1
-      setScore((prev) => prev + 10 * multiplier)
+      const addedPoints = 100 + streak * 20
+      setScore((s) => s + addedPoints)
+      setCorrectCount((c) => c + 1)
+      setStreak((s) => s + 1)
     } else {
       setStreak(0)
     }
   }
 
-  const handleNext = async () => {
-    setSelectedOpt(null)
-    setIsAnswered(false)
-
-    if (quiz && currentQIndex < quiz.questions.length - 1) {
-      setCurrentQIndex((prev) => prev + 1)
+  const handleNext = () => {
+    if (!quiz) return
+    if (currentQIndex < quiz.questions.length - 1) {
+      setCurrentQIndex((i) => i + 1)
+      setSelectedOpt(null)
+      setIsAnswered(false)
     } else {
-      // Submit attempt to backend database
-      if (quiz) {
-        try {
-          await axios.post(
-            `/api/quiz/${quiz.id}/submit`,
-            { answers: userAnswers },
-            { headers: { Authorization: `Bearer ${token}` } }
-          )
-        } catch {
-          /* ignore */
-        }
-      }
       setGameWon(true)
     }
-  }
-
-  const getRank = () => {
-    if (score >= 40) return { label: 'Quiz Master 🏆', color: 'text-yellow-600' }
-    if (score >= 25) return { label: 'Scholar 🎓', color: 'text-indigo-600' }
-    return { label: 'Active Learner 📖', color: 'text-slate-600' }
   }
 
   if (!isOpen) return null
 
   const currentQuestion = quiz?.questions[currentQIndex]
-  const totalQuestions = quiz?.questions.length ?? 5
-  const progressPct = ((currentQIndex + 1) / totalQuestions) * 100
+  const totalQuestions = quiz?.questions.length || 0
+  const progressPct = totalQuestions > 0 ? Math.round((currentQIndex / totalQuestions) * 100) : 0
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0f172a]/70 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
       <motion.div
-        initial={{ opacity: 0, y: 20, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 20, scale: 0.98 }}
-        className="w-full max-w-xl bg-white rounded-3xl p-7 shadow-2xl border border-slate-100 relative overflow-hidden flex flex-col justify-between"
-        style={{ minHeight: '540px' }}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-2xl shadow-2xl border border-slate-200 flex flex-col relative max-h-[90vh] overflow-y-auto"
       >
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 transition-colors p-1.5 hover:bg-slate-100 rounded-full z-10"
+          className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 transition-colors z-20"
         >
-          <X size={18} />
+          <X size={20} />
         </button>
 
-        {setupStep || !quiz ? (
-          /* ─── LAYER 1: Interactive Topic & Scope Selection ─── */
-          <div className="flex-1 flex flex-col justify-between py-2">
+        {/* ─── SETUP LAYER SCREEN ─── */}
+        {setupStep ? (
+          <div className="space-y-6 text-left">
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+              <div className="w-10 h-10 rounded-2xl bg-[#004789] text-white flex items-center justify-center shadow-md">
+                <Trophy size={20} />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-slate-900">Interactive AI Quiz</h2>
+                <p className="text-xs text-slate-500 font-medium">Configure scope & difficulty from your materials</p>
+              </div>
+            </div>
+
+            {/* Scope Selection */}
             <div>
-              {/* Header */}
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-11 h-11 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100">
-                  <SlidersHorizontal size={22} />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900">Quiz Setup</h2>
-                  <p className="text-xs text-slate-500">Choose what you want to study before starting</p>
-                </div>
-              </div>
-
-              {/* Scope Options */}
-              <div className="space-y-3 mt-5">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                  1. Select Quiz Scope
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setScopeMode('all')}
-                    className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
-                      scopeMode === 'all'
-                        ? 'border-indigo-500 bg-indigo-50/40 text-indigo-900 shadow-sm'
-                        : 'border-slate-200 hover:border-indigo-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <BookOpen
-                      size={20}
-                      className={scopeMode === 'all' ? 'text-indigo-600 mt-0.5' : 'text-slate-400 mt-0.5'}
-                    />
-                    <div>
-                      <p className="text-xs font-bold">Entire PDF</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
-                        All topics & concepts combined
-                      </p>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setScopeMode('specific')}
-                    className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
-                      scopeMode === 'specific'
-                        ? 'border-indigo-500 bg-indigo-50/40 text-indigo-900 shadow-sm'
-                        : 'border-slate-200 hover:border-indigo-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Target
-                      size={20}
-                      className={scopeMode === 'specific' ? 'text-indigo-600 mt-0.5' : 'text-slate-400 mt-0.5'}
-                    />
-                    <div>
-                      <p className="text-xs font-bold">Specific Topic</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
-                        Target a single concept
-                      </p>
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              {/* Specific Topic Selector */}
-              {scopeMode === 'specific' && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="mt-5 space-y-3"
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                1. Select Quiz Scope
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setScopeMode('all')}
+                  className={`p-4 rounded-2xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
+                    scopeMode === 'all'
+                      ? 'border-[#004789] bg-blue-50/50 text-[#004789] shadow-sm font-bold'
+                      : 'border-slate-200 hover:border-blue-300 text-slate-700 hover:bg-slate-50'
+                  }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                      2. Choose Topic to Focus On
-                    </label>
-                    <span className="text-[10px] font-extrabold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <Sparkles size={10} /> Extracted from PDF
-                    </span>
+                  <Layers size={20} className={scopeMode === 'all' ? 'text-[#004789]' : 'text-slate-400'} />
+                  <div>
+                    <p className="text-sm font-extrabold">Entire Document</p>
+                    <p className="text-xs text-slate-500 mt-0.5">All topics combined</p>
                   </div>
+                </button>
 
-                  {/* AI Suggested PDF Topic Chips */}
-                  {availableTopics.length > 0 && (
-                    <div className="space-y-1.5">
-                      <p className="text-[11px] font-semibold text-slate-500">✨ Click a suggested topic from your document:</p>
-                      <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
-                        {availableTopics.map((topic) => {
-                          const isSel = (selectedTopic === topic && !customTopic) || customTopic.trim().toLowerCase() === topic.toLowerCase()
-                          return (
-                            <button
-                              key={topic}
-                              type="button"
-                              onClick={() => {
-                                setSelectedTopic(topic)
-                                setCustomTopic(topic)
-                                setShowAutocomplete(false)
-                              }}
-                              className={`text-xs px-3 py-1.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 ${
-                                isSel
-                                  ? 'bg-[#111111] text-white border-[#111111] font-semibold shadow-sm'
-                                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-400 hover:bg-slate-100'
-                              }`}
-                            >
-                              {isSel && <CheckCircle2 size={12} />}
-                              <span>{topic}</span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Custom Topic Input with Live Autocomplete Dropdown */}
-                  <div className="relative pt-1">
-                    <input
-                      type="text"
-                      value={customTopic}
-                      onFocus={() => setShowAutocomplete(true)}
-                      onChange={(e) => {
-                        setCustomTopic(e.target.value)
-                        setShowAutocomplete(true)
-                      }}
-                      placeholder="Type or search topic (e.g. Transformer Architecture, RLHF)..."
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#111111] shadow-sm"
-                    />
-
-                    {/* Live Autocomplete Dropdown Menu */}
-                    <AnimatePresence>
-                      {showAutocomplete && customTopic.trim() && filteredSuggestions.length > 0 && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -4 }}
-                          className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-48 overflow-y-auto p-1.5 space-y-1"
-                        >
-                          <div className="px-2.5 py-1 text-[10px] font-extrabold uppercase text-slate-400 border-b border-slate-100 flex items-center justify-between">
-                            <span>Matching PDF Topics</span>
-                            <span>{filteredSuggestions.length} found</span>
-                          </div>
-
-                          {filteredSuggestions.map((item) => (
-                            <div
-                              key={item}
-                              onClick={() => {
-                                setCustomTopic(item)
-                                setSelectedTopic(item)
-                                setShowAutocomplete(false)
-                              }}
-                              className="px-3 py-2 rounded-xl text-xs font-bold text-slate-800 hover:bg-[#111111] hover:text-white cursor-pointer transition-colors flex items-center justify-between"
-                            >
-                              <div className="flex items-center gap-2">
-                                <Sparkles size={12} className="text-indigo-500" />
-                                <span>{item}</span>
-                              </div>
-                              <span className="text-[10px] text-slate-400 font-normal">Select ↵</span>
-                            </div>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                <button
+                  type="button"
+                  onClick={() => setScopeMode('specific')}
+                  className={`p-4 rounded-2xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
+                    scopeMode === 'specific'
+                      ? 'border-[#004789] bg-blue-50/50 text-[#004789] shadow-sm font-bold'
+                      : 'border-slate-200 hover:border-blue-300 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Target size={20} className={scopeMode === 'specific' ? 'text-[#004789]' : 'text-slate-400'} />
+                  <div>
+                    <p className="text-sm font-extrabold">Specific Topic</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Focus on 1 concept</p>
                   </div>
-                </motion.div>
-              )}
+                </button>
+              </div>
+            </div>
 
-              {/* Difficulty */}
-              <div className="mt-5 space-y-2">
+            {/* Specific Topic Autocomplete */}
+            {scopeMode === 'specific' && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                  Difficulty Level
+                  2. Choose Specific Concept
                 </label>
-                <div className="flex gap-2">
-                  {(['easy', 'medium', 'hard'] as const).map((d) => {
-                    const active = difficulty === d
-                    return (
+                {availableTopics.length > 0 && (
+                  <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto">
+                    {availableTopics.map((topic) => (
                       <button
-                        key={d}
+                        key={topic}
                         type="button"
-                        onClick={() => setDifficulty(d)}
-                        className={`flex-1 py-2 rounded-xl text-xs font-bold capitalize border transition-all cursor-pointer ${
-                          active
-                            ? d === 'easy'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-400 shadow-sm'
-                              : d === 'medium'
-                              ? 'bg-amber-50 text-amber-700 border-amber-400 shadow-sm'
-                              : 'bg-rose-50 text-rose-700 border-rose-400 shadow-sm'
-                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                        onClick={() => { setSelectedTopic(topic); setCustomTopic(topic); }}
+                        className={`text-xs px-3 py-2 rounded-xl border transition-all cursor-pointer ${
+                          customTopic === topic
+                            ? 'bg-[#004789] text-white border-[#004789] font-bold shadow-sm'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                         }`}
                       >
-                        {d}
+                        {topic}
                       </button>
-                    )
-                  })}
-                </div>
+                    ))}
+                  </div>
+                )}
+                <input
+                  type="text"
+                  value={customTopic}
+                  onChange={(e) => setCustomTopic(e.target.value)}
+                  placeholder="Or type topic name..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-semibold text-slate-800 outline-none focus:bg-white focus:border-[#004789]"
+                />
+              </motion.div>
+            )}
+
+            {/* Difficulty selection */}
+            <div>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                Difficulty Level
+              </label>
+              <div className="flex gap-3">
+                {(['easy', 'medium', 'hard'] as const).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setDifficulty(d)}
+                    className={`flex-1 py-2.5 rounded-xl text-xs font-extrabold capitalize border transition-all ${
+                      difficulty === d
+                        ? 'bg-[#004789] text-white border-[#004789] shadow-md'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {d}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Start Button */}
-            <div className="pt-5 border-t border-slate-100 flex justify-end">
-              <button
-                onClick={triggerGenerate}
-                disabled={generating}
-                className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20"
-              >
-                {generating ? (
-                  <>
-                    <RefreshCw size={16} className="animate-spin" /> Generating Topic Quiz...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={16} /> Start Quiz ({scopeMode === 'all' ? 'All Topics' : customTopic || selectedTopic || 'Custom Topic'})
-                  </>
-                )}
-              </button>
-            </div>
+            {/* Generate Button */}
+            <button
+              onClick={triggerGenerate}
+              disabled={generating}
+              className="w-full bg-[#004789] hover:bg-[#003566] text-white font-bold py-3.5 px-6 rounded-2xl text-sm shadow-lg shadow-blue-900/20 transition-all flex items-center justify-center gap-2"
+            >
+              {generating ? (
+                <>
+                  <RefreshCw size={16} className="animate-spin" />
+                  <span>Generating AI Quiz...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} />
+                  <span>Start Quiz</span>
+                </>
+              )}
+            </button>
           </div>
         ) : gameWon ? (
-          /* ─── Victory / Results Screen (No Game Over state needed) ─── */
-          <div className="flex-1 flex flex-col items-center justify-center text-center py-6 space-y-6">
-            <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-md border border-indigo-100">
-              <Trophy size={30} />
+          /* ─── QUIZ COMPLETED SUMMARY SCREEN ─── */
+          <div className="py-8 text-center space-y-6">
+            <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto shadow-xl">
+              <Trophy size={40} />
             </div>
             <div>
-              <h2 className="text-2xl font-extrabold text-slate-900">Quiz Completed!</h2>
-              <p className="text-xs text-slate-500 mt-1.5">
-                You answered {correctCount} of {totalQuestions} questions correctly.
+              <h2 className="text-2xl font-black text-slate-900">Quiz Completed!</h2>
+              <p className="text-sm font-semibold text-slate-500 mt-1">
+                You scored <span className="text-[#004789] font-bold">{correctCount}</span> out of <span className="font-bold">{totalQuestions}</span> questions correctly ({Math.round((correctCount / totalQuestions) * 100)}%)
               </p>
             </div>
-
-            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 w-full space-y-3">
-              <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Score</p>
-                <p className="text-4xl font-extrabold text-indigo-600 mt-1">{score} pts</p>
-              </div>
-              <p className={`text-sm font-extrabold ${getRank().color}`}>{getRank().label}</p>
-            </div>
-
-            <div className="flex gap-3 w-full pt-2">
+            <div className="flex gap-4 max-w-sm mx-auto pt-4">
               <button
                 onClick={() => setSetupStep(true)}
-                className="btn-primary flex-1 py-2.5 text-xs shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-1.5"
+                className="w-full bg-[#004789] hover:bg-[#003566] text-white font-bold py-3 px-6 rounded-full text-xs shadow-md transition-all"
               >
-                <Layers size={14} /> Change Topic / New Quiz
-              </button>
-              <button
-                onClick={resetGame}
-                className="btn-ghost flex-1 py-2.5 text-xs text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5"
-              >
-                <RefreshCw size={14} /> Retake Quiz
+                Take Another Quiz
               </button>
             </div>
           </div>
         ) : (
-          /* ─── Active Quiz Screen (No Lives) ─── */
-          <div className="flex-1 flex flex-col justify-between">
-            <div>
-              {/* Top info bar */}
-              <div className="flex items-center justify-between pb-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Score</span>
-                  <span className="text-sm font-black text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full">
-                    {score}
-                  </span>
-                  {streak >= 2 && (
-                    <span className="text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-100 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
-                      <Flame size={12} /> {streak}x Streak
-                    </span>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => setSetupStep(true)}
-                  className="text-[11px] font-medium text-slate-400 hover:text-indigo-600 flex items-center gap-1 transition-colors"
-                >
-                  <Layers size={12} /> Change Topic
-                </button>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="w-full bg-slate-100 rounded-full h-1.5 mb-4">
-                <div
-                  className="bg-indigo-600 h-1.5 rounded-full transition-all duration-300"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Question Card */}
-            <div className="flex-1 flex flex-col justify-center my-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2.5 py-0.5 rounded-md">
-                  Question {currentQIndex + 1} of {totalQuestions}
-                </span>
-                <span className="text-[10px] text-slate-400 font-medium">
-                  {quiz?.title || 'Study Quiz'}
-                </span>
-              </div>
-
-              <h3 className="text-base font-bold text-slate-900 leading-snug mt-3">
-                {currentQuestion?.question_text}
+          /* ─── ACTIVE QUIZ SCREEN (MATCHING USER REFERENCE DESIGN) ─── */
+          <div className="space-y-6">
+            
+            {/* QUIZ PROGRESS (0/2) Header & Progress Bar */}
+            <div className="text-center">
+              <h3 className="text-xs font-black uppercase tracking-widest text-slate-900 mb-2">
+                QUIZ PROGRESS ({currentQIndex}/{totalQuestions})
               </h3>
-
-              {/* Options */}
-              <div className="space-y-2 mt-4">
-                {currentQuestion?.options.map((option, idx) => {
-                  const label = OPTION_LABELS[idx]
-                  const isSelected = selectedOpt === label
-                  const isCorrect = label === currentQuestion.correct_answer
-
-                  let optStyle =
-                    'border-slate-200/80 bg-white text-slate-800 hover:border-indigo-200 hover:bg-indigo-50/10'
-                  let badgeStyle = 'bg-slate-100 text-slate-700'
-
-                  if (isAnswered) {
-                    if (isCorrect) {
-                      optStyle =
-                        'bg-emerald-50 border-emerald-500/50 text-emerald-900 font-bold shadow-sm'
-                      badgeStyle = 'bg-emerald-500 text-white'
-                    } else if (isSelected) {
-                      optStyle = 'bg-rose-50 border-rose-500/50 text-rose-900 font-bold'
-                      badgeStyle = 'bg-rose-500 text-white'
-                    } else {
-                      optStyle = 'opacity-50 border-slate-100 text-slate-400 bg-slate-50/50'
-                    }
-                  } else if (isSelected) {
-                    optStyle = 'border-indigo-500 bg-indigo-50/30 text-indigo-900 font-bold shadow-sm'
-                    badgeStyle = 'bg-indigo-600 text-white'
-                  }
-
-                  return (
-                    <button
-                      key={label}
-                      disabled={isAnswered}
-                      onClick={() => handleOptionSelect(label)}
-                      className={`w-full text-left p-3 rounded-xl border transition-all text-xs flex items-center gap-3 cursor-pointer ${optStyle}`}
-                    >
-                      <span
-                        className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-extrabold flex-shrink-0 ${badgeStyle}`}
-                      >
-                        {label}
-                      </span>
-                      <span className="leading-normal">{option}</span>
-                    </button>
-                  )
-                })}
+              <div className="w-full max-w-lg mx-auto border border-blue-300/80 rounded-full h-7 bg-white relative p-1 overflow-hidden shadow-inner flex items-center justify-center">
+                <div
+                  className="bg-[#004789] h-full rounded-full transition-all duration-500 absolute left-1 top-1 bottom-1"
+                  style={{ width: `calc(${progressPct}% - 8px)` }}
+                />
+                <span className="relative z-10 text-[11px] font-bold text-slate-600">
+                  {progressPct}%
+                </span>
               </div>
+            </div>
 
-              {/* Explanation Box */}
-              <AnimatePresence>
-                {isAnswered && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-3 p-3 bg-indigo-50/40 border border-indigo-100 rounded-xl text-[11px] text-slate-700 leading-relaxed"
+            {/* Question Text */}
+            <div className="text-left mt-6">
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900 leading-snug">
+                Question: {currentQuestion?.question_text}
+              </h2>
+            </div>
+
+            {/* Option Cards */}
+            <div className="space-y-3">
+              {currentQuestion?.options.map((option, idx) => {
+                const label = OPTION_LABELS[idx]
+                const isSelected = selectedOpt === label
+                const isCorrect = label === currentQuestion.correct_answer
+
+                let cardStyle =
+                  'bg-[#f8fafc] border-slate-200/90 text-slate-800 hover:border-blue-400 hover:bg-[#f0f7ff]'
+                let circleStyle = 'border-slate-300 group-hover:border-blue-500'
+
+                if (isAnswered) {
+                  if (isCorrect) {
+                    cardStyle = 'bg-emerald-50 border-emerald-500 text-emerald-900 font-bold'
+                    circleStyle = 'border-emerald-600 bg-emerald-600 text-white'
+                  } else if (isSelected) {
+                    cardStyle = 'bg-rose-50 border-rose-500 text-rose-900 font-bold'
+                    circleStyle = 'border-rose-600 bg-rose-600 text-white'
+                  } else {
+                    cardStyle = 'opacity-50 bg-slate-50 border-slate-100 text-slate-400'
+                  }
+                } else if (isSelected) {
+                  cardStyle = 'bg-blue-50/70 border-[#004789] text-[#004789] font-bold shadow-sm'
+                  circleStyle = 'border-[#004789] bg-[#004789] text-white'
+                }
+
+                return (
+                  <div
+                    key={label}
+                    onClick={() => handleOptionSelect(label)}
+                    className={`w-full border rounded-2xl p-4 text-left font-medium text-sm flex items-center justify-between transition-all shadow-sm group cursor-pointer ${cardStyle}`}
                   >
-                    <span className="font-bold text-indigo-700 flex items-center gap-1 mb-0.5">
-                      <Brain size={12} /> Explanation:
-                    </span>
-                    <p>{currentQuestion?.explanation}</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                    <span>{label}) {option}</span>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${circleStyle}`}>
+                      {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
 
-            {/* Actions */}
-            <div className="flex justify-end pt-3 border-t border-slate-100 mt-2">
-              <button
-                onClick={handleNext}
-                disabled={!isAnswered}
-                className="btn-primary flex items-center gap-1.5 py-2 px-5 text-xs disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-indigo-500/10"
+            {/* Explanation Box */}
+            {isAnswered && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 bg-blue-50/60 border border-blue-200 rounded-2xl text-xs text-slate-800 text-left leading-relaxed"
               >
-                {currentQIndex === totalQuestions - 1 ? 'Finish Quiz' : 'Next Question'}{' '}
-                <ArrowRight size={13} />
-              </button>
+                <span className="font-bold text-[#004789] flex items-center gap-1.5 mb-1">
+                  <Brain size={14} /> Explanation:
+                </span>
+                <p>{currentQuestion?.explanation}</p>
+              </motion.div>
+            )}
+
+            {/* Centered Action Button */}
+            <div className="pt-4 flex justify-center">
+              {!isAnswered ? (
+                <button
+                  onClick={handleChooseAnswer}
+                  disabled={!selectedOpt}
+                  className="bg-[#004789] hover:bg-[#003566] text-white font-bold px-8 py-3 rounded-full text-sm shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-[0.98]"
+                >
+                  Choose answer
+                </button>
+              ) : (
+                <button
+                  onClick={handleNext}
+                  className="bg-[#004789] hover:bg-[#003566] text-white font-bold px-8 py-3 rounded-full text-sm shadow-md transition-all active:scale-[0.98] flex items-center gap-2"
+                >
+                  <span>{currentQIndex === totalQuestions - 1 ? 'Finish Quiz' : 'Next Question'}</span>
+                  <ArrowRight size={16} />
+                </button>
+              )}
             </div>
+
           </div>
         )}
       </motion.div>

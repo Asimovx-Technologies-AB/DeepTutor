@@ -102,9 +102,22 @@ export const documentsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
-  status: (topicId: string) => api.get(`/documents/status/${topicId}`),
-  list: () => api.get('/documents'),
-  delete: (docId: string) => api.delete(`/documents/${docId}`),
+  list: (topicId?: string) =>
+    api.get('/documents', { params: { topic_id: topicId } }),
+  status: (docId: string) => api.get(`/documents/${docId}/status`),
+  graph: (topicId: string) => api.get(`/documents/topic/${topicId}/graph`),
+}
+
+// ─── MCP Protocol API ──────────────────────────────────────────
+export const mcpApi = {
+  listServers: () => api.get('/mcp/servers'),
+  addServer: (config: any) => api.post('/mcp/servers', config),
+  toggleServer: (serverId: string, enabled: boolean) =>
+    api.patch(`/mcp/servers/${serverId}/toggle`, { enabled }),
+  deleteServer: (serverId: string) => api.delete(`/mcp/servers/${serverId}`),
+  listTools: () => api.get('/mcp/tools'),
+  executeTool: (toolName: string, args: any) =>
+    api.post('/mcp/tools/execute', { tool_name: toolName, arguments: args }),
 }
 
 // ─── Study Plan ───────────────────────────────────────────────
