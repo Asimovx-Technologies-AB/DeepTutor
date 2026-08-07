@@ -1,0 +1,15 @@
+id,category,question,actual_output,faithfulness,relevancy,context_precision,graph_entity_recall,page_accuracy,latency_seconds,error
+tc_001,concept_explanation,What are Support Vector Machines and how do they work?,"**Support Vector Machines (SVMs)**
+
+### Introduction
+
+Support Vector Machines (SVMs) are a type of s...",0.8,1.0,0.4,0.33,,20.752,
+tc_002,feature_selection,Explain Feature Selection techniques in Machine Learning.,"**Feature Selection Techniques in Machine Learning**
+===============================================...",0.8,1.0,0.4,0.25,,16.979,
+tc_003,page_constrained,What is discussed on page 42 of the document?,"Support Vector Machines (SVM)
+================================
+
+According to the document context, o...",0.8,0.0,0.0,0.0,1.0,14.82,
+tc_004,graph_multihop,How are SVM-RFE and Feature Selection related?,"**Relationship between SVM-RFE and Feature Selection**
+=============================================...",0.8,1.0,0.4,1.0,,17.159,
+tc_005,out_of_domain,What is the recipe for making Neapolitan pizza?,"I can help you with your question, but I need to clarify that my current knowledge graph context and...",0.0,0.0,0.0,,,12.752,

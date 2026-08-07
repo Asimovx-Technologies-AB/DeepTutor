@@ -31,7 +31,7 @@ class OllamaClient:
         self,
         messages: List[Dict[str, str]],
         model: Optional[str] = None,
-        temperature: float = 0.7,
+        temperature: float = 0.2,
     ) -> str:
         """Single (non-streaming) chat response."""
         model = model or self.chat_model
@@ -58,7 +58,7 @@ class OllamaClient:
         self,
         messages: List[Dict[str, str]],
         model: Optional[str] = None,
-        temperature: float = 0.7,
+        temperature: float = 0.2,
     ) -> AsyncGenerator[str, None]:
         """Async generator: yields tokens one by one (with offline fallback)."""
         model = model or self.chat_model

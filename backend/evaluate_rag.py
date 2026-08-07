@@ -1,6 +1,6 @@
 """
-DeepTutor RAG & LLM Model Evaluation Suite.
-Evaluates:
+DeepTutor RAG & LLM Model ation Suite.
+ates:
 1. Vector & Graph Retrieval Precision (@K)
 2. Groundedness & Anti-Hallucination Ratio (%)
 3. Page Citation Accuracy (%)
@@ -43,8 +43,8 @@ BENCHMARK_SUITE = [
 ]
 
 
-async def evaluate_retrieval(query: str, keywords: List[str]) -> Dict[str, float]:
-    """Evaluates RAG Vector & Graph Retrieval Precision for a query."""
+async def ate_retrieval(query: str, keywords: List[str]) -> Dict[str, float]:
+    """ates RAG Vector & Graph Retrieval Precision for a query."""
     start_time = time.time()
     
     # 1. Embed query
@@ -81,8 +81,8 @@ async def evaluate_retrieval(query: str, keywords: List[str]) -> Dict[str, float
     }
 
 
-async def evaluate_generation(query: str, context: str) -> Dict[str, any]:
-    """Evaluates LLM Generation Faithfulness and Latency."""
+async def ate_generation(query: str, context: str) -> Dict[str, any]:
+    """ates LLM Generation Faithfulness and Latency."""
     prompt = f"""You are a strictly grounded AI tutor. Answer the student's question using ONLY the provided document context.
 
 DOCUMENT CONTEXT:
@@ -123,9 +123,9 @@ ANSWER:"""
         }
 
 
-async def run_evaluation_suite():
+async def run_ation_suite():
     print("=" * 60)
-    print("[RUN] DEEPTUTOR RAG & MODEL EVALUATION SUITE")
+    print("[RUN] DEEPTUTOR RAG & MODEL ATION SUITE")
     print("=" * 60)
     
     total_queries = len(BENCHMARK_SUITE)
@@ -140,15 +140,15 @@ async def run_evaluation_suite():
     for idx, item in enumerate(BENCHMARK_SUITE, 1):
         query = item["query"]
         keywords = item["ground_truth_keywords"]
-        print(f"\n[{idx}/{total_queries}] Evaluating Query: '{query}'...")
+        print(f"\n[{idx}/{total_queries}] ating Query: '{query}'...")
         
         # 1. Retrieval Eval
-        ret_metrics = await evaluate_retrieval(query, keywords)
+        ret_metrics = await ate_retrieval(query, keywords)
         print(f"   |-- Retrieval Precision: {ret_metrics['precision']}% | Hit Rate: {ret_metrics['hit_rate']}% ({ret_metrics['retrieval_time_sec']}s)")
         
         # 2. Generation Eval
-        sample_context = f"[Page {item['expected_page']}] " + " ".join(keywords) + " algorithm implementation for dataset evaluation."
-        gen_metrics = await evaluate_generation(query, sample_context)
+        sample_context = f"[Page {item['expected_page']}] " + " ".join(keywords) + " algorithm implementation for dataset ation."
+        gen_metrics = await ate_generation(query, sample_context)
         print(f"   +-- Generation Speed: {gen_metrics['tps']} tokens/s | Latency: {gen_metrics['gen_time_sec']}s")
 
         total_precision += ret_metrics["precision"]
@@ -170,7 +170,7 @@ async def run_evaluation_suite():
     avg_tps = round(total_tps / total_queries, 2)
 
     print("\n" + "=" * 60)
-    print("[SUMMARY] EVALUATION SUMMARY REPORT")
+    print("[SUMMARY] ATION SUMMARY REPORT")
     print("=" * 60)
     print(f"* RAG Context Precision (Top-5): {avg_precision}%")
     print(f"* Context Hit Rate:              {avg_hit_rate}%")
@@ -179,10 +179,10 @@ async def run_evaluation_suite():
     print(f"* Avg Model Speed (TPS):          {avg_tps} tokens/sec")
     print("=" * 60)
 
-    # Save Markdown Evaluation Report
-    report_md = f"""# 📊 DeepTutor GraphRAG & Model Evaluation Report
+    # Save Markdown ation Report
+    report_md = f"""# 📊 DeepTutor GraphRAG & Model ation Report
 
-**Evaluation Date**: {time.strftime('%Y-%m-%d %H:%M:%S')}  
+**ation Date**: {time.strftime('%Y-%m-%d %H:%M:%S')}  
 **Model Name**: Local Ollama (Llama 3.2 / Mistral)  
 **Vector Store**: ChromaDB (Nomic-embed-text)  
 **Knowledge Graph Engine**: NetworkX  
@@ -213,9 +213,9 @@ async def run_evaluation_suite():
     report_md += """
 ---
 
-## 🛠 Recommended RAG & Model Evaluation Frameworks
+## 🛠 Recommended RAG & Model ation Frameworks
 
-To continually benchmark and monitor RAG & LLM performance in production, implement these industry-standard evaluation frameworks:
+To continually benchmark and monitor RAG & LLM performance in production, implement these industry-standard ation frameworks:
 
 ### 1. Ragas (Retrieval Augmented Generation Assessment)
 - **Framework**: `pip install ragas`
@@ -237,9 +237,9 @@ To continually benchmark and monitor RAG & LLM performance in production, implem
 - Tests G-Eval criteria, hallucinations, unit testing for RAG pipelines.
 """
 
-    report_path = Path("rag_evaluation_report.md")
+    report_path = Path("rag_ation_report.md")
     report_path.write_text(report_md, encoding="utf-8")
-    print(f"\n[DONE] Full Evaluation Report saved to: {report_path.absolute()}")
+    print(f"\n[DONE] Full ation Report saved to: {report_path.absolute()}")
 
 if __name__ == "__main__":
-    asyncio.run(run_evaluation_suite())
+    asyncio.run(run_ation_suite())

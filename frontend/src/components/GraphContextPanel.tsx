@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Network, X, ZoomIn, ZoomOut, RefreshCw, Maximize2, Minimize2,
-  MousePointer, Search, Sparkles, ChevronRight
+  MousePointer, Search, Sparkles, ChevronRight, Layers, Sun, Moon,
+  Info, Filter, Eye
 } from 'lucide-react'
 
 interface GraphNode {
@@ -26,24 +27,25 @@ interface Props {
   onClose: () => void
 }
 
-/* ─── Color Palette for Node Types ────────────────────────────── */
-const NODE_TYPE_COLORS: Record<string, string> = {
-  concept:    '#6366f1', // Indigo
-  person:     '#f59e0b', // Amber
-  place:      '#10b981', // Emerald
-  event:      '#ef4444', // Red
-  formula:    '#06b6d4', // Cyan
-  law:        '#8b5cf6', // Purple
-  theorem:    '#ec4899', // Pink
-  document:   '#3b82f6', // Blue
-  example_of: '#64748b', // Slate
+/* ─── Rich Vibrant Color Palette for Node Types ─────────────────── */
+const NODE_TYPE_COLORS: Record<string, { bg: string; border: string; glow: string }> = {
+  concept:    { bg: '#6366f1', border: '#818cf8', glow: 'rgba(99, 102, 241, 0.4)' },  // Indigo
+  person:     { bg: '#f59e0b', border: '#fbbf24', glow: 'rgba(245, 158, 11, 0.4)' },  // Amber
+  place:      { bg: '#10b981', border: '#34d399', glow: 'rgba(16, 185, 129, 0.4)' },  // Emerald
+  event:      { bg: '#ef4444', border: '#f87171', glow: 'rgba(239, 68, 68, 0.4)' },   // Red
+  formula:    { bg: '#06b6d4', border: '#22d3ee', glow: 'rgba(6, 182, 212, 0.4)' },   // Cyan
+  law:        { bg: '#8b5cf6', border: '#a78bfa', glow: 'rgba(139, 92, 246, 0.4)' },  // Purple
+  theorem:    { bg: '#ec4899', border: '#f472b6', glow: 'rgba(236, 72, 153, 0.4)' },  // Pink
+  document:   { bg: '#3b82f6', border: '#60a5fa', glow: 'rgba(59, 130, 246, 0.4)' },  // Blue
+  example_of: { bg: '#64748b', border: '#94a3b8', glow: 'rgba(100, 116, 139, 0.4)' }, // Slate
 }
 
-function getColor(type: string): string {
-  return NODE_TYPE_COLORS[type?.toLowerCase()] ?? '#6366f1'
+function getNodeColor(type?: string) {
+  const key = type?.toLowerCase() ?? 'concept'
+  return NODE_TYPE_COLORS[key] || NODE_TYPE_COLORS.concept
 }
 
-/* ─── Simulation Node & Edge ───────────────────────────────────── */
+/* ─── Physics Simulation Interfaces ────────────────────────────── */
 interface SimNode {
   id: string
   x: number
@@ -71,15 +73,17 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
   const nodesRef = useRef<SimNode[]>([])
   const edgesRef = useRef<SimEdge[]>([])
 
-  // Camera & Zoom state
+  // Camera & Viewport
   const [zoom, setZoom] = useState(1)
   const camRef = useRef({ x: 0, y: 0, zoom: 1 })
 
-  // Interaction state
+  // UI States
   const [selectedNode, setSelectedNode] = useState<SimNode | null>(null)
   const [hoveredNode, setHoveredNode] = useState<SimNode | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string | null>(null)
+  const [darkMode, setDarkMode] = useState(true) // Default to high-tech dark space canvas
 
   const dragRef = useRef<{
     node: SimNode | null
@@ -99,27 +103,34 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
 
   const tickRef = useRef(0)
 
-  /* ─── Initialize Graph & Nodes ───────────────────────────────── */
+  /* ─── Extract Unique Entity Types for Filter Bar ──────────────── */
+  const uniqueTypes = useMemo(() => {
+    const types = new Set<string>()
+    entities.forEach((e) => {
+      if (e.type) types.add(e.type.toLowerCase())
+    })
+    return Array.from(types)
+  }, [entities])
+
+  /* ─── Initialize Simulation Nodes ─────────────────────────────── */
   useEffect(() => {
     if (!entities.length || !isOpen) return
 
-    const W = containerRef.current?.clientWidth || 800
-    const H = containerRef.current?.clientHeight || 500
+    const W = containerRef.current?.clientWidth || 1000
+    const H = containerRef.current?.clientHeight || 650
     const cx = W / 2
     const cy = H / 2
 
-    // Fixed elegant radius to prevent huge overlapping circles
-    const nodeRadius = 12
-
-    // Distribute nodes evenly in a circle around the canvas center (cx, cy)
+    const nodeRadius = 14
     const count = entities.length
+
     const nodes: SimNode[] = entities.map((e, i) => {
       const angle = (2 * Math.PI * i) / count - Math.PI / 2
-      const radius = Math.min(W, H) * 0.28
+      const radius = Math.min(W, H) * 0.32
       return {
         id: e.id,
-        x: cx + radius * Math.cos(angle),
-        y: cy + radius * Math.sin(angle),
+        x: cx + radius * Math.cos(angle) + (Math.random() - 0.5) * 40,
+        y: cy + radius * Math.sin(angle) + (Math.random() - 0.5) * 40,
         vx: 0,
         vy: 0,
         name: e.name || e.id,
@@ -141,11 +152,11 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
     edgesRef.current = edges
     tickRef.current = 0
 
-    // Reset camera to exact 100% zoom centered
     camRef.current = { x: 0, y: 0, zoom: 1 }
     setZoom(1)
     setSelectedNode(null)
     setHoveredNode(null)
+    setSelectedTypeFilter(null)
   }, [entities, relationships, isOpen])
 
   /* ─── Physics Simulation Tick ──────────────────────────────────── */
@@ -154,16 +165,15 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
     const edges = edgesRef.current
     if (!nodes.length) return
 
-    const W = containerRef.current?.clientWidth || 800
-    const H = containerRef.current?.clientHeight || 500
+    const W = containerRef.current?.clientWidth || 1000
+    const H = containerRef.current?.clientHeight || 650
     const cx = W / 2
     const cy = H / 2
 
-    // Cooling factor: settles simulation into stable layout
     const cooling = Math.max(0.01, 1 - tickRef.current * 0.005)
     tickRef.current++
 
-    // 1. Repulsion between nodes
+    // 1. Repulsion force between nodes
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
         const a = nodes[i]
@@ -171,8 +181,8 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
         let dx = b.x - a.x
         let dy = b.y - a.y
         let dist = Math.sqrt(dx * dx + dy * dy) || 1
-        const minDist = (a.radius + b.radius) * 5
-        const force = (12000 * cooling) / (dist * dist)
+        const minDist = (a.radius + b.radius) * 4.5
+        const force = (14000 * cooling) / (dist * dist)
         const fx = (dx / dist) * force
         const fy = (dy / dist) * force
 
@@ -185,7 +195,6 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
           b.vy += fy
         }
 
-        // Hard distance separation
         if (dist < minDist) {
           const overlap = (minDist - dist) / 2
           const ox = (dx / dist) * overlap
@@ -203,7 +212,7 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
     }
 
     // 2. Edge spring force
-    const idealLen = 130
+    const idealLen = 140
     for (const edge of edges) {
       const a = nodes.find((n) => n.id === edge.source)
       const b = nodes.find((n) => n.id === edge.target)
@@ -237,14 +246,13 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
       node.x += node.vx
       node.y += node.vy
 
-      // Keep within canvas bounds
-      const margin = node.radius + 20
+      const margin = node.radius + 24
       node.x = Math.max(margin, Math.min(W - margin, node.x))
       node.y = Math.max(margin, Math.min(H - margin, node.y))
     }
   }, [])
 
-  /* ─── Canvas Render Engine (Perfect DPR & Centering) ───────────── */
+  /* ─── Canvas Render Engine ─────────────────────────────────────── */
   const render = useCallback(() => {
     const canvas = canvasRef.current
     const container = containerRef.current
@@ -261,20 +269,40 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
     const selected = selectedNode
     const hovered = hoveredNode
 
-    // Reset Canvas Transform matrix to identity before clear
+    // Reset Canvas Transform
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
+    // Canvas Background Fill
+    ctx.fillStyle = darkMode ? '#0B0F19' : '#F8FAFC'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+
     ctx.save()
-    // 1. Apply High-DPI screen scaling
     ctx.scale(dpr, dpr)
 
-    // 2. Center Camera Transform at exact (W/2, H/2)
+    // Apply Camera Transform
     ctx.translate(W / 2 + cam.x, H / 2 + cam.y)
     ctx.scale(cam.zoom, cam.zoom)
     ctx.translate(-W / 2, -H / 2)
 
-    // Highlight helper sets
+    // Render Grid Pattern
+    const gridSize = 40
+    ctx.strokeStyle = darkMode ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.03)'
+    ctx.lineWidth = 1
+    for (let x = 0; x < W * 2; x += gridSize) {
+      ctx.beginPath()
+      ctx.moveTo(x - W / 2, -H / 2)
+      ctx.lineTo(x - W / 2, H * 1.5)
+      ctx.stroke()
+    }
+    for (let y = 0; y < H * 2; y += gridSize) {
+      ctx.beginPath()
+      ctx.moveTo(-W / 2, y - H / 2)
+      ctx.lineTo(W * 1.5, y - H / 2)
+      ctx.stroke()
+    }
+
+    // Highlight Sets
     const connectedIds = new Set<string>()
     const connectedEdgeIndices = new Set<number>()
 
@@ -305,6 +333,16 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
       const tgt = nodes.find((n) => n.id === edge.target)
       if (!src || !tgt) return
 
+      const isTypeFilterMatch = !selectedTypeFilter || 
+        src.type.toLowerCase() === selectedTypeFilter || 
+        tgt.type.toLowerCase() === selectedTypeFilter
+
+      const isHighlighted = selected ? connectedEdgeIndices.has(i) : false
+      const isDimmed =
+        (selected && !isHighlighted) ||
+        (searchMatchIds.size > 0 && !searchMatchIds.has(src.id) && !searchMatchIds.has(tgt.id)) ||
+        (!isTypeFilterMatch)
+
       const dx = tgt.x - src.x
       const dy = tgt.y - src.y
       const dist = Math.sqrt(dx * dx + dy * dy) || 1
@@ -316,41 +354,40 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
       const x2 = tgt.x - nx * (tgt.radius + 8)
       const y2 = tgt.y - ny * (tgt.radius + 8)
 
-      const isHighlighted = selected ? connectedEdgeIndices.has(i) : false
-      const isDimmed =
-        (selected && !isHighlighted) ||
-        (searchMatchIds.size > 0 && !searchMatchIds.has(src.id) && !searchMatchIds.has(tgt.id))
-
-      // Edge line
+      // Edge Line
       ctx.beginPath()
       ctx.moveTo(x1, y1)
       ctx.lineTo(x2, y2)
       ctx.strokeStyle = isDimmed
-        ? 'rgba(226,232,240,0.4)'
+        ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')
         : isHighlighted
-        ? '#6366f1'
-        : 'rgba(148,163,184,0.4)'
-      ctx.lineWidth = isHighlighted ? 2.5 : 1.5
+        ? '#818cf8'
+        : (darkMode ? 'rgba(148,163,184,0.35)' : 'rgba(100,116,139,0.35)')
+      ctx.lineWidth = isHighlighted ? 3 : 1.8
       ctx.stroke()
 
       // Arrowhead
-      const arrowLen = isHighlighted ? 8 : 6
+      const arrowLen = isHighlighted ? 9 : 7
       const arrowAngle = Math.atan2(y2 - y1, x2 - x1)
       ctx.beginPath()
       ctx.moveTo(x2, y2)
       ctx.lineTo(
-        x2 - arrowLen * Math.cos(arrowAngle - 0.4),
-        y2 - arrowLen * Math.sin(arrowAngle - 0.4)
+        x2 - arrowLen * Math.cos(arrowAngle - 0.45),
+        y2 - arrowLen * Math.sin(arrowAngle - 0.45)
       )
       ctx.lineTo(
-        x2 - arrowLen * Math.cos(arrowAngle + 0.4),
-        y2 - arrowLen * Math.sin(arrowAngle + 0.4)
+        x2 - arrowLen * Math.cos(arrowAngle + 0.45),
+        y2 - arrowLen * Math.sin(arrowAngle + 0.45)
       )
       ctx.closePath()
-      ctx.fillStyle = isDimmed ? 'rgba(226,232,240,0.4)' : isHighlighted ? '#6366f1' : 'rgba(148,163,184,0.5)'
+      ctx.fillStyle = isDimmed
+        ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')
+        : isHighlighted
+        ? '#818cf8'
+        : (darkMode ? 'rgba(148,163,184,0.45)' : 'rgba(100,116,139,0.45)')
       ctx.fill()
 
-      // Relationship type text tag
+      // Relationship Tag Pill
       if (edge.type && !isDimmed) {
         const mx = (src.x + tgt.x) / 2
         const my = (src.y + tgt.y) / 2
@@ -361,12 +398,18 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
         const label = edge.type.replace(/_/g, ' ')
         const tw = ctx.measureText(label).width
 
-        ctx.fillStyle = 'rgba(255,255,255,0.94)'
-        ctx.fillRect(mx - tw / 2 - 4, my - 7, tw + 8, 14)
-        ctx.strokeStyle = 'rgba(226,232,240,0.9)'
-        ctx.strokeRect(mx - tw / 2 - 4, my - 7, tw + 8, 14)
+        ctx.fillStyle = darkMode ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.94)'
+        ctx.beginPath()
+        ctx.roundRect(mx - tw / 2 - 5, my - 8, tw + 10, 16, 4)
+        ctx.fill()
+        ctx.strokeStyle = isHighlighted
+          ? '#6366f1'
+          : (darkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(226, 232, 240, 0.9)')
+        ctx.stroke()
 
-        ctx.fillStyle = isHighlighted ? '#4338ca' : '#64748b'
+        ctx.fillStyle = isHighlighted
+          ? (darkMode ? '#c7d2fe' : '#4338ca')
+          : (darkMode ? '#94a3b8' : '#64748b')
         ctx.fillText(label, mx, my)
         ctx.restore()
       }
@@ -374,77 +417,86 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
 
     // ─── Draw Nodes ───────────────────────────────────────────────
     nodes.forEach((node) => {
-      const color = getColor(node.type)
+      const colors = getNodeColor(node.type)
       const isSelected = selected?.id === node.id
       const isHovered = hovered?.id === node.id
       const isConnected = connectedIds.has(node.id)
       const isSearchMatch = searchMatchIds.has(node.id)
-      const isDimmed = (selected && !isConnected) || (searchMatchIds.size > 0 && !isSearchMatch)
+      const isTypeMatch = !selectedTypeFilter || node.type.toLowerCase() === selectedTypeFilter
+      const isDimmed = (selected && !isConnected) || 
+                       (searchMatchIds.size > 0 && !isSearchMatch) ||
+                       (!isTypeMatch)
 
       const r = node.radius
 
-      // Soft outer glow for selected/hovered/searched
+      // Glowing outer halo
       if ((isSelected || isHovered || isSearchMatch) && !isDimmed) {
         ctx.beginPath()
-        ctx.arc(node.x, node.y, r + 6, 0, Math.PI * 2)
-        ctx.fillStyle = isSelected
-          ? 'rgba(99,102,241,0.25)'
-          : isSearchMatch
-          ? 'rgba(245,158,11,0.3)'
-          : 'rgba(99,102,241,0.15)'
+        ctx.arc(node.x, node.y, r + 8, 0, Math.PI * 2)
+        ctx.fillStyle = colors.glow
         ctx.fill()
       }
 
       // Main Node Circle
       ctx.beginPath()
       ctx.arc(node.x, node.y, r, 0, Math.PI * 2)
-      ctx.fillStyle = isDimmed ? '#f1f5f9' : color
+      ctx.fillStyle = isDimmed ? (darkMode ? '#1e293b' : '#f1f5f9') : colors.bg
       ctx.fill()
 
-      ctx.lineWidth = isSelected ? 3 : 2
-      ctx.strokeStyle = isDimmed ? '#cbd5e1' : isSelected ? '#111111' : '#ffffff'
+      ctx.lineWidth = isSelected ? 3.5 : 2
+      ctx.strokeStyle = isDimmed
+        ? (darkMode ? '#334155' : '#cbd5e1')
+        : isSelected
+        ? '#ffffff'
+        : colors.border
       ctx.stroke()
 
-      // Center Dot
+      // Center Core Dot
       ctx.beginPath()
       ctx.arc(node.x, node.y, r * 0.35, 0, Math.PI * 2)
-      ctx.fillStyle = isDimmed ? '#cbd5e1' : '#ffffff'
+      ctx.fillStyle = isDimmed ? (darkMode ? '#475569' : '#cbd5e1') : '#ffffff'
       ctx.fill()
 
-      // Node Label (Clean Crisp Pill)
-      const label = node.name.length > 22 ? node.name.slice(0, 20) + '…' : node.name
+      // Node Label (Clean Crisp Badge)
+      const label = node.name.length > 24 ? node.name.slice(0, 22) + '…' : node.name
       ctx.font = `${isSelected || isHovered ? '700' : '600'} ${isSelected ? '12px' : '11px'} Inter, sans-serif`
       ctx.textAlign = 'center'
 
-      const textY = node.y + r + 11
+      const textY = node.y + r + 13
 
       if (!isDimmed) {
         const tw = ctx.measureText(label).width
-        const px = 6
-        const py = 2
-        ctx.fillStyle = isSelected ? '#111111' : 'rgba(255,255,255,0.95)'
+        const px = 7
+        const py = 3
+        ctx.fillStyle = isSelected
+          ? (darkMode ? '#ffffff' : '#0F172A')
+          : (darkMode ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.95)')
 
         ctx.beginPath()
         const rx = node.x - tw / 2 - px
         const ry = textY - py - 8
         const rw = tw + px * 2
-        const rh = 14 + py
+        const rh = 16 + py
         ctx.roundRect(rx, ry, rw, rh, 6)
         ctx.fill()
 
-        ctx.strokeStyle = isSelected ? '#111111' : 'rgba(226,232,240,0.9)'
+        ctx.strokeStyle = isSelected
+          ? colors.bg
+          : (darkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(226, 232, 240, 0.9)')
         ctx.stroke()
 
-        ctx.fillStyle = isSelected ? '#ffffff' : '#0f172a'
+        ctx.fillStyle = isSelected
+          ? (darkMode ? '#0F172A' : '#ffffff')
+          : (darkMode ? '#f8fafc' : '#0f172a')
         ctx.fillText(label, node.x, textY)
       } else {
-        ctx.fillStyle = '#cbd5e1'
+        ctx.fillStyle = darkMode ? '#475569' : '#94a3b8'
         ctx.fillText(label, node.x, textY)
       }
     })
 
     ctx.restore()
-  }, [selectedNode, hoveredNode, searchQuery])
+  }, [selectedNode, hoveredNode, searchQuery, selectedTypeFilter, darkMode])
 
   /* ─── Simulation Loop ─────────────────────────────────────────── */
   useEffect(() => {
@@ -458,7 +510,7 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
     return () => cancelAnimationFrame(animRef.current)
   }, [isOpen, entities, simulate, render])
 
-  /* ─── DPR Resize Handler ──────────────────────────────────────── */
+  /* ─── High DPI Canvas Resize Handler ───────────────────────────── */
   useEffect(() => {
     if (!isOpen) return
     const resize = () => {
@@ -476,7 +528,7 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
     return () => window.removeEventListener('resize', resize)
   }, [isOpen, isFullscreen])
 
-  /* ─── Accurate Hit Testing ────────────────────────────────────── */
+  /* ─── Hit Testing for Interactive Selection ────────────────────── */
   const hitTest = useCallback((clientX: number, clientY: number): SimNode | null => {
     const canvas = canvasRef.current
     const container = containerRef.current
@@ -490,7 +542,6 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
     const mx = clientX - rect.left
     const my = clientY - rect.top
 
-    // Convert mouse to world coordinates matching render transform
     const wx = (mx - W / 2 - cam.x) / cam.zoom + W / 2
     const wy = (my - H / 2 - cam.y) / cam.zoom + H / 2
 
@@ -498,14 +549,14 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
       const node = nodesRef.current[i]
       const dx = wx - node.x
       const dy = wy - node.y
-      if (dx * dx + dy * dy <= (node.radius + 8) * (node.radius + 8)) {
+      if (dx * dx + dy * dy <= (node.radius + 10) * (node.radius + 10)) {
         return node
       }
     }
     return null
   }, [])
 
-  /* ─── Mouse Handlers ───────────────────────────────────────────── */
+  /* ─── Mouse Event Handlers ─────────────────────────────────────── */
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const node = hitTest(e.clientX, e.clientY)
     if (node) {
@@ -553,34 +604,33 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
       const mx = e.clientX - rect.left
       const my = e.clientY - rect.top
 
-      const wx = (mx - W / 2 - cam.x) / cam.zoom + W / 2
-      const wy = (my - H / 2 - cam.y) / cam.zoom + H / 2
-
-      drag.node.x = wx
-      drag.node.y = wy
-      drag.node.vx = 0
-      drag.node.vy = 0
+      drag.node.x = (mx - W / 2 - cam.x) / cam.zoom + W / 2
+      drag.node.y = (my - H / 2 - cam.y) / cam.zoom + H / 2
       return
     }
 
-    const node = hitTest(e.clientX, e.clientY)
-    setHoveredNode(node)
-    if (canvasRef.current) {
-      canvasRef.current.style.cursor = node ? 'pointer' : 'default'
-    }
+    const hover = hitTest(e.clientX, e.clientY)
+    setHoveredNode(hover)
   }, [hitTest])
 
   const handleMouseUp = useCallback(() => {
     if (dragRef.current.node) {
       dragRef.current.node.pinned = false
     }
-    dragRef.current = { node: null, isPanning: false, startX: 0, startY: 0, startCamX: 0, startCamY: 0 }
+    dragRef.current = {
+      node: null,
+      isPanning: false,
+      startX: 0,
+      startY: 0,
+      startCamX: 0,
+      startCamY: 0,
+    }
   }, [])
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     const node = hitTest(e.clientX, e.clientY)
     if (node) {
-      setSelectedNode((prev) => (prev?.id === node.id ? null : node))
+      setSelectedNode(node)
     } else {
       setSelectedNode(null)
     }
@@ -588,8 +638,8 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
-    const delta = e.deltaY > 0 ? 0.9 : 1.1
-    const newZoom = Math.max(0.4, Math.min(2.5, camRef.current.zoom * delta))
+    const zoomFactor = e.deltaY < 0 ? 1.12 : 0.88
+    const newZoom = Math.max(0.35, Math.min(3.0, camRef.current.zoom * zoomFactor))
     camRef.current.zoom = newZoom
     setZoom(newZoom)
   }, [])
@@ -598,14 +648,13 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
     camRef.current = { x: 0, y: 0, zoom: 1 }
     setZoom(1)
     setSelectedNode(null)
-    setHoveredNode(null)
     setSearchQuery('')
-    tickRef.current = 0
+    setSelectedTypeFilter(null)
   }, [])
 
   if (!isOpen) return null
 
-  // Direct connections list for selected node
+  // Connected Nodes for Inspection Drawer
   const selectedNodeConnections = selectedNode
     ? edgesRef.current
         .filter((e) => e.source === selectedNode.id || e.target === selectedNode.id)
@@ -626,81 +675,128 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 md:p-8"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-2 sm:p-4 md:p-6"
       >
         <motion.div
-          initial={{ scale: 0.95, opacity: 0, y: 10 }}
+          initial={{ scale: 0.96, opacity: 0, y: 15 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.95, opacity: 0, y: 10 }}
-          className={`relative flex flex-col bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden ${
-            isFullscreen ? 'w-full h-full rounded-none' : 'w-full max-w-6xl'
+          exit={{ scale: 0.96, opacity: 0, y: 15 }}
+          className={`relative flex flex-col rounded-3xl shadow-2xl border transition-all duration-300 overflow-hidden ${
+            darkMode 
+              ? 'bg-[#0B0F19] border-slate-800 text-slate-100' 
+              : 'bg-white border-slate-200 text-slate-900'
+          } ${
+            isFullscreen 
+              ? 'w-full h-full rounded-none border-none' 
+              : 'w-[96vw] max-w-[1400px] h-[92vh] max-h-[880px]'
           }`}
-          style={{ height: isFullscreen ? '100%' : 'min(88vh, 760px)' }}
         >
-          {/* ─── HEADER BAR ─── */}
-          <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-white">
+          {/* ─── TOP HEADER CONTROL BAR ─── */}
+          <div className={`flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b ${
+            darkMode ? 'border-slate-800/80 bg-[#0F172A]/80' : 'border-slate-100 bg-white'
+          }`}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-[#111111] text-white flex items-center justify-center shadow-md">
-                <Network size={20} />
+              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg transition-transform hover:scale-105 ${
+                darkMode ? 'bg-indigo-600 text-white shadow-indigo-500/20' : 'bg-slate-900 text-white'
+              }`}>
+                <Network size={22} />
               </div>
               <div>
-                <h3 className="text-base font-black text-slate-900 leading-tight">
-                  3D Knowledge Graph
-                </h3>
-                <p className="text-xs text-slate-500 font-semibold">
-                  {entities.length} entities · {relationships.length} relationships connected
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-black tracking-tight leading-tight">
+                    3D Knowledge Graph
+                  </h3>
+                  <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                    darkMode ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+                  }`}>
+                    Live Interactive
+                  </span>
+                </div>
+                <p className={`text-xs font-semibold mt-0.5 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  {entities.length} concept entities · {relationships.length} relationships connected
                 </p>
               </div>
             </div>
 
-            {/* Live Search Input */}
-            <div className="relative w-64">
-              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search entity in graph..."
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#111111]"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
+            {/* Controls Right Section */}
+            <div className="flex items-center gap-3">
+              {/* Search Bar */}
+              <div className="relative w-64 md:w-72">
+                <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${
+                  darkMode ? 'text-slate-400' : 'text-slate-400'
+                }`} />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search entity in graph..."
+                  className={`w-full rounded-xl pl-9 pr-8 py-2 text-xs font-semibold focus:outline-none transition-all ${
+                    darkMode 
+                      ? 'bg-slate-900/90 border border-slate-700/80 text-slate-100 placeholder:text-slate-500 focus:border-indigo-500' 
+                      : 'bg-slate-50 border border-slate-200 text-slate-800 focus:border-slate-900'
+                  }`}
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
 
-            {/* Action Buttons */}
-            <div className="flex items-center gap-2">
+              {/* Dark / Light Mode Canvas Toggle */}
               <button
-                onClick={() => setIsFullscreen(!isFullscreen)}
-                className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors"
-                title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                onClick={() => setDarkMode(!darkMode)}
+                className={`p-2.5 rounded-xl border transition-all ${
+                  darkMode 
+                    ? 'bg-slate-800/80 border-slate-700 text-amber-400 hover:bg-slate-800' 
+                    : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                }`}
+                title={darkMode ? 'Switch to Light Studio' : 'Switch to Dark Cyberpunk'}
               >
-                {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                {darkMode ? <Sun size={17} /> : <Moon size={17} />}
               </button>
 
+              {/* Fullscreen Toggle */}
+              <button
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                className={`p-2.5 rounded-xl border transition-all ${
+                  darkMode 
+                    ? 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800' 
+                    : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                }`}
+                title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+              >
+                {isFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+              </button>
+
+              {/* Close Button */}
               <button
                 onClick={onClose}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                className={`p-2.5 rounded-xl border transition-all ${
+                  darkMode 
+                    ? 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white hover:bg-red-500/20 hover:border-red-500/30' 
+                    : 'bg-slate-100 border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-200'
+                }`}
                 title="Close Graph"
               >
-                <X size={20} />
+                <X size={19} />
               </button>
             </div>
           </div>
 
           {/* ─── CANVAS WORKSPACE AREA ─── */}
-          <div ref={containerRef} className="flex-1 relative bg-slate-50 overflow-hidden">
+          <div ref={containerRef} className="flex-1 relative overflow-hidden">
             {entities.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center p-6">
-                <Network size={48} className="text-slate-300 mb-3" />
-                <h4 className="text-base font-bold text-slate-700">No Knowledge Graph Extracted Yet</h4>
-                <p className="text-xs text-slate-500 max-w-sm mt-1">
-                  Upload a PDF document to generate an interactive 3D concept graph.
+                <Network size={56} className={darkMode ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'} />
+                <h4 className={`text-lg font-bold ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                  No Knowledge Graph Extracted Yet
+                </h4>
+                <p className={`text-xs max-w-md mt-1.5 leading-relaxed ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>
+                  Upload a PDF document or ask a question to construct an interactive 3D concept graph automatically.
                 </p>
               </div>
             ) : (
@@ -712,89 +808,146 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
                 onMouseLeave={handleMouseUp}
                 onClick={handleClick}
                 onWheel={handleWheel}
-                className="w-full h-full block"
+                className="w-full h-full block cursor-grab active:cursor-grabbing"
               />
             )}
 
-            {/* Instruction Badge */}
-            <div className="absolute top-4 left-4 bg-white/90 border border-slate-200/80 backdrop-blur-md px-3.5 py-2 rounded-xl shadow-sm flex items-center gap-2 text-xs font-semibold text-slate-600">
-              <MousePointer size={14} className="text-indigo-600" />
-              <span>Click node to inspect details · Drag to move · Scroll to zoom</span>
+            {/* Floating Navigation Instruction Pill */}
+            <div className={`absolute top-4 left-4 backdrop-blur-xl px-4 py-2.5 rounded-2xl shadow-xl border flex items-center gap-2.5 text-xs font-bold ${
+              darkMode 
+                ? 'bg-slate-900/90 border-slate-700/80 text-slate-300' 
+                : 'bg-white/90 border-slate-200/80 text-slate-700'
+            }`}>
+              <MousePointer size={15} className="text-indigo-500 animate-pulse" />
+              <span>Click node to inspect · Drag to move · Scroll to zoom</span>
             </div>
 
-            {/* ─── INTERACTIVE NODE DETAIL DRAWER ─── */}
+            {/* Live Search Match Counter */}
+            {searchQuery && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-500/20 border border-amber-500/40 backdrop-blur-md px-4 py-1.5 rounded-full text-xs font-bold text-amber-400 shadow-lg">
+                Matching nodes highlighted
+              </div>
+            )}
+
+            {/* ─── SLIDE-OVER NODE DETAIL DRAWER ─── */}
             <AnimatePresence>
               {selectedNode && (
                 <motion.div
-                  initial={{ opacity: 0, x: 20 }}
+                  initial={{ opacity: 0, x: 30 }}
                   animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  className="absolute top-4 right-4 bottom-4 w-80 bg-white/95 border border-slate-200 backdrop-blur-md rounded-2xl shadow-xl p-5 flex flex-col justify-between z-20 overflow-y-auto"
+                  exit={{ opacity: 0, x: 30 }}
+                  className={`absolute top-4 right-4 bottom-4 w-88 md:w-96 backdrop-blur-xl rounded-3xl shadow-2xl p-6 flex flex-col justify-between z-20 overflow-y-auto border ${
+                    darkMode 
+                      ? 'bg-slate-900/95 border-slate-700 text-slate-100' 
+                      : 'bg-white/95 border-slate-200 text-slate-900'
+                  }`}
                 >
-                  <div className="space-y-4">
+                  <div className="space-y-5">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-2">
                         <div
-                          className="w-3.5 h-3.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: getColor(selectedNode.type) }}
+                          className="w-4 h-4 rounded-full flex-shrink-0 shadow-md"
+                          style={{ backgroundColor: getNodeColor(selectedNode.type).bg }}
                         />
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                        <span className={`text-[11px] font-extrabold uppercase tracking-wider ${
+                          darkMode ? 'text-slate-400' : 'text-slate-500'
+                        }`}>
                           {selectedNode.type} Entity
                         </span>
                       </div>
                       <button
                         onClick={() => setSelectedNode(null)}
-                        className="text-slate-400 hover:text-slate-700 p-1"
+                        className={`p-1.5 rounded-xl transition-colors ${
+                          darkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                        }`}
                       >
-                        <X size={16} />
+                        <X size={17} />
                       </button>
                     </div>
 
                     <div>
-                      <h4 className="text-lg font-black text-slate-900 leading-snug">
+                      <h4 className="text-xl font-black leading-snug tracking-tight">
                         {selectedNode.name}
                       </h4>
-                      {selectedNode.description && (
-                        <p className="text-xs text-slate-600 mt-2 leading-relaxed font-medium bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      {selectedNode.description ? (
+                        <p className={`text-xs mt-3 leading-relaxed font-medium p-4 rounded-2xl border ${
+                          darkMode 
+                            ? 'bg-slate-800/60 border-slate-700/60 text-slate-300' 
+                            : 'bg-slate-50 border-slate-200/80 text-slate-700'
+                        }`}>
                           {selectedNode.description}
+                        </p>
+                      ) : (
+                        <p className={`text-xs mt-2 italic ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                          No detailed description available for this entity.
                         </p>
                       )}
                     </div>
 
                     {/* Direct Connections List */}
-                    <div className="space-y-2">
-                      <p className="text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-                        <span>Connected Entities</span>
-                        <span className="text-indigo-600">{selectedNodeConnections.length}</span>
-                      </p>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-extrabold uppercase tracking-wider ${
+                          darkMode ? 'text-slate-400' : 'text-slate-500'
+                        }`}>
+                          Connected Entities
+                        </span>
+                        <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                          {selectedNodeConnections.length}
+                        </span>
+                      </div>
 
-                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                        {selectedNodeConnections.map((conn, idx) => (
-                          <div
-                            key={idx}
-                            onClick={() => conn.targetNode && setSelectedNode(conn.targetNode)}
-                            className="p-2.5 rounded-xl border border-slate-200/80 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-200 transition-all cursor-pointer flex items-center justify-between group"
-                          >
-                            <div>
-                              <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
-                                {conn.targetNode?.name}
-                              </p>
-                              {conn.edgeType && (
-                                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                                  {conn.edgeType.replace(/_/g, ' ')}
-                                </p>
-                              )}
+                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                        {selectedNodeConnections.length === 0 ? (
+                          <p className={`text-xs italic py-2 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                            No direct connections found.
+                          </p>
+                        ) : (
+                          selectedNodeConnections.map((conn, idx) => (
+                            <div
+                              key={idx}
+                              onClick={() => conn.targetNode && setSelectedNode(conn.targetNode)}
+                              className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group ${
+                                darkMode 
+                                  ? 'bg-slate-800/50 border-slate-700/80 hover:bg-indigo-950/40 hover:border-indigo-500/50' 
+                                  : 'bg-slate-50 border-slate-200/80 hover:bg-indigo-50 hover:border-indigo-200'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <div
+                                  className="w-3 h-3 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: getNodeColor(conn.targetNode?.type).bg }}
+                                />
+                                <div>
+                                  <p className="text-xs font-bold group-hover:text-indigo-400 transition-colors">
+                                    {conn.targetNode?.name}
+                                  </p>
+                                  {conn.edgeType && (
+                                    <p className={`text-[10px] font-semibold mt-0.5 capitalize ${
+                                      darkMode ? 'text-slate-400' : 'text-slate-500'
+                                    }`}>
+                                      {conn.edgeType.replace(/_/g, ' ')}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              <ChevronRight size={15} className={`group-hover:translate-x-1 transition-transform ${
+                                darkMode ? 'text-slate-500 group-hover:text-indigo-400' : 'text-slate-400 group-hover:text-indigo-600'
+                              }`} />
                             </div>
-                            <ChevronRight size={14} className="text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-transform" />
-                          </div>
-                        ))}
+                          ))
+                        )}
                       </div>
                     </div>
                   </div>
 
                   <button
                     onClick={() => setSelectedNode(null)}
-                    className="w-full py-2.5 rounded-xl bg-[#111111] text-white text-xs font-bold hover:bg-[#27272a] transition-colors mt-4"
+                    className={`w-full py-3 rounded-2xl font-bold text-xs transition-all shadow-lg mt-5 ${
+                      darkMode 
+                        ? 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-indigo-600/25' 
+                        : 'bg-slate-900 text-white hover:bg-slate-800'
+                    }`}
                   >
                     Close Inspection
                   </button>
@@ -803,53 +956,92 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
             </AnimatePresence>
           </div>
 
-          {/* ─── FOOTER & LEGEND ─── */}
-          <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-t border-slate-100 bg-white text-xs text-slate-600">
-            {/* Zoom Controls */}
+          {/* ─── FOOTER BAR: ZOOM CONTROLS & ENTITY TYPE FILTERS ─── */}
+          <div className={`flex flex-wrap items-center justify-between gap-4 px-6 py-3.5 border-t text-xs ${
+            darkMode ? 'border-slate-800/80 bg-[#0F172A]/90 text-slate-300' : 'border-slate-100 bg-white text-slate-700'
+          }`}>
+            {/* Zoom & View Controls */}
             <div className="flex items-center gap-2">
               <button
                 onClick={() => {
-                  camRef.current.zoom = Math.max(0.4, camRef.current.zoom - 0.15)
+                  camRef.current.zoom = Math.max(0.35, camRef.current.zoom - 0.15)
                   setZoom(camRef.current.zoom)
                 }}
-                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors"
+                className={`p-2 rounded-xl border transition-all ${
+                  darkMode ? 'bg-slate-800/80 border-slate-700 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 hover:bg-slate-200'
+                }`}
                 title="Zoom Out"
               >
-                <ZoomOut size={14} />
+                <ZoomOut size={15} />
               </button>
-              <span className="font-extrabold w-12 text-center text-slate-800">
+              
+              <span className="font-extrabold w-12 text-center text-xs">
                 {Math.round(zoom * 100)}%
               </span>
+
               <button
                 onClick={() => {
-                  camRef.current.zoom = Math.min(2.5, camRef.current.zoom + 0.15)
+                  camRef.current.zoom = Math.min(3.0, camRef.current.zoom + 0.15)
                   setZoom(camRef.current.zoom)
                 }}
-                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors"
+                className={`p-2 rounded-xl border transition-all ${
+                  darkMode ? 'bg-slate-800/80 border-slate-700 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 hover:bg-slate-200'
+                }`}
                 title="Zoom In"
               >
-                <ZoomIn size={14} />
+                <ZoomIn size={15} />
               </button>
+
               <button
                 onClick={resetView}
-                className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors ml-2"
+                className={`flex items-center gap-1.5 font-bold px-3.5 py-2 rounded-xl border transition-all ml-2 ${
+                  darkMode ? 'bg-slate-800/80 border-slate-700 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 hover:bg-slate-200'
+                }`}
               >
-                <RefreshCw size={12} /> Reset View
+                <RefreshCw size={13} /> Reset View
               </button>
             </div>
 
-            {/* Entity Types Legend */}
-            <div className="flex items-center gap-3 overflow-x-auto">
-              <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider">
-                Entity Types
+            {/* Entity Types Filter Bar */}
+            <div className="flex items-center gap-3 overflow-x-auto max-w-full py-1">
+              <span className={`text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 ${
+                darkMode ? 'text-slate-400' : 'text-slate-400'
+              }`}>
+                <Filter size={12} /> Entity Filter:
               </span>
-              <div className="flex items-center gap-3">
-                {Object.entries(NODE_TYPE_COLORS).slice(0, 6).map(([type, color]) => (
-                  <div key={type} className="flex items-center gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                    <span className="text-xs font-semibold capitalize text-slate-700">{type}</span>
-                  </div>
-                ))}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSelectedTypeFilter(null)}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                    selectedTypeFilter === null
+                      ? (darkMode ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-900 text-white')
+                      : (darkMode ? 'bg-slate-800/60 border border-slate-700/60 text-slate-400 hover:text-slate-200' : 'bg-slate-100 border border-slate-200 text-slate-600')
+                  }`}
+                >
+                  All ({entities.length})
+                </button>
+
+                {uniqueTypes.map((type) => {
+                  const colors = getNodeColor(type)
+                  const count = entities.filter((e) => e.type?.toLowerCase() === type).length
+                  const isSelected = selectedTypeFilter === type
+
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => setSelectedTypeFilter(isSelected ? null : type)}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition-all border ${
+                        isSelected
+                          ? (darkMode ? 'bg-indigo-500/30 border-indigo-500 text-white' : 'bg-indigo-50 border-indigo-300 text-indigo-700')
+                          : (darkMode ? 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:border-slate-600' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300')
+                      }`}
+                    >
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colors.bg }} />
+                      <span className="capitalize">{type}</span>
+                      <span className={`text-[10px] opacity-75 font-normal`}>({count})</span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </div>

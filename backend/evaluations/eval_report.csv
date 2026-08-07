@@ -1,13 +1,16 @@
-id,category,question,actual_output,faithfulness,relevancy,graph_entity_recall,page_accuracy,latency_seconds
-tc_001,concept_explanation,What are Support Vector Machines and how do they work?,"**Support Vector Machines (SVM) Overview**
+id,category,question,actual_output,faithfulness,relevancy,context_precision,graph_entity_recall,page_accuracy,latency_seconds,error
+tc_001,concept_explanation,What are Support Vector Machines and how do they work?,"**Support Vector Machines (SVMs)**
 =====================================
 
-### What are Suppo...",0.8,1.0,0.33,1.0,10.26
-tc_002,feature_selection,Explain Feature Selection techniques in Machine Learning.,"**Feature Selection Techniques in Machine Learning**
-===============================================...",0.8,1.0,0.25,1.0,9.862
-tc_003,page_constrained,What is discussed on page 42 of the document?,"**Answering Your Question About Page 42**
+### Introduction
 
-Given that page 42 of the uploaded document, `ML_Textbook...",0.8,0.0,0.0,1.0,9.516
-tc_004,graph_multihop,How are SVM-RFE and Feature Selection related?,"**Relationship Between SVM-RFE and Feature Selection**
-=============================================...",0.8,1.0,1.0,1.0,10.038
-tc_005,out_of_domain,What is the recipe for making Neapolitan pizza?,"I'm happy to help you with your question, but I need to point out that the topic of Neapolitan pizza...",0.1,0.0,1.0,1.0,9.951
+Support ...",0.8,1.0,0.4,0.33,,21.7,
+tc_002,feature_selection,Explain Feature Selection techniques in Machine Learning.,"**Feature Selection Techniques in Machine Learning**
+===============================================...",0.8,1.0,0.4,0.25,,17.507,
+tc_003,page_constrained,What is discussed on page 42 of the document?,"**Page 42 of ML_Textbook.pdf**
+
+On page 42 of the uploaded document ""ML_Textbook.pdf"", it is mention...",1.0,1.0,0.0,0.0,1.0,10.856,
+tc_004,graph_multihop,How are SVM-RFE and Feature Selection related?,"**Relationship between SVM-RFE and Feature Selection**
+
+Feature selection and embedded feature selec...",0.8,1.0,0.4,1.0,,16.951,
+tc_005,out_of_domain,What is the recipe for making Neapolitan pizza?,I can see that we're not equipped with any relevant information about cooking or recipes from the kn...,0.0,0.0,0.0,,,17.033,

@@ -1,15 +1,15 @@
 {
-  "timestamp": "2026-08-07 14:20:18",
+  "timestamp": "2026-08-07 14:07:13",
   "topic_id": "eval_test_topic",
   "aggregate_scores": {
-    "faithfulness": 0.68,
+    "faithfulness": 0.64,
     "relevancy": 0.8,
     "context_precision": 0.24,
     "graph_entity_recall": 0.395,
     "page_accuracy": 1.0,
-    "mean_latency_seconds": 16.809,
-    "p50_latency_seconds": 17.033,
-    "p95_latency_seconds": 20.861,
+    "mean_latency_seconds": 21.16,
+    "p50_latency_seconds": 17.383,
+    "p95_latency_seconds": 35.221,
     "error_count": 0,
     "total_cases": 5
   },
@@ -37,7 +37,7 @@
       "context_precision": 0.4,
       "graph_entity_recall": 0.33,
       "page_accuracy": null,
-      "latency_seconds": 21.7,
+      "latency_seconds": 23.944,
       "error": null
     },
     {
@@ -50,46 +50,46 @@
       "context_precision": 0.4,
       "graph_entity_recall": 0.25,
       "page_accuracy": null,
-      "latency_seconds": 17.507,
+      "latency_seconds": 17.383,
       "error": null
     },
     {
       "id": "tc_003",
       "category": "page_constrained",
       "question": "What is discussed on page 42 of the document?",
-      "actual_output": "**Page 42 of ML_Textbook.pdf**\n\nOn page 42 of the uploaded document \"ML_Textbook.pdf\", it is mention...",
-      "faithfulness": 1.0,
+      "actual_output": "## Supporting Vector Machines (SVM)\n### Introduction to SVM\nSupport Vector Machines (SVM) are a type...",
+      "faithfulness": 0.8,
       "relevancy": 1.0,
       "context_precision": 0.0,
       "graph_entity_recall": 0.0,
       "page_accuracy": 1.0,
-      "latency_seconds": 10.856,
+      "latency_seconds": 13.945,
       "error": null
     },
     {
       "id": "tc_004",
       "category": "graph_multihop",
       "question": "How are SVM-RFE and Feature Selection related?",
-      "actual_output": "**Relationship between SVM-RFE and Feature Selection**\n\nFeature selection and embedded feature selec...",
+      "actual_output": "**Relationship between SVM-RFE and Feature Selection**\n=============================================...",
       "faithfulness": 0.8,
       "relevancy": 1.0,
       "context_precision": 0.4,
       "graph_entity_recall": 1.0,
       "page_accuracy": null,
-      "latency_seconds": 16.951,
+      "latency_seconds": 12.49,
       "error": null
     },
     {
       "id": "tc_005",
       "category": "out_of_domain",
       "question": "What is the recipe for making Neapolitan pizza?",
-      "actual_output": "I can see that we're not equipped with any relevant information about cooking or recipes from the kn...",
+      "actual_output": "I'd be happy to help you with your question! However, I must point out that our current context only...",
       "faithfulness": 0.0,
       "relevancy": 0.0,
       "context_precision": 0.0,
       "graph_entity_recall": null,
       "page_accuracy": null,
-      "latency_seconds": 17.033,
+      "latency_seconds": 38.04,
       "error": null
     }
   ]

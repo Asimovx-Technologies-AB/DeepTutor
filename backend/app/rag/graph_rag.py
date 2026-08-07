@@ -212,52 +212,45 @@ class GraphRAGPipeline:
         # ── Step 1: Retrieval (only if topic has indexed data) ─────────────────
         if effective_topic_id and vector_store.count(effective_topic_id) > 0:
             requested_pages = extract_requested_pages(question)
-            page_chunks = []
+            query_entities = []
+
             if requested_pages:
+                # Direct metadata filter by exact page numbers — bypass similarity search entirely
                 page_chunks = vector_store.get_chunks_by_pages(effective_topic_id, requested_pages)
-
-            # Run embedding and query entity extraction concurrently in parallel
-            import asyncio
-            query_emb_task = ollama.embed(question)
-            query_entities_task = extract_query_entities(question)
-            query_emb, query_entities = await asyncio.gather(query_emb_task, query_entities_task)
-
-            vector_chunks = vector_store.search(
-                effective_topic_id, query_emb, top_k=settings.TOP_K_CHUNKS
-            )
-
-            if requested_pages:
                 if page_chunks:
-                    # Combine exact page_chunks first, then vector_chunks without duplicates
-                    seen_texts = set()
-                    combined = []
-                    for c in page_chunks + vector_chunks:
-                        t = c["text"]
-                        if t not in seen_texts:
-                            seen_texts.add(t)
-                            combined.append(c)
-                    vector_chunks = combined
+                    vector_chunks = page_chunks
                 else:
-                    # System notice if requested pages do not exist in document
+                    # Graceful handling when requested page doesn't exist in document
                     missing_str = ", ".join([str(p) for p in requested_pages])
-                    vector_chunks.insert(0, {
+                    vector_chunks = [{
                         "text": f"[SYSTEM NOTICE: The student explicitly asked about page(s) {missing_str}, but no content for page(s) {missing_str} was found in the indexed document.]",
                         "metadata": {"source": "System", "page": f"Missing ({missing_str})"},
                         "score": 1.0,
-                    })
+                    }]
+            else:
+                # Standard vector similarity search for non-page-constrained queries
+                import asyncio
+                query_emb_task = ollama.embed(question)
+                query_entities_task = extract_query_entities(question)
+                query_emb, query_entities = await asyncio.gather(query_emb_task, query_entities_task)
 
-            # Graph search
+                vector_chunks = vector_store.search(
+                    effective_topic_id, query_emb, top_k=settings.TOP_K_CHUNKS
+                )
+
+            # Graph search (only run graph search for general non-page-constrained queries)
             all_graph_nodes = []
             all_graph_edges = []
 
-            for entity_term in query_entities[:3]:  # Limit to top 3 entities
-                relevant = graph_store.find_relevant_entities(effective_topic_id, [entity_term])
-                for ent in relevant[:2]:
-                    subgraph = graph_store.search_neighbors(
-                        effective_topic_id, ent["id"], hops=settings.GRAPH_HOP_DEPTH
-                    )
-                    all_graph_nodes.extend(subgraph["nodes"])
-                    all_graph_edges.extend(subgraph["edges"])
+            if not requested_pages and query_entities:
+                for entity_term in query_entities[:3]:  # Limit to top 3 entities
+                    relevant = graph_store.find_relevant_entities(effective_topic_id, [entity_term])
+                    for ent in relevant[:2]:
+                        subgraph = graph_store.search_neighbors(
+                            effective_topic_id, ent["id"], hops=settings.GRAPH_HOP_DEPTH
+                        )
+                        all_graph_nodes.extend(subgraph["nodes"])
+                        all_graph_edges.extend(subgraph["edges"])
 
 
             # Deduplicate graph nodes
@@ -311,13 +304,31 @@ class GraphRAGPipeline:
             role_label = "Student" if msg["role"] == "user" else "Tutor"
             history_text += f"{role_label}: {msg['content'][:500]}\n"
 
+        # Specialized direct prompt instruction for page-constrained questions
+        requested_pages_list = extract_requested_pages(question) if question else []
+        if requested_pages_list and vector_chunks and not any("Missing" in str(c.get("metadata", {}).get("page", "")) for c in vector_chunks):
+            pages_str = ", ".join(str(p) for p in requested_pages_list)
+            prompt_instruction = (
+                f"Answer using ONLY the following content from page {pages_str}.\n"
+                f"Begin your answer by clearly stating you are describing page {pages_str}."
+            )
+        else:
+            prompt_instruction = "Please provide a comprehensive, educational response:"
+
         # Use context if available, else just answer from knowledge
         if graph_context_text or vector_context_text:
-            user_content = CONTEXT_TEMPLATE.format(
-                graph_context=graph_context_text or "No graph entities found for this query.",
-                vector_context=vector_context_text or "No document passages found for this query.",
-                history=history_text or "No prior conversation.",
-                question=question,
+            user_content = (
+                f"## Knowledge Graph Context\n"
+                f"Relevant entities and relationships retrieved from the knowledge graph:\n"
+                f"{graph_context_text or 'No graph entities found for this query.'}\n\n"
+                f"## Document Context  \n"
+                f"Relevant passages from uploaded documents:\n"
+                f"{vector_context_text or 'No document passages found for this query.'}\n\n"
+                f"## Conversation History\n"
+                f"{history_text or 'No prior conversation.'}\n\n"
+                f"## Student Question\n"
+                f"{question}\n\n"
+                f"{prompt_instruction}"
             )
         else:
             user_content = question
