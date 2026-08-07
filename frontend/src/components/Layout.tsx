@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -13,10 +13,13 @@ import {
   Zap,
   Bot,
   Sparkles,
-  Trophy
+  Trophy,
+  Wifi,
+  WifiOff
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
+import { healthApi } from '../services/api'
 
 const NAV_ITEMS = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', badge: null },
@@ -28,10 +31,25 @@ const NAV_ITEMS = [
 
 export default function Layout() {
   const { user, logout } = useAuthStore()
-  const sessions = useChatStore((s) => s.sessions)
   const navigate = useNavigate()
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [isOnline, setIsOnline] = useState<boolean>(true)
+
+  // Periodic Network Connection Health Check
+  useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        await healthApi.check()
+        setIsOnline(true)
+      } catch {
+        setIsOnline(false)
+      }
+    }
+    checkBackend()
+    const timer = setInterval(checkBackend, 15000)
+    return () => clearInterval(timer)
+  }, [])
 
   const handleLogout = () => {
     logout()
@@ -39,7 +57,7 @@ export default function Layout() {
   }
 
   return (
-    <div className="flex h-screen bg-[#f8fafc] overflow-hidden font-sans text-slate-800">
+    <div className="flex h-screen bg-[#f8fafc] overflow-hidden font-sans text-slate-800 flex-col lg:flex-row">
       {/* Mobile backdrop */}
       {mobileOpen && (
         <div
@@ -96,8 +114,8 @@ export default function Layout() {
                     to={to}
                     onClick={() => setMobileOpen(false)}
                     className={`flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-extrabold transition-all group ${isActive
-                        ? 'bg-[#111111] text-white shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-[#f4f4f5]'
+                      ? 'bg-[#111111] text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-[#f4f4f5]'
                       }`}
                   >
                     <div className="flex items-center gap-3.5">
@@ -111,8 +129,8 @@ export default function Layout() {
                     {badge ? (
                       <span
                         className={`text-xs font-extrabold px-2 py-0.5 rounded-full ${isActive
-                            ? 'bg-white/20 text-white'
-                            : 'bg-[#f4f4f5] text-[#18181b] border border-[#e4e4e7]'
+                          ? 'bg-white/20 text-white'
+                          : 'bg-[#f4f4f5] text-[#18181b] border border-[#e4e4e7]'
                           }`}
                       >
                         {badge}
@@ -126,14 +144,21 @@ export default function Layout() {
             </nav>
           </div>
 
-          {/* Quick Action Widget in Sidebar */}
+          {/* Quick Action Widget & Network Monitor */}
           <div className="p-4 bg-[#fafafa] border border-[#e4e4e7] rounded-2xl space-y-3 shadow-sm">
-            <div className="flex items-center gap-2">
-              <Zap size={16} className="text-[#111111]" />
-              <span className="text-sm font-extrabold text-slate-900">Quick Tutor Chat</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Zap size={16} className="text-[#111111]" />
+                <span className="text-sm font-extrabold text-slate-900">Network & API</span>
+              </div>
+              <span className={`flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full ${isOnline ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200 animate-pulse'
+                }`}>
+                {isOnline ? <Wifi size={10} /> : <WifiOff size={10} />}
+                {isOnline ? 'ONLINE' : 'OFFLINE'}
+              </span>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed font-medium">
-              Have a study question? Ask Ollama AI tutor directly.
+              {isOnline ? 'Connected to local FastAPI backend & Ollama engine.' : 'Backend disconnected. Verify http://localhost:8000 is running.'}
             </p>
             <button
               onClick={() => {
@@ -176,26 +201,71 @@ export default function Layout() {
       {/* ─── MAIN CONTENT CONTAINER ─── */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Mobile top navbar toggle */}
-        <div className="lg:hidden p-4 bg-white border-b border-slate-200 flex items-center justify-between">
+        <div className="lg:hidden p-4 bg-white border-b border-slate-200 flex items-center justify-between sticky top-0 z-30 shadow-sm">
           <button
             onClick={() => setMobileOpen(true)}
             className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
           >
             <Menu size={18} />
           </button>
-          <div className="flex items-center gap-2" onClick={() => navigate('/dashboard')}>
-            <GraduationCap size={18} className="text-indigo-600" />
-            <span className="font-black text-sm">Adhyapika AI</span>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/dashboard')}>
+            <GraduationCap size={20} className="text-indigo-600" />
+            <span className="font-black text-base text-slate-900">DeepTutor AI</span>
           </div>
-          <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center font-bold text-xs text-indigo-600">
-            {user?.username?.[0]?.toUpperCase() ?? 'U'}
+          <div className="flex items-center gap-2">
+            <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-rose-500 animate-ping'}`} title={isOnline ? 'API Connected' : 'API Offline'} />
+            <button
+              onClick={() => {
+                if (window.confirm(`Logged in as "${user?.username || user?.email}". Would you like to log out and switch accounts?`)) {
+                  handleLogout()
+                }
+              }}
+              className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-extrabold text-xs shadow-sm hover:opacity-90 active:scale-95 cursor-pointer"
+              title={`Logged in as ${user?.username} (${user?.email}). Click to Logout / Switch Account`}
+            >
+              {user?.username?.[0]?.toUpperCase() ?? 'U'}
+            </button>
           </div>
         </div>
 
+        {/* Offline Alert Banner if Backend standard call fails */}
+        {!isOnline && (
+          <div className="bg-amber-500 text-white px-4 py-2 text-xs font-bold flex items-center justify-between shadow-inner">
+            <div className="flex items-center gap-2">
+              <WifiOff size={14} />
+              <span>Network Warning: Unable to reach backend server. Make sure FastAPI server (`start.bat`) is running on port 8000.</span>
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-lg text-[11px] font-extrabold"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Page Outlet */}
-        <main className="flex-1 overflow-y-auto bg-[#f8fafc]">
+        <main className="flex-1 overflow-y-auto bg-[#f8fafc] pb-16 lg:pb-0">
           <Outlet />
         </main>
+
+        {/* ─── MOBILE BOTTOM QUICK NAVIGATION BAR ─── */}
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 py-2 px-3 flex items-center justify-around z-40 shadow-lg">
+          {NAV_ITEMS.map(({ to, icon: Icon, label }) => {
+            const isActive = location.pathname.startsWith(to)
+            return (
+              <NavLink
+                key={to}
+                to={to}
+                className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive ? 'text-indigo-600 font-extrabold scale-105' : 'text-slate-400 font-semibold hover:text-slate-600'
+                  }`}
+              >
+                <Icon size={18} />
+                <span className="text-[10px]">{label}</span>
+              </NavLink>
+            )
+          })}
+        </nav>
       </div>
     </div>
   )

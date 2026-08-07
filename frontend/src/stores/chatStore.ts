@@ -13,6 +13,7 @@ export interface ChatSession {
   topic_id: string
   session_title: string
   started_at: string
+  user_id?: string
 }
 
 interface ChatState {

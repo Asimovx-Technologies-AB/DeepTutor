@@ -159,3 +159,82 @@ def process_document(file_path: str) -> List[Dict]:
         return process_txt(file_path)
     else:
         raise ValueError(f"Unsupported file type: {ext}")
+
+
+def extract_key_topics(chunks: List[Dict]) -> List[str]:
+    """
+    Extract the most important key topics, headings, algorithms, and concepts
+    from document chunks during vectorization.
+    """
+    if not chunks:
+        return []
+
+    STOP_WORDS = {
+        "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with",
+        "by", "from", "up", "about", "into", "over", "after", "is", "are", "was", "were",
+        "be", "been", "being", "have", "has", "had", "do", "does", "did", "this", "that",
+        "these", "those", "it", "its", "page", "pages", "pdf", "figure", "table", "chapter",
+        "section", "author", "authors", "editor", "volume", "issue", "journal", "abstract",
+        "introduction", "conclusion", "references", "http", "https", "doi", "isbn", "university",
+        "department", "press", "rights", "reserved", "copyright", "edition", "published"
+    }
+
+    candidates_counts: Dict[str, int] = {}
+
+    for chunk in chunks:
+        text = chunk.get("text", "")
+        if not text:
+            continue
+
+        # 1. Regex for headings / section titles (e.g., '1.2 Support Vector Machines' or '### Feature Selection')
+        heading_matches = re.findall(
+            r'(?:^|\n)(?:#{1,4}\s*|\d+(?:\.\d+)*\s+)?([A-Z][A-Za-z0-9\s\-\:\(\)]{3,45})(?=\n|\:|\.|\s{2,})',
+            text
+        )
+        for h in heading_matches:
+            h_clean = h.strip()
+            h_lower = h_clean.lower()
+            if 4 <= len(h_clean) <= 40 and not any(sw in h_lower for sw in ["page", "http", "doi:"]):
+                if not any(word in STOP_WORDS for word in h_lower.split()[:1]):
+                    candidates_counts[h_clean] = candidates_counts.get(h_clean, 0) + 3
+
+        # 2. Regex for capitalized multi-word technical concepts (e.g. 'Gradient Descent', 'Kernel Method')
+        concept_matches = re.findall(
+            r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b',
+            text
+        )
+        for c in concept_matches:
+            c_clean = c.strip()
+            c_lower = c_clean.lower()
+            words = c_lower.split()
+            if not any(w in STOP_WORDS for w in words):
+                candidates_counts[c_clean] = candidates_counts.get(c_clean, 0) + 2
+
+        # 3. Regex for prominent acronyms / capitalized methods (e.g., 'SVM', 'RLHF', 'BERT', 'CNN')
+        acronym_matches = re.findall(r'\b([A-Z]{2,8}(?:\-[A-Z0-9]+)?)\b', text)
+        for a in acronym_matches:
+            if a not in {"PDF", "HTTP", "HTTPS", "DOI", "ISBN", "URL", "HTML", "USA", "UK"}:
+                candidates_counts[a] = candidates_counts.get(a, 0) + 1
+
+    # Sort candidates by frequency / score
+    sorted_topics = sorted(candidates_counts.items(), key=lambda x: x[1], reverse=True)
+
+    # Filter duplicates / substring matches
+    final_topics = []
+    seen_lower = set()
+
+    for topic_name, score in sorted_topics:
+        t_lower = topic_name.lower()
+        if t_lower in seen_lower:
+            continue
+        # Avoid overlapping substrings if longer version exists
+        if any(t_lower in s for s in seen_lower):
+            continue
+
+        seen_lower.add(t_lower)
+        final_topics.append(topic_name)
+        if len(final_topics) >= 15:
+            break
+
+    return final_topics
+

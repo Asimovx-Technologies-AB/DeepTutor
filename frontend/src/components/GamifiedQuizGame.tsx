@@ -14,8 +14,7 @@ import {
   Check,
   RotateCcw
 } from 'lucide-react'
-import axios from 'axios'
-import { useAuthStore } from '../stores/authStore'
+import { quizApi } from '../services/api'
 import { useChatStore } from '../stores/chatStore'
 
 interface Question {
@@ -41,7 +40,6 @@ interface Props {
 const OPTION_LABELS = ['A', 'B', 'C', 'D']
 
 export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) {
-  const token = useAuthStore((s) => s.token)
   const activeSession = useChatStore((s) => s.activeSession)
 
   const [quiz, setQuiz] = useState<Quiz | null>(null)
@@ -55,6 +53,7 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
   const [selectedTopic, setSelectedTopic] = useState<string>('')
   const [customTopic, setCustomTopic] = useState<string>('')
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium')
+  const [numQuestions, setNumQuestions] = useState<number>(5)
 
   // Game state
   const [currentQIndex, setCurrentQIndex] = useState(0)
@@ -67,14 +66,14 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
 
   const [showAutocomplete, setShowAutocomplete] = useState(false)
 
-  // Fetch topics from uploaded PDF documents
+  // Fetch extracted key topics from uploaded PDF documents
   useEffect(() => {
     if (!isOpen) return
     const fetchSuggestions = async () => {
       try {
-        const res = await axios.get('/api/quiz/suggestions', {
-          params: { session_id: sessionId || activeSession?.id, topic_id: activeSession?.topic_id },
-          headers: { Authorization: `Bearer ${token}` },
+        const res = await quizApi.suggestions({
+          session_id: sessionId || activeSession?.id,
+          topic_id: activeSession?.topic_id,
         })
         const suggestions: string[] = res.data?.suggestions || []
         setAvailableTopics(suggestions)
@@ -92,7 +91,7 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
       }
     }
     fetchSuggestions()
-  }, [isOpen, sessionId, activeSession, token])
+  }, [isOpen, sessionId, activeSession])
 
   const filteredSuggestions = availableTopics.filter((t) =>
     customTopic.trim() ? t.toLowerCase().includes(customTopic.toLowerCase().trim()) : true
@@ -116,17 +115,13 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
         : customTopic.trim() || selectedTopic || 'General Study Concepts'
 
     try {
-      const res = await axios.post(
-        '/api/quiz/generate',
-        {
-          session_id: sessionId || activeSession?.id,
-          topic_id: activeSession?.topic_id || 'general',
-          custom_topic: effectiveTopic,
-          difficulty: difficulty,
-          num_questions: 5,
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
+      const res = await quizApi.generate({
+        session_id: sessionId || activeSession?.id,
+        topic_id: activeSession?.topic_id || 'general',
+        custom_topic: effectiveTopic,
+        difficulty: difficulty,
+        num_questions: numQuestions,
+      })
       setQuiz(res.data)
       resetGame()
       setSetupStep(false)
@@ -291,13 +286,36 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
                     key={d}
                     type="button"
                     onClick={() => setDifficulty(d)}
-                    className={`flex-1 py-2.5 rounded-xl text-xs font-extrabold capitalize border transition-all ${
+                    className={`flex-1 py-2.5 rounded-xl text-xs font-extrabold capitalize border transition-all cursor-pointer ${
                       difficulty === d
                         ? 'bg-[#004789] text-white border-[#004789] shadow-md'
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
                     {d}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Number of Questions selection */}
+            <div>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                Number of Questions
+              </label>
+              <div className="flex gap-2">
+                {[3, 5, 10, 15, 20].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => setNumQuestions(num)}
+                    className={`flex-1 py-2 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
+                      numQuestions === num
+                        ? 'bg-[#004789] text-white border-[#004789] shadow-md'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {num} Qs
                   </button>
                 ))}
               </div>

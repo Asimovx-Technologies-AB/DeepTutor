@@ -161,6 +161,16 @@ class GraphRAGPipeline:
         graph_store.add_entities(topic_id, all_entities)
         graph_store.add_relationships(topic_id, all_relationships)
 
+        # Step 5: Extract key topics & combine top graph entities
+        extracted_topics = extract_key_topics(chunks)
+        top_entity_names = [
+            e["name"] for e in all_entities
+            if e.get("type") not in {"metadata"} and 4 <= len(e.get("name", "")) <= 45
+        ]
+        for ent_name in top_entity_names:
+            if ent_name and ent_name not in extracted_topics and len(extracted_topics) < 20:
+                extracted_topics.append(ent_name)
+
         stats = graph_store.get_graph_stats(topic_id)
         if progress_callback:
             await progress_callback("done", 100)
@@ -171,6 +181,7 @@ class GraphRAGPipeline:
             "relationships_extracted": len(all_relationships),
             "graph_nodes": stats["node_count"],
             "graph_edges": stats["edge_count"],
+            "extracted_topics": extracted_topics,
         }
 
     # ── Querying ───────────────────────────────────────────────────────────────

@@ -63,7 +63,13 @@ async def get_topic_suggestions(
         "references", "figure", "table", "index"
     }
 
-    # 1. Extract concept/algorithm/method entities from NetworkX Knowledge Graph
+    # 1. Fetch DB key topics extracted during document vectorization
+    db_extracted_topics = db.get_key_topics_for_user_section(user['id'], target_tid)
+    for kt in db_extracted_topics:
+        if kt and len(kt) >= 3:
+            suggestions.add(kt.strip())
+
+    # 2. Extract concept/algorithm/method entities from NetworkX Knowledge Graph
     try:
         from app.rag.graph_store import graph_store
         graph = graph_store.get_full_graph(namespaced_topic)
@@ -98,10 +104,17 @@ async def get_topic_suggestions(
 
     # Filter candidates
     clean_list = []
+
+    # Ensure DB vectorization topics come first in priority
+    for kt in db_extracted_topics:
+        if kt and kt not in clean_list and len(clean_list) < 15:
+            clean_list.append(kt)
+
     for s in suggestions:
         s_lower = s.lower()
         if (
             len(s) >= 4
+            and s not in clean_list
             and s_lower not in STOP_TOPICS
             and not re.search(r'\.pdf|\bp\.\d+|\bpages?\b', s_lower)
             and not re.match(r'^[A-Z]\.\s*[A-Z]\.', s)  # Initials like H. T. Abbas

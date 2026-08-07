@@ -46,6 +46,7 @@ async def _run_indexing(doc_id: str, section_id: str, file_path: str, user_id: s
             indexed=True,
             entity_count=stats.get("entities_extracted", 0),
             chunk_count=stats.get("chunks_indexed", 0),
+            key_topics=stats.get("extracted_topics", []),
         )
     except Exception as e:
         _indexing_status[doc_id] = {"status": "error", "progress": 0, "error": str(e), "stats": {}}

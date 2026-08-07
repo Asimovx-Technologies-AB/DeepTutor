@@ -24,7 +24,7 @@ import {
   Check,
   X
 } from 'lucide-react'
-import axios from 'axios'
+import { studyPlanApi, documentsApi, default as api } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
 
@@ -52,7 +52,7 @@ interface StudyPlan {
 }
 
 export default function StudyPlanPage() {
-  const token = useAuthStore((s) => s.token)
+  const { user } = useAuthStore()
   const sessions = useChatStore((s) => s.sessions)
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -86,9 +86,7 @@ export default function StudyPlanPage() {
   const { data: plans = [], isLoading } = useQuery<StudyPlan[]>({
     queryKey: ['study-plans'],
     queryFn: async () => {
-      const res = await axios.get('/api/study-plan/my-plans', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await studyPlanApi.myPlans()
       return res.data || []
     },
   })
@@ -99,15 +97,13 @@ export default function StudyPlanPage() {
   // Toggle day completed mutation
   const toggleDayMutation = useMutation({
     mutationFn: async ({ planId, dayNumber }: { planId: string; dayNumber: number }) => {
-      const res = await axios.post(
-        `/api/study-plan/${planId}/toggle-day`,
-        { day_number: dayNumber },
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
+      const res = await studyPlanApi.toggleDay(planId, dayNumber)
       return res.data
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['study-plans'] })
+      queryClient.invalidateQueries({ queryKey: ['progress-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['progress-calendar'] })
     },
   })
 
@@ -120,15 +116,11 @@ export default function StudyPlanPage() {
     })
 
     try {
-      const res = await axios.post(
-        '/api/study-plan/day-notes',
-        {
-          topic_id: currentPlan?.topic_id || 'general',
-          day_topic: dayItem.topic,
-          key_concepts: dayItem.key_concepts || [],
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
+      const res = await api.post('/study-plan/day-notes', {
+        topic_id: currentPlan?.topic_id || 'general',
+        day_topic: dayItem.topic,
+        key_concepts: dayItem.key_concepts || [],
+      })
       if (res.data?.notes) {
         setActiveNotesModal({
           dayNum: dayItem.day,
@@ -169,12 +161,11 @@ export default function StudyPlanPage() {
   // Delete plan mutation
   const deletePlanMutation = useMutation({
     mutationFn: async (planId: string) => {
-      await axios.delete(`/api/study-plan/${planId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      await studyPlanApi.delete(planId)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['study-plans'] })
+      queryClient.invalidateQueries({ queryKey: ['progress-summary'] })
       setActivePlanId(null)
     },
   })
@@ -190,38 +181,27 @@ export default function StudyPlanPage() {
       // If user uploaded a new file directly in the Study Plan generator
       if (selectedFile) {
         topicId = `plan_${Date.now()}`
-        const formData = new FormData()
-        formData.append('file', selectedFile)
-        formData.append('topic_id', topicId)
-        await axios.post('/api/documents/upload', formData, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data',
-          },
-        })
+        await documentsApi.upload(topicId, selectedFile)
       } else if (selectedSessionId) {
-        const foundS = sessions.find((s) => s.id === selectedSessionId)
-        topicId = foundS?.topic_id || foundS?.id || selectedSessionId
+        const session = sessions.find((s) => s.id === selectedSessionId)
+        topicId = session?.topic_id || selectedSessionId
       }
 
       // Generate Study Plan
-      const res = await axios.post(
-        '/api/study-plan/generate',
-        {
-          topic_id: topicId,
-          session_id: selectedSessionId || undefined,
-          target_date: targetDate,
-          hours_per_day: hoursPerDay,
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
+      const res = await studyPlanApi.generate({
+        topic_id: topicId,
+        target_date: targetDate,
+        hours_per_day: hoursPerDay,
+      })
 
       queryClient.invalidateQueries({ queryKey: ['study-plans'] })
+      queryClient.invalidateQueries({ queryKey: ['progress-summary'] })
       setActivePlanId(res.data.id)
       setShowCreateModal(false)
       setSelectedFile(null)
     } catch (err: any) {
-      alert(err.response?.data?.detail ?? 'Failed to generate study plan. Please make sure a PDF is selected.')
+      console.error(err)
+      alert(err.response?.data?.detail || 'Failed to generate study plan. Make sure Ollama is running.')
     } finally {
       setGenerating(false)
     }

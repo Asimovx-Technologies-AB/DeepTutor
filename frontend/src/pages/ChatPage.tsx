@@ -186,7 +186,7 @@ export default function ChatPage() {
     let content = (text ?? input).trim()
     if (!content || isStreaming) return
 
-    let currentSessionId = activeSession?.id
+    let currentSessionId: string = activeSession?.id || ''
     if (!currentSessionId) {
       try {
         const res = await chatApi.createSession('', content.slice(0, 30) || 'New Chat')
@@ -392,7 +392,7 @@ export default function ChatPage() {
     setUploadingFile(true)
 
     try {
-      let targetSessionId = activeSession?.id
+      let targetSessionId: string = activeSession?.id || ''
       if (!targetSessionId) {
         const newSess = await chatApi.createSession('', file.name.slice(0, 30))
         targetSessionId = newSess.data.id

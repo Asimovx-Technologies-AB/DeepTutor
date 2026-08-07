@@ -5,7 +5,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   BarChart, Bar, Cell
 } from 'recharts'
-import { TrendingUp, Flame, BookOpen, Trophy, Sparkles, Target, HelpCircle } from 'lucide-react'
+import { TrendingUp, Flame, BookOpen, Trophy, Sparkles, Target, HelpCircle, Download, Award, Layers, Calendar } from 'lucide-react'
 import { progressApi } from '../services/api'
 
 const INTENSITY_COLORS = [
@@ -97,22 +97,106 @@ export default function ProgressPage() {
           { subject: 'General Concepts', score: summary?.avg_score || 0 },
         ]
 
+  const handleExportReport = () => {
+    const reportText = `================================================
+  DEEPTUTOR AI - LEARNING PROGRESS REPORT
+================================================
+Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}
+
+[STUDY XP & LEVEL]
+- Level: Level ${summary?.level ?? 1} (${summary?.level_title ?? 'Novice Scholar'})
+- Total XP: ${summary?.total_xp ?? 0} XP
+- XP in Current Level: ${summary?.xp_in_level ?? 0} / 250 XP
+
+[PERFORMANCE SUMMARY]
+- Day Streak: ${summary?.streak_days ?? 0} Days
+- Total Sessions: ${summary?.total_sessions ?? 0}
+- Quizzes Taken: ${summary?.quizzes_taken ?? 0}
+- Average Quiz Score: ${summary?.avg_score ?? 0}%
+- Topics Studied: ${summary?.topics_studied ?? 0}
+- Flashcards Mastered: ${summary?.flashcards_mastered ?? 0}
+- Study Plan Days Completed: ${summary?.completed_plan_days ?? 0}
+
+[RECENT QUIZ ATTEMPTS]
+${recentQuizzes.map((q: any) => `- ${q.full_name || q.name}: ${q.score}% (${q.date})`).join('\n') || 'None'}
+
+================================================`
+    const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `DeepTutor_Learning_Report_${new Date().toISOString().split('T')[0]}.txt`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const levelPct = Math.min(100, Math.round(((summary?.xp_in_level ?? 0) / 250) * 100))
+
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8">
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="flex items-center gap-2 mb-1">
-          <Sparkles size={16} className="text-indigo-600" />
-          <span className="text-xs font-extrabold text-indigo-600 uppercase tracking-widest">
-            Learning Analytics
-          </span>
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 sm:space-y-8">
+      {/* Header with Export Action */}
+      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles size={16} className="text-indigo-600" />
+            <span className="text-xs font-extrabold text-indigo-600 uppercase tracking-widest">
+              Learning Analytics & Mastery
+            </span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 mb-1">Your Progress</h1>
+          <p className="text-slate-500 text-xs sm:text-sm">Track real-time learning stats, XP levels, and quiz performance</p>
         </div>
-        <h1 className="text-3xl font-black text-slate-900 mb-1">Your Progress</h1>
-        <p className="text-slate-500 text-sm">Track your real-time learning journey and quiz performance</p>
+
+        <button
+          onClick={handleExportReport}
+          className="btn-primary py-2.5 px-4 text-xs font-extrabold flex items-center gap-2 self-start sm:self-auto shadow-md"
+        >
+          <Download size={15} /> Export Report
+        </button>
       </motion.div>
 
-      {/* Real-time Stats row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Level & XP Progression Banner */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="glass-card p-6 border border-indigo-100 bg-gradient-to-r from-indigo-900 via-indigo-800 to-violet-900 text-white rounded-3xl shadow-xl flex flex-col md:flex-row items-center justify-between gap-6"
+      >
+        <div className="flex items-center gap-4 text-left w-full md:w-auto">
+          <div className="w-16 h-16 rounded-2xl bg-amber-400 text-indigo-950 flex items-center justify-center font-black text-2xl shadow-lg flex-shrink-0">
+            <Award size={32} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-full text-indigo-100">
+                Level {summary?.level ?? 1}
+              </span>
+              <span className="text-xs font-extrabold text-amber-300">
+                {summary?.level_title ?? 'Novice Scholar'}
+              </span>
+            </div>
+            <h2 className="text-2xl font-black mt-1">{summary?.total_xp ?? 0} Total XP</h2>
+            <p className="text-xs text-indigo-200 mt-0.5 font-medium">Earn XP by completing quizzes, sessions, flashcards & study plans</p>
+          </div>
+        </div>
+
+        <div className="w-full md:w-80 space-y-2">
+          <div className="flex justify-between text-xs font-extrabold text-indigo-100">
+            <span>Progress to Level {(summary?.level ?? 1) + 1}</span>
+            <span>{summary?.xp_in_level ?? 0} / 250 XP</span>
+          </div>
+          <div className="w-full bg-indigo-950/60 rounded-full h-3 p-0.5 border border-indigo-500/30 overflow-hidden">
+            <motion.div
+              className="bg-gradient-to-r from-amber-400 to-amber-300 h-full rounded-full"
+              initial={{ width: 0 }}
+              animate={{ width: `${levelPct}%` }}
+              transition={{ duration: 0.8, ease: 'easeOut' }}
+            />
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Real-time Stats Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatBadge
           icon={Flame}
           label="Day Streak"
@@ -132,9 +216,9 @@ export default function ProgressPage() {
           color="from-emerald-500 to-teal-600"
         />
         <StatBadge
-          icon={BookOpen}
-          label="Topics Studied"
-          value={summary?.topics_studied ?? 0}
+          icon={Layers}
+          label="Flashcards Mastered"
+          value={summary?.flashcards_mastered ?? 0}
           color="from-indigo-500 to-violet-600"
         />
       </div>

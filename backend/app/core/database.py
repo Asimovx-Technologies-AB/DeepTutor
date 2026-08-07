@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import List, Optional, Dict
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session
 from app.core.config import get_settings
 from app.core.models import Base, User, ChatSession, ChatMessage, Document, Quiz, QuizQuestion, QuizAttempt, Flashcard, StudyPlan
@@ -20,6 +20,14 @@ db_session = scoped_session(SessionLocal)
 
 # Create tables automatically on startup
 Base.metadata.create_all(bind=engine)
+
+# Auto-migrate missing columns for existing SQLite database
+with engine.connect() as conn:
+    try:
+        conn.execute(text("ALTER TABLE documents ADD COLUMN key_topics TEXT DEFAULT '[]'"))
+        conn.commit()
+    except Exception:
+        pass
 
 
 def new_id() -> str:
@@ -243,6 +251,7 @@ def get_documents_for_topic(topic_id: str) -> List[dict]:
                 "indexed": d.indexed,
                 "entity_count": d.entity_count,
                 "chunk_count": d.chunk_count,
+                "key_topics": getattr(d, "key_topics", []),
                 "created_at": d.created_at,
             }
             for d in docs
@@ -269,6 +278,7 @@ def get_documents_for_user_and_topic(user_id: str, topic_id: str) -> List[dict]:
                 "indexed": d.indexed,
                 "entity_count": d.entity_count,
                 "chunk_count": d.chunk_count,
+                "key_topics": getattr(d, "key_topics", []),
                 "created_at": d.created_at,
             }
             for d in docs
@@ -289,21 +299,38 @@ def get_documents_for_user(user_id: str) -> List[dict]:
                 "indexed": d.indexed,
                 "entity_count": d.entity_count,
                 "chunk_count": d.chunk_count,
+                "key_topics": getattr(d, "key_topics", []),
                 "created_at": d.created_at,
             }
             for d in docs
         ]
 
 
-def update_document_stats(doc_id: str, indexed: bool, entity_count: int, chunk_count: int) -> bool:
+def update_document_stats(doc_id: str, indexed: bool, entity_count: int, chunk_count: int, key_topics: list = None) -> bool:
     with DBContext() as db:
         doc = db.query(Document).filter(Document.id == doc_id).first()
         if doc:
             doc.indexed = indexed
             doc.entity_count = entity_count
             doc.chunk_count = chunk_count
+            if key_topics is not None:
+                doc.key_topics = key_topics
             return True
     return False
+
+
+def get_key_topics_for_user_section(user_id: str, topic_id: str) -> List[str]:
+    with DBContext() as db:
+        query = db.query(Document).filter(Document.user_id == user_id)
+        if topic_id and topic_id != "general":
+            query = query.filter(Document.topic_id == topic_id)
+        docs = query.all()
+        extracted = []
+        for d in docs:
+            for t in getattr(d, "key_topics", []):
+                if t and t not in extracted:
+                    extracted.append(t)
+        return extracted
 
 
 # ─── Quiz helpers ──────────────────────────────────────────────────────────────

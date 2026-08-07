@@ -34,11 +34,7 @@ export default function RegisterPage() {
       navigate('/dashboard')
     } catch (err: any) {
       if (!err.response || err.code === 'ERR_NETWORK' || err.response?.status >= 500) {
-        login(
-          { id: 'demo-user', username: form.username || 'Learner', email: form.email, role: 'student' },
-          'demo-token'
-        )
-        navigate('/dashboard')
+        setError('Network Error: Unable to reach FastAPI backend server. Please verify backend is running.')
         return
       }
       setError(err.response?.data?.detail ?? 'Registration failed.')

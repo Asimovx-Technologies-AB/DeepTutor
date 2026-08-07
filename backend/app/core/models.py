@@ -69,7 +69,19 @@ class Document(Base):
     indexed = Column(Boolean, default=False)
     entity_count = Column(Integer, default=0)
     chunk_count = Column(Integer, default=0)
+    _key_topics = Column("key_topics", Text, default="[]")
     created_at = Column(String, default=lambda: datetime.utcnow().isoformat())
+
+    @property
+    def key_topics(self):
+        try:
+            return json.loads(self._key_topics)
+        except Exception:
+            return []
+
+    @key_topics.setter
+    def key_topics(self, value):
+        self._key_topics = json.dumps(value or [])
 
 
 class Quiz(Base):

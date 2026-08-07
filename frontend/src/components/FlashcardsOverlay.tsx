@@ -12,9 +12,10 @@ import {
   CheckCircle2,
   Brain
 } from 'lucide-react'
-import axios from 'axios'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
+import { flashcardsApi, quizApi } from '../services/api'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface Flashcard {
   id: string
@@ -31,8 +32,8 @@ interface Props {
 }
 
 export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props) {
-  const token = useAuthStore((s) => s.token)
   const activeSession = useChatStore((s) => s.activeSession)
+  const queryClient = useQueryClient()
 
   const [cards, setCards] = useState<Flashcard[]>([])
   const [loading, setLoading] = useState(false)
@@ -53,9 +54,9 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
     if (!isOpen) return
     const fetchTopics = async () => {
       try {
-        const res = await axios.get('/api/quiz/suggestions', {
-          params: { session_id: sessionId || activeSession?.id, topic_id: activeSession?.topic_id },
-          headers: { Authorization: `Bearer ${token}` },
+        const res = await quizApi.suggestions({
+          session_id: sessionId || activeSession?.id,
+          topic_id: activeSession?.topic_id,
         })
         const suggestions: string[] = res.data?.suggestions || []
         setAvailableTopics(suggestions)
@@ -65,7 +66,7 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
       }
     }
     fetchTopics()
-  }, [isOpen, sessionId, activeSession, token])
+  }, [isOpen, sessionId, activeSession])
 
   const triggerGenerate = async () => {
     setGenerating(true)
@@ -75,20 +76,18 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
         : customTopic.trim() || selectedTopic || 'General Study Concepts'
 
     try {
-      const res = await axios.post(
-        '/api/flashcards/generate',
-        {
-          session_id: sessionId || activeSession?.id,
-          topic_id: activeSession?.topic_id || 'general',
-          custom_topic: effectiveTopic,
-          num_cards: 5,
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
+      const res = await flashcardsApi.generate({
+        session_id: sessionId || activeSession?.id,
+        topic_id: activeSession?.topic_id || 'general',
+        custom_topic: effectiveTopic,
+        num_cards: 5,
+      })
       setCards(res.data || [])
       setCurrentIndex(0)
       setIsFlipped(false)
       setSetupStep(false)
+      queryClient.invalidateQueries({ queryKey: ['progress-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['progress-calendar'] })
     } catch (err: any) {
       console.error(err)
       alert(err.response?.data?.detail || 'Failed to generate flashcards. Make sure you have uploaded a PDF document and Ollama is running.')

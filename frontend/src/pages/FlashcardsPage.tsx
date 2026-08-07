@@ -17,8 +17,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react'
-import axios from 'axios'
-import { useAuthStore } from '../stores/authStore'
+import { flashcardsApi } from '../services/api'
 
 interface Flashcard {
   id: string
@@ -31,7 +30,6 @@ interface Flashcard {
 export default function FlashcardsPage() {
   const { topicId } = useParams<{ topicId: string }>()
   const navigate = useNavigate()
-  const token = useAuthStore((s) => s.token)
   const queryClient = useQueryClient()
 
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -46,9 +44,7 @@ export default function FlashcardsPage() {
   const { data: cards = [], isLoading } = useQuery<Flashcard[]>({
     queryKey: ['flashcards', topicId],
     queryFn: async () => {
-      const res = await axios.get(`/api/flashcards/topic/${topicId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await flashcardsApi.byTopic(topicId || 'general')
       return res.data
     },
   })
@@ -57,15 +53,13 @@ export default function FlashcardsPage() {
   const generateMutation = useMutation({
     mutationFn: async () => {
       setGenerating(true)
-      const res = await axios.post(
-        '/api/flashcards/generate',
-        { topic_id: topicId },
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
+      const res = await flashcardsApi.generate({ topic_id: topicId })
       return res.data
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['flashcards', topicId] })
+      queryClient.invalidateQueries({ queryKey: ['progress-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['progress-calendar'] })
       setGenerating(false)
       setCurrentIndex(0)
       setIsFlipped(false)
@@ -79,14 +73,12 @@ export default function FlashcardsPage() {
   // Review mutation
   const reviewMutation = useMutation({
     mutationFn: async ({ cardId, mastered }: { cardId: string; mastered: boolean }) => {
-      await axios.post(
-        `/api/flashcards/${topicId}/cards/${cardId}/review`,
-        { mastered },
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
+      await flashcardsApi.review(topicId || 'general', cardId, mastered)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['flashcards', topicId] })
+      queryClient.invalidateQueries({ queryKey: ['progress-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['progress-calendar'] })
     },
   })
 

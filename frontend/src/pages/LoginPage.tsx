@@ -25,15 +25,10 @@ export default function LoginPage() {
       navigate('/dashboard')
     } catch (err: any) {
       if (!err.response || err.code === 'ERR_NETWORK' || err.response?.status >= 500) {
-        const username = email.split('@')[0] || 'Learner'
-        login(
-          { id: 'demo-user', username, email, role: 'student' },
-          'demo-token'
-        )
-        navigate('/dashboard')
+        setError('Network Error: Unable to connect to FastAPI backend server. Please verify backend (start.bat) is running on port 8000.')
         return
       }
-      setError(err.response?.data?.detail ?? 'Login failed. Please try again.')
+      setError(err.response?.data?.detail ?? 'Login failed. Please check your credentials and try again.')
     } finally {
       setLoading(false)
     }

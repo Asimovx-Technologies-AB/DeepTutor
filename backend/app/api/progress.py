@@ -30,16 +30,26 @@ async def get_progress_summary(user: dict = Depends(get_current_user)):
         if s.get("topic_id"):
             topic_ids.add(s["topic_id"])
             
+    flashcards_mastered = 0
     with db.DBContext() as database:
-        from app.core.models import Document
+        from app.core.models import Document, Flashcard, StudyPlan
         docs = database.query(Document).filter(Document.user_id == user_id).all()
         for d in docs:
             if d.topic_id:
                 topic_ids.add(d.topic_id)
+        
+        # Count flashcards mastered for user topics
+        for tid in list(topic_ids) + ["general"]:
+            cards = database.query(Flashcard).filter(Flashcard.topic_id == tid, Flashcard.mastered == True).all()
+            flashcards_mastered += len(cards)
+
+        # Count study plan completed days
+        plans = database.query(StudyPlan).filter(StudyPlan.user_id == user_id).all()
+        completed_plan_days = sum(len(p.completed_days or []) for p in plans)
                 
     topics_studied = max(len(topic_ids), 1 if total_sessions > 0 or quizzes_taken > 0 else 0)
 
-    # 4. Calculate day streak
+    # 4. Calculate day streak & activity dates
     activity_dates = set()
     for s in sessions:
         if s.get("started_at"):
@@ -56,7 +66,7 @@ async def get_progress_summary(user: dict = Depends(get_current_user)):
                 activity_dates.add(date_str)
             except Exception:
                 pass
-                
+
     today = datetime.utcnow().date()
     streak_days = 0
     check_date = today
@@ -65,8 +75,33 @@ async def get_progress_summary(user: dict = Depends(get_current_user)):
         streak_days += 1
         check_date -= timedelta(days=1)
         
-    if streak_days == 0 and (total_sessions > 0 or quizzes_taken > 0):
+    if streak_days == 0 and (total_sessions > 0 or quizzes_taken > 0 or flashcards_mastered > 0):
         streak_days = 1
+
+    # 5. XP & Level System Calculation
+    session_xp = total_sessions * 50
+    quiz_xp = sum(100 + int(a.get("percentage", 0) * 2) for a in attempts)
+    flashcard_xp = flashcards_mastered * 30
+    plan_xp = completed_plan_days * 40
+    streak_xp = streak_days * 50
+
+    total_xp = session_xp + quiz_xp + flashcard_xp + plan_xp + streak_xp
+    level = 1 + (total_xp // 250)
+    xp_in_level = total_xp % 250
+    xp_for_next = 250
+
+    if level <= 2:
+        level_title = "Novice Scholar"
+    elif level <= 4:
+        level_title = "Knowledge Explorer"
+    elif level <= 7:
+        level_title = "Concept Craftsman"
+    elif level <= 10:
+        level_title = "GraphRAG Master"
+    elif level <= 15:
+        level_title = "AI Tutor Polymath"
+    else:
+        level_title = "Grand Academician"
 
     return {
         "total_sessions": total_sessions,
@@ -74,7 +109,15 @@ async def get_progress_summary(user: dict = Depends(get_current_user)):
         "avg_score": avg_score,
         "topics_studied": topics_studied,
         "streak_days": streak_days,
+        "flashcards_mastered": flashcards_mastered,
+        "completed_plan_days": completed_plan_days,
+        "total_xp": total_xp,
+        "level": level,
+        "xp_in_level": xp_in_level,
+        "xp_for_next": xp_for_next,
+        "level_title": level_title,
     }
+
 
 
 @router.get("/weekly")

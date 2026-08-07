@@ -1,8 +1,15 @@
 import axios from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
+export const getApiBaseUrl = (): string => {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL
+  }
+  return '/api'
+}
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: getApiBaseUrl(),
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -24,6 +31,11 @@ api.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+// ─── Health & Connection ──────────────────────────────────────
+export const healthApi = {
+  check: () => api.get('/health'),
+}
 
 // ─── Auth ─────────────────────────────────────────────────────
 export const authApi = {
@@ -80,7 +92,8 @@ export const streamChatMessage = async ({
   signal?: AbortSignal
 }) => {
   try {
-    const url = `/api/chat/sessions/${sessionId}/message/stream?content=${encodeURIComponent(content)}`
+    const baseUrl = getApiBaseUrl()
+    const url = `${baseUrl}/chat/sessions/${sessionId}/message/stream?content=${encodeURIComponent(content)}`
     const headers: Record<string, string> = { Accept: 'text/event-stream' }
     if (token) headers.Authorization = `Bearer ${token}`
 
@@ -141,7 +154,8 @@ export const streamChatMessage = async ({
 
 // SSE streaming — legacy EventSource
 export const streamMessage = (sessionId: string, content: string, token: string): EventSource => {
-  const urlWithToken = `/api/chat/sessions/${sessionId}/message/stream?content=${encodeURIComponent(content)}&token=${token}`
+  const baseUrl = getApiBaseUrl()
+  const urlWithToken = `${baseUrl}/chat/sessions/${sessionId}/message/stream?content=${encodeURIComponent(content)}&token=${token}`
   return new EventSource(urlWithToken)
 }
 
@@ -159,12 +173,30 @@ export const quizApi = {
     difficulty?: string
     session_id?: string
     focus_topic?: string
+    custom_topic?: string
     num_questions?: number
   }) => api.post('/quiz/generate', data),
   submit: (quizId: string, answers: Record<string, string>) =>
     api.post(`/quiz/${quizId}/submit`, { answers }),
   attempts: (quizId: string) => api.get(`/quiz/${quizId}/attempts`),
   myAttempts: () => api.get('/quiz/my-attempts'),
+  suggestions: (params: { session_id?: string; topic_id?: string }) =>
+    api.get('/quiz/suggestions', { params }),
+}
+
+// ─── Flashcards ───────────────────────────────────────────────
+export const flashcardsApi = {
+  generate: (data: {
+    session_id?: string
+    topic_id?: string
+    focus_topic?: string
+    custom_topic?: string
+    num_cards?: number
+  }) => api.post('/flashcards/generate', data),
+  byTopic: (topicId: string) => api.get(`/flashcards/topic/${topicId}`),
+  bySession: (sessionId: string) => api.get(`/flashcards/session/${sessionId}`),
+  review: (topicId: string, cardId: string, mastered: boolean) =>
+    api.post(`/flashcards/${topicId}/cards/${cardId}/review`, { mastered }),
 }
 
 // ─── Progress ─────────────────────────────────────────────────
@@ -222,3 +254,4 @@ export const leaderboardApi = {
 }
 
 export default api
+
