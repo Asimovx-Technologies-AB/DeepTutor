@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 from app.rag.ollama_client import ollama
 from app.rag.vector_store import vector_store
 from app.rag.document_processor import process_document
+from app.rag.section_scope import get_section_context, user_owns_section
 from app.core import database as db
 
 FLASHCARD_PROMPT_TEMPLATE = """You are a precise academic study engine. Create a deck of exactly 8-10 high-quality study flashcards derived STRICTLY from the provided UPLOADED DOCUMENT CONTEXT.
@@ -38,87 +39,35 @@ UPLOADED PDF DOCUMENT CONTEXT:
 JSON:"""
 
 
-async def generate_flashcards_for_topic(
-    topic_id: str,
+async def generate_flashcards_for_section(
+    section_id: str,
     focus_topic: Optional[str] = None,
     user_id: Optional[str] = None,
 ) -> List[dict]:
     """
-    Generate a deck of flashcards derived strictly from the uploaded PDF document text.
-    Saves and returns the generated cards.
+    Generate a deck of flashcards derived strictly from the uploaded PDF document text
+    stored in the user's specific section.
     """
     context_docs: List[str] = []
 
-    # 1. Prioritize reading directly from the user's uploaded PDF document(s)
-    user_docs: List[dict] = []
-    if user_id:
-        user_docs = db.get_documents_for_user(user_id)
-    if not user_docs and topic_id:
-        user_docs = db.get_documents_for_topic(topic_id)
-    if not user_docs:
-        user_docs = db.get_documents_for_topic("general")
+    if not user_id or not section_id:
+        return []
 
-    for d in user_docs:
-        fpath = d.get("file_path")
-        if fpath and Path(fpath).exists():
-            try:
-                chunks = process_document(fpath)
-                fname = d.get("file_name", "Document")
-                for c in chunks:
-                    if c.get("text"):
-                        page = c.get("metadata", {}).get("page", 1)
-                        context_docs.append(f"[{fname} Page {page}] {c['text']}")
-            except Exception as e:
-                print(f"Error parsing uploaded document {fpath}: {e}")
+    if not user_owns_section(user_id, section_id):
+        return []
 
-    # 2. Fallback to vector store lookup across candidate collections if direct files return no text
-    if not context_docs:
-        candidate_topics = []
-        if user_id:
-            safe_uid = user_id.replace("-", "_")
-            safe_tid = (topic_id or "general").replace("-", "_")
-            candidate_topics.append(f"{safe_uid}_{safe_tid}")
-        if topic_id:
-            candidate_topics.append(topic_id)
-        candidate_topics.append("general")
-
-        for tid in candidate_topics:
-            try:
-                collection = vector_store._collection(tid)
-                if collection.count() == 0:
-                    continue
-
-                if focus_topic and focus_topic.strip() and focus_topic.lower() != "all topics (entire pdf)":
-                    try:
-                        emb = await ollama.get_embedding(focus_topic)
-                        if emb:
-                            search_res = vector_store.search(tid, emb, top_k=10)
-                            context_docs = [
-                                f"[Page {c.get('page', 1)}] {c['text']}" for c in search_res if c.get("text")
-                            ]
-                    except Exception:
-                        pass
-
-                if not context_docs:
-                    data = collection.get(include=["documents", "metadatas"])
-                    documents = data.get("documents", [])
-                    metadatas = data.get("metadatas", [])
-                    if documents:
-                        doc_pairs = list(zip(documents, metadatas if metadatas else [{}] * len(documents)))
-                        random.shuffle(doc_pairs)
-                        for text, meta in doc_pairs[:12]:
-                            page = meta.get("page", 1) if meta else 1
-                            context_docs.append(f"[Page {page}] {text}")
-
-                if context_docs:
-                    break
-            except Exception:
-                continue
+    query_text = focus_topic if (focus_topic and focus_topic.lower() != "all topics (entire pdf)") else None
+    context_docs = await get_section_context(
+        user_id=user_id,
+        section_id=section_id,
+        query=query_text,
+        top_k=12,
+    )
 
     if not context_docs:
         return []
 
-    # Select representative sample chunks from the document context
+    # Select representative sample chunks from the section context
     sample_docs = context_docs
     if len(sample_docs) > 15:
         sample_docs = random.sample(sample_docs, 15)
@@ -129,7 +78,7 @@ async def generate_flashcards_for_topic(
     topic_instruction = (
         f"FOCUS TOPIC: The flashcards MUST focus specifically on '{focus_topic}' and its core terms/concepts from the PDF."
         if (focus_topic and focus_topic.lower() != "all topics (entire pdf)")
-        else "Scope: Comprehensive flashcards covering key terms, definitions, and concepts across the uploaded PDF document."
+        else "Scope: Comprehensive flashcards covering key terms, definitions, and concepts across the uploaded PDF document section."
     )
 
     # 3. Call Ollama to generate flashcards strictly from PDF context
@@ -158,9 +107,9 @@ async def generate_flashcards_for_topic(
         card_data = json.loads(json_str)
         cards = card_data.get("flashcards", [])
 
-        # Delete existing cards for this topic to ensure fresh PDF-derived deck
-        db.delete_flashcards_for_topic(topic_id)
-        if topic_id != "general":
+        # Delete existing cards for this section to ensure fresh section-derived deck
+        db.delete_flashcards_for_topic(section_id)
+        if section_id != "general":
             db.delete_flashcards_for_topic("general")
 
         saved_cards = []
@@ -169,7 +118,7 @@ async def generate_flashcards_for_topic(
             back = c.get("back", "").strip()
             if front and back:
                 card = db.add_flashcard(
-                    topic_id=topic_id,
+                    topic_id=section_id,
                     front=front,
                     back=back,
                 )
@@ -178,5 +127,5 @@ async def generate_flashcards_for_topic(
         return saved_cards
 
     except Exception as e:
-        print(f"Error generating flashcards from PDF: {e}")
+        print(f"[flashcard_generator] Error generating flashcards for section {section_id}: {e}")
         return []

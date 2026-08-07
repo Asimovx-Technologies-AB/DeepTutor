@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from app.api.auth import get_current_user
 from app.core import database as db
-from app.rag.flashcard_generator import generate_flashcards_for_topic
+from app.rag.flashcard_generator import generate_flashcards_for_section
 
 router = APIRouter(prefix="/flashcards", tags=["flashcards"])
 
@@ -12,6 +12,7 @@ class GenerateFlashcardsRequest(BaseModel):
     session_id: Optional[str] = None
     topic_id: Optional[str] = None
     focus_topic: Optional[str] = None
+    custom_topic: Optional[str] = None
 
 
 class ReviewFlashcardRequest(BaseModel):
@@ -23,18 +24,20 @@ async def generate_flashcards(
     body: GenerateFlashcardsRequest,
     user: dict = Depends(get_current_user),
 ):
-    topic_id = body.topic_id
+    section_id = body.topic_id
     if body.session_id:
         session = db.get_session(body.session_id)
         if session:
-            topic_id = session.get("topic_id") or "general"
-            
-    if not topic_id:
-        topic_id = "general"
+            section_id = session.get("topic_id") or session.get("id") or "general"
 
-    cards = await generate_flashcards_for_topic(
-        topic_id=topic_id,
-        focus_topic=body.focus_topic,
+    if not section_id:
+        section_id = "general"
+
+    effective_focus = body.focus_topic or body.custom_topic
+
+    cards = await generate_flashcards_for_section(
+        section_id=section_id,
+        focus_topic=effective_focus,
         user_id=user["id"]
     )
     if not cards:
@@ -51,10 +54,8 @@ async def list_session_flashcards(
     user: dict = Depends(get_current_user),
 ):
     session = db.get_session(session_id)
-    topic_id = session.get("topic_id") if session else "general"
-    cards = db.get_flashcards_by_topic(topic_id or "general")
-    if not cards:
-        cards = await generate_flashcards_for_topic(topic_id or "general", user_id=user["id"])
+    section_id = (session.get("topic_id") or session.get("id")) if session else "general"
+    cards = db.get_flashcards_by_topic(section_id or "general")
     return cards
 
 
@@ -64,8 +65,6 @@ async def list_flashcards(
     user: dict = Depends(get_current_user),
 ):
     cards = db.get_flashcards_by_topic(topic_id)
-    if not cards:
-        cards = await generate_flashcards_for_topic(topic_id, user_id=user["id"])
     return cards
 
 

@@ -137,6 +137,8 @@ export default function Layout() {
             </p>
             <button
               onClick={() => {
+                useChatStore.getState().setActiveSession(null)
+                useChatStore.getState().setMessages([])
                 setMobileOpen(false)
                 navigate('/chat')
               }}

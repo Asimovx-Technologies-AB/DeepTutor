@@ -44,18 +44,20 @@ async def generate_plan(
     body: GenerateStudyPlanRequest,
     user: dict = Depends(get_current_user),
 ):
-    topic_id = body.topic_id
+    section_id = body.topic_id
     if body.session_id:
         session = db.get_session(body.session_id)
         if session:
-            topic_id = session.get("topic_id") or "general"
+            section_id = session.get("topic_id") or session.get("id") or body.session_id
+        else:
+            section_id = body.session_id
 
-    if not topic_id:
-        topic_id = "general"
+    if not section_id:
+        section_id = "general"
 
     plan = await generate_study_plan(
         user_id=user["id"],
-        topic_id=topic_id,
+        topic_id=section_id,
         target_date=body.target_date,
         hours_per_day=body.hours_per_day or 2.0,
     )

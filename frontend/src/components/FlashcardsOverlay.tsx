@@ -89,33 +89,10 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
       setCurrentIndex(0)
       setIsFlipped(false)
       setSetupStep(false)
-    } catch {
-      setCards([
-        {
-          id: 'fc1',
-          topic_id: 't1',
-          front: 'What is the primary purpose of collecting information about a company’s field of activity and client preferences?',
-          back: 'To provide a better estimate for the project’s budget, timeline terms, and tailored deliverables.',
-          mastered: false
-        },
-        {
-          id: 'fc2',
-          topic_id: 't2',
-          front: 'What is the function of the Self-Attention Mechanism in Transformers?',
-          back: 'It dynamically computes contextual correlation weights between all tokens in a sequence simultaneously.',
-          mastered: false
-        },
-        {
-          id: 'fc3',
-          topic_id: 't3',
-          front: 'What does GraphRAG add beyond traditional vector RAG?',
-          back: 'GraphRAG extracts named entities & semantic relationships into a 3D knowledge graph for multi-hop reasoning.',
-          mastered: false
-        }
-      ])
-      setCurrentIndex(0)
-      setIsFlipped(false)
-      setSetupStep(false)
+    } catch (err: any) {
+      console.error(err)
+      alert(err.response?.data?.detail || 'Failed to generate flashcards. Make sure you have uploaded a PDF document and Ollama is running.')
+      setSetupStep(true)
     } finally {
       setGenerating(false)
     }

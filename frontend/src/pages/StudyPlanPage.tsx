@@ -201,7 +201,7 @@ export default function StudyPlanPage() {
         })
       } else if (selectedSessionId) {
         const foundS = sessions.find((s) => s.id === selectedSessionId)
-        if (foundS?.topic_id) topicId = foundS.topic_id
+        topicId = foundS?.topic_id || foundS?.id || selectedSessionId
       }
 
       // Generate Study Plan
@@ -209,6 +209,7 @@ export default function StudyPlanPage() {
         '/api/study-plan/generate',
         {
           topic_id: topicId,
+          session_id: selectedSessionId || undefined,
           target_date: targetDate,
           hours_per_day: hoursPerDay,
         },

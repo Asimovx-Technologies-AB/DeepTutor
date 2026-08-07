@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { useChatStore } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
-import { chatApi } from '../services/api'
+import { chatApi, streamChatMessage } from '../services/api'
 import ChatMessage from '../components/ChatMessage'
 import GraphContextPanel from '../components/GraphContextPanel'
 import GamifiedQuizGame from '../components/GamifiedQuizGame'
@@ -89,6 +89,7 @@ function UploadStatus({ docId, onDone }: { docId: string; onDone: (stats: any) =
 export default function ChatPage() {
   const { sessionId } = useParams<{ sessionId?: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, token, logout } = useAuthStore()
 
   const {
@@ -162,8 +163,9 @@ export default function ChatPage() {
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const eventSourceRef = useRef<EventSource | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const skipNextFetchRef = useRef<string | null>(null)
 
   // Fetch sessions
   const { refetch: refetchSessions } = useQuery({
@@ -180,21 +182,146 @@ export default function ChatPage() {
     staleTime: 0,
   })
 
+  const handleSend = useCallback(async (text?: string) => {
+    let content = (text ?? input).trim()
+    if (!content || isStreaming) return
+
+    let currentSessionId = activeSession?.id
+    if (!currentSessionId) {
+      try {
+        const res = await chatApi.createSession('', content.slice(0, 30) || 'New Chat')
+        currentSessionId = res.data.id
+        skipNextFetchRef.current = currentSessionId
+        setActiveSession(res.data)
+        await refetchSessions()
+        navigate(`/chat/${res.data.id}`)
+      } catch (err) {
+        console.error('Auto session creation failed', err)
+        return
+      }
+    }
+
+    setInput('')
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+
+    const userMsg: ExtendedMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content,
+      created_at: new Date().toISOString(),
+    }
+    setExtMessages((prev) => [...prev, userMsg])
+    addMessage(userMsg)
+
+    setStreaming(true)
+    clearStreamingContent()
+    setLiveSources([])
+    setLiveGraphContext({ entities: [], relationships: [] })
+
+    if (abortControllerRef.current) abortControllerRef.current.abort()
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
+    let accContent = ''
+    let accSources: Source[] = []
+    let accGraph: GraphContextData = { entities: [], relationships: [] }
+
+    await streamChatMessage({
+      sessionId: currentSessionId,
+      content,
+      token: token || '',
+      signal: controller.signal,
+      onToken: (t) => {
+        accContent += t
+        appendStreamToken(t)
+      },
+      onSources: (s) => {
+        accSources = s
+        setLiveSources(s)
+      },
+      onGraphContext: (g) => {
+        accGraph = g
+        setLiveGraphContext(g)
+      },
+      onDone: () => {
+        const assistantMsg: ExtendedMessage = {
+          id: Date.now().toString() + '_ai',
+          role: 'assistant',
+          content: accContent,
+          created_at: new Date().toISOString(),
+          sources: accSources,
+          graph_context: accGraph,
+        }
+        setExtMessages((prev) => [...prev, assistantMsg])
+        clearStreamingContent()
+        setStreaming(false)
+      },
+      onError: (err) => {
+        console.error('Stream error:', err)
+        const fallback: ExtendedMessage = {
+          id: Date.now().toString() + '_fallback',
+          role: 'assistant',
+          content: accContent || `⚠️ **Error communicating with AI backend:** ${err?.message || 'Server error'}. Please verify that FastAPI backend is running on http://localhost:8000.`,
+          created_at: new Date().toISOString(),
+        }
+        setExtMessages((prev) => [...prev, fallback])
+        clearStreamingContent()
+        setStreaming(false)
+      },
+    })
+  }, [input, isStreaming, activeSession, token, navigate, refetchSessions, setActiveSession, addMessage, appendStreamToken, clearStreamingContent, setStreaming])
+
   // Load session messages when sessionId changes
   useEffect(() => {
-    if (!sessionId) return
-    chatApi.messages(sessionId).then((res) => {
-      const msgs: ExtendedMessage[] = res.data.map((m: any) => ({
-        ...m,
-        sources: m.metadata?.sources ?? [],
-        graph_context: m.metadata?.graph_context ?? null,
-      }))
-      setExtMessages(msgs)
-      setMessages(res.data)
-      const session = sessions.find((s) => s.id === sessionId)
-      if (session) setActiveSession(session)
-    })
-  }, [sessionId])
+    if (!sessionId) {
+      setActiveSession(null)
+      setExtMessages([])
+      setMessages([])
+      return
+    }
+
+    if (skipNextFetchRef.current === sessionId) {
+      skipNextFetchRef.current = null
+      return
+    }
+
+    const found = sessions.find((s) => s.id === sessionId)
+    if (found) {
+      setActiveSession(found)
+    } else {
+      setActiveSession({
+        id: sessionId,
+        user_id: user?.id || '',
+        topic_id: '',
+        session_title: 'Chat Session',
+        started_at: new Date().toISOString(),
+      })
+    }
+
+    chatApi
+      .messages(sessionId)
+      .then((res) => {
+        const msgs: ExtendedMessage[] = res.data.map((m: any) => ({
+          ...m,
+          sources: m.metadata?.sources ?? [],
+          graph_context: m.metadata?.graph_context ?? null,
+        }))
+        setExtMessages(msgs)
+        setMessages(res.data)
+      })
+      .catch((err) => {
+        console.error('Failed to load session messages:', err)
+      })
+  }, [sessionId, sessions])
+
+  // Automatically submit initial prompt if navigated from Dashboard Quick Ask
+  useEffect(() => {
+    const initialPrompt = (location.state as any)?.initialPrompt
+    if (initialPrompt && typeof initialPrompt === 'string') {
+      handleSend(initialPrompt)
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+  }, [location.state, handleSend, location.pathname, navigate])
 
   // Group sessions by date
   const groupedSessions = useMemo(() => {
@@ -252,94 +379,6 @@ export default function ChatPage() {
     e.target.style.height = `${Math.min(e.target.scrollHeight, 180)}px`
   }
 
-  const handleSend = useCallback(async (text?: string) => {
-    let content = (text ?? input).trim()
-    if (!content || isStreaming) return
-
-    let currentSessionId = activeSession?.id
-    if (!currentSessionId) {
-      try {
-        const res = await chatApi.createSession('', content.slice(0, 30) || 'New Chat')
-        await refetchSessions()
-        currentSessionId = res.data.id
-        setActiveSession(res.data)
-        navigate(`/chat/${res.data.id}`)
-      } catch (err) {
-        console.error('Auto session creation failed', err)
-        return
-      }
-    }
-
-    setInput('')
-    if (textareaRef.current) textareaRef.current.style.height = 'auto'
-
-    const userMsg: ExtendedMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content,
-      created_at: new Date().toISOString(),
-    }
-    setExtMessages((prev) => [...prev, userMsg])
-    addMessage(userMsg)
-
-    setStreaming(true)
-    clearStreamingContent()
-    setLiveSources([])
-    setLiveGraphContext({ entities: [], relationships: [] })
-
-    if (eventSourceRef.current) eventSourceRef.current.close()
-
-    const url = `/api/chat/sessions/${currentSessionId}/message/stream?content=${encodeURIComponent(content)}&token=${token}`
-    const es = new EventSource(url)
-    eventSourceRef.current = es
-
-    let accContent = ''
-    let accSources: Source[] = []
-    let accGraph: GraphContextData = { entities: [], relationships: [] }
-
-    es.onmessage = (event) => {
-      try {
-        const evt = JSON.parse(event.data)
-        if (evt.type === 'token') {
-          accContent += evt.data
-          appendStreamToken(evt.data)
-        } else if (evt.type === 'sources') {
-          accSources = evt.data
-          setLiveSources(evt.data)
-        } else if (evt.type === 'graph_context') {
-          accGraph = evt.data
-          setLiveGraphContext(evt.data)
-        } else if (evt.type === 'done') {
-          es.close()
-          const assistantMsg: ExtendedMessage = {
-            id: Date.now().toString() + '_ai',
-            role: 'assistant',
-            content: accContent,
-            created_at: new Date().toISOString(),
-            sources: accSources,
-            graph_context: accGraph,
-          }
-          setExtMessages((prev) => [...prev, assistantMsg])
-          clearStreamingContent()
-          setStreaming(false)
-        }
-      } catch { /* ignore */ }
-    }
-
-    es.onerror = () => {
-      es.close()
-      const fallback: ExtendedMessage = {
-        id: Date.now().toString() + '_fallback',
-        role: 'assistant',
-        content: accContent || '⚠️ **Backend not connected.** Start the FastAPI backend to use DeepTutor GraphRAG:\n```bash\ncd backend\nuvicorn app.main:app --reload\n```',
-        created_at: new Date().toISOString(),
-      }
-      setExtMessages((prev) => [...prev, fallback])
-      clearStreamingContent()
-      setStreaming(false)
-    }
-  }, [input, isStreaming, activeSession, token, navigate, refetchSessions, setActiveSession, addMessage, appendStreamToken, clearStreamingContent, setStreaming])
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -357,11 +396,13 @@ export default function ChatPage() {
       if (!targetSessionId) {
         const newSess = await chatApi.createSession('', file.name.slice(0, 30))
         targetSessionId = newSess.data.id
+        skipNextFetchRef.current = targetSessionId
         setActiveSession(newSess.data)
+        await refetchSessions()
         navigate(`/chat/${newSess.data.id}`)
       }
 
-      const topicId = activeSession?.topic_id || 'general'
+      const topicId = activeSession?.topic_id || targetSessionId || activeSession?.id || 'general'
       const formData = new FormData()
       formData.append('file', file)
       formData.append('topic_id', topicId)
@@ -452,10 +493,11 @@ export default function ChatPage() {
           {/* New Chat Button (Easlo Obsidian Black) */}
           <button
             onClick={() => {
-              navigate('/chat')
               setActiveSession(null)
               setExtMessages([])
+              setMessages([])
               setMobileLeftOpen(false)
+              navigate('/chat')
             }}
             className="w-full bg-[#111111] hover:bg-[#27272a] text-white font-bold text-sm py-3 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98] mb-4"
           >

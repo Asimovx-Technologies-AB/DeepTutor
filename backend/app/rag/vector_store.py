@@ -141,6 +141,14 @@ class VectorStore:
         except Exception:
             pass
 
+    def reset(self) -> None:
+        try:
+            for col in self._client.list_collections():
+                name = col.name if hasattr(col, 'name') else str(col)
+                self._client.delete_collection(name)
+        except Exception:
+            pass
+
 
 # Singleton
 vector_store = VectorStore()

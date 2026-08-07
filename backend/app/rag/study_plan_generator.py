@@ -132,36 +132,22 @@ async def generate_study_plan(
 
     total_days = max(3, min(30, total_days))
 
-    # Retrieve document text
-    context_docs = []
-    namespaced_topic = f"{user_id.replace('-', '_')}_{(topic_id or 'general').replace('-', '_')}"
+    # Retrieve document text strictly for this user & section
+    from app.rag.section_scope import get_section_context, user_owns_section
 
-    for tid in [namespaced_topic, topic_id, "general"]:
-        try:
-            collection = vector_store._collection(tid)
-            if collection.count() > 0:
-                data = collection.get(include=["documents"])
-                documents = data.get("documents", [])
-                if documents:
-                    shuffled = list(documents)
-                    random.shuffle(shuffled)
-                    context_docs = shuffled[:15]
-                    break
-        except Exception:
-            continue
+    if not user_owns_section(user_id, topic_id):
+        print(f"[study_plan_generator] Refused: user {user_id} does not own section {topic_id}")
+        return None
+
+    context_docs = await get_section_context(
+        user_id=user_id,
+        section_id=topic_id,
+        top_k=15,
+    )
 
     if not context_docs:
-        docs = db.get_documents_for_user(user_id)
-        for d in docs:
-            fpath = d.get("file_path")
-            if fpath and Path(fpath).exists():
-                try:
-                    chunks = process_document(fpath)
-                    for c in chunks:
-                        if c.get("text"):
-                            context_docs.append(c["text"])
-                except Exception:
-                    pass
+        print(f"[study_plan_generator] No content found for section_id={topic_id} (user_id={user_id})")
+        return None
 
     context = "\n\n".join(context_docs)[:5000] if context_docs else "General study concepts and textbook chapters."
 
@@ -248,31 +234,16 @@ async def generate_day_study_notes(
     """
     Generates rich, structured Markdown study notes for a specific day topic using Ollama & RAG.
     """
-    context_docs = []
-    if user_id:
-        namespaced_topic = f"{user_id.replace('-', '_')}_{(topic_id or 'general').replace('-', '_')}"
-        try:
-            emb = await ollama.get_embedding(day_topic)
-            if emb:
-                search_res = vector_store.search(namespaced_topic, emb, top_k=6)
-                context_docs = [c["text"] for c in search_res if c.get("text")]
-        except Exception:
-            pass
+    from app.rag.section_scope import get_section_context
 
-    if not context_docs:
-        docs = db.get_documents_for_user(user_id) if user_id else []
-        if not docs:
-            docs = db.get_documents_for_topic(topic_id)
-        for d in docs:
-            fpath = d.get("file_path")
-            if fpath and Path(fpath).exists():
-                try:
-                    chunks = process_document(fpath)
-                    for c in chunks:
-                        if c.get("text"):
-                            context_docs.append(c["text"])
-                except Exception:
-                    pass
+    context_docs = []
+    if user_id and topic_id:
+        context_docs = await get_section_context(
+            user_id=user_id,
+            section_id=topic_id,
+            query=day_topic,
+            top_k=8,
+        )
 
     context = "\n\n".join(context_docs)[:4000] if context_docs else "Refer to general principles for this topic."
 

@@ -249,6 +249,32 @@ def get_documents_for_topic(topic_id: str) -> List[dict]:
         ]
 
 
+def get_documents_for_user_and_topic(user_id: str, topic_id: str) -> List[dict]:
+    with DBContext() as db:
+        docs = (
+            db.query(Document)
+            .filter(Document.user_id == user_id)
+            .filter(Document.topic_id == topic_id)
+            .order_by(Document.created_at.desc())
+            .all()
+        )
+        return [
+            {
+                "id": d.id,
+                "user_id": d.user_id,
+                "topic_id": d.topic_id,
+                "file_name": d.file_name,
+                "file_path": d.file_path,
+                "file_type": d.file_type,
+                "indexed": d.indexed,
+                "entity_count": d.entity_count,
+                "chunk_count": d.chunk_count,
+                "created_at": d.created_at,
+            }
+            for d in docs
+        ]
+
+
 def get_documents_for_user(user_id: str) -> List[dict]:
     with DBContext() as db:
         docs = db.query(Document).filter(Document.user_id == user_id).order_by(Document.created_at.desc()).all()

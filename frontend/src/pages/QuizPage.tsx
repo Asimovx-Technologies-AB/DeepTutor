@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Trophy, Clock, ArrowLeft, ChevronRight, Brain, AlertCircle, Sparkles, RefreshCw } from 'lucide-react'
 import { quizApi } from '../services/api'
+import { useChatStore } from '../stores/chatStore'
 
 const MOCK_QUIZ = {
   id: 'q1',
@@ -49,6 +50,7 @@ const OPTION_LABELS = ['A', 'B', 'C', 'D']
 export default function QuizPage() {
   const { topicId } = useParams<{ topicId: string }>()
   const navigate = useNavigate()
+  const activeSession = useChatStore((s) => s.activeSession)
   const [currentQ, setCurrentQ] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [timeLeft, setTimeLeft] = useState(0)
@@ -113,7 +115,11 @@ export default function QuizPage() {
   const generateQuiz = async () => {
     setGenerating(true)
     try {
-      await quizApi.generate(topicId!, 'medium')
+      await quizApi.generate({
+        topic_id: activeSession?.topic_id || topicId!,
+        session_id: activeSession?.id,
+        difficulty: 'medium',
+      })
     } catch { /* noop */ }
     setGenerating(false)
   }

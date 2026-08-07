@@ -7,7 +7,7 @@ backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
 from app.rag.vector_store import vector_store
-from app.rag.flashcard_generator import generate_flashcards_for_topic
+from app.rag.flashcard_generator import generate_flashcards_for_section
 
 
 async def test_pdf_flashcards_generation():
@@ -31,7 +31,7 @@ async def test_pdf_flashcards_generation():
     vector_store.add_chunks(namespaced_topic, dummy_chunks, dummy_embeddings)
 
     print(f"Generating flashcards for namespaced topic '{namespaced_topic}'...")
-    cards = await generate_flashcards_for_topic(topic_id=topic_id, user_id=user_id)
+    cards = await generate_flashcards_for_section(section_id=topic_id, user_id=user_id)
 
     print(f"Generated {len(cards)} flashcards from uploaded PDF context.")
     assert len(cards) > 0, "Expected generated flashcards, got 0"

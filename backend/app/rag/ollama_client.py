@@ -41,8 +41,8 @@ class OllamaClient:
             "stream": False,
             "options": {
                 "temperature": temperature,
-                "num_ctx": 4096,
-                "num_predict": 512,
+                "num_ctx": 8192,
+                "num_predict": 2048,
             },
         }
         async with httpx.AsyncClient(timeout=self.timeout) as client:

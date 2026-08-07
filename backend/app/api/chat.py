@@ -15,6 +15,7 @@ from app.api.auth import get_current_user, decode_token
 from app.core import database as db
 from app.rag.graph_rag import graph_rag
 from app.rag.ollama_client import ollama
+from app.rag.section_scope import get_section_collection_id
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -28,11 +29,10 @@ class MessageRequest(BaseModel):
     content: str
 
 
-def _user_topic(user_id: str, topic_id: str) -> str:
-    """Build a per-user namespaced topic key — must match documents.py."""
-    safe_uid = user_id.replace("-", "_")
-    safe_tid = (topic_id or "general").replace("-", "_")
-    return f"{safe_uid}_{safe_tid}"
+def _user_section_collection_id(user_id: str, topic_id: str, session_id: str = "") -> str:
+    """Build a per-user section collection id — isolates data by user and session section."""
+    section_id = topic_id or session_id or "general"
+    return get_section_collection_id(user_id, section_id)
 
 
 # ─── Sessions ──────────────────────────────────────────────────────────────────
@@ -84,8 +84,8 @@ async def send_message(
     db.add_message(session_id, "user", body.content)
     history = db.get_messages(session_id, last_n=10)
 
-    # Use per-user namespaced topic for ChromaDB/graph lookup
-    topic_id = _user_topic(user["id"], session.get("topic_id") or "general")
+    # Use per-user and per-session namespaced section for ChromaDB/graph lookup
+    topic_id = _user_section_collection_id(user["id"], session.get("topic_id") or "", session_id=session_id)
 
     if not await ollama.is_available():
         response_text = (
@@ -95,7 +95,7 @@ async def send_message(
         msg = db.add_message(session_id, "assistant", response_text)
         return msg
 
-    # GraphRAG query — scoped to this user's vector collection
+    # GraphRAG query — scoped to this user's & session's vector collection
     result = await graph_rag.simple_query(
         topic_id=topic_id,
         question=body.content,
@@ -132,15 +132,14 @@ async def stream_message(
         return StreamingResponse(not_found(), media_type="text/event-stream")
 
     # Resolve user_id from session (stored when session was created)
-    # This avoids needing to parse the JWT for every streaming token
     user_id = session.get("user_id", "")
 
     # Save user message
     db.add_message(session_id, "user", content)
     history = db.get_messages(session_id, last_n=10)
 
-    # Per-user namespaced topic for ChromaDB isolation
-    topic_id = _user_topic(user_id, session.get("topic_id") or "general")
+    # Per-user & per-session namespaced topic for ChromaDB/Graph isolation
+    topic_id = _user_section_collection_id(user_id, session.get("topic_id") or "", session_id=session_id)
 
     async def event_generator():
         # If Ollama not available, send helpful error

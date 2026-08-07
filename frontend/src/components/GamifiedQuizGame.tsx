@@ -130,39 +130,10 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
       setQuiz(res.data)
       resetGame()
       setSetupStep(false)
-    } catch {
-      setQuiz({
-        id: 'quiz_fallback',
-        title: `Quiz: ${effectiveTopic}`,
-        questions: [
-          {
-            id: 'q1',
-            question_text: "What is the primary purpose of collecting information about a company's field of activity and client preferences?",
-            options: [
-              "To understand the company's competition.",
-              "To provide a better estimate for the project's budget and terms.",
-              "To create a marketing strategy for the company.",
-              "To assess the company's financial stability."
-            ],
-            correct_answer: 'B',
-            explanation: 'Collecting field of activity and client preferences allows accurate scoping of project budget, terms, and deliverables.'
-          },
-          {
-            id: 'q2',
-            question_text: "Which mechanism allows LLM transformers to weigh relative token positions efficiently?",
-            options: [
-              "Convolutional Filters",
-              "Self-Attention Mechanism",
-              "Recurrent Hidden States",
-              "Feed-Forward Residuals"
-            ],
-            correct_answer: 'B',
-            explanation: 'Self-attention calculates dynamic context weights across all input tokens simultaneously.'
-          }
-        ]
-      })
-      resetGame()
-      setSetupStep(false)
+    } catch (err: any) {
+      console.error(err)
+      alert(err.response?.data?.detail || 'Failed to generate quiz. Make sure you have uploaded a PDF document and Ollama is running.')
+      setSetupStep(true)
     } finally {
       setGenerating(false)
     }
@@ -203,7 +174,8 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
 
   const currentQuestion = quiz?.questions[currentQIndex]
   const totalQuestions = quiz?.questions.length || 0
-  const progressPct = totalQuestions > 0 ? Math.round((currentQIndex / totalQuestions) * 100) : 0
+  const displayQNum = totalQuestions > 0 ? currentQIndex + 1 : 0
+  const progressPct = totalQuestions > 0 ? Math.round(((currentQIndex + 1) / totalQuestions) * 100) : 0
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -378,7 +350,7 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
             {/* QUIZ PROGRESS (0/2) Header & Progress Bar */}
             <div className="text-center">
               <h3 className="text-xs font-black uppercase tracking-widest text-slate-900 mb-2">
-                QUIZ PROGRESS ({currentQIndex}/{totalQuestions})
+                QUIZ PROGRESS ({displayQNum}/{totalQuestions})
               </h3>
               <div className="w-full max-w-lg mx-auto border border-blue-300/80 rounded-full h-7 bg-white relative p-1 overflow-hidden shadow-inner flex items-center justify-center">
                 <div

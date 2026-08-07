@@ -57,11 +57,90 @@ export const chatApi = {
     api.delete(`/chat/sessions/${sessionId}`),
 }
 
-// SSE streaming — returns EventSource
+// SSE streaming — using fetch + ReadableStream for reliable header auth & proxy support
+export const streamChatMessage = async ({
+  sessionId,
+  content,
+  token,
+  onToken,
+  onSources,
+  onGraphContext,
+  onDone,
+  onError,
+  signal,
+}: {
+  sessionId: string
+  content: string
+  token: string
+  onToken: (token: string) => void
+  onSources: (sources: any[]) => void
+  onGraphContext: (graph: any) => void
+  onDone: () => void
+  onError: (err: any) => void
+  signal?: AbortSignal
+}) => {
+  try {
+    const url = `/api/chat/sessions/${sessionId}/message/stream?content=${encodeURIComponent(content)}`
+    const headers: Record<string, string> = { Accept: 'text/event-stream' }
+    if (token) headers.Authorization = `Bearer ${token}`
+
+    const res = await fetch(url, { headers, signal })
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    }
+
+    if (!res.body) {
+      throw new Error('ReadableStream not supported')
+    }
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+    let isCompleted = false
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed.startsWith('data: ')) continue
+        const raw = trimmed.slice(6)
+        try {
+          const evt = JSON.parse(raw)
+          if (evt.type === 'token') {
+            onToken(evt.data)
+          } else if (evt.type === 'sources') {
+            onSources(evt.data)
+          } else if (evt.type === 'graph_context') {
+            onGraphContext(evt.data)
+          } else if (evt.type === 'done') {
+            isCompleted = true
+            onDone()
+            return
+          }
+        } catch {
+          // ignore parsing error for partial frame
+        }
+      }
+    }
+
+    if (!isCompleted) {
+      onDone()
+    }
+  } catch (err: any) {
+    if (err.name === 'AbortError') return
+    onError(err)
+  }
+}
+
+// SSE streaming — legacy EventSource
 export const streamMessage = (sessionId: string, content: string, token: string): EventSource => {
-  const params = new URLSearchParams({ content })
-  const url = `/api/chat/sessions/${sessionId}/message/stream?${params}`
-  // We can't set headers on EventSource natively; use a workaround via URL param
   const urlWithToken = `/api/chat/sessions/${sessionId}/message/stream?content=${encodeURIComponent(content)}&token=${token}`
   return new EventSource(urlWithToken)
 }
@@ -70,12 +149,18 @@ export const streamMessage = (sessionId: string, content: string, token: string)
 export const sendMessage = (sessionId: string, content: string) =>
   api.post(`/chat/sessions/${sessionId}/message`, { content })
 
+
 // ─── Quiz ─────────────────────────────────────────────────────
 export const quizApi = {
   list: (topicId: string) => api.get(`/quiz/topic/${topicId}`),
   get: (id: string) => api.get(`/quiz/${id}`),
-  generate: (topicId: string, difficulty?: string) =>
-    api.post('/quiz/generate', { topic_id: topicId, difficulty }),
+  generate: (data: {
+    topic_id: string
+    difficulty?: string
+    session_id?: string
+    focus_topic?: string
+    num_questions?: number
+  }) => api.post('/quiz/generate', data),
   submit: (quizId: string, answers: Record<string, string>) =>
     api.post(`/quiz/${quizId}/submit`, { answers }),
   attempts: (quizId: string) => api.get(`/quiz/${quizId}/attempts`),
