@@ -36,7 +36,9 @@ class Settings(BaseSettings):
 
     # ── RAG Core ────────────────────────────────────────────────────────────────
     # Document parsing
-    DOCLING_ENABLE_OCR: bool = False      # Enable OCR for scanned/image-only PDFs (slower)
+    ENABLE_DOCLING: bool = True           # Set True to enable IBM Docling structure parsing for complex PDFs
+    DOCLING_TIMEOUT_SECONDS: int = 45     # Max seconds allowed for Docling GPU/CPU parsing before fallback
+    DOCLING_ENABLE_OCR: bool = True       # Enable OCR for scanned PDFs and image files (.png, .jpg, .jpeg, .webp)
     DOCLING_OCR_ENGINE: str = "easyocr"  # "easyocr" | "tesseract" | "rapidocr"
 
     # Chunking

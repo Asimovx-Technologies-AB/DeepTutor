@@ -127,10 +127,10 @@ class GraphRAGPipeline:
         3. Extract entities/relationships → graph_store
         Returns stats dict.
         """
-        # Step 1: Parse with semantic chunker
+        # Step 1: Parse with semantic chunker (non-blocking in thread pool)
         if progress_callback:
-            await progress_callback("parsing", 0)
-        chunks = process_document(file_path)
+            await progress_callback("parsing", 5)
+        chunks = await asyncio.to_thread(process_document, file_path)
         if not chunks:
             raise ValueError(
                 "No text could be extracted from the document. "
@@ -140,7 +140,7 @@ class GraphRAGPipeline:
 
         # Step 2: Embed + store in vector DB (BM25 index built automatically on first search)
         if progress_callback:
-            await progress_callback("embedding", 10)
+            await progress_callback("embedding", 25)
 
         embeddings = await ollama.embed_batch([chunk["text"] for chunk in chunks])
         if progress_callback:
@@ -151,29 +151,33 @@ class GraphRAGPipeline:
         # Invalidate query result cache for this topic (new data)
         await query_result_cache.invalidate(topic_id)
 
-        # Step 3: Entity extraction (sample every 3rd chunk to save LLM calls)
+        # Step 3: Entity extraction (sample up to 15 representative chunks to save LLM time)
         if progress_callback:
-            await progress_callback("extracting_entities", 50)
+            await progress_callback("extracting_entities", 60)
 
         all_entities: List[Dict] = []
         all_relationships: List[Dict] = []
-        sample_chunks = chunks[::3]
+        sample_step = max(1, len(chunks) // 15)
+        sample_chunks = chunks[::sample_step][:15]
 
         semaphore = asyncio.Semaphore(3)
 
         async def _sem_extract(chunk: dict, index: int):
             async with semaphore:
-                source = chunk["metadata"].get("source", "")
-                page = chunk["metadata"].get("page", "")
-                section = chunk["metadata"].get("section_title", "")
-                source_info = f"{source} p.{page}" + (f" §{section}" if section else "")
-                entities, relationships = await extract_entities_and_relationships(
-                    chunk["text"], source_info
-                )
-                if progress_callback:
-                    pct = 50 + int((index / len(sample_chunks)) * 45)
-                    await progress_callback("extracting_entities", pct)
-                return entities, relationships
+                try:
+                    source = chunk["metadata"].get("source", "")
+                    page = chunk["metadata"].get("page", "")
+                    section = chunk["metadata"].get("section_title", "")
+                    source_info = f"{source} p.{page}" + (f" §{section}" if section else "")
+                    entities, relationships = await extract_entities_and_relationships(
+                        chunk["text"], source_info
+                    )
+                    if progress_callback:
+                        pct = 60 + int(((index + 1) / max(1, len(sample_chunks))) * 30)
+                        await progress_callback("extracting_entities", min(90, pct))
+                    return entities, relationships
+                except Exception:
+                    return [], []
 
         tasks = [_sem_extract(chunk, idx) for idx, chunk in enumerate(sample_chunks)]
         results = await asyncio.gather(*tasks)
@@ -334,20 +338,20 @@ class GraphRAGPipeline:
             requested_pages = extract_requested_pages(question)
 
             if requested_pages:
-                # Direct page-number retrieval (bypasses all advanced pipeline)
+                # Direct exact page metadata filter — skips vector search completely
                 page_chunks = vector_store.get_chunks_by_pages(effective_topic_id, requested_pages)
                 if page_chunks:
                     vector_chunks = page_chunks
                 else:
+                    # Page does not exist in document — return clean missing page notice without pulling unrelated pages
                     missing_str = ", ".join([str(p) for p in requested_pages])
                     vector_chunks = [{
                         "id": "system_notice",
                         "text": (
-                            f"[SYSTEM NOTICE: The student explicitly asked about page(s) "
-                            f"{missing_str}, but no content for page(s) {missing_str} was found "
-                            f"in the indexed document.]"
+                            f"[SYSTEM NOTICE: Page(s) {missing_str} do not exist in the uploaded document. "
+                            f"No content could be retrieved for page(s) {missing_str}.]"
                         ),
-                        "metadata": {"source": "System", "page": f"Missing ({missing_str})"},
+                        "metadata": {"source": "System", "page": f"Page Missing ({missing_str})"},
                         "score": 1.0,
                     }]
             else:

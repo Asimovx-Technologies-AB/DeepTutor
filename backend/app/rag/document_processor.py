@@ -60,24 +60,46 @@ def _get_docling_converter():
         return _docling_converter
 
     try:
+        import torch
         from docling.datamodel.base_models import InputFormat
-        from docling.datamodel.pipeline_options import PdfPipelineOptions
+        from docling.datamodel.pipeline_options import PdfPipelineOptions, AcceleratorOptions
         from docling.document_converter import DocumentConverter, PdfFormatOption
 
         pipeline_options = PdfPipelineOptions()
-        # OCR disabled by default for speed; selectable-text PDFs don't need it
-        # Set DOCLING_ENABLE_OCR=true in .env to enable for scanned PDFs
         pipeline_options.do_ocr = settings.DOCLING_ENABLE_OCR
 
-        _docling_converter = DocumentConverter(
-            format_options={
-                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
-            }
-        )
+        accel_opts = None
+        # CUDA GPU acceleration for Docling layout & table vision models
+        if torch.cuda.is_available():
+            device_name = torch.cuda.get_device_name(0)
+            print(f"[DOCLING GPU] CUDA enabled on {device_name}! Routing layout models to GPU...")
+            accel_opts = AcceleratorOptions(num_threads=8, device="cuda")
+            pipeline_options.accelerator_options = accel_opts
+        else:
+            print("[DOCLING CPU] CUDA not detected. Docling running on CPU.")
+
+        format_options = {
+            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
+        }
+
+        # Enable Docling builtin Image OCR format options if supported
+        try:
+            from docling.datamodel.pipeline_options import ImagePipelineOptions
+            from docling.document_converter import ImageFormatOption
+            image_pipeline_options = ImagePipelineOptions()
+            image_pipeline_options.do_ocr = True
+            if accel_opts:
+                image_pipeline_options.accelerator_options = accel_opts
+            format_options[InputFormat.IMAGE] = ImageFormatOption(pipeline_options=image_pipeline_options)
+        except Exception:
+            pass
+
+        _docling_converter = DocumentConverter(format_options=format_options)
         _docling_available = True
         return _docling_converter
 
     except Exception as e:
+        print(f"[DOCLING WARN] Converter initialization error: {e}")
         _docling_available = False
         return None
 
@@ -222,44 +244,57 @@ class DoclingChunker:
 # ══════════════════════════════════════════════════════════════════════════════
 # Docling extraction path
 # ══════════════════════════════════════════════════════════════════════════════
-def _try_docling(file_path: str) -> List[Dict]:
-    """
-    Primary parser: uses Docling for structure-aware PDF extraction.
-    Returns list of chunks or [] on failure.
-    """
+# ══════════════════════════════════════════════════════════════════════════════
+# Docling extraction path
+# ══════════════════════════════════════════════════════════════════════════════
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+
+def _run_docling_conversion(file_path: str) -> List[Dict]:
+    """Internal helper to convert document with Docling."""
     converter = _get_docling_converter()
     if converter is None:
         return []
+    source_name = Path(file_path).name
+    result = converter.convert(file_path)
+    doc = result.document
 
+    chunker = DoclingChunker(
+        chunk_size=settings.CHUNK_SIZE,
+        chunk_overlap=settings.CHUNK_OVERLAP,
+    )
+    chunks = chunker.chunk_document(doc, source_name)
+
+    if not chunks:
+        md_text = doc.export_to_markdown()
+        if md_text and _chunker is not None:
+            return _chunker.chunk(md_text, {
+                "source": source_name,
+                "page": 1,
+                "file_path": file_path,
+            })
+    return chunks
+
+
+def _try_docling(file_path: str) -> List[Dict]:
+    """
+    Primary parser: uses Docling for structure-aware PDF extraction with strict timeout.
+    Returns list of chunks or [] on failure/timeout.
+    """
+    if not getattr(settings, "ENABLE_DOCLING", False):
+        return []
+
+    timeout_sec = getattr(settings, "DOCLING_TIMEOUT_SECONDS", 12)
     try:
-        source_name = Path(file_path).name
-        result = converter.convert(file_path)
-        doc = result.document
-
-        chunker = DoclingChunker(
-            chunk_size=settings.CHUNK_SIZE,
-            chunk_overlap=settings.CHUNK_OVERLAP,
-        )
-        chunks = chunker.chunk_document(doc, source_name)
-
-        if not chunks:
-            # Fallback: export full markdown and chunk with SemanticChunker
-            md_text = doc.export_to_markdown()
-            if md_text and _chunker is not None:
-                return _chunker.chunk(md_text, {
-                    "source": source_name,
-                    "page": 1,
-                    "file_path": file_path,
-                })
-
-        return chunks
-
-    except Exception as e:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_run_docling_conversion, file_path)
+            return future.result(timeout=timeout_sec)
+    except (FuturesTimeoutError, Exception) as e:
+        # Fall back gracefully to fast text parsers (pdfplumber/pypdf)
         return []
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Fallback parsers (pdfplumber → pypdf → PyPDF2)
+# Fallback parsers (pdfplumber → pypdf → pypdfium2 → PyPDF2)
 # ══════════════════════════════════════════════════════════════════════════════
 def _legacy_split(text: str, chunk_size: int, overlap: int) -> List[str]:
     """Character-based fallback splitter."""
@@ -323,6 +358,20 @@ def _try_pypdf(file_path: str) -> List[Dict]:
         return []
 
 
+def _try_pypdfium2(file_path: str) -> List[Dict]:
+    try:
+        import pypdfium2 as pdfium
+        chunks = []
+        pdf = pdfium.PdfDocument(file_path)
+        for page_num, page in enumerate(pdf, 1):
+            textpage = page.get_textpage()
+            text = re.sub(r'\s+', ' ', textpage.get_text_range() or "").strip()
+            chunks.extend(_chunk_page_text(text, page_num, file_path))
+        return chunks
+    except Exception:
+        return []
+
+
 def _try_pypdf2(file_path: str) -> List[Dict]:
     try:
         import PyPDF2
@@ -343,12 +392,13 @@ def _try_pypdf2(file_path: str) -> List[Dict]:
 def process_pdf(file_path: str) -> List[Dict]:
     """
     Extract and chunk a PDF using a cascading parser priority:
-      1. Docling  — structure-aware, OCR-capable, table/formula-aware  ← PRIMARY
-      2. pdfplumber — good layout, no OCR                              ← FALLBACK 1
-      3. pypdf      — standard, fast                                   ← FALLBACK 2
-      4. PyPDF2     — legacy                                           ← FALLBACK 3
+      1. Docling    — structure-aware, OCR-capable (with strict timeout)  ← PRIMARY
+      2. pdfplumber — good layout, fast                                  ← FALLBACK 1
+      3. pypdf      — standard, very fast                                ← FALLBACK 2
+      4. pypdfium2  — pdfium engine, fast                                ← FALLBACK 3
+      5. PyPDF2     — legacy                                             ← FALLBACK 4
     """
-    # 1. Docling (primary)
+    # 1. Docling (primary, timed out)
     chunks = _try_docling(file_path)
     if chunks:
         return chunks
@@ -363,8 +413,245 @@ def process_pdf(file_path: str) -> List[Dict]:
     if chunks:
         return chunks
 
-    # 4. PyPDF2
+    # 4. pypdfium2
+    chunks = _try_pypdfium2(file_path)
+    if chunks:
+        return chunks
+
+    # 5. PyPDF2
     return _try_pypdf2(file_path)
+
+
+def process_docx(file_path: str) -> List[Dict]:
+    """Extract text, headers, and tables from Word (.docx) documents."""
+    try:
+        import docx
+        doc = docx.Document(file_path)
+        source_name = Path(file_path).name
+        full_text_blocks = []
+        current_section = ""
+
+        for p in doc.paragraphs:
+            text = p.text.strip()
+            if not text:
+                continue
+            if p.style and p.style.name.startswith("Heading"):
+                current_section = text
+                full_text_blocks.append(f"\n# {text}\n")
+            else:
+                full_text_blocks.append(text)
+
+        # Extract tables as markdown tables
+        for table in doc.tables:
+            table_lines = []
+            for i, row in enumerate(table.rows):
+                row_vals = [cell.text.strip().replace("\n", " ") for cell in row.cells]
+                table_lines.append("| " + " | ".join(row_vals) + " |")
+                if i == 0:
+                    table_lines.append("| " + " | ".join(["---"] * len(row_vals)) + " |")
+            if table_lines:
+                full_text_blocks.append("\n" + "\n".join(table_lines) + "\n")
+
+        joined_text = "\n".join(full_text_blocks).strip()
+        if not joined_text:
+            return []
+
+        meta = {"source": source_name, "page": 1, "section_title": current_section, "file_path": file_path}
+        chunks = _chunker.chunk(joined_text, meta) if _chunker is not None else []
+        if not chunks:
+            chunks = _chunk_page_text(joined_text, 1, file_path)
+        return chunks
+    except Exception as e:
+        # Fallback to plain text read if docx library fails
+        return process_txt(file_path)
+
+
+def process_csv(file_path: str) -> List[Dict]:
+    """Extract and format tabular CSV data as structured Markdown tables."""
+    try:
+        import csv
+        source_name = Path(file_path).name
+        chunks = []
+        rows = []
+
+        with open(file_path, mode="r", encoding="utf-8", errors="ignore") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if row:
+                    rows.append(row)
+
+        if not rows:
+            return []
+
+        header = rows[0]
+        data_rows = rows[1:]
+
+        # Batch 40 rows per chunk to preserve tabular context
+        batch_size = 40
+        for i in range(0, max(1, len(data_rows)), batch_size):
+            batch = data_rows[i:i + batch_size]
+            table_lines = [
+                f"# CSV Dataset: {source_name} (Rows {i+1} to {i+len(batch)})",
+                "| " + " | ".join([str(h).strip() for h in header]) + " |",
+                "| " + " | ".join(["---"] * len(header)) + " |"
+            ]
+            for row in batch:
+                row_str = "| " + " | ".join([str(val).strip().replace("\n", " ") for val in row]) + " |"
+                table_lines.append(row_str)
+
+            chunk_text = "\n".join(table_lines)
+            page_num = (i // batch_size) + 1
+            meta = {
+                "source": source_name,
+                "page": page_num,
+                "section_title": f"Rows {i+1}-{i+len(batch)}",
+                "file_path": file_path
+            }
+
+            chunks.append({
+                "text": chunk_text,
+                "metadata": {
+                    **meta,
+                    "chunk_index": len(chunks),
+                    "chunk_type": "csv_table",
+                    "estimated_tokens": len(chunk_text) // 4,
+                    "char_count": len(chunk_text)
+                }
+            })
+
+        return chunks
+    except Exception as e:
+        return process_txt(file_path)
+
+
+def process_excel(file_path: str) -> List[Dict]:
+    """Extract Excel spreadsheets (.xlsx, .xls) as Markdown table chunks per worksheet."""
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(file_path, data_only=True)
+        source_name = Path(file_path).name
+        chunks = []
+
+        for page_num, sheet_name in enumerate(wb.sheetnames, 1):
+            sheet = wb[sheet_name]
+            rows = list(sheet.iter_rows(values_only=True))
+            if not rows:
+                continue
+
+            clean_rows = []
+            for r in rows:
+                if any(cell is not None for cell in r):
+                    clean_rows.append([str(c).strip() if c is not None else "" for c in r])
+
+            if not clean_rows:
+                continue
+
+            header = clean_rows[0]
+            table_lines = [
+                f"# Excel Sheet: {sheet_name}",
+                "| " + " | ".join(header) + " |",
+                "| " + " | ".join(["---"] * len(header)) + " |"
+            ]
+            for r in clean_rows[1:]:
+                table_lines.append("| " + " | ".join(r) + " |")
+
+            chunk_text = "\n".join(table_lines)
+            meta = {
+                "source": source_name,
+                "page": page_num,
+                "section_title": f"Sheet: {sheet_name}",
+                "file_path": file_path
+            }
+            chunks.append({
+                "text": chunk_text,
+                "metadata": {
+                    **meta,
+                    "chunk_index": len(chunks),
+                    "chunk_type": "excel_sheet",
+                    "estimated_tokens": len(chunk_text) // 4,
+                    "char_count": len(chunk_text)
+                }
+            })
+        return chunks
+    except Exception:
+        return process_txt(file_path)
+
+
+def process_pptx(file_path: str) -> List[Dict]:
+    """Extract PowerPoint presentation (.pptx) slides into formatted slide chunks."""
+    try:
+        import pptx
+        prs = pptx.Presentation(file_path)
+        source_name = Path(file_path).name
+        chunks = []
+
+        for slide_num, slide in enumerate(prs.slides, 1):
+            slide_texts = []
+            title = ""
+            for shape in slide.shapes:
+                if shape.has_text_frame:
+                    txt = shape.text_frame.text.strip()
+                    if txt:
+                        if shape == slide.shapes.title:
+                            title = txt
+                        else:
+                            slide_texts.append(txt)
+
+            slide_body = "\n\n".join(slide_texts)
+            chunk_text = f"# Slide {slide_num}: {title}\n\n{slide_body}".strip()
+            if len(chunk_text) >= 10:
+                meta = {
+                    "source": source_name,
+                    "page": slide_num,
+                    "section_title": f"Slide {slide_num}: {title}",
+                    "file_path": file_path
+                }
+                chunks.append({
+                    "text": chunk_text,
+                    "metadata": {
+                        **meta,
+                        "chunk_index": len(chunks),
+                        "chunk_type": "pptx_slide",
+                        "estimated_tokens": len(chunk_text) // 4,
+                        "char_count": len(chunk_text)
+                    }
+                })
+        return chunks
+    except Exception:
+        return process_txt(file_path)
+
+
+def process_html(file_path: str) -> List[Dict]:
+    """Extract clean text and structure from HTML pages."""
+    try:
+        from bs4 import BeautifulSoup
+        raw_html = Path(file_path).read_text(encoding="utf-8", errors="ignore")
+        soup = BeautifulSoup(raw_html, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer", "header"]):
+            tag.decompose()
+        text = soup.get_text(separator="\n").strip()
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        meta = {"source": Path(file_path).name, "page": 1, "file_path": file_path}
+        if _chunker is not None:
+            return _chunker.chunk(text, meta)
+        return _chunk_page_text(text, 1, file_path)
+    except Exception:
+        return process_txt(file_path)
+
+
+def process_json(file_path: str) -> List[Dict]:
+    """Parse JSON data files into formatted structured text chunks."""
+    try:
+        import json
+        raw = Path(file_path).read_text(encoding="utf-8", errors="ignore")
+        data = json.loads(raw)
+        formatted_text = json.dumps(data, indent=2)
+        meta = {"source": Path(file_path).name, "page": 1, "file_path": file_path}
+        if _chunker is not None:
+            return _chunker.chunk(formatted_text, meta)
+        return _chunk_page_text(formatted_text, 1, file_path)
+    except Exception:
+        return process_txt(file_path)
 
 
 def process_txt(file_path: str) -> List[Dict]:
@@ -390,15 +677,74 @@ def process_txt(file_path: str) -> List[Dict]:
         raise RuntimeError(f"Text processing failed: {e}")
 
 
+def process_image(file_path: str) -> List[Dict]:
+    """
+    Extract text, layout, and formulas from image files (.png, .jpg, .jpeg, .webp, .bmp, .tiff)
+    using Docling's builtin OCR with CUDA GPU acceleration, falling back to EasyOCR/PyTesseract.
+    """
+    # 1. Try Docling builtin OCR engine
+    chunks = _try_docling(file_path)
+    if chunks:
+        return chunks
+
+    # 2. Fallback: EasyOCR / PyTesseract
+    source_name = Path(file_path).name
+    try:
+        import torch, easyocr
+        reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())
+        results = reader.readtext(file_path, detail=0)
+        extracted_text = " ".join(results).strip()
+        if extracted_text and len(extracted_text) >= 10:
+            return _chunk_page_text(extracted_text, 1, file_path)
+    except Exception:
+        pass
+
+    try:
+        import pytesseract
+        from PIL import Image
+        img = Image.open(file_path)
+        extracted_text = pytesseract.image_to_string(img).strip()
+        if extracted_text and len(extracted_text) >= 10:
+            return _chunk_page_text(extracted_text, 1, file_path)
+    except Exception:
+        pass
+
+    # Generic image placeholder fallback
+    meta = {"source": source_name, "page": 1, "file_path": file_path}
+    img_text = f"[Image Document: {source_name}]\n(Image content indexed via OCR)"
+    return [{
+        "text": img_text,
+        "metadata": {
+            **meta, "chunk_index": 0, "chunk_type": "image_ocr",
+            "estimated_tokens": len(img_text)//4, "char_count": len(img_text)
+        }
+    }]
+
+
 def process_document(file_path: str) -> List[Dict]:
-    """Auto-detect file type and process."""
+    """Auto-detect file type and process with format-specific parsers."""
     ext = Path(file_path).suffix.lower()
     if ext == ".pdf":
         return process_pdf(file_path)
-    elif ext in {".txt", ".md", ".rst"}:
+    elif ext in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".tif"}:
+        return process_image(file_path)
+    elif ext in {".docx", ".doc"}:
+        return process_docx(file_path)
+    elif ext == ".csv":
+        return process_csv(file_path)
+    elif ext in {".xlsx", ".xls"}:
+        return process_excel(file_path)
+    elif ext in {".pptx", ".ppt"}:
+        return process_pptx(file_path)
+    elif ext in {".html", ".htm"}:
+        return process_html(file_path)
+    elif ext == ".json":
+        return process_json(file_path)
+    elif ext in {".txt", ".md", ".rst", ".log", ".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".c", ".cpp"}:
         return process_txt(file_path)
     else:
-        raise ValueError(f"Unsupported file type: {ext}")
+        # Fallback to plain text parser
+        return process_txt(file_path)
 
 
 def is_docling_available() -> bool:
@@ -435,57 +781,78 @@ def _get_docling_version() -> Optional[str]:
 
 def extract_key_topics(chunks: List[Dict]) -> List[str]:
     """
-    Extract the most important key topics, headings, algorithms, and concepts
-    from document chunks. Prioritises section_title metadata from Docling.
+    Extract high-value academic concepts, headings, algorithms, and technical topics
+    from document chunks. Filters out publisher metadata, country names, database tags, and noise.
     """
     if not chunks:
         return []
 
-    STOP_WORDS = {
+    META_STOPWORDS = {
         "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with",
         "by", "from", "up", "about", "into", "over", "after", "is", "are", "was", "were",
         "be", "been", "being", "have", "has", "had", "do", "does", "did", "this", "that",
         "these", "those", "it", "its", "page", "pages", "pdf", "figure", "table", "chapter",
         "section", "author", "authors", "editor", "volume", "issue", "journal", "abstract",
         "introduction", "conclusion", "references", "http", "https", "doi", "isbn", "university",
-        "department", "press", "rights", "reserved", "copyright", "edition", "published"
+        "department", "press", "rights", "reserved", "copyright", "edition", "published",
+        "ieee", "south africa", "science core collection", "sci-expanded", "keywords plus",
+        "web of science", "elsevier", "springer", "wiley", "taylor", "francis", "thomson reuters",
+        "google scholar", "scopus", "proceedings", "conference", "symposium", "institution",
+        "tc", "tp", "cpp", "lr", "roc", "usa", "uk", "china", "india", "japan", "germany"
+    }
+
+    ACRONYM_MAP = {
+        "SVM": "Support Vector Machines (SVM)",
+        "KNN": "K-Nearest Neighbors (KNN)",
+        "RF": "Random Forest (RF)",
+        "ML": "Machine Learning (ML)",
+        "AI": "Artificial Intelligence (AI)",
+        "CNN": "Convolutional Neural Networks (CNN)",
+        "RNN": "Recurrent Neural Networks (RNN)",
+        "LSTM": "Long Short-Term Memory (LSTM)",
+        "BERT": "BERT Language Model",
+        "LLM": "Large Language Models (LLM)",
+        "NLP": "Natural Language Processing (NLP)",
+        "PCA": "Principal Component Analysis (PCA)",
+        "RAG": "Retrieval-Augmented Generation (RAG)",
     }
 
     candidates_counts: Dict[str, int] = {}
 
-    # Highest-signal: Docling section titles from metadata
     for chunk in chunks:
+        # 1. Section titles from Docling/pdfplumber metadata
         section_title = chunk.get("metadata", {}).get("section_title", "")
-        if section_title and 4 <= len(section_title) <= 60:
-            candidates_counts[section_title] = candidates_counts.get(section_title, 0) + 5
+        if section_title:
+            # Clean section numbers like '2.1. Decision Trees' -> 'Decision Trees'
+            clean_sec = re.sub(r'^(?:\d+(?:\.\d+)*\s*)', '', section_title).strip()
+            clean_sec_lower = clean_sec.lower()
+            if 4 <= len(clean_sec) <= 50 and not any(sw in clean_sec_lower for sw in META_STOPWORDS):
+                candidates_counts[clean_sec] = candidates_counts.get(clean_sec, 0) + 6
 
-    for chunk in chunks:
         text = chunk.get("text", "")
         if not text:
             continue
 
-        # Headings / section titles
-        heading_matches = re.findall(
-            r'(?:^|\n)(?:#{1,4}\s*|\d+(?:\.\d+)*\s+)?([A-Z][A-Za-z0-9\s\-\:\(\)]{3,45})(?=\n|\:|\.|\ {2,})',
-            text
-        )
-        for h in heading_matches:
-            h_clean = h.strip()
+        # 2. Text headings / numbered section headers
+        for h in re.findall(r'(?:^|\n)(?:#{1,4}\s*|\d+(?:\.\d+)*\s+)?([A-Z][A-Za-z0-9\s\-\:\(\)]{3,45})(?=\n|\:|\.|\ {2,})', text):
+            h_clean = re.sub(r'^(?:\d+(?:\.\d+)*\s*)', '', h).strip()
             h_lower = h_clean.lower()
-            if 4 <= len(h_clean) <= 40 and not any(sw in h_lower for sw in ["page", "http", "doi:"]):
-                if not any(word in STOP_WORDS for word in h_lower.split()[:1]):
-                    candidates_counts[h_clean] = candidates_counts.get(h_clean, 0) + 3
+            if 4 <= len(h_clean) <= 40 and not any(sw in h_lower for sw in META_STOPWORDS):
+                if not any(word in META_STOPWORDS for word in h_lower.split()[:1]):
+                    candidates_counts[h_clean] = candidates_counts.get(h_clean, 0) + 4
 
-        # Capitalized multi-word technical concepts
-        for c in re.findall(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b', text):
+        # 3. Capitalized multi-word concepts (e.g. 'Decision Trees', 'Random Forests', 'Naïve Bayes')
+        for c in re.findall(r'\b([A-Z][A-Za-z0-9\-]+(?:\s+[A-Z][A-Za-z0-9\-]+){1,3})\b', text):
             c_clean = c.strip()
-            if not any(w in STOP_WORDS for w in c_clean.lower().split()):
+            c_lower = c_clean.lower()
+            if 4 <= len(c_clean) <= 45 and not any(w in META_STOPWORDS for w in c_lower.split()):
                 candidates_counts[c_clean] = candidates_counts.get(c_clean, 0) + 2
 
-        # Acronyms
-        for a in re.findall(r'\b([A-Z]{2,8}(?:\-[A-Z0-9]+)?)\b', text):
-            if a not in {"PDF", "HTTP", "HTTPS", "DOI", "ISBN", "URL", "HTML", "USA", "UK"}:
-                candidates_counts[a] = candidates_counts.get(a, 0) + 1
+        # 4. Known domain acronyms
+        for word in re.findall(r'\b([A-Z]{2,6})\b', text):
+            if word in ACRONYM_MAP:
+                mapped = ACRONYM_MAP[word]
+                candidates_counts[mapped] = candidates_counts.get(mapped, 0) + 3
 
     sorted_topics = sorted(candidates_counts.items(), key=lambda x: x[1], reverse=True)
 

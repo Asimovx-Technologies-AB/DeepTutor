@@ -58,16 +58,27 @@ async def get_topic_suggestions(
 
     # Noisy words & metadata headers to ignore
     STOP_TOPICS = {
-        "institution", "keywords plus", "author", "editor",
-        "volume", "issue", "pages", "journal", "abstract", "introduction", "conclusion",
-        "references", "figure", "table", "index"
+        "institution", "keywords plus", "author", "authors", "editor", "volume", "issue",
+        "pages", "journal", "abstract", "introduction", "conclusion", "references", "figure",
+        "table", "index", "ieee", "south africa", "science core collection", "sci-expanded",
+        "web of science", "elsevier", "springer", "wiley", "taylor", "francis", "thomson reuters",
+        "google scholar", "scopus", "proceedings", "conference", "symposium", "department",
+        "university", "faculty", "edition", "published", "copyright", "rights reserved",
+        "tc", "tp", "cpp", "lr", "roc", "usa", "uk", "china", "india", "japan", "germany"
     }
 
     # 1. Fetch DB key topics extracted during document vectorization
     db_extracted_topics = db.get_key_topics_for_user_section(user['id'], target_tid)
+
+    # Filter out noisy DB topics
+    clean_db_topics = []
     for kt in db_extracted_topics:
         if kt and len(kt) >= 3:
-            suggestions.add(kt.strip())
+            kt_clean = kt.strip()
+            kt_lower = kt_clean.lower()
+            if kt_lower not in STOP_TOPICS and not any(stop in kt_lower for stop in ["http", "doi:", "isbn", "page"]):
+                if not re.match(r'^[A-Z]{1,2}$', kt_clean):  # ignore single/double letter noise
+                    clean_db_topics.append(kt_clean)
 
     # 2. Extract concept/algorithm/method entities from NetworkX Knowledge Graph
     try:
@@ -106,7 +117,7 @@ async def get_topic_suggestions(
     clean_list = []
 
     # Ensure DB vectorization topics come first in priority
-    for kt in db_extracted_topics:
+    for kt in clean_db_topics:
         if kt and kt not in clean_list and len(clean_list) < 15:
             clean_list.append(kt)
 

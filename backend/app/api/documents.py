@@ -61,12 +61,16 @@ async def upload_document(
     user: dict = Depends(get_current_user),
 ):
     # Validate file type
-    allowed_exts = {".pdf", ".txt", ".md"}
+    allowed_exts = {
+        ".pdf", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".tif",
+        ".docx", ".doc", ".csv", ".xlsx", ".xls", ".pptx", ".ppt",
+        ".html", ".htm", ".json", ".txt", ".md", ".rst", ".log", ".py", ".js", ".ts"
+    }
     ext = Path(file.filename).suffix.lower()
     if ext not in allowed_exts:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(allowed_exts)}"
+            detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(list(allowed_exts)))}"
         )
 
     # Check file size
@@ -140,3 +144,32 @@ async def get_knowledge_graph(topic_id: str, user: dict = Depends(get_current_us
     graph = graph_store.get_full_graph(namespaced_topic)
     stats = graph_store.get_graph_stats(namespaced_topic)
     return {"topic_id": topic_id, "stats": stats, "graph": graph}
+
+
+@router.get("/{doc_id}/markdown")
+async def get_document_markdown(doc_id: str, user: dict = Depends(get_current_user)):
+    """Export and return full structured Markdown content for an uploaded document."""
+    from app.rag.document_processor import process_document
+    with db.DBContext() as database:
+        doc = database.query(db.Document).filter(db.Document.id == doc_id).first()
+        if not doc or doc.user_id != user["id"]:
+            raise HTTPException(status_code=404, detail="Document not found.")
+        file_path = doc.file_path
+
+    if not Path(file_path).exists():
+        raise HTTPException(status_code=404, detail="Source file not found on server.")
+
+    chunks = await asyncio.to_thread(process_document, file_path)
+    md_lines = [f"# {doc.file_name}\n"]
+    for c in chunks:
+        title = c.get("metadata", {}).get("section_title")
+        if title:
+            md_lines.append(f"\n## {title}\n")
+        md_lines.append(c["text"])
+
+    return {
+        "doc_id": doc_id,
+        "file_name": doc.file_name,
+        "chunk_count": len(chunks),
+        "markdown": "\n\n".join(md_lines),
+    }

@@ -153,12 +153,17 @@ class BM25Reranker:
             weights=[self.dense_weight, self.sparse_weight],
         )
 
-        # Sort by fused score
+        # Sort by fused score and normalize to 0-1 range
+        max_rrf = (self.dense_weight + self.sparse_weight) / 61.0
         order = sorted(range(n), key=lambda i: fused[i], reverse=True)
         reranked = []
         for rank, idx in enumerate(order[:top_k]):
             chunk = dict(chunks[idx])
-            chunk["rerank_score"] = round(fused[idx], 6)
+            orig_score = chunk.get("score", 0.5)
+            norm_rrf = min(1.0, fused[idx] / max(max_rrf, 1e-6))
+            final_score = round(max(orig_score, norm_rrf * 0.95), 4)
+            chunk["rerank_score"] = final_score
+            chunk["score"]        = final_score
             chunk["bm25_score"]   = round(bm25_scores[idx], 4)
             chunk["rerank_pos"]   = rank + 1
             reranked.append(chunk)
@@ -243,13 +248,18 @@ Score (0-10):"""
             [ce_ranked, dense_ranked],
             weights=[0.6, 0.4],
         )
+        max_rrf = (0.6 + 0.4) / 61.0
         order = sorted(range(n), key=lambda i: fused[i], reverse=True)
 
         reranked = []
         for rank, idx in enumerate(order[:top_k]):
             chunk = dict(candidates[idx])
-            chunk["ce_score"]    = round(scores[idx], 4)
-            chunk["rerank_score"] = round(fused[idx], 6)
+            orig_score = chunk.get("score", 0.5)
+            norm_rrf = min(1.0, fused[idx] / max(max_rrf, 1e-6))
+            final_score = round(max(orig_score, norm_rrf * 0.95), 4)
+            chunk["ce_score"]     = round(scores[idx], 4)
+            chunk["rerank_score"] = final_score
+            chunk["score"]        = final_score
             chunk["rerank_pos"]   = rank + 1
             reranked.append(chunk)
 

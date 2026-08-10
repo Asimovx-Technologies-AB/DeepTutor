@@ -342,12 +342,16 @@ class VectorStore:
             sparse_weight=settings.SPARSE_WEIGHT,
         )
 
+        max_rrf = (settings.DENSE_WEIGHT + settings.SPARSE_WEIGHT) / 61.0
         results = []
         for doc_id, fused_score in fused[:top_k]:
             if doc_id not in all_chunks:
                 continue
             chunk = dict(all_chunks[doc_id])
-            chunk["score"] = round(fused_score, 6)
+            orig_score = chunk.get("score", 0.5)
+            norm_rrf = min(1.0, fused_score / max(max_rrf, 1e-6))
+            chunk["score"] = round(max(orig_score, norm_rrf * 0.95), 4)
+            chunk["fused_raw"] = round(fused_score, 6)
             chunk["fused"] = True
             results.append(chunk)
 
@@ -360,30 +364,57 @@ class VectorStore:
         pages: List[int],
     ) -> List[Dict]:
         """
-        Retrieve chunks that belong to specific page numbers using metadata filter.
-        Returns list of chunks with text, metadata, score.
+        Retrieve chunks that belong ONLY to specific page numbers using metadata filter.
+        Returns list of chunks where chunk.metadata.page in pages. Skips vector search completely.
         """
         collection = self._collection(topic_id)
         if collection.count() == 0 or not pages:
             return []
 
-        where_clause = {"page": pages[0]} if len(pages) == 1 else {"page": {"$in": pages}}
+        int_pages = [int(p) for p in pages]
+        str_pages = [str(p) for p in pages]
+        target_set = set(int_pages + str_pages)
+
+        chunks = []
         try:
-            results = collection.get(
-                where=where_clause,
-                include=["documents", "metadatas"],
-            )
-            chunks = []
-            if results and results.get("documents"):
-                ids = results.get("ids", [])
-                for idx, (doc, meta) in enumerate(zip(results["documents"], results["metadatas"])):
+            # Query int metadata
+            where_int = {"page": int_pages[0]} if len(int_pages) == 1 else {"page": {"$in": int_pages}}
+            res_int = collection.get(where=where_int, include=["documents", "metadatas"])
+            if res_int and res_int.get("documents"):
+                ids = res_int.get("ids", [])
+                for idx, (doc, meta) in enumerate(zip(res_int["documents"], res_int["metadatas"])):
                     chunks.append({
                         "id": ids[idx] if idx < len(ids) else f"page_{idx}",
                         "text": doc,
                         "metadata": meta,
                         "score": 1.0,
                     })
-            return chunks
+
+            # If empty, query string metadata fallback
+            if not chunks:
+                where_str = {"page": str_pages[0]} if len(str_pages) == 1 else {"page": {"$in": str_pages}}
+                res_str = collection.get(where=where_str, include=["documents", "metadatas"])
+                if res_str and res_str.get("documents"):
+                    ids = res_str.get("ids", [])
+                    for idx, (doc, meta) in enumerate(zip(res_str["documents"], res_str["metadatas"])):
+                        chunks.append({
+                            "id": ids[idx] if idx < len(ids) else f"page_{idx}",
+                            "text": doc,
+                            "metadata": meta,
+                            "score": 1.0,
+                        })
+
+            # Strict verification filter: guarantee 100% context precision
+            verified_chunks = []
+            seen_ids = set()
+            for c in chunks:
+                p_val = c.get("metadata", {}).get("page")
+                if p_val in target_set or (p_val is not None and str(p_val) in str_pages):
+                    if c["id"] not in seen_ids:
+                        seen_ids.add(c["id"])
+                        verified_chunks.append(c)
+
+            return verified_chunks
         except Exception:
             return []
 

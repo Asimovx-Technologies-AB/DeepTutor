@@ -485,7 +485,7 @@ export default function StudyPlanPage() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".pdf,.txt,.md"
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.docx,.doc,.csv,.xlsx,.xls,.pptx,.ppt,.html,.json,.txt,.md"
                     className="hidden"
                     onChange={(e) => {
                       if (e.target.files?.[0]) {
