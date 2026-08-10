@@ -1,0 +1,202 @@
+{
+  "evaluation_date": "2026-08-10 12:54:41",
+  "config": {
+    "model": "llama3.2",
+    "embed_model": "nomic-embed-text",
+    "chunking_strategy": "semantic",
+    "top_k_retrieval": 10,
+    "top_k_final": 5,
+    "reranker": "bm25",
+    "hyde_enabled": true,
+    "query_expansion_enabled": true
+  },
+  "summary": {
+    "avg_precision": 0.0,
+    "avg_hit_rate": 0.0,
+    "avg_mrr": 0.0,
+    "avg_retrieval_time_sec": 1.197,
+    "p50_retrieval_time_sec": 0.536,
+    "p95_retrieval_time_sec": 4.57,
+    "avg_gen_time_sec": 2.97,
+    "avg_tps": 20.16,
+    "faithfulness_pct": 8.3,
+    "oos_accuracy_pct": 33.3,
+    "embedding_cache_hit_rate": 0.0
+  },
+  "queries": [
+    {
+      "query": "What are Support Vector Machines and how do they work?",
+      "expected_in_doc": true,
+      "retrieval": {
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "mrr": 0.0,
+        "avg_semantic_score": 0.0,
+        "retrieval_time_sec": 4.57,
+        "embed_time_sec": 4.528,
+        "search_time_sec": 0.042,
+        "chunks_retrieved": 0,
+        "matched_keywords": [],
+        "confidence_score": 0.0,
+        "confidence_label": "out_of_scope",
+        "out_of_scope_predicted": true,
+        "out_of_scope_correct": false
+      },
+      "generation": {
+        "response_preview": "I cannot find this in the provided document.",
+        "gen_time_sec": 5.553,
+        "word_count": 8,
+        "tps": 1.44,
+        "has_citation": false,
+        "faithfulness": 0.0,
+        "refused_gracefully": true,
+        "used_real_context": true
+      }
+    },
+    {
+      "query": "Explain Feature Selection techniques in Machine Learning.",
+      "expected_in_doc": true,
+      "retrieval": {
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "mrr": 0.0,
+        "avg_semantic_score": 0.0,
+        "retrieval_time_sec": 0.536,
+        "embed_time_sec": 0.534,
+        "search_time_sec": 0.002,
+        "chunks_retrieved": 0,
+        "matched_keywords": [],
+        "confidence_score": 0.0,
+        "confidence_label": "out_of_scope",
+        "out_of_scope_predicted": true,
+        "out_of_scope_correct": false
+      },
+      "generation": {
+        "response_preview": "I cannot provide an answer based on a non-existent document. The document context is not available.\n\nHowever, I can provide general information about feature selection techniques in machine learning:\n\nFeature selection is the process of selecting a s...",
+        "gen_time_sec": 3.327,
+        "word_count": 134,
+        "tps": 40.27,
+        "has_citation": true,
+        "faithfulness": 0.0,
+        "refused_gracefully": false,
+        "used_real_context": true
+      }
+    },
+    {
+      "query": "What is Reinforcement Learning from Human Feedback (RLHF)?",
+      "expected_in_doc": false,
+      "retrieval": {
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "mrr": 0.0,
+        "avg_semantic_score": 0.0,
+        "retrieval_time_sec": 0.526,
+        "embed_time_sec": 0.524,
+        "search_time_sec": 0.002,
+        "chunks_retrieved": 0,
+        "matched_keywords": [],
+        "confidence_score": 0.0,
+        "confidence_label": "out_of_scope",
+        "out_of_scope_predicted": true,
+        "out_of_scope_correct": true
+      },
+      "generation": {
+        "response_preview": "I cannot find this in the provided document.",
+        "gen_time_sec": 1.162,
+        "word_count": 8,
+        "tps": 6.89,
+        "has_citation": false,
+        "faithfulness": 0.0,
+        "refused_gracefully": true,
+        "used_real_context": true
+      }
+    },
+    {
+      "query": "What is AlphaFold and what problem does it solve?",
+      "expected_in_doc": false,
+      "retrieval": {
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "mrr": 0.0,
+        "avg_semantic_score": 0.0,
+        "retrieval_time_sec": 0.503,
+        "embed_time_sec": 0.501,
+        "search_time_sec": 0.002,
+        "chunks_retrieved": 0,
+        "matched_keywords": [],
+        "confidence_score": 0.0,
+        "confidence_label": "out_of_scope",
+        "out_of_scope_predicted": true,
+        "out_of_scope_correct": true
+      },
+      "generation": {
+        "response_preview": "I cannot find this in the provided document.",
+        "gen_time_sec": 1.211,
+        "word_count": 8,
+        "tps": 6.61,
+        "has_citation": false,
+        "faithfulness": 0.0,
+        "refused_gracefully": true,
+        "used_real_context": true
+      }
+    },
+    {
+      "query": "Describe the Random Forest algorithm and its advantages over Decision Trees.",
+      "expected_in_doc": true,
+      "retrieval": {
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "mrr": 0.0,
+        "avg_semantic_score": 0.0,
+        "retrieval_time_sec": 0.547,
+        "embed_time_sec": 0.545,
+        "search_time_sec": 0.002,
+        "chunks_retrieved": 0,
+        "matched_keywords": [],
+        "confidence_score": 0.0,
+        "confidence_label": "out_of_scope",
+        "out_of_scope_predicted": true,
+        "out_of_scope_correct": false
+      },
+      "generation": {
+        "response_preview": "I cannot provide an answer based on the provided document context. The document context is not available.\n\nHowever, I can provide a general description of the Random Forest algorithm and its advantages over Decision Trees:\n\nThe Random Forest algorith...",
+        "gen_time_sec": 4.927,
+        "word_count": 204,
+        "tps": 41.4,
+        "has_citation": false,
+        "faithfulness": 16.7,
+        "refused_gracefully": false,
+        "used_real_context": true
+      }
+    },
+    {
+      "query": "What is Naive Bayes and what are its assumptions?",
+      "expected_in_doc": true,
+      "retrieval": {
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "mrr": 0.0,
+        "avg_semantic_score": 0.0,
+        "retrieval_time_sec": 0.501,
+        "embed_time_sec": 0.499,
+        "search_time_sec": 0.002,
+        "chunks_retrieved": 0,
+        "matched_keywords": [],
+        "confidence_score": 0.0,
+        "confidence_label": "out_of_scope",
+        "out_of_scope_predicted": true,
+        "out_of_scope_correct": false
+      },
+      "generation": {
+        "response_preview": "I cannot provide an answer based on the given context. The document context is empty, which means there is no information available to answer the question about Naive Bayes and its assumptions. \n\n\"I cannot find this in the provided document.\"",
+        "gen_time_sec": 1.642,
+        "word_count": 40,
+        "tps": 24.36,
+        "has_citation": false,
+        "faithfulness": 33.3,
+        "refused_gracefully": true,
+        "used_real_context": true
+      }
+    }
+  ]
+}

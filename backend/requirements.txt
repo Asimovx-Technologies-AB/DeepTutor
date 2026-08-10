@@ -11,13 +11,21 @@ python-multipart>=0.0.9
 sqlalchemy>=2.0.0
 aiosqlite>=0.20.0
 
-# RAG
+# RAG — Core
 langchain>=0.2.0
 langchain-community>=0.2.0
 chromadb>=0.5.0
 networkx>=3.3
 
-# Document processing
+# Document parsing — Primary (Docling) + Fallbacks
+docling>=2.0.0            # IBM Docling: structure-aware PDF parsing, OCR, tables, formulas
+
+# RAG — Advanced Retrieval (NEW)
+rank-bm25>=0.2.2          # BM25+ reranking and hybrid search
+cachetools>=5.3.0         # TTL-aware LRU caches for embedding + query results
+scikit-learn>=1.4.0       # cosine similarity utilities
+
+# Document processing (fallbacks)
 pypdf2>=3.0.0
 pypdf>=4.0.0
 pdfplumber>=0.11.0

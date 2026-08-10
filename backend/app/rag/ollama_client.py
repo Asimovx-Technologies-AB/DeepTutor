@@ -1,6 +1,6 @@
 """
-Async Ollama API client.
-Supports: chat, streaming chat, embeddings.
+Async Ollama API client with integrated EmbeddingCache.
+Supports: chat, streaming chat, embeddings (cached).
 Ollama must be running: `ollama serve`
 """
 import json
@@ -17,6 +17,15 @@ class OllamaClient:
         self.chat_model = settings.OLLAMA_CHAT_MODEL
         self.embed_model = settings.OLLAMA_EMBED_MODEL
         self.timeout = settings.OLLAMA_TIMEOUT
+        self._cache = None  # lazy import to avoid circular dep
+
+    @property
+    def _embedding_cache(self):
+        """Lazy-load cache to avoid circular imports at module level."""
+        if self._cache is None:
+            from app.rag.cache import embedding_cache
+            self._cache = embedding_cache
+        return self._cache
 
     async def is_available(self) -> bool:
         """Check if Ollama is running."""
@@ -68,8 +77,8 @@ class OllamaClient:
             "stream": True,
             "options": {
                 "temperature": temperature,
-                "num_ctx": 4096,
-                "num_predict": 512,
+                "num_ctx": 8192,
+                "num_predict": 1024,
             },
         }
         try:
@@ -94,13 +103,27 @@ class OllamaClient:
                             continue
         except Exception:
             # Fallback response for evaluation when local LLM server is offline
-            fallback_resp = "Support Vector Machines (SVM) find the optimal hyper-plane for separating classes with maximum margin. Feature selection includes Filter methods, Wrapper methods, and Embedded methods such as SVM-RFE."
+            fallback_resp = (
+                "Support Vector Machines (SVM) find the optimal hyper-plane for "
+                "separating classes with maximum margin. Feature selection includes "
+                "Filter methods, Wrapper methods, and Embedded methods such as SVM-RFE."
+            )
             for word in fallback_resp.split(" "):
                 yield word + " "
 
     async def embed(self, text: str, model: Optional[str] = None) -> List[float]:
-        """Get embedding vector for text, with fallback for offline mode."""
+        """
+        Get embedding vector for text.
+        Checks EmbeddingCache first — avoids redundant Ollama calls for identical text.
+        Falls back to deterministic pseudo-embedding if Ollama is offline.
+        """
         model = model or self.embed_model
+
+        # Check cache first
+        cached = await self._embedding_cache.get(text, model)
+        if cached is not None:
+            return cached
+
         payload = {"model": model, "prompt": text}
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -109,19 +132,28 @@ class OllamaClient:
                     json=payload,
                 )
                 r.raise_for_status()
-                return r.json()["embedding"]
+                embedding = r.json()["embedding"]
+                # Store in cache
+                await self._embedding_cache.set(text, model, embedding)
+                return embedding
         except Exception:
             # Deterministic pseudo-embedding for testing when Ollama is offline
             import hashlib
             h = int(hashlib.md5(text.encode("utf-8")).hexdigest(), 16)
-            return [((h + i) % 1000) / 1000.0 for i in range(768)]
+            pseudo = [((h + i) % 1000) / 1000.0 for i in range(768)]
+            await self._embedding_cache.set(text, model, pseudo)
+            return pseudo
 
     async def embed_batch(
         self, texts: List[str], model: Optional[str] = None
     ) -> List[List[float]]:
-        """Embed multiple texts concurrently using a semaphore to limit parallel requests."""
+        """
+        Embed multiple texts concurrently.
+        - Checks cache for each text first (avoids redundant calls)
+        - Uses semaphore to limit parallel Ollama requests
+        """
         import asyncio
-        semaphore = asyncio.Semaphore(15)  # Run 15 concurrent embeddings
+        semaphore = asyncio.Semaphore(15)  # 15 concurrent embeddings
 
         async def _sem_embed(text: str) -> List[float]:
             async with semaphore:

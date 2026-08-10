@@ -1,15 +1,14 @@
-"""
-Utility script to wipe all stored database entries, ChromaDB collections, graph files, and uploads so you can start completely fresh.
-"""
-import os
 import shutil
 from pathlib import Path
 from app.core.database import DBContext
-from app.core.models import User, ChatSession, ChatMessage, Document, Quiz, QuizQuestion, QuizAttempt, Flashcard, StudyPlan
+from app.core.models import (
+    User, ChatSession, ChatMessage, Document, 
+    Quiz, QuizQuestion, QuizAttempt, Flashcard, StudyPlan
+)
 from app.rag.vector_store import vector_store
 
-def reset_all_data():
-    print("Cleaning database tables...")
+def wipe_all_data():
+    print("1. Wiping SQL database tables...")
     with DBContext() as db:
         db.query(ChatMessage).delete()
         db.query(ChatSession).delete()
@@ -21,18 +20,18 @@ def reset_all_data():
         db.query(Document).delete()
         db.query(User).delete()
 
-    print("Resetting ChromaDB collections...")
+    print("2. Resetting ChromaDB vector collections...")
     try:
         vector_store.reset()
     except Exception as e:
         print(f"Vector store reset note: {e}")
 
-    # Remove upload directories and graph data
-    dirs_to_clean = ["./uploads", "./graph_data"]
-    for dir_path in dirs_to_clean:
-        p = Path(dir_path)
-        if p.exists():
-            for item in p.iterdir():
+    print("3. Deleting uploaded files and graph data...")
+    folders_to_clear = ["./uploads", "./graph_data"]
+    for folder in folders_to_clear:
+        path = Path(folder)
+        if path.exists():
+            for item in path.iterdir():
                 if item.is_dir():
                     shutil.rmtree(item, ignore_errors=True)
                 else:
@@ -40,9 +39,9 @@ def reset_all_data():
                         item.unlink()
                     except Exception:
                         pass
-            print(f"Cleared contents of {dir_path}")
+            print(f"   Cleared contents of {folder}")
 
-    print("All database records and files cleared successfully! Starting fresh.")
+    print("✅ All data successfully deleted! You can start fresh.")
 
 if __name__ == "__main__":
-    reset_all_data()
+    wipe_all_data()
