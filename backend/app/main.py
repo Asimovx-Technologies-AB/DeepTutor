@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
     print(f"[START] {settings.APP_NAME} v{settings.APP_VERSION} started")
     print(f"[OLLAMA] Base URL: {settings.OLLAMA_BASE_URL} | Model: {settings.OLLAMA_CHAT_MODEL}")
     print(f"[GRAPHRAG] ChromaDB @ {settings.CHROMA_PERSIST_DIR} | Graph @ {settings.GRAPH_DATA_DIR}")
-    # Backend reloaded with Image upload OCR support (.png, .jpg, .jpeg, .webp, .bmp, .tiff)
+    # Backend reloaded with PyTorch 2.6.0+cu124 CUDA GPU acceleration enabled for Docling
     try:
         from app.rag.document_processor import get_parser_info
         info = get_parser_info()

@@ -1,0 +1,11 @@
+# Netlify Deployment Configuration for DeepTutor Frontend
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Client-side SPA routing (redirect all routes to index.html for React Router)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
