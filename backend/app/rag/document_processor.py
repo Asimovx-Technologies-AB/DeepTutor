@@ -71,9 +71,13 @@ def _get_docling_converter():
         accel_opts = None
         # CUDA GPU acceleration for Docling layout & table vision models
         if torch.cuda.is_available():
+            try:
+                torch.cuda.set_device(0)
+            except Exception:
+                pass
             device_name = torch.cuda.get_device_name(0)
             print(f"[DOCLING GPU] CUDA enabled on {device_name}! Routing layout models to GPU...")
-            accel_opts = AcceleratorOptions(num_threads=8, device="cuda")
+            accel_opts = AcceleratorOptions(num_threads=8, device="cuda:0")
             pipeline_options.accelerator_options = accel_opts
         else:
             print("[DOCLING CPU] CUDA not detected. Docling running on CPU.")
