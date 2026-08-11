@@ -395,15 +395,15 @@ def _try_pypdf2(file_path: str) -> List[Dict]:
 # ══════════════════════════════════════════════════════════════════════════════
 def process_pdf(file_path: str) -> List[Dict]:
     """
-    Extract and chunk a PDF using a cascading parser priority:
-      1. Docling    — structure-aware, OCR-capable (with strict timeout)  ← PRIMARY
-      2. pdfplumber — good layout, fast                                  ← FALLBACK 1
-      3. pypdf      — standard, very fast                                ← FALLBACK 2
-      4. pypdfium2  — pdfium engine, fast                                ← FALLBACK 3
-      5. PyPDF2     — legacy                                             ← FALLBACK 4
+    Extract and chunk a PDF using a high-speed, robust cascading parser priority:
+      1. pypdfium2  — C++ pdfium engine (0.39s sub-second speed)          ← PRIMARY FAST PATH
+      2. pdfplumber — high layout quality, clean table extraction        ← FALLBACK 1
+      3. pypdf      — lightweight python parser                          ← FALLBACK 2
+      4. Docling    — deep learning structure parser (if enabled)         ← OPTIONAL
+      5. PyPDF2     — legacy fallback                                    ← FALLBACK 3
     """
-    # 1. Docling (primary, timed out)
-    chunks = _try_docling(file_path)
+    # 1. pypdfium2 (0.39s sub-second lightning fast parser)
+    chunks = _try_pypdfium2(file_path)
     if chunks:
         return chunks
 
@@ -417,10 +417,11 @@ def process_pdf(file_path: str) -> List[Dict]:
     if chunks:
         return chunks
 
-    # 4. pypdfium2
-    chunks = _try_pypdfium2(file_path)
-    if chunks:
-        return chunks
+    # 4. Docling (if enabled with timeout guard)
+    if getattr(settings, "ENABLE_DOCLING", False):
+        chunks = _try_docling(file_path)
+        if chunks:
+            return chunks
 
     # 5. PyPDF2
     return _try_pypdf2(file_path)

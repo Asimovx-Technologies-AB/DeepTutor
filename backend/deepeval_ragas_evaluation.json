@@ -1,0 +1,56 @@
+{
+  "date": "2026-08-10 16:46:45",
+  "active_collection": "sec_00000000_0000_0000_0000_000000000000_general",
+  "eval_count": 5,
+  "results": [
+    {
+      "query": "What are Support Vector Machines and how do they work?",
+      "answer": "...",
+      "retrieved_chunks_count": 5,
+      "latency_sec": 3.727,
+      "confidence": 0.8173,
+      "out_of_scope": true,
+      "expected_in_doc": true
+    },
+    {
+      "query": "Explain Feature Selection techniques in Machine Learning.",
+      "answer": "...",
+      "retrieved_chunks_count": 5,
+      "latency_sec": 3.3,
+      "confidence": 0.8161,
+      "out_of_scope": true,
+      "expected_in_doc": true
+    },
+    {
+      "query": "Describe the Random Forest algorithm and its advantages over Decision Trees.",
+      "answer": "...",
+      "retrieved_chunks_count": 5,
+      "latency_sec": 8.484,
+      "confidence": 0.8117,
+      "out_of_scope": true,
+      "expected_in_doc": true
+    },
+    {
+      "query": "What is Naive Bayes and what are its assumptions?",
+      "answer": "...",
+      "retrieved_chunks_count": 5,
+      "latency_sec": 2.818,
+      "confidence": 0.793,
+      "out_of_scope": true,
+      "expected_in_doc": true
+    },
+    {
+      "query": "What is Reinforcement Learning from Human Feedback (RLHF)?",
+      "answer": "...",
+      "retrieved_chunks_count": 5,
+      "latency_sec": 8.155,
+      "confidence": 0.8477,
+      "out_of_scope": false,
+      "expected_in_doc": false
+    }
+  ],
+  "deepeval": {
+    "status": "SKIPPED",
+    "reason": "OpenAI API key is not configured. Set OPENAI_API_KEY in your environment or pass `api_key` to GPTModel(...)."
+  }
+}

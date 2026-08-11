@@ -1,6 +1,6 @@
 # 📊 DeepTutor Advanced GraphRAG Evaluation Report v2.0
 
-**Evaluation Date**: 2026-08-10 12:54:41  
+**Evaluation Date**: 2026-08-10 16:58:06  
 **Model Name**: Local Ollama (llama3.2)  
 **Vector Store**: ChromaDB (nomic-embed-text)  
 **Knowledge Graph Engine**: NetworkX  
@@ -14,15 +14,15 @@
 
 | Metric | Score / Value | Target | Status |
 | :--- | :--- | :--- | :--- |
-| **Context Precision (@5)** | **0.0%** | >80% | ⚠️ WARN |
-| **Context Hit Rate** | **0.0%** | >90% | ⚠️ WARN |
-| **MRR (Mean Reciprocal Rank)** | **0.0** | >0.7 | ⚠️ WARN |
-| **Avg Retrieval Latency** | **1.197s** | <1.0s | ⚠️ WARN |
-| **Retrieval P95 Latency** | **4.57s** | <2.0s | ⚠️ WARN |
-| **Avg LLM Generation Latency** | **2.97s** | <5.0s | ✅ PASS |
-| **Model Throughput (TPS)** | **20.16 tok/s** | >15 TPS | ✅ PASS |
-| **Faithfulness (Anti-Hallucination)** | **8.3%** | >90% | ⚠️ WARN |
-| **Out-of-Scope Detection** | **33.3%** | >80% | ⚠️ WARN |
+| **Context Precision (@5)** | **37.5%** | >80% | ⚠️ WARN |
+| **Context Hit Rate** | **66.67%** | >90% | ⚠️ WARN |
+| **MRR (Mean Reciprocal Rank)** | **0.5833** | >0.7 | ⚠️ WARN |
+| **Avg Retrieval Latency** | **0.541s** | <1.0s | ✅ PASS |
+| **Retrieval P95 Latency** | **0.739s** | <2.0s | ✅ PASS |
+| **Avg LLM Generation Latency** | **1.907s** | <5.0s | ✅ PASS |
+| **Model Throughput (TPS)** | **15.84 tok/s** | >15 TPS | ✅ PASS |
+| **Faithfulness (Anti-Hallucination)** | **53.3%** | >90% | ⚠️ WARN |
+| **Out-of-Scope Detection** | **66.7%** | >80% | ⚠️ WARN |
 | **Embedding Cache Hit Rate** | **0.0%** | >30% | ⚠️ WARN |
 
 ---
@@ -31,12 +31,12 @@
 
 | # | Query | Prec. | Hit | MRR | Faith. | OOS✓ | Ret.Time | TPS |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| 1 | What are Support Vector Machines and how do they w... | 0.0% | 0.0% | 0.0 | 0.0% | ❌ | 4.57s | 1.44 |
-| 2 | Explain Feature Selection techniques in Machine Le... | 0.0% | 0.0% | 0.0 | 0.0% | ❌ | 0.536s | 40.27 |
-| 3 | What is Reinforcement Learning from Human Feedback... | 0.0% | 0.0% | 0.0 | 0.0% | ✅ | 0.526s | 6.89 |
-| 4 | What is AlphaFold and what problem does it solve?... | 0.0% | 0.0% | 0.0 | 0.0% | ✅ | 0.503s | 6.61 |
-| 5 | Describe the Random Forest algorithm and its advan... | 0.0% | 0.0% | 0.0 | 16.7% | ❌ | 0.547s | 41.4 |
-| 6 | What is Naive Bayes and what are its assumptions?... | 0.0% | 0.0% | 0.0 | 33.3% | ❌ | 0.501s | 24.36 |
+| 1 | What are Support Vector Machines and how do they w... | 0.0% | 0.0% | 0.0 | 20.0% | ✅ | 0.739s | 30.55 |
+| 2 | Explain Feature Selection techniques in Machine Le... | 16.67% | 100.0% | 1.0 | 100.0% | ✅ | 0.497s | 8.73 |
+| 3 | What is Reinforcement Learning from Human Feedback... | 100.0% | 100.0% | 1.0 | 100.0% | ❌ | 0.512s | 21.77 |
+| 4 | What is AlphaFold and what problem does it solve?... | 0.0% | 0.0% | 0.0 | 0.0% | ❌ | 0.502s | 6.56 |
+| 5 | Describe the Random Forest algorithm and its advan... | 33.33% | 100.0% | 0.5 | 0.0% | ✅ | 0.497s | 18.4 |
+| 6 | What is Naive Bayes and what are its assumptions?... | 75.0% | 100.0% | 1.0 | 100.0% | ✅ | 0.501s | 9.04 |
 
 ---
 

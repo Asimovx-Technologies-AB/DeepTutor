@@ -280,8 +280,36 @@ async def evaluate_generation(query: str, retrieved_chunks: List[Dict]) -> Dict:
     else:
         context = "No document context available."
 
-    prompt = f"""You are a strictly grounded AI tutor. Answer the student's question using ONLY the provided document context.
-If the context does not contain information to answer the question, say "I cannot find this in the provided document."
+    prompt = f"""You are DeepTutor's answering engine. You answer ONLY from the CONTEXT block provided below. You have no other knowledge source for this task — treat anything not in CONTEXT as if it does not exist, even if you recognize the topic from general training.
+
+## Step 1 — Silent grounding check (do this before writing anything else)
+
+For the user's QUERY, check the CONTEXT and classify internally:
+- FULLY_GROUNDED: the CONTEXT directly defines/explains the specific concept asked about, not just a related or adjacent term.
+- PARTIALLY_GROUNDED: the CONTEXT mentions the concept but doesn't fully answer the question.
+- NOT_GROUNDED: the CONTEXT does not define or substantively address the concept, even if related keywords appear (e.g. shared field, adjacent technique, a term that co-occurs but isn't explained).
+
+Do not let keyword overlap alone count as grounding. "The context mentions 'reward' and 'alignment'" is not the same as "the context explains RLHF." If you are inferring the answer by connecting scattered related terms yourself rather than reading it stated in the text, that is NOT_GROUNDED.
+
+## Step 2 — Respond based on classification
+
+**If NOT_GROUNDED:**
+Reply with exactly this pattern (fill the bracket, change nothing else):
+"I cannot find information about [specific topic] in the provided document context."
+Do not add related information, do not speculate, do not soften this with partial explanations from your own knowledge. A short, clean refusal is the correct and fully faithful answer here — it is not a failure state.
+
+**If PARTIALLY_GROUNDED:**
+Answer only the part that is supported. Explicitly state what is and isn't covered, e.g.: "The document covers X but does not address Y."
+
+**If FULLY_GROUNDED:**
+Answer using only the content in CONTEXT. Every factual claim must be traceable to a specific passage. Attach an inline citation marker [doc p.X] after each claim that pulls from a specific chunk. If you cannot mark a claim with a source, cut the claim — don't state it.
+
+## Step 3 — Hard constraints (apply in every branch)
+
+1. Never fill gaps with outside/pretrained knowledge, even to be "helpful."
+2. Never hedge a NOT_GROUNDED case into a soft answer ("this might relate to...").
+3. Never treat topical adjacency as sufficient grounding.
+4. Do not apologize, do not editorialize about the document's limitations. State the grounding result plainly.
 
 DOCUMENT CONTEXT:
 {context}
@@ -339,7 +367,7 @@ ANSWER:"""
 # ── Main evaluation suite ──────────────────────────────────────────────────────
 async def run_evaluation_suite():
     print("=" * 70)
-    print("[RUN] DEEPTUTOR ADVANCED RAG EVALUATION SUITE v2.0")
+    print("[RUN] DEEPTUTOR ADVANCED RAG EVALUATION SUITE v2.0 (DeepEval + Ragas)")
     print("=" * 70)
     print(f"Config: strategy={settings.CHUNKING_STRATEGY}, "
           f"top_k_retrieval={settings.TOP_K_RETRIEVAL}, "
@@ -348,6 +376,25 @@ async def run_evaluation_suite():
           f"hyde={settings.ENABLE_HYDE}, "
           f"query_expansion={settings.ENABLE_QUERY_EXPANSION}")
     print()
+
+    # ── Auto-setup active vector collection ───────────────────────────────────
+    import glob
+    from app.rag.graph_rag import graph_rag
+    from app.rag.section_scope import get_section_collection_id
+
+    effective_topic_id = get_section_collection_id("00000000-0000-0000-0000-000000000000", "general")
+    if vector_store.count(effective_topic_id) == 0:
+        user_cols = [c for c in vector_store._client.list_collections() if c.name.startswith("sec_")]
+        if user_cols:
+            best_col = max(user_cols, key=lambda c: c.count())
+            effective_topic_id = best_col.name
+            print(f"[EVAL SETUP] Using active indexed vector collection: {effective_topic_id} ({best_col.count()} chunks)")
+        else:
+            pdfs = glob.glob("uploads/**/*.pdf", recursive=True)
+            if pdfs:
+                target_pdf = pdfs[0]
+                print(f"[EVAL SETUP] Auto-indexing benchmark document: {target_pdf}")
+                await graph_rag.index_document(effective_topic_id, target_pdf)
 
     total_queries = len(BENCHMARK_SUITE)
     results_summary = []
@@ -371,9 +418,9 @@ async def run_evaluation_suite():
         print(f"\n[{idx}/{total_queries}] Query: '{query}'")
         print(f"   Expected in doc: {expected_in_doc}")
 
-        # Retrieval evaluation
+        # Retrieval evaluation using active collection
         ret_metrics = await evaluate_retrieval(
-            query, keywords, expected_in_doc, topic_id="general"
+            query, keywords, expected_in_doc, topic_id=effective_topic_id
         )
         print(f"   |-- Precision:    {ret_metrics['precision']}% | Hit Rate: {ret_metrics['hit_rate']}%")
         print(f"   |-- MRR:          {ret_metrics['mrr']} | Chunks: {ret_metrics['chunks_retrieved']}")
