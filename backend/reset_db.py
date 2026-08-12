@@ -41,7 +41,7 @@ def wipe_all_data():
                         pass
             print(f"   Cleared contents of {folder}")
 
-    print("✅ All data successfully deleted! You can start fresh.")
+    print("[OK] All data successfully deleted! You can start fresh.")
 
 if __name__ == "__main__":
     wipe_all_data()

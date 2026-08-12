@@ -36,6 +36,42 @@ class OllamaClient:
         except Exception:
             return False
 
+    async def get_available_models(self) -> List[str]:
+        """Get list of installed model names from Ollama."""
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                r = await client.get(f"{self.base_url}/api/tags")
+                if r.status_code == 200:
+                    models = r.json().get("models", [])
+                    names = []
+                    for m in models:
+                        name = m.get("name", "")
+                        if name:
+                            names.append(name)
+                            if ":" in name:
+                                names.append(name.split(":")[0])
+                    return names
+        except Exception:
+            pass
+        return []
+
+    async def get_working_chat_model(self, requested_model: Optional[str] = None) -> str:
+        """Resolve a working chat model name against installed Ollama models."""
+        target = requested_model or self.chat_model
+        available = await self.get_available_models()
+        if not available:
+            return target
+
+        if target in available or f"{target}:latest" in available:
+            return target
+
+        # Fallback candidates order
+        for fallback in ["llama3.1", "llama3", "llama3.2", "mistral", "gemma2", "qwen2.5", "deepseek-r1"]:
+            if fallback in available or f"{fallback}:latest" in available:
+                return fallback
+
+        return target
+
     async def chat(
         self,
         messages: List[Dict[str, str]],
@@ -43,9 +79,9 @@ class OllamaClient:
         temperature: float = 0.2,
     ) -> str:
         """Single (non-streaming) chat response."""
-        model = model or self.chat_model
+        resolved_model = await self.get_working_chat_model(model)
         payload = {
-            "model": model,
+            "model": resolved_model,
             "messages": messages,
             "stream": False,
             "options": {
@@ -69,10 +105,10 @@ class OllamaClient:
         model: Optional[str] = None,
         temperature: float = 0.2,
     ) -> AsyncGenerator[str, None]:
-        """Async generator: yields tokens one by one (with offline fallback)."""
-        model = model or self.chat_model
+        """Async generator: yields tokens one by one."""
+        resolved_model = await self.get_working_chat_model(model)
         payload = {
-            "model": model,
+            "model": resolved_model,
             "messages": messages,
             "stream": True,
             "options": {
@@ -101,15 +137,26 @@ class OllamaClient:
                                 break
                         except json.JSONDecodeError:
                             continue
-        except Exception:
-            # Fallback response for evaluation when local LLM server is offline
-            fallback_resp = (
-                "Support Vector Machines (SVM) find the optimal hyper-plane for "
-                "separating classes with maximum margin. Feature selection includes "
-                "Filter methods, Wrapper methods, and Embedded methods such as SVM-RFE."
-            )
-            for word in fallback_resp.split(" "):
-                yield word + " "
+        except Exception as e:
+            error_msg = f"⚠️ Ollama model error ({resolved_model}): {str(e)}"
+            print(f"[OLLAMA ERROR] {error_msg}")
+            raise RuntimeError(error_msg) from e
+
+    async def get_working_embed_model(self, requested_model: Optional[str] = None) -> str:
+        """Resolve a working embed model name against installed Ollama models."""
+        target = requested_model or self.embed_model
+        available = await self.get_available_models()
+        if not available:
+            return target
+
+        if target in available or f"{target}:latest" in available:
+            return target
+
+        for fallback in ["nomic-embed-text", "all-minilm", "bge-m3", "mxbai-embed-large"]:
+            if fallback in available or f"{fallback}:latest" in available:
+                return fallback
+
+        return target
 
     async def embed(self, text: str, model: Optional[str] = None) -> List[float]:
         """
@@ -117,14 +164,14 @@ class OllamaClient:
         Checks EmbeddingCache first — avoids redundant Ollama calls for identical text.
         Falls back to deterministic pseudo-embedding if Ollama is offline.
         """
-        model = model or self.embed_model
+        resolved_model = await self.get_working_embed_model(model)
 
         # Check cache first
-        cached = await self._embedding_cache.get(text, model)
+        cached = await self._embedding_cache.get(text, resolved_model)
         if cached is not None:
             return cached
 
-        payload = {"model": model, "prompt": text}
+        payload = {"model": resolved_model, "prompt": text}
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 r = await client.post(
@@ -134,14 +181,14 @@ class OllamaClient:
                 r.raise_for_status()
                 embedding = r.json()["embedding"]
                 # Store in cache
-                await self._embedding_cache.set(text, model, embedding)
+                await self._embedding_cache.set(text, resolved_model, embedding)
                 return embedding
         except Exception:
             # Deterministic pseudo-embedding for testing when Ollama is offline
             import hashlib
             h = int(hashlib.md5(text.encode("utf-8")).hexdigest(), 16)
             pseudo = [((h + i) % 1000) / 1000.0 for i in range(768)]
-            await self._embedding_cache.set(text, model, pseudo)
+            await self._embedding_cache.set(text, resolved_model, pseudo)
             return pseudo
 
     async def embed_batch(

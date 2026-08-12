@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # Ollama
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_CHAT_MODEL: str = "llama3.2"      # or mistral, gemma2
+    OLLAMA_CHAT_MODEL: str = "llama3.1"      # or llama3, mistral, gemma2
     OLLAMA_EMBED_MODEL: str = "nomic-embed-text"
     OLLAMA_TIMEOUT: int = 120
 
