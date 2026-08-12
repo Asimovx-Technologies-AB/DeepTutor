@@ -1,8 +1,11 @@
 # Environments & Dependencies
 .venv/
 venv/
+**/venv/
+**/.venv/
 ENV/
 node_modules/
+**/node_modules/
 dist/
 dist-ssr/
 *.local
@@ -11,13 +14,21 @@ dist-ssr/
 *.db
 *.sqlite
 *.sqlite3
-backend/chroma_data/
-backend/graph_data/
-backend/uploads/
-!backend/uploads/.gitkeep
+chroma_data/
+**/chroma_data/
+graph_data/
+**/graph_data/
+uploads/
+**/uploads/
+!**/uploads/.gitkeep
 
 # Python Cache & Build
 __pycache__/
+**/__pycache__/
+.pytest_cache/
+**/ .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 *.py[cod]
 *$py.class
 *.so
@@ -37,6 +48,12 @@ wheels/
 .installed.cfg
 *.egg
 
+# Evaluation Outputs & Temporary Exports
+backend/evaluations/eval_results*/
+backend/rag_evaluation_report.*
+backend/*exported_document.md
+backend/deepeval_ragas_evaluation.json
+
 # Logs & Environment Variables
 *.log
 .env
@@ -47,3 +64,4 @@ wheels/
 .idea/
 .DS_Store
 Thumbs.db
+.gemini/
