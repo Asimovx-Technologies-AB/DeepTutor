@@ -223,7 +223,10 @@ export const documentsApi = {
     api.get('/documents', { params: { topic_id: topicId } }),
   status: (docId: string) => api.get(`/documents/${docId}/status`),
   graph: (topicId: string) => api.get(`/documents/topic/${topicId}/graph`),
+  delete: (docId: string) => api.delete(`/documents/${docId}`),
+  deleteSection: (sectionId: string) => api.delete(`/documents/section/${sectionId}`),
 }
+
 
 // ─── MCP Protocol API ──────────────────────────────────────────
 export const mcpApi = {

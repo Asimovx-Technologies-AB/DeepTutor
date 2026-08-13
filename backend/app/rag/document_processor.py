@@ -391,40 +391,119 @@ def _try_pypdf2(file_path: str) -> List[Dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# OCR Engine Helpers (EasyOCR + PyTesseract + Docling)
+# ══════════════════════════════════════════════════════════════════════════════
+_easyocr_reader = None
+
+def _get_easyocr_reader():
+    global _easyocr_reader
+    if _easyocr_reader is not None:
+        return _easyocr_reader
+    try:
+        import easyocr
+        import torch
+        use_gpu = torch.cuda.is_available()
+        print(f"[OCR] Initializing EasyOCR engine (GPU={use_gpu})...")
+        _easyocr_reader = easyocr.Reader(['en'], gpu=use_gpu, verbose=False)
+        return _easyocr_reader
+    except Exception as e:
+        print(f"[OCR WARN] EasyOCR initialization note: {e}")
+        return None
+
+
+
+def _ocr_extract_text(file_path_or_img) -> str:
+    """Run EasyOCR -> PyTesseract OCR fallback chain on an image file or PIL image."""
+    # 1. EasyOCR
+    reader = _get_easyocr_reader()
+    if reader is not None:
+        try:
+            results = reader.readtext(file_path_or_img, detail=0)
+            text = " ".join(results).strip()
+            if text and len(text) >= 10:
+                return text
+        except Exception as e:
+            print(f"[OCR WARN] EasyOCR extraction error: {e}")
+
+    # 2. PyTesseract
+    try:
+        import pytesseract
+        from PIL import Image
+        if isinstance(file_path_or_img, (str, Path)):
+            img = Image.open(file_path_or_img)
+        else:
+            img = file_path_or_img
+        text = pytesseract.image_to_string(img).strip()
+        if text and len(text) >= 10:
+            return text
+    except Exception as e:
+        print(f"[OCR WARN] PyTesseract extraction error: {e}")
+
+    return ""
+
+
+def _ocr_scanned_pdf(file_path: str) -> List[Dict]:
+    """Render scanned PDF pages as images and extract text using OCR."""
+    chunks = []
+    source_name = Path(file_path).name
+    try:
+        import pypdfium2 as pdfium
+        pdf = pdfium.PdfDocument(file_path)
+
+        for page_num, page in enumerate(pdf, 1):
+            pil_image = page.render(scale=2.0).to_pil()
+            text = _ocr_extract_text(pil_image)
+            if text and len(text) >= 15:
+                page_chunks = _chunk_page_text(text, page_num, file_path)
+                chunks.extend(page_chunks)
+    except Exception as e:
+        print(f"[OCR WARN] Scanned PDF OCR error for {file_path}: {e}")
+    return chunks
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Public API
 # ══════════════════════════════════════════════════════════════════════════════
 def process_pdf(file_path: str) -> List[Dict]:
     """
-    Extract and chunk a PDF using a high-speed, robust cascading parser priority:
-      1. pypdfium2  — C++ pdfium engine (0.39s sub-second speed)          ← PRIMARY FAST PATH
-      2. pdfplumber — high layout quality, clean table extraction        ← FALLBACK 1
-      3. pypdf      — lightweight python parser                          ← FALLBACK 2
-      4. Docling    — deep learning structure parser (if enabled)         ← OPTIONAL
-      5. PyPDF2     — legacy fallback                                    ← FALLBACK 3
+    Extract and chunk a PDF using high-speed cascading parser priority:
+      1. pypdfium2 (sub-second fast text extraction)
+      2. pdfplumber (layout & table extraction)
+      3. pypdf (python text fallback)
+      4. Scanned PDF OCR (renders pages & extracts text if PDF has no embedded text)
+      5. Docling (structure-aware ML parser)
+      6. PyPDF2 (legacy fallback)
     """
-    # 1. pypdfium2 (0.39s sub-second lightning fast parser)
+    # 1. pypdfium2
     chunks = _try_pypdfium2(file_path)
-    if chunks:
+    if chunks and any(len(c.get("text", "").strip()) >= 50 for c in chunks):
         return chunks
 
     # 2. pdfplumber
     chunks = _try_pdfplumber(file_path)
-    if chunks:
+    if chunks and any(len(c.get("text", "").strip()) >= 50 for c in chunks):
         return chunks
 
     # 3. pypdf
     chunks = _try_pypdf(file_path)
-    if chunks:
+    if chunks and any(len(c.get("text", "").strip()) >= 50 for c in chunks):
         return chunks
 
-    # 4. Docling (if enabled with timeout guard)
+    # 4. Scanned / Image-based PDF OCR
+    print(f"[OCR] PDF {file_path} appears to be scanned or image-based. Running OCR page parser...")
+    ocr_chunks = _ocr_scanned_pdf(file_path)
+    if ocr_chunks:
+        return ocr_chunks
+
+    # 5. Docling
     if getattr(settings, "ENABLE_DOCLING", False):
         chunks = _try_docling(file_path)
         if chunks:
             return chunks
 
-    # 5. PyPDF2
+    # 6. PyPDF2
     return _try_pypdf2(file_path)
+
 
 
 def process_docx(file_path: str) -> List[Dict]:
@@ -684,46 +763,52 @@ def process_txt(file_path: str) -> List[Dict]:
 
 def process_image(file_path: str) -> List[Dict]:
     """
-    Extract text, layout, and formulas from image files (.png, .jpg, .jpeg, .webp, .bmp, .tiff)
-    using Docling's builtin OCR with CUDA GPU acceleration, falling back to EasyOCR/PyTesseract.
+    Extract text, diagram labels, equations, and structure from images (.png, .jpg, .jpeg, .webp, .bmp, .tiff)
+    using EasyOCR / PyTesseract / Docling OCR engines.
     """
-    # 1. Try Docling builtin OCR engine
-    chunks = _try_docling(file_path)
-    if chunks:
-        return chunks
-
-    # 2. Fallback: EasyOCR / PyTesseract
     source_name = Path(file_path).name
-    try:
-        import torch, easyocr
-        reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())
-        results = reader.readtext(file_path, detail=0)
-        extracted_text = " ".join(results).strip()
-        if extracted_text and len(extracted_text) >= 10:
-            return _chunk_page_text(extracted_text, 1, file_path)
-    except Exception:
-        pass
 
-    try:
-        import pytesseract
-        from PIL import Image
-        img = Image.open(file_path)
-        extracted_text = pytesseract.image_to_string(img).strip()
-        if extracted_text and len(extracted_text) >= 10:
-            return _chunk_page_text(extracted_text, 1, file_path)
-    except Exception:
-        pass
+    # 1. Run EasyOCR / PyTesseract OCR extraction
+    text = _ocr_extract_text(file_path)
 
-    # Generic image placeholder fallback
+    # 2. Docling OCR fallback
+    if not text or len(text) < 10:
+        docling_chunks = _try_docling(file_path)
+        if docling_chunks:
+            return docling_chunks
+
+    if text and len(text) >= 10:
+        meta = {
+            "source": source_name,
+            "page": 1,
+            "section_title": f"Image Diagram: {source_name}",
+            "file_path": file_path,
+        }
+        formatted_text = f"# Image Document / Diagram: {source_name}\n\n[Extracted OCR Content & Diagram Labels]:\n{text}"
+        return _chunk_page_text(formatted_text, 1, file_path) or [{
+            "text": formatted_text,
+            "metadata": {
+                **meta,
+                "chunk_index": 0,
+                "chunk_type": "image_ocr",
+                "estimated_tokens": len(formatted_text) // 4,
+                "char_count": len(formatted_text),
+            }
+        }]
+
     meta = {"source": source_name, "page": 1, "file_path": file_path}
-    img_text = f"[Image Document: {source_name}]\n(Image content indexed via OCR)"
+    img_text = f"[Image Document: {source_name}]\nImage uploaded. No clear text labels found by OCR."
     return [{
         "text": img_text,
         "metadata": {
-            **meta, "chunk_index": 0, "chunk_type": "image_ocr",
-            "estimated_tokens": len(img_text)//4, "char_count": len(img_text)
+            **meta,
+            "chunk_index": 0,
+            "chunk_type": "image_ocr",
+            "estimated_tokens": len(img_text) // 4,
+            "char_count": len(img_text),
         }
     }]
+
 
 
 def process_document(file_path: str) -> List[Dict]:

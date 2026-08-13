@@ -3,29 +3,38 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  MessageSquare, Star, BookOpen, Calendar,
+  MessageSquare, Star, BookOpen, CalendarCheck,
   Flame, ArrowRight, Brain, Zap, Clock, Send,
-  Trophy, CheckCircle2, Sparkles, X
+  Trophy, CheckCircle2, Sparkles, X, Lightbulb, Code2,
+  HelpCircle, Compass, LineChart, Hash, ChevronRight,
+  Target, Layers, Dna, Atom, Globe, Book, Check, Award,
+  Bell, User, MoreHorizontal
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
+import { useSubjectStore } from '../stores/subjectStore'
 import { progressApi, chatApi } from '../services/api'
 
-const SUBJECT_COLORS = [
-  'from-indigo-500 to-violet-600',
-  'from-violet-500 to-pink-600',
-  'from-cyan-500 to-blue-600',
-  'from-emerald-500 to-cyan-600',
-  'from-orange-500 to-red-600',
-  'from-rose-500 to-pink-600',
-]
-
-const SUBJECT_ICONS = ['⚛️', '🧬', '📐', '🌍', '📜', '💻']
+import NotificationPopup from '../components/NotificationPopup'
+import ProfileModal from '../components/ProfileModal'
 
 export default function DashboardPage() {
   const { user } = useAuthStore()
   const navigate = useNavigate()
 
-  // Quick Chat state on Dashboard
+  const {
+    getSubject,
+    getSubjectProgress,
+    getCurrentTopic,
+    getTopics,
+    getRecommendation,
+  } = useSubjectStore()
+
+  const recommendation = getRecommendation()
+
+  // Profile Modal State
+  const [isProfileOpen, setIsProfileOpen] = useState(false)
+
+  // Quick Chat input state
   const [quickPrompt, setQuickPrompt] = useState('')
   const [activeModal, setActiveModal] = useState<'sessions' | 'score' | 'topics' | 'streak' | null>(null)
 
@@ -56,457 +65,436 @@ export default function DashboardPage() {
   const hour = new Date().getHours()
   const timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
-  // Submit quick prompt from dashboard
-  const handleQuickAsk = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!quickPrompt.trim()) return
-    navigate('/chat', { state: { initialPrompt: quickPrompt } })
+  const handleQuickAsk = (e?: React.FormEvent, customText?: string) => {
+    if (e) e.preventDefault()
+    const textToSend = customText || quickPrompt
+    if (!textToSend.trim()) return
+    navigate('/chat', { state: { initialPrompt: textToSend } })
   }
 
   const completedGoalsCount = goals.filter(g => g.completed).length
   const goalPct = Math.round((completedGoalsCount / goals.length) * 100)
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8">
-      {/* ─── HEADER & QUICK ASK BAR ─── */}
+    <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-8 bg-[#FAF8F3] text-[#20201D] font-sans">
+      
+      {/* User View/Edit Profile Modal */}
+      <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
+
+      {/* ─── 1. TOP HEADER & HEADER ACTIONS ─── */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col md:flex-row md:items-center justify-between gap-4"
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E7E1D8]/60 pb-5"
       >
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-            {timeGreeting}, <span className="gradient-text">{user?.username}</span> 👋
+          <h1 className="text-[28px] sm:text-[32px] leading-[36px] sm:leading-[40px] tracking-[-0.6px] font-bold text-[#20201D] flex items-center gap-2">
+            <span>{timeGreeting}, <span className="text-[#F28A45] font-bold">{user?.username || 'adwaid'}</span></span>
+            <span className="text-2xl animate-bounce">👋</span>
           </h1>
-          <p className="text-slate-500 text-sm mt-0.5">
-            Ready to learn something new today? Your AI Tutor is online.
+          <p className="text-[#6F6B63] text-sm leading-[22px] font-normal mt-1">
+            Let's continue your learning journey.
           </p>
         </div>
 
-        <button
-          onClick={() => navigate('/chat')}
-          className="btn-primary flex items-center gap-2 self-start md:self-auto shadow-lg shadow-indigo-500/20"
-        >
-          <Brain size={16} /> Ask AI Tutor
-        </button>
+        {/* Top Right Header Action Items matching reference image */}
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          {/* Ask Your Tutor Button */}
+          <button
+            onClick={() => navigate('/chat')}
+            className="btn-primary font-semibold text-sm py-2.5 px-4 rounded-full flex items-center gap-2 shadow-2xs transition-all active:scale-[0.98] cursor-pointer"
+          >
+            <Sparkles size={16} />
+            <span>Ask your tutor</span>
+          </button>
+
+          {/* Dynamic Notification Bell & Study Plan Reminders Dropdown */}
+          <NotificationPopup />
+
+          {/* User Profile Avatar Pill (Triggers Profile Modal) */}
+          <div
+            onClick={() => setIsProfileOpen(true)}
+            className="flex items-center gap-2 bg-white border border-[#E7E1D8] p-1 pr-3 rounded-full shadow-2xs cursor-pointer hover:bg-[#FFF9F2] transition-colors"
+            title="View & Edit Profile"
+          >
+            <div className="w-8 h-8 rounded-full bg-[#20201D] text-white flex items-center justify-center font-bold text-xs">
+              {user?.username?.[0]?.toUpperCase() ?? 'A'}
+            </div>
+            <ChevronRight size={14} className="text-[#969188]" />
+          </div>
+        </div>
       </motion.div>
 
-      {/* ─── INTERACTIVE STAT CARDS ─── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Stat 1: Chat Sessions */}
-        <motion.div
-          whileHover={{ y: -3, scale: 1.01 }}
-          onClick={() => setActiveModal('sessions')}
-          className="glass-card p-6 cursor-pointer relative overflow-hidden group border border-slate-200/80"
-        >
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-[#111111] text-white flex items-center justify-center shadow-sm">
-              <MessageSquare size={22} />
+      {/* ─── 2. MAIN 2-COLUMN DASHBOARD GRID (CENTRAL LEARNING + RIGHT INSIGHTS PANEL) ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        {/* ─── CENTRAL COLUMN (Lg: col-span-8) ─── */}
+        <div className="lg:col-span-8 space-y-8">
+          
+          {/* ASK YOUR TUTOR HERO LEARNING CARD (EDITORIAL BORDERLESS COMPOSITION) */}
+          <div className="bg-[#FFF9F2] border border-[#E7E1D8] rounded-3xl p-6 sm:p-8 shadow-2xs relative overflow-hidden space-y-6">
+            
+            {/* Header Content with Left Desk Lamp & Right Plant Editorial Layout */}
+            <div className="relative flex flex-col items-center text-center space-y-3 px-4 sm:px-16 pt-2">
+              
+              {/* Left Decorative Illustration: Desk Lamp & Books (Borderless & Transparent) */}
+              <div className="hidden sm:block absolute left-2 top-0 w-24 sm:w-32 h-24 sm:h-32 pointer-events-none select-none">
+                <img src="/assets/illustrations/desk_lamp.png" alt="Desk Lamp" className="w-full h-full object-contain" />
+              </div>
+
+              {/* Right Decorative Illustration: Potted Plant (Borderless & Transparent) */}
+              <div className="hidden sm:block absolute right-2 top-0 w-24 sm:w-32 h-24 sm:h-32 pointer-events-none select-none">
+                <img src="/assets/illustrations/plant.png" alt="Plant" className="w-full h-full object-contain" />
+              </div>
+
+              {/* Floating Sparkle Accents */}
+              <span className="absolute top-1 left-28 text-[#D99A32] text-xs opacity-70 animate-pulse">✨</span>
+              <span className="absolute bottom-1 right-28 text-[#F28A45] text-xs opacity-70 animate-pulse">✨</span>
+
+              <h2 className="text-[24px] sm:text-[28px] leading-[32px] sm:leading-[36px] tracking-[-0.5px] font-bold text-[#20201D] max-w-md">
+                What would you like to <span className="text-[#F28A45] font-bold">understand</span> today?
+              </h2>
+
+              <p className="text-sm leading-[22px] font-normal text-[#6F6B63] max-w-sm">
+                Ask anything. I'll explain it in the way you learn best.
+              </p>
             </div>
-            <span className="text-xs font-bold text-[#18181b] bg-[#f4f4f5] border border-[#e4e4e7] px-2.5 py-1 rounded-full group-hover:bg-[#e4e4e7] transition-colors">
-              Details →
-            </span>
-          </div>
-          <p className="text-3xl font-black text-[#111111] mb-1">{progress?.total_sessions ?? 0}</p>
-          <p className="text-sm font-bold text-slate-700">Chat Sessions</p>
-          <p className="text-xs text-slate-500 mt-0.5">Total conversations</p>
-        </motion.div>
 
-        {/* Stat 2: Avg Quiz Score */}
-        <motion.div
-          whileHover={{ y: -3, scale: 1.01 }}
-          onClick={() => setActiveModal('score')}
-          className="glass-card p-6 cursor-pointer relative overflow-hidden group border border-slate-200/80"
-        >
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-[#111111] text-white flex items-center justify-center shadow-sm">
-              <Star size={22} />
-            </div>
-            <span className="text-xs font-bold text-[#18181b] bg-[#f4f4f5] border border-[#e4e4e7] px-2.5 py-1 rounded-full group-hover:bg-[#e4e4e7] transition-colors">
-              Details →
-            </span>
-          </div>
-          <p className="text-3xl font-black text-[#111111] mb-1">{progress?.avg_score ?? 0}%</p>
-          <p className="text-sm font-bold text-slate-700">Avg Quiz Score</p>
-          <p className="text-xs text-slate-500 mt-0.5">Across all quizzes</p>
-        </motion.div>
+            {/* Question Input Field (Visually Dominant & High Contrast) */}
+            <form onSubmit={(e) => handleQuickAsk(e)} className="relative w-full max-w-2xl mx-auto pt-1 z-10">
+              <div className="bg-white border border-[#E7E1D8] rounded-full p-2 flex items-center justify-between gap-3 shadow-2xs focus-within:border-[#F28A45] focus-within:ring-2 focus-within:ring-[#F28A45]/20 transition-all">
+                <div className="flex items-center gap-2 flex-1 pl-4">
+                  <Sparkles size={16} className="text-[#F28A45] flex-shrink-0" />
+                  <input
+                    type="text"
+                    value={quickPrompt}
+                    onChange={(e) => setQuickPrompt(e.target.value)}
+                    placeholder="Ask your tutor anything..."
+                    className="w-full bg-transparent outline-none text-[#20201D] font-normal text-[15px] leading-[24px] placeholder-[#969188]"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={!quickPrompt.trim()}
+                  className="w-10 h-10 rounded-full bg-[#F28A45] hover:bg-[#DF7635] text-white flex items-center justify-center shadow-2xs disabled:opacity-40 transition-all cursor-pointer flex-shrink-0"
+                  title="Submit prompt"
+                >
+                  <ArrowRight size={18} className="text-white" />
+                </button>
+              </div>
+            </form>
 
-        {/* Stat 3: Topics Explored */}
-        <motion.div
-          whileHover={{ y: -3, scale: 1.01 }}
-          onClick={() => setActiveModal('topics')}
-          className="glass-card p-6 cursor-pointer relative overflow-hidden group border border-slate-200/80"
-        >
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-[#111111] text-white flex items-center justify-center shadow-sm">
-              <BookOpen size={22} />
-            </div>
-            <span className="text-xs font-bold text-[#18181b] bg-[#f4f4f5] border border-[#e4e4e7] px-2.5 py-1 rounded-full group-hover:bg-[#e4e4e7] transition-colors">
-              Details →
-            </span>
-          </div>
-          <p className="text-3xl font-black text-[#111111] mb-1">{progress?.topics_studied ?? 0}</p>
-          <p className="text-sm font-bold text-slate-700">Topics Explored</p>
-          <p className="text-xs text-slate-500 mt-0.5">Unique topics</p>
-        </motion.div>
-
-        {/* Stat 4: Day Streak */}
-        <motion.div
-          whileHover={{ y: -3, scale: 1.01 }}
-          onClick={() => setActiveModal('streak')}
-          className="glass-card p-6 cursor-pointer relative overflow-hidden group border border-slate-200/80"
-        >
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-[#111111] text-white flex items-center justify-center shadow-sm">
-              <Flame size={22} className="text-orange-400" />
-            </div>
-            <span className="text-xs font-bold text-[#18181b] bg-[#f4f4f5] border border-[#e4e4e7] px-2.5 py-1 rounded-full group-hover:bg-[#e4e4e7] transition-colors">
-              Details →
-            </span>
-          </div>
-          <p className="text-3xl font-black text-[#111111] mb-1">{progress?.streak_days ?? 0}</p>
-          <p className="text-sm font-bold text-slate-700">Day Streak</p>
-          <p className="text-xs text-slate-500 mt-0.5">Keep it up!</p>
-        </motion.div>
-      </div>
-
-      {/* ─── INTERACTIVE QUICK QUESTION SEARCH BAR ─── */}
-      <div className="glass-card p-4 border border-indigo-100 bg-gradient-to-r from-indigo-50/50 via-white to-violet-50/50">
-        <form onSubmit={handleQuickAsk} className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-indigo-600/20">
-            <Sparkles size={18} />
-          </div>
-          <input
-            type="text"
-            value={quickPrompt}
-            onChange={(e) => setQuickPrompt(e.target.value)}
-            placeholder="Ask AI Tutor anything... (e.g., 'Explain Quantum Entanglement simply')"
-            className="flex-1 bg-transparent text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={!quickPrompt.trim()}
-            className="btn-primary py-2 px-4 text-xs flex items-center gap-1.5 disabled:opacity-40 shadow-sm"
-          >
-            Ask AI <Send size={12} />
-          </button>
-        </form>
-      </div>
-
-      {/* ─── HERO STUDY BANNER & DAILY GOAL WIDGET ─── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Continue Learning Banner */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="lg:col-span-2 relative overflow-hidden rounded-3xl p-7 flex flex-col justify-between"
-          style={{
-            background: 'linear-gradient(135deg, rgba(99,102,241,0.1) 0%, rgba(139,92,246,0.1) 50%, rgba(34,211,238,0.05) 100%)',
-            border: '1px solid rgba(99,102,241,0.2)'
-          }}
-        >
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Zap size={15} className="text-amber-500" />
-              <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest">
-                AI-Powered GraphRAG Learning
-              </span>
-            </div>
-            <h2 className="text-2xl font-black text-slate-900 mb-1">
-              {lastSession ? `Continue: "${lastSession.session_title}"` : 'Start your study session'}
-            </h2>
-            <p className="text-slate-600 text-xs max-w-lg leading-relaxed">
-              {lastSession
-                ? `Last active ${new Date(lastSession.started_at).toLocaleDateString()} — pick up right where you stopped.`
-                : 'Your local GraphRAG AI tutor is ready. Upload PDFs, generate knowledge graphs, and test yourself with AI quizzes.'}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 mt-6">
-            {lastSession ? (
-              <button
-                onClick={() => navigate(`/chat/${lastSession.id}`)}
-                className="btn-primary flex items-center gap-2 py-2.5 px-5 text-xs shadow-md shadow-indigo-500/20"
+            {/* Quick Actions Chips */}
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <motion.button
+                whileHover={{ y: -2 }}
+                onClick={() => handleQuickAsk(undefined, "Explain the core concept of Machine Learning")}
+                className="flex items-center gap-1.5 bg-white hover:bg-[#FFF0E4] border border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shadow-2xs cursor-pointer"
               >
-                Resume Session <ArrowRight size={14} />
-              </button>
-            ) : (
+                <img src="/assets/illustrations/lightbulb.png" alt="Lightbulb" className="w-4 h-4 object-contain" />
+                <span>Explain a concept</span>
+              </motion.button>
+
+              <motion.button
+                whileHover={{ y: -2 }}
+                onClick={() => handleQuickAsk(undefined, "Can you give me a real-world example of Linear Regression")}
+                className="flex items-center gap-1.5 bg-white hover:bg-[#E3F0E5] border border-[#E7E1D8] hover:border-[#4F8A68]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shadow-2xs cursor-pointer"
+              >
+                <img src="/assets/illustrations/cs_code.png" alt="Code" className="w-4 h-4 object-contain" />
+                <span>Give me an example</span>
+              </motion.button>
+
+              <motion.button
+                whileHover={{ y: -2 }}
+                onClick={() => handleQuickAsk(undefined, "Quiz me with 3 questions on Neural Networks")}
+                className="flex items-center gap-1.5 bg-white hover:bg-[#F0ECF7] border border-[#E7E1D8] hover:border-[#A99BCB]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shadow-2xs cursor-pointer"
+              >
+                <img src="/assets/illustrations/checklist_clipboard.png" alt="Quiz" className="w-4 h-4 object-contain" />
+                <span>Quiz me</span>
+              </motion.button>
+
+              <motion.button
+                whileHover={{ y: -2 }}
+                onClick={() => handleQuickAsk(undefined, "Help me study and summarize my uploaded document")}
+                className="flex items-center gap-1.5 bg-white hover:bg-[#FFF0E4] border border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shadow-2xs cursor-pointer"
+              >
+                <img src="/assets/illustrations/open_book.png" alt="Study" className="w-4 h-4 object-contain" />
+                <span>Help me study</span>
+              </motion.button>
+            </div>
+          </div>
+
+          {/* CONTINUE LEARNING SECTION */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[20px] leading-[28px] tracking-[-0.2px] font-bold text-[#20201D]">Continue learning</h2>
               <button
                 onClick={() => navigate('/chat')}
-                className="btn-primary flex items-center gap-2 py-2.5 px-5 text-xs shadow-md shadow-indigo-500/20"
+                className="text-xs font-bold text-[#F28A45] hover:text-[#DF7635] flex items-center gap-1 transition-colors cursor-pointer"
               >
-                Start Chatting <ArrowRight size={14} />
+                <span>View all</span> <ArrowRight size={13} />
               </button>
-            )}
-            <button
-              onClick={() => navigate('/study-plan')}
-              className="btn-ghost flex items-center gap-2 py-2.5 px-4 text-xs font-bold text-slate-700"
-            >
-              <Calendar size={14} className="text-indigo-600" /> Create Study Plan
-            </button>
-          </div>
-        </motion.div>
+            </div>
 
-        {/* Interactive Daily Goals Checklist */}
-        <div className="glass-card p-6 border border-slate-200/80 flex flex-col justify-between space-y-4">
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Trophy size={16} className="text-amber-500" />
-                <h3 className="font-bold text-slate-900 text-sm">Today's Study Goal</h3>
+            <div className="bg-white border border-[#E7E1D8] rounded-3xl p-6 shadow-2xs flex flex-col md:flex-row items-center justify-between gap-6 hover:border-[#F28A45]/40 transition-all relative overflow-hidden">
+              
+              {/* Left Concept Graphic Thumbnail */}
+              <div className="w-full md:w-36 h-28 rounded-2xl bg-[#4F8A68] border border-[#35654B]/30 flex items-center justify-center text-white flex-shrink-0 relative overflow-hidden p-3 shadow-2xs">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#4F8A68] to-[#35654B] opacity-90" />
+                <div className="relative z-10 flex flex-col items-center justify-center text-center">
+                  <Brain size={32} className="text-[#E3F0E5] mb-1" />
+                  <span className="text-[10px] font-black uppercase tracking-wider text-[#E3F0E5]">ML Concept</span>
+                </div>
+                <span className="absolute bottom-2 right-2 bg-black/40 backdrop-blur-xs text-white text-[10px] font-extrabold px-2 py-0.5 rounded-md">
+                  68%
+                </span>
               </div>
-              <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-                {goalPct}%
-              </span>
-            </div>
 
-            {/* Goal Progress bar */}
-            <div className="w-full bg-slate-100 rounded-full h-1.5 mb-4">
-              <motion.div
-                className="bg-indigo-600 h-1.5 rounded-full"
-                animate={{ width: `${goalPct}%` }}
-                transition={{ duration: 0.4 }}
-              />
-            </div>
-
-            {/* Goals List */}
-            <div className="space-y-2">
-              {goals.map((g) => (
-                <button
-                  key={g.id}
-                  onClick={() => toggleGoal(g.id)}
-                  className={`w-full p-2.5 rounded-xl border text-left transition-all flex items-center gap-2.5 cursor-pointer text-xs ${
-                    g.completed
-                      ? 'bg-emerald-50/50 border-emerald-200 text-emerald-900 font-medium line-through'
-                      : 'bg-slate-50/60 border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <CheckCircle2
-                    size={16}
-                    className={g.completed ? 'text-emerald-600 flex-shrink-0' : 'text-slate-300 flex-shrink-0'}
-                  />
-                  <span>{g.text}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <p className="text-[10px] text-slate-400 text-center font-medium">Click items to complete today's goals</p>
-        </div>
-      </div>
-
-      {/* ─── RECENT SESSIONS ─── */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-slate-900">Recent Sessions</h2>
-          <button
-            onClick={() => navigate('/chat')}
-            className="text-xs text-indigo-600 hover:text-indigo-700 font-bold transition-colors"
-          >
-            View all →
-          </button>
-        </div>
-
-        {recentSessions.length === 0 ? (
-          <div className="glass-card p-8 text-center border border-slate-200/70">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center mx-auto mb-3 text-indigo-600 border border-indigo-100">
-              <MessageSquare size={24} />
-            </div>
-            <p className="text-slate-800 font-bold mb-1">No sessions yet</p>
-            <p className="text-slate-500 text-xs mb-4">Start a conversation with your AI tutor</p>
-            <button onClick={() => navigate('/chat')} className="btn-primary text-xs">
-              Start Learning
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {recentSessions.map((session: any, i: number) => (
-              <motion.button
-                key={session.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.07 }}
-                onClick={() => navigate(`/chat/${session.id}`)}
-                className="glass-card p-4 text-left group border border-slate-200/80 hover:border-indigo-300 transition-all cursor-pointer"
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className={`w-10 h-10 rounded-xl bg-gradient-to-br ${
-                      SUBJECT_COLORS[i % SUBJECT_COLORS.length]
-                    } flex items-center justify-center text-lg flex-shrink-0 shadow-md`}
-                  >
-                    {SUBJECT_ICONS[i % SUBJECT_ICONS.length]}
+              {/* Middle Course Information */}
+              <div className="space-y-2 flex-1 min-w-0 z-10">
+                <p className="text-[11px] font-bold text-[#6F6B63]">Introduction to Machine Learning</p>
+                <h3 className="text-xl font-black text-[#20201D] truncate">Supervised Learning</h3>
+                <p className="text-xs text-[#969188] font-bold">Linear Regression</p>
+                
+                {/* Progress Bar & Percentage */}
+                <div className="flex items-center gap-3 pt-1">
+                  <div className="flex-1 bg-[#F4EFE7] rounded-full h-1.5 overflow-hidden">
+                    <div className="bg-[#F28A45] h-full rounded-full w-[68%]" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-slate-900 text-sm truncate group-hover:text-indigo-600 transition-colors">
-                      {session.session_title}
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <Clock size={11} className="text-slate-400" />
-                      <span className="text-[11px] text-slate-400 font-medium">
-                        {new Date(session.started_at).toLocaleDateString()}
-                      </span>
+                  <span className="text-xs font-black text-[#20201D]">68%</span>
+                </div>
+
+                <p className="text-xs text-[#6F6B63] font-semibold leading-relaxed line-clamp-1 pt-1">
+                  You were learning how a model learns the relationship between inputs and outputs.
+                </p>
+
+                <div className="pt-2">
+                  <button
+                    onClick={() => navigate(lastSession ? `/chat/${lastSession.id}` : '/chat', { state: lastSession ? {} : { initialPrompt: 'Continue Supervised Learning lesson on Linear Regression' } })}
+                    className="btn-primary text-xs font-black py-2.5 px-5 rounded-2xl flex items-center gap-2 shadow-2xs cursor-pointer whitespace-nowrap"
+                  >
+                    <span>Continue learning</span>
+                    <ArrowRight size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Friendly AI Robot Working on Laptop (Borderless Illustration) */}
+              <div className="w-28 sm:w-36 h-28 sm:h-36 flex-shrink-0 relative select-none pointer-events-none">
+                <img src="/assets/illustrations/ai_tutor_laptop.png" alt="AI Robot Laptop" className="w-full h-full object-contain filter drop-shadow-xs" />
+              </div>
+
+              {/* Top Right Context Menu (...) */}
+              <button className="absolute top-5 right-5 text-[#969188] hover:text-[#20201D] transition-colors p-1 cursor-pointer">
+                <MoreHorizontal size={18} />
+              </button>
+
+            </div>
+          </div>
+
+          {/* YOUR SUBJECTS SECTION (DYNAMIC SINGLE SOURCE OF TRUTH) */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-black text-[#20201D]">Your subjects</h2>
+              <button
+                onClick={() => navigate('/subjects')}
+                className="text-xs font-black text-[#F28A45] hover:text-[#DF7635] flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <span>View all</span> <ChevronRight size={14} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {['6', '3', '1'].map((subjectId) => {
+                const subject = getSubject(subjectId)
+                if (!subject) return null
+                const progressVal = getSubjectProgress(subjectId)
+                const subjectTopics = getTopics(subjectId)
+                const completedCount = subjectTopics.filter((t) => t.status === 'COMPLETED').length
+                const currentTopic = getCurrentTopic(subjectId)
+
+                return (
+                  <div
+                    key={subject.id}
+                    onClick={() => navigate(`/subjects/${subject.id}`)}
+                    className="bg-white border border-[#E7E1D8] hover:border-[#F28A45]/50 rounded-3xl p-5 shadow-2xs transition-all cursor-pointer group flex flex-col justify-between space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-[#FFF0E4] border border-[#F28A45]/30 flex items-center justify-center p-1.5">
+                          <img src={subject.illustration} alt={subject.name} className="w-full h-full object-contain" />
+                        </div>
+                        <h4 className="text-xs font-black text-[#20201D] group-hover:text-[#F28A45] transition-colors">
+                          {subject.name}
+                        </h4>
+                      </div>
+                    </div>
+
+                    {currentTopic && (
+                      <p className="text-[11px] font-semibold text-[#6F6B63] truncate">
+                        Next: <span className="text-[#20201D] font-bold">{currentTopic.title}</span>
+                      </p>
+                    )}
+
+                    <div className="space-y-1.5 pt-1">
+                      <div className="w-full bg-[#F4EFE7] rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className="bg-[#F28A45] h-full rounded-full transition-all duration-300"
+                          style={{ width: `${progressVal}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] font-bold text-[#969188]">
+                        <span>{completedCount} / {subjectTopics.length} topics completed</span>
+                        <span className="text-[#20201D] font-black">{progressVal}%</span>
+                      </div>
                     </div>
                   </div>
-                  <ArrowRight
-                    size={16}
-                    className="text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all mt-1"
-                  />
-                </div>
-              </motion.button>
-            ))}
+                )
+              })}
+            </div>
           </div>
-        )}
-      </div>
 
-      {/* ─── AI STUDY TOOLS & ROADMAP ─── */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-slate-900">AI Study Roadmap & Tools</h2>
-          <button
-            onClick={() => navigate('/study-plan')}
-            className="text-xs text-indigo-600 hover:text-indigo-700 font-bold transition-colors"
-          >
-            View Study Plans →
-          </button>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <motion.button
-            whileHover={{ y: -3, scale: 1.02 }}
-            onClick={() => navigate('/study-plan')}
-            className="glass-card p-5 text-left border border-slate-200/80 hover:border-indigo-300 transition-all cursor-pointer flex items-center gap-3.5"
-          >
-            <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-lg border border-indigo-100 flex-shrink-0">
-              📅
+          {/* TUTOR REMEMBERS SECTION (EDITORIAL BORDERLESS PLANT ILLUSTRATION) */}
+          <div className="bg-[#FFF9F2] border border-[#F28A45]/30 rounded-3xl p-5 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4 relative overflow-hidden">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 flex-shrink-0 select-none">
+                <img src="/assets/illustrations/plant.png" alt="Plant" className="w-full h-full object-contain filter drop-shadow-xs" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-[#20201D]">Your tutor remembers</h4>
+                <p className="text-xs text-[#6F6B63] font-semibold leading-relaxed mt-0.5">
+                  You already understand linear regression well, but classification is still a bit unclear. Let's strengthen it! 💪
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-bold text-slate-900">AI Study Roadmap</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">Custom day-by-day exam schedule</p>
-            </div>
-          </motion.button>
-
-          <motion.button
-            whileHover={{ y: -3, scale: 1.02 }}
-            onClick={() => navigate('/chat')}
-            className="glass-card p-5 text-left border border-slate-200/80 hover:border-indigo-300 transition-all cursor-pointer flex items-center gap-3.5"
-          >
-            <div className="w-11 h-11 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center font-bold text-lg border border-violet-100 flex-shrink-0">
-              🧠
-            </div>
-            <div>
-              <p className="text-xs font-bold text-slate-900">GraphRAG AI Tutor</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">Upload PDFs & ask graph-aware questions</p>
-            </div>
-          </motion.button>
-
-          <motion.button
-            whileHover={{ y: -3, scale: 1.02 }}
-            onClick={() => navigate('/progress')}
-            className="glass-card p-5 text-left border border-slate-200/80 hover:border-indigo-300 transition-all cursor-pointer flex items-center gap-3.5"
-          >
-            <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg border border-emerald-100 flex-shrink-0">
-              📈
-            </div>
-            <div>
-              <p className="text-xs font-bold text-slate-900">Analytics & Mastery</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">Quiz scores, streaks & concept progress</p>
-            </div>
-          </motion.button>
-        </div>
-      </div>
-
-      {/* ─── STAT DETAILS MODAL ─── */}
-      <AnimatePresence>
-        {activeModal && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-slate-100 relative"
+            <button
+              onClick={() => navigate('/chat', { state: { initialPrompt: 'Review Classification concepts and reinforce understanding.' } })}
+              className="btn-orange-outline text-xs whitespace-nowrap self-stretch sm:self-auto cursor-pointer"
             >
-              <button
-                onClick={() => setActiveModal(null)}
-                className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-50"
-              >
-                <X size={18} />
-              </button>
-
-              {activeModal === 'sessions' && (
-                <div className="space-y-4 text-center py-2">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
-                    <MessageSquare size={24} />
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900">Chat Sessions ({progress?.total_sessions ?? 0})</h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    You have participated in {progress?.total_sessions ?? 0} learning sessions powered by Ollama LLM and GraphRAG.
-                  </p>
-                  <button
-                    onClick={() => { setActiveModal(null); navigate('/chat') }}
-                    className="btn-primary w-full py-2.5 text-xs"
-                  >
-                    Open AI Tutor Chat
-                  </button>
-                </div>
-              )}
-
-              {activeModal === 'score' && (
-                <div className="space-y-4 text-center py-2">
-                  <div className="w-12 h-12 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center mx-auto">
-                    <Star size={24} />
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900">Average Score: {progress?.avg_score ?? 0}%</h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Calculated from all stored quiz attempts. Take more quizzes to improve your mastery score!
-                  </p>
-                  <button
-                    onClick={() => { setActiveModal(null); navigate('/progress') }}
-                    className="btn-primary w-full py-2.5 text-xs"
-                  >
-                    View Analytics Details
-                  </button>
-                </div>
-              )}
-
-              {activeModal === 'topics' && (
-                <div className="space-y-4 text-center py-2">
-                  <div className="w-12 h-12 rounded-2xl bg-cyan-50 text-cyan-600 flex items-center justify-center mx-auto">
-                    <BookOpen size={24} />
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900">Topics Explored ({progress?.topics_studied ?? 0})</h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Unique topic areas indexed from your documents and study chats.
-                  </p>
-                  <button
-                    onClick={() => { setActiveModal(null); navigate('/subjects') }}
-                    className="btn-primary w-full py-2.5 text-xs"
-                  >
-                    Browse All Subjects
-                  </button>
-                </div>
-              )}
-
-              {activeModal === 'streak' && (
-                <div className="space-y-4 text-center py-2">
-                  <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center mx-auto">
-                    <Flame size={24} className="animate-bounce" />
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900">{progress?.streak_days ?? 0} Day Learning Streak 🔥</h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Study every day to maintain your streak and earn learning master badges!
-                  </p>
-                  <button
-                    onClick={() => { setActiveModal(null); navigate('/progress') }}
-                    className="btn-primary w-full py-2.5 text-xs"
-                  >
-                    View Activity Calendar
-                  </button>
-                </div>
-              )}
-            </motion.div>
+              Review Classification &rarr;
+            </button>
           </div>
-        )}
-      </AnimatePresence>
+
+        </div>
+
+        {/* ─── RIGHT INSIGHTS PANEL (Lg: col-span-4, ~300-330px) ─── */}
+        <div className="lg:col-span-4 space-y-6">
+          
+          {/* 1. YOUR STUDY GOAL CARD */}
+          <div className="bg-white border border-[#E7E1D8] rounded-3xl p-6 shadow-2xs space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <img src="/assets/illustrations/target_arrow.png" alt="Target Goal" className="w-5 h-5 object-contain" />
+                <h3 className="font-extrabold text-[#20201D] text-xs">Your study goal</h3>
+              </div>
+              <button onClick={() => navigate('/study-plan')} className="text-xs font-bold text-[#4F8A68] hover:underline cursor-pointer">
+                Change
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-black text-[#20201D]">Study 5 days this week</p>
+              
+              {/* 7 Day Indicators M T W T F S S */}
+              <div className="flex items-center justify-between pt-1">
+                {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, idx) => (
+                  <div key={idx} className="flex flex-col items-center gap-1">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${
+                      idx < 5 ? 'bg-[#4F8A68] text-white' : 'border border-[#E7E1D8] text-[#969188]'
+                    }`}>
+                      {idx < 5 ? '✓' : ''}
+                    </div>
+                    <span className="text-[10px] font-extrabold text-[#969188]">{day}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Weekly Goal Progress bar */}
+            <div className="space-y-1.5 pt-2">
+              <div className="flex items-center justify-between text-xs font-bold">
+                <span className="text-[#6F6B63]">Progress</span>
+                <span className="text-[#20201D] font-black">80%</span>
+              </div>
+              <div className="w-full bg-[#F4EFE7] rounded-full h-2 overflow-hidden">
+                <motion.div
+                  className="bg-[#4F8A68] h-full rounded-full"
+                  animate={{ width: `80%` }}
+                  transition={{ duration: 0.4 }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 2. TUTOR SUGGESTS CARD (MATCHING REFERENCE IMAGE 3) */}
+          <div className="bg-[#FFF9F2] border border-[#F28A45]/30 rounded-3xl p-6 shadow-2xs space-y-4 relative overflow-hidden">
+            <div className="flex items-center gap-2">
+              <img src="/assets/illustrations/lightbulb.png" alt="Lightbulb" className="w-5 h-5 object-contain" />
+              <h3 className="font-extrabold text-[#20201D] text-xs">Tutor suggests</h3>
+            </div>
+
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-xs text-[#6F6B63] leading-relaxed font-semibold flex-1">
+                Review gradient descent before moving on to neural networks. It will strengthen your foundation.
+              </p>
+              
+              {/* Friendly AI Robot Reading Book (Borderless Graphic) */}
+              <div className="w-20 h-20 flex-shrink-0 relative select-none pointer-events-none -mt-4">
+                <img src="/assets/illustrations/ai_tutor_thinking.png" alt="AI Reading" className="w-full h-full object-contain filter drop-shadow-xs" />
+                <span className="absolute top-0 right-0 text-[#F28A45] text-[10px] animate-pulse">✨</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => navigate('/chat', { state: { initialPrompt: 'Review Gradient Descent before moving on to neural networks.' } })}
+              className="btn-orange-outline w-full text-xs font-bold py-2.5 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-2xs cursor-pointer"
+            >
+              <span>Start suggested lesson &rarr;</span>
+            </button>
+          </div>
+
+          {/* 3. YOUR LEARNING AT A GLANCE CARD (WITH DONUT CHART GRAPHIC) */}
+          <div className="bg-white border border-[#E7E1D8] rounded-3xl p-6 shadow-2xs space-y-4">
+            <div className="flex items-center gap-2 border-b border-[#E7E1D8] pb-3">
+              <LineChart size={16} className="text-[#F28A45]" />
+              <h3 className="font-extrabold text-[#20201D] text-xs">Your learning at a glance</h3>
+            </div>
+
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-3 text-xs font-semibold flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[#6F6B63]">Sessions completed</span>
+                  <span className="text-[#4F8A68] font-black">{progress?.total_sessions ?? 0}</span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[#6F6B63]">Active subjects</span>
+                  <span className="text-[#20201D] font-black">{getSubject('6')?.isEnrolled ? 3 : 1}</span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[#6F6B63]">Topics mastered</span>
+                  <span className="text-[#20201D] font-black">{progress?.topics_studied ?? 0}</span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[#6F6B63]">Current streak</span>
+                  <span className="text-[#F28A45] font-black">{progress?.streak_days ?? 0} {progress?.streak_days === 1 ? 'day' : 'days'}</span>
+                </div>
+              </div>
+
+              {/* Analytics Donut Graphic */}
+              <div className="w-20 h-20 flex-shrink-0 select-none pointer-events-none">
+                <img src="/assets/illustrations/donut_80_percent.png" alt="Donut Chart" className="w-full h-full object-contain filter drop-shadow-xs" />
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
     </div>
   )
 }
+

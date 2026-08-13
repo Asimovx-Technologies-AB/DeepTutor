@@ -179,6 +179,18 @@ class GraphStore:
             ],
         }
 
+    def delete_graph(self, topic_id: str) -> None:
+        """Delete graph from memory cache and disk."""
+        if topic_id in self._graphs:
+            del self._graphs[topic_id]
+        path = self._graph_path(topic_id)
+        if path.exists():
+            try:
+                path.unlink()
+            except Exception:
+                pass
+
 
 # Singleton
 graph_store = GraphStore()
+

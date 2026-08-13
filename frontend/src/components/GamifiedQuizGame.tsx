@@ -32,7 +32,7 @@ interface Quiz {
 }
 
 interface Props {
-  sessionId: string
+  sessionId?: string
   isOpen: boolean
   onClose: () => void
 }
@@ -178,12 +178,12 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-2xl shadow-2xl border border-slate-200 flex flex-col relative max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-2xl shadow-2xl border border-[#E7E1D8] flex flex-col relative max-h-[90vh] overflow-y-auto"
       >
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 transition-colors z-20"
+          className="absolute top-5 right-5 p-2 text-[#969188] hover:text-[#20201D] rounded-full hover:bg-[#FAF8F3] transition-colors z-20 cursor-pointer"
         >
           <X size={20} />
         </button>
@@ -191,19 +191,19 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
         {/* ─── SETUP LAYER SCREEN ─── */}
         {setupStep ? (
           <div className="space-y-6 text-left">
-            <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-              <div className="w-10 h-10 rounded-2xl bg-[#004789] text-white flex items-center justify-center shadow-md">
+            <div className="flex items-center gap-3 border-b border-[#E7E1D8] pb-4">
+              <div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] border border-[#F28A45]/30 text-[#F28A45] flex items-center justify-center shadow-2xs">
                 <Trophy size={20} />
               </div>
               <div>
-                <h2 className="text-xl font-black text-slate-900">Interactive AI Quiz</h2>
-                <p className="text-xs text-slate-500 font-medium">Configure scope & difficulty from your materials</p>
+                <h2 className="text-xl font-black text-[#20201D]">Interactive AI Quiz</h2>
+                <p className="text-xs text-[#6F6B63] font-medium">Configure scope & difficulty from your materials</p>
               </div>
             </div>
 
             {/* Scope Selection */}
             <div>
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+              <label className="text-xs font-black text-[#969188] uppercase tracking-wider block mb-2">
                 1. Select Quiz Scope
               </label>
               <div className="grid grid-cols-2 gap-3">
@@ -212,14 +212,14 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
                   onClick={() => setScopeMode('all')}
                   className={`p-4 rounded-2xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
                     scopeMode === 'all'
-                      ? 'border-[#004789] bg-blue-50/50 text-[#004789] shadow-sm font-bold'
-                      : 'border-slate-200 hover:border-blue-300 text-slate-700 hover:bg-slate-50'
+                      ? 'border-[#F28A45] bg-[#FFF0E4]/60 text-[#F28A45] shadow-2xs font-black'
+                      : 'border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] hover:bg-[#FFF9F2]'
                   }`}
                 >
-                  <Layers size={20} className={scopeMode === 'all' ? 'text-[#004789]' : 'text-slate-400'} />
+                  <Layers size={20} className={scopeMode === 'all' ? 'text-[#F28A45]' : 'text-[#969188]'} />
                   <div>
-                    <p className="text-sm font-extrabold">Entire Document</p>
-                    <p className="text-xs text-slate-500 mt-0.5">All topics combined</p>
+                    <p className="text-sm font-black">Entire Document</p>
+                    <p className="text-xs text-[#6F6B63] mt-0.5 font-medium">All topics combined</p>
                   </div>
                 </button>
 
@@ -228,14 +228,14 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
                   onClick={() => setScopeMode('specific')}
                   className={`p-4 rounded-2xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
                     scopeMode === 'specific'
-                      ? 'border-[#004789] bg-blue-50/50 text-[#004789] shadow-sm font-bold'
-                      : 'border-slate-200 hover:border-blue-300 text-slate-700 hover:bg-slate-50'
+                      ? 'border-[#F28A45] bg-[#FFF0E4]/60 text-[#F28A45] shadow-2xs font-black'
+                      : 'border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] hover:bg-[#FFF9F2]'
                   }`}
                 >
-                  <Target size={20} className={scopeMode === 'specific' ? 'text-[#004789]' : 'text-slate-400'} />
+                  <Target size={20} className={scopeMode === 'specific' ? 'text-[#F28A45]' : 'text-[#969188]'} />
                   <div>
-                    <p className="text-sm font-extrabold">Specific Topic</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Focus on 1 concept</p>
+                    <p className="text-sm font-black">Specific Topic</p>
+                    <p className="text-xs text-[#6F6B63] mt-0.5 font-medium">Focus on 1 concept</p>
                   </div>
                 </button>
               </div>
@@ -244,7 +244,7 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
             {/* Specific Topic Autocomplete */}
             {scopeMode === 'specific' && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                <label className="text-xs font-black text-[#969188] uppercase tracking-wider block">
                   2. Choose Specific Concept
                 </label>
                 {availableTopics.length > 0 && (
@@ -254,10 +254,10 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
                         key={topic}
                         type="button"
                         onClick={() => { setSelectedTopic(topic); setCustomTopic(topic); }}
-                        className={`text-xs px-3 py-2 rounded-xl border transition-all cursor-pointer ${
+                        className={`text-xs px-3 py-2 rounded-xl border transition-all cursor-pointer font-bold ${
                           customTopic === topic
-                            ? 'bg-[#004789] text-white border-[#004789] font-bold shadow-sm'
-                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                            ? 'bg-[#F28A45] text-white border-[#F28A45] shadow-2xs'
+                            : 'bg-[#FAF8F3] text-[#20201D] border-[#E7E1D8] hover:bg-[#F4EFE7]'
                         }`}
                       >
                         {topic}
@@ -270,14 +270,14 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
                   value={customTopic}
                   onChange={(e) => setCustomTopic(e.target.value)}
                   placeholder="Or type topic name..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-semibold text-slate-800 outline-none focus:bg-white focus:border-[#004789]"
+                  className="w-full bg-[#FAF8F3] border border-[#E7E1D8] rounded-xl px-4 py-3 text-xs font-bold text-[#20201D] outline-none focus:bg-white focus:border-[#F28A45]"
                 />
               </motion.div>
             )}
 
             {/* Difficulty selection */}
             <div>
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+              <label className="text-xs font-black text-[#969188] uppercase tracking-wider block mb-2">
                 Difficulty Level
               </label>
               <div className="flex gap-3">
@@ -286,10 +286,10 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
                     key={d}
                     type="button"
                     onClick={() => setDifficulty(d)}
-                    className={`flex-1 py-2.5 rounded-xl text-xs font-extrabold capitalize border transition-all cursor-pointer ${
+                    className={`flex-1 py-2.5 rounded-xl text-xs font-black capitalize border transition-all cursor-pointer ${
                       difficulty === d
-                        ? 'bg-[#004789] text-white border-[#004789] shadow-md'
-                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                        ? 'bg-[#F28A45] text-white border-[#F28A45] shadow-2xs'
+                        : 'bg-[#FAF8F3] text-[#6F6B63] border-[#E7E1D8] hover:bg-[#F4EFE7]'
                     }`}
                   >
                     {d}
@@ -300,7 +300,7 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
 
             {/* Number of Questions selection */}
             <div>
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+              <label className="text-xs font-black text-[#969188] uppercase tracking-wider block mb-2">
                 Number of Questions
               </label>
               <div className="flex gap-2">
@@ -309,10 +309,10 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
                     key={num}
                     type="button"
                     onClick={() => setNumQuestions(num)}
-                    className={`flex-1 py-2 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
+                    className={`flex-1 py-2 rounded-xl text-xs font-black border transition-all cursor-pointer ${
                       numQuestions === num
-                        ? 'bg-[#004789] text-white border-[#004789] shadow-md'
-                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                        ? 'bg-[#F28A45] text-white border-[#F28A45] shadow-2xs'
+                        : 'bg-[#FAF8F3] text-[#6F6B63] border-[#E7E1D8] hover:bg-[#F4EFE7]'
                     }`}
                   >
                     {num} Qs
@@ -325,7 +325,7 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
             <button
               onClick={triggerGenerate}
               disabled={generating}
-              className="w-full bg-[#004789] hover:bg-[#003566] text-white font-bold py-3.5 px-6 rounded-2xl text-sm shadow-lg shadow-blue-900/20 transition-all flex items-center justify-center gap-2"
+              className="btn-primary w-full py-3.5 px-6 font-black text-sm shadow-2xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {generating ? (
                 <>
@@ -343,39 +343,39 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
         ) : gameWon ? (
           /* ─── QUIZ COMPLETED SUMMARY SCREEN ─── */
           <div className="py-8 text-center space-y-6">
-            <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto shadow-xl">
+            <div className="w-20 h-20 bg-[#FFF0E4] border border-[#F28A45]/30 text-[#F28A45] rounded-full flex items-center justify-center mx-auto shadow-xs">
               <Trophy size={40} />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-slate-900">Quiz Completed!</h2>
-              <p className="text-sm font-semibold text-slate-500 mt-1">
-                You scored <span className="text-[#004789] font-bold">{correctCount}</span> out of <span className="font-bold">{totalQuestions}</span> questions correctly ({Math.round((correctCount / totalQuestions) * 100)}%)
+              <h2 className="text-2xl font-black text-[#20201D]">Quiz Completed!</h2>
+              <p className="text-sm font-semibold text-[#6F6B63] mt-1">
+                You scored <span className="text-[#F28A45] font-black">{correctCount}</span> out of <span className="font-black text-[#20201D]">{totalQuestions}</span> questions correctly ({Math.round((correctCount / totalQuestions) * 100)}%)
               </p>
             </div>
             <div className="flex gap-4 max-w-sm mx-auto pt-4">
               <button
                 onClick={() => setSetupStep(true)}
-                className="w-full bg-[#004789] hover:bg-[#003566] text-white font-bold py-3 px-6 rounded-full text-xs shadow-md transition-all"
+                className="btn-primary w-full py-3 px-6 text-xs font-black shadow-2xs cursor-pointer"
               >
                 Take Another Quiz
               </button>
             </div>
           </div>
         ) : (
-          /* ─── ACTIVE QUIZ SCREEN (MATCHING USER REFERENCE DESIGN) ─── */
+          /* ─── ACTIVE QUIZ SCREEN ─── */
           <div className="space-y-6">
             
-            {/* QUIZ PROGRESS (0/2) Header & Progress Bar */}
+            {/* QUIZ PROGRESS Header & Progress Bar */}
             <div className="text-center">
-              <h3 className="text-xs font-black uppercase tracking-widest text-slate-900 mb-2">
+              <h3 className="text-xs font-black uppercase tracking-widest text-[#20201D] mb-2">
                 QUIZ PROGRESS ({displayQNum}/{totalQuestions})
               </h3>
-              <div className="w-full max-w-lg mx-auto border border-blue-300/80 rounded-full h-7 bg-white relative p-1 overflow-hidden shadow-inner flex items-center justify-center">
+              <div className="w-full max-w-lg mx-auto border border-[#E7E1D8] rounded-full h-7 bg-[#F4EFE7] relative p-1 overflow-hidden flex items-center justify-center">
                 <div
-                  className="bg-[#004789] h-full rounded-full transition-all duration-500 absolute left-1 top-1 bottom-1"
+                  className="bg-[#F28A45] h-full rounded-full transition-all duration-500 absolute left-1 top-1 bottom-1"
                   style={{ width: `calc(${progressPct}% - 8px)` }}
                 />
-                <span className="relative z-10 text-[11px] font-bold text-slate-600">
+                <span className="relative z-10 text-[11px] font-black text-[#20201D]">
                   {progressPct}%
                 </span>
               </div>
@@ -383,7 +383,7 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
 
             {/* Question Text */}
             <div className="text-left mt-6">
-              <h2 className="text-lg sm:text-xl font-bold text-slate-900 leading-snug">
+              <h2 className="text-lg sm:text-xl font-black text-[#20201D] leading-snug">
                 Question: {currentQuestion?.question_text}
               </h2>
             </div>
@@ -396,29 +396,29 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
                 const isCorrect = label === currentQuestion.correct_answer
 
                 let cardStyle =
-                  'bg-[#f8fafc] border-slate-200/90 text-slate-800 hover:border-blue-400 hover:bg-[#f0f7ff]'
-                let circleStyle = 'border-slate-300 group-hover:border-blue-500'
+                  'bg-[#FAF8F3] border-[#E7E1D8] text-[#20201D] hover:border-[#F28A45]/40 hover:bg-[#FFF9F2]'
+                let circleStyle = 'border-[#E7E1D8] group-hover:border-[#F28A45]'
 
                 if (isAnswered) {
                   if (isCorrect) {
-                    cardStyle = 'bg-emerald-50 border-emerald-500 text-emerald-900 font-bold'
-                    circleStyle = 'border-emerald-600 bg-emerald-600 text-white'
+                    cardStyle = 'bg-[#E3F0E5] border-[#4F8A68] text-[#35654B] font-black'
+                    circleStyle = 'border-[#4F8A68] bg-[#4F8A68] text-white'
                   } else if (isSelected) {
-                    cardStyle = 'bg-rose-50 border-rose-500 text-rose-900 font-bold'
-                    circleStyle = 'border-rose-600 bg-rose-600 text-white'
+                    cardStyle = 'bg-[#FBE7E4] border-[#C85C52] text-[#C85C52] font-black'
+                    circleStyle = 'border-[#C85C52] bg-[#C85C52] text-white'
                   } else {
-                    cardStyle = 'opacity-50 bg-slate-50 border-slate-100 text-slate-400'
+                    cardStyle = 'opacity-50 bg-[#FAF8F3] border-[#E7E1D8] text-[#969188]'
                   }
                 } else if (isSelected) {
-                  cardStyle = 'bg-blue-50/70 border-[#004789] text-[#004789] font-bold shadow-sm'
-                  circleStyle = 'border-[#004789] bg-[#004789] text-white'
+                  cardStyle = 'bg-[#FFF0E4] border-[#F28A45] text-[#F28A45] font-black shadow-2xs'
+                  circleStyle = 'border-[#F28A45] bg-[#F28A45] text-white'
                 }
 
                 return (
                   <div
                     key={label}
                     onClick={() => handleOptionSelect(label)}
-                    className={`w-full border rounded-2xl p-4 text-left font-medium text-sm flex items-center justify-between transition-all shadow-sm group cursor-pointer ${cardStyle}`}
+                    className={`w-full border rounded-2xl p-4 text-left font-bold text-sm flex items-center justify-between transition-all shadow-2xs group cursor-pointer ${cardStyle}`}
                   >
                     <span>{label}) {option}</span>
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${circleStyle}`}>
@@ -434,9 +434,9 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
               <motion.div
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-4 bg-blue-50/60 border border-blue-200 rounded-2xl text-xs text-slate-800 text-left leading-relaxed"
+                className="p-4 bg-[#FFF0E4] border border-[#F28A45]/30 rounded-2xl text-xs text-[#20201D] text-left leading-relaxed font-medium"
               >
-                <span className="font-bold text-[#004789] flex items-center gap-1.5 mb-1">
+                <span className="font-black text-[#F28A45] flex items-center gap-1.5 mb-1">
                   <Brain size={14} /> Explanation:
                 </span>
                 <p>{currentQuestion?.explanation}</p>
@@ -449,14 +449,14 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
                 <button
                   onClick={handleChooseAnswer}
                   disabled={!selectedOpt}
-                  className="bg-[#004789] hover:bg-[#003566] text-white font-bold px-8 py-3 rounded-full text-sm shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-[0.98]"
+                  className="btn-primary font-black px-8 py-3 rounded-full text-sm shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
                   Choose answer
                 </button>
               ) : (
                 <button
                   onClick={handleNext}
-                  className="bg-[#004789] hover:bg-[#003566] text-white font-bold px-8 py-3 rounded-full text-sm shadow-md transition-all active:scale-[0.98] flex items-center gap-2"
+                  className="btn-primary font-black px-8 py-3 rounded-full text-sm shadow-2xs flex items-center gap-2 cursor-pointer"
                 >
                   <span>{currentQIndex === totalQuestions - 1 ? 'Finish Quiz' : 'Next Question'}</span>
                   <ArrowRight size={16} />

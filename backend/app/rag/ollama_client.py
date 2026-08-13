@@ -66,11 +66,16 @@ class OllamaClient:
             return target
 
         # Fallback candidates order
-        for fallback in ["llama3.1", "llama3", "llama3.2", "mistral", "gemma2", "qwen2.5", "deepseek-r1"]:
+        for fallback in ["llama3.1", "llama3", "llama3.2", "mistral", "gemma2", "qwen2.5", "deepseek-r1", "phi3", "llama2"]:
             if fallback in available or f"{fallback}:latest" in available:
                 return fallback
 
+        # If no known candidate matched, use the first model installed in Ollama
+        if available:
+            return available[0]
+
         return target
+
 
     async def chat(
         self,

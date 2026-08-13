@@ -52,28 +52,28 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f3f3f7] flex items-center justify-center p-4 sm:p-8 font-sans">
+    <div className="min-h-screen bg-[#FAF8F3] flex items-center justify-center p-4 sm:p-8 font-sans">
       
       {/* Outer Card Frame */}
-      <div className="w-full max-w-5xl bg-[#f8f8fb] rounded-[36px] border border-slate-200/80 shadow-2xl p-6 sm:p-10 flex flex-col justify-between min-h-[640px] relative overflow-hidden">
+      <div className="w-full max-w-5xl bg-[#F4EFE7] rounded-[36px] border border-[#E7E1D8] shadow-2xs p-6 sm:p-10 flex flex-col justify-between min-h-[640px] relative overflow-hidden">
         
         {/* Top Header Navigation */}
         <header className="flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-indigo-700 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30">
+            <div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] border border-[#F28A45]/30 flex items-center justify-center text-[#F28A45] shadow-2xs">
               <Brain size={22} />
             </div>
             <div>
-              <span className="font-extrabold text-slate-900 text-xl tracking-tight">DeepTutor</span>
-              <span className="block text-[10px] font-extrabold text-indigo-600 uppercase tracking-widest">AI Learning Engine</span>
+              <span className="font-black text-[#20201D] text-xl tracking-tight">DeepTutor</span>
+              <span className="block text-[10px] font-black text-[#F28A45] uppercase tracking-widest">AI Learning Engine</span>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <button className="w-10 h-10 rounded-full border border-slate-200 bg-white text-slate-600 hover:text-indigo-600 hover:border-indigo-200 flex items-center justify-center transition-all shadow-sm">
+            <button className="w-10 h-10 rounded-full border border-[#E7E1D8] bg-white text-[#6F6B63] hover:text-[#F28A45] hover:border-[#F28A45]/30 flex items-center justify-center transition-all shadow-2xs cursor-pointer">
               <Globe size={18} />
             </button>
-            <button className="w-10 h-10 rounded-full bg-slate-900 text-white hover:bg-black flex items-center justify-center transition-all shadow-md">
+            <button className="w-10 h-10 rounded-full bg-[#20201D] text-white hover:bg-black flex items-center justify-center transition-all shadow-2xs cursor-pointer">
               <Send size={16} />
             </button>
           </div>
@@ -86,15 +86,15 @@ export default function RegisterPage() {
           <div className="hidden lg:flex flex-col items-center justify-center absolute left-6 bottom-4 select-none opacity-90">
             <div className="relative">
               <svg width="220" height="180" viewBox="0 0 220 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="20" y="100" width="45" height="70" rx="6" fill="#FFFFFF" stroke="#1E293B" strokeWidth="2.5" />
-                <path d="M32 135L42 120" stroke="#1E293B" strokeWidth="2.5" strokeLinecap="round" />
-                <rect x="70" y="70" width="55" height="100" rx="6" fill="#FDE047" stroke="#1E293B" strokeWidth="2.5" />
-                <rect x="150" y="90" width="50" height="80" rx="6" fill="#FFFFFF" stroke="#1E293B" strokeWidth="2.5" />
-                <rect x="180" y="45" width="35" height="125" rx="6" fill="#FDE047" stroke="#1E293B" strokeWidth="2.5" />
-                <circle cx="82" cy="40" r="12" fill="#1E293B" />
-                <path d="M72 58C72 52 92 52 92 58L95 82H69L72 58Z" fill="#1E293B" />
-                <path d="M69 82L62 105L85 105L88 82" fill="#1E293B" />
-                <path d="M92 72L108 62" stroke="#6366F1" strokeWidth="4" strokeLinecap="round" />
+                <rect x="20" y="100" width="45" height="70" rx="6" fill="#FFFFFF" stroke="#20201D" strokeWidth="2.5" />
+                <path d="M32 135L42 120" stroke="#20201D" strokeWidth="2.5" strokeLinecap="round" />
+                <rect x="70" y="70" width="55" height="100" rx="6" fill="#FFF0E4" stroke="#F28A45" strokeWidth="2.5" />
+                <rect x="150" y="90" width="50" height="80" rx="6" fill="#FFFFFF" stroke="#20201D" strokeWidth="2.5" />
+                <rect x="180" y="45" width="35" height="125" rx="6" fill="#FFF0E4" stroke="#F28A45" strokeWidth="2.5" />
+                <circle cx="82" cy="40" r="12" fill="#20201D" />
+                <path d="M72 58C72 52 92 52 92 58L95 82H69L72 58Z" fill="#20201D" />
+                <path d="M69 82L62 105L85 105L88 82" fill="#20201D" />
+                <path d="M92 72L108 62" stroke="#F28A45" strokeWidth="4" strokeLinecap="round" />
               </svg>
             </div>
           </div>
@@ -104,22 +104,22 @@ export default function RegisterPage() {
             initial={{ opacity: 0, y: 20, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.4 }}
-            className="w-full max-w-md bg-white rounded-3xl p-8 sm:p-10 border border-slate-200/90 shadow-2xl relative"
+            className="w-full max-w-md bg-white rounded-3xl p-8 sm:p-10 border border-[#E7E1D8] shadow-xs relative"
           >
             <div className="text-left mb-6">
-              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mb-1.5">
-                Lets<br />Start Learning
+              <h1 className="text-2xl sm:text-3xl font-black text-[#20201D] tracking-tight mb-1.5 leading-tight">
+                Let's<br />Start Learning
               </h1>
-              <p className="text-xs font-semibold text-slate-400">
+              <p className="text-xs font-semibold text-[#969188]">
                 Create your account to continue
               </p>
             </div>
 
             {/* Demo Hint */}
-            <div className="mb-5 p-3 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex items-center gap-2.5">
-              <Sparkles size={16} className="text-indigo-600 flex-shrink-0" />
-              <p className="text-xs text-indigo-900 font-medium">
-                <span className="font-bold">Demo Mode:</span> Fill in any details to create your profile.
+            <div className="mb-5 p-3 rounded-2xl bg-[#FFF0E4] border border-[#F28A45]/30 flex items-center gap-2.5">
+              <Sparkles size={16} className="text-[#F28A45] flex-shrink-0" />
+              <p className="text-xs text-[#20201D] font-medium">
+                <span className="font-bold text-[#F28A45]">Demo Mode:</span> Fill in any details to create your profile.
               </p>
             </div>
 
@@ -127,7 +127,7 @@ export default function RegisterPage() {
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
-                className="mb-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold"
+                className="mb-4 p-3 rounded-2xl bg-[#FBE7E4] border border-[#C85C52]/30 text-[#C85C52] text-xs font-bold"
               >
                 {error}
               </motion.div>
@@ -137,13 +137,13 @@ export default function RegisterPage() {
               
               {/* Username */}
               <div className="relative">
-                <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#969188]" />
                 <input
                   id="reg-username"
                   type="text"
                   value={form.username}
                   onChange={(e) => set('username', e.target.value)}
-                  className="w-full bg-slate-50/80 border border-slate-200 rounded-2xl pl-12 pr-4 py-3 text-sm font-medium text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 transition-all"
+                  className="w-full bg-[#FAF8F3] border border-[#E7E1D8] rounded-2xl pl-12 pr-4 py-3 text-sm font-semibold text-[#20201D] placeholder-[#969188] outline-none focus:bg-white focus:border-[#F28A45] focus:ring-4 focus:ring-[#F28A45]/20 transition-all"
                   placeholder="Your Name"
                   required
                 />
@@ -151,13 +151,13 @@ export default function RegisterPage() {
 
               {/* Email */}
               <div className="relative">
-                <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#969188]" />
                 <input
                   id="reg-email"
                   type="email"
                   value={form.email}
                   onChange={(e) => set('email', e.target.value)}
-                  className="w-full bg-slate-50/80 border border-slate-200 rounded-2xl pl-12 pr-4 py-3 text-sm font-medium text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 transition-all"
+                  className="w-full bg-[#FAF8F3] border border-[#E7E1D8] rounded-2xl pl-12 pr-4 py-3 text-sm font-semibold text-[#20201D] placeholder-[#969188] outline-none focus:bg-white focus:border-[#F28A45] focus:ring-4 focus:ring-[#F28A45]/20 transition-all"
                   placeholder="Your Email"
                   required
                 />
@@ -165,20 +165,20 @@ export default function RegisterPage() {
 
               {/* Password */}
               <div className="relative">
-                <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#969188]" />
                 <input
                   id="reg-password"
                   type={showPass ? 'text' : 'password'}
                   value={form.password}
                   onChange={(e) => set('password', e.target.value)}
-                  className="w-full bg-slate-50/80 border border-slate-200 rounded-2xl pl-12 pr-11 py-3 text-sm font-medium text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 transition-all"
+                  className="w-full bg-[#FAF8F3] border border-[#E7E1D8] rounded-2xl pl-12 pr-11 py-3 text-sm font-semibold text-[#20201D] placeholder-[#969188] outline-none focus:bg-white focus:border-[#F28A45] focus:ring-4 focus:ring-[#F28A45]/20 transition-all"
                   placeholder="Your Password"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#969188] hover:text-[#20201D] transition-colors"
                 >
                   {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -186,13 +186,13 @@ export default function RegisterPage() {
 
               {/* Confirm Password */}
               <div className="relative">
-                <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#969188]" />
                 <input
                   id="reg-confirm"
                   type="password"
                   value={form.confirm}
                   onChange={(e) => set('confirm', e.target.value)}
-                  className="w-full bg-slate-50/80 border border-slate-200 rounded-2xl pl-12 pr-4 py-3 text-sm font-medium text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 transition-all"
+                  className="w-full bg-[#FAF8F3] border border-[#E7E1D8] rounded-2xl pl-12 pr-4 py-3 text-sm font-semibold text-[#20201D] placeholder-[#969188] outline-none focus:bg-white focus:border-[#F28A45] focus:ring-4 focus:ring-[#F28A45]/20 transition-all"
                   placeholder="Confirm Password"
                   required
                 />
@@ -203,7 +203,7 @@ export default function RegisterPage() {
                 type="submit"
                 id="register-submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:opacity-95 text-white font-bold py-3.5 px-4 rounded-2xl text-base shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.99] flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
+                className="btn-primary w-full py-3.5 px-4 text-base font-black shadow-xs flex items-center justify-center gap-2 mt-2 cursor-pointer disabled:opacity-50"
               >
                 {loading ? (
                   <span className="flex gap-1">
@@ -224,7 +224,7 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={handleGoogleSignup}
-                className="w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-3 px-4 rounded-2xl text-sm flex items-center justify-center gap-2.5 transition-all shadow-sm"
+                className="w-full bg-white border border-[#E7E1D8] hover:bg-[#FAF8F3] text-[#20201D] font-bold py-3 px-4 rounded-2xl text-sm flex items-center justify-center gap-2.5 transition-all shadow-2xs cursor-pointer"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -237,9 +237,9 @@ export default function RegisterPage() {
             </div>
 
             {/* Switch to Login */}
-            <p className="text-center text-xs font-semibold text-slate-500 mt-4">
-              Already Have An Account?{' '}
-              <Link to="/login" className="text-indigo-600 hover:text-indigo-800 font-bold transition-colors">
+            <p className="text-center text-xs font-semibold text-[#6F6B63] mt-4">
+              Already have an account?{' '}
+              <Link to="/login" className="text-[#F28A45] hover:text-[#DF7635] font-black transition-colors">
                 Login
               </Link>
             </p>
@@ -248,9 +248,9 @@ export default function RegisterPage() {
         </div>
 
         {/* Footer info */}
-        <footer className="flex items-center justify-between text-xs text-slate-400 font-semibold z-10 pt-2 border-t border-slate-200/60">
-          <div className="flex items-center gap-1.5 text-slate-500">
-            <Brain size={16} className="text-indigo-600" />
+        <footer className="flex items-center justify-between text-xs text-[#969188] font-semibold z-10 pt-2 border-t border-[#E7E1D8]">
+          <div className="flex items-center gap-1.5 text-[#6F6B63]">
+            <Brain size={16} className="text-[#F28A45]" />
             <span>Powered by Local DeepTutor AI</span>
           </div>
           <span>© 2026 DeepTutor Inc.</span>

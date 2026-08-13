@@ -429,6 +429,14 @@ class VectorStore:
         except Exception:
             pass
 
+    def delete_collection(self, collection_name: str) -> None:
+        try:
+            self._client.delete_collection(collection_name)
+            self._invalidate_bm25(collection_name)
+        except Exception:
+            pass
+
+
     def reset(self) -> None:
         try:
             for col in self._client.list_collections():

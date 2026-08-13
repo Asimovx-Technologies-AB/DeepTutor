@@ -30,13 +30,13 @@ export default function ChatMessage({ role, content, isStreaming, sources }: Pro
       className={`flex gap-4 group ${isAssistant ? '' : 'flex-row-reverse'}`}
     >
       {/* Avatar */}
-      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 mt-1 shadow-sm ${
+      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 mt-1 shadow-2xs ${
         isAssistant
-          ? 'bg-[#111111] text-white'
-          : 'bg-[#27272a] text-white'
+          ? 'bg-[#FFF0E4] text-[#F28A45] border border-[#F28A45]/30'
+          : 'bg-[#20201D] text-white'
       }`}>
         {isAssistant ? (
-          <Bot size={18} className="text-white" />
+          <Bot size={18} className="text-[#F28A45]" />
         ) : (
           <User size={18} className="text-white" />
         )}
@@ -45,10 +45,10 @@ export default function ChatMessage({ role, content, isStreaming, sources }: Pro
       {/* Content column */}
       <div className={`max-w-[85%] relative ${isAssistant ? '' : 'items-end'}`}>
         {/* Message bubble */}
-        <div className={`rounded-3xl px-5 py-4 shadow-sm ${
+        <div className={`rounded-3xl px-5 py-4 shadow-2xs ${
           isAssistant
-            ? 'bg-white border border-[#e4e4e7] rounded-tl-sm text-[#111111]'
-            : 'bg-[#111111] text-white rounded-tr-sm shadow-md'
+            ? 'bg-white border border-[#E7E1D8] rounded-tl-sm text-[#20201D]'
+            : 'bg-[#F28A45] text-white rounded-tr-sm shadow-xs font-semibold'
         }`}>
           {isAssistant ? (
             <div className="markdown-content">
@@ -64,7 +64,7 @@ export default function ChatMessage({ role, content, isStreaming, sources }: Pro
               )}
             </div>
           ) : (
-            <p className="text-white text-base font-medium leading-relaxed">{content}</p>
+            <p className="text-white text-base font-semibold leading-relaxed">{content}</p>
           )}
         </div>
 
@@ -77,9 +77,9 @@ export default function ChatMessage({ role, content, isStreaming, sources }: Pro
         {isAssistant && content && !isStreaming && (
           <button
             onClick={handleCopy}
-            className="absolute -bottom-6 left-2 opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 hover:text-indigo-600 flex items-center gap-1.5 text-xs font-semibold bg-white/80 backdrop-blur-sm px-2 py-0.5 rounded-lg border border-slate-200/60 shadow-sm"
+            className="absolute -bottom-6 left-2 opacity-0 group-hover:opacity-100 transition-opacity text-[#969188] hover:text-[#F28A45] flex items-center gap-1.5 text-xs font-bold bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-lg border border-[#E7E1D8] shadow-2xs"
           >
-            {copied ? <><Check size={12} className="text-emerald-500" /> Copied</> : <><Copy size={12} /> Copy</>}
+            {copied ? <><Check size={12} className="text-[#4F8A68]" /> Copied</> : <><Copy size={12} /> Copy</>}
           </button>
         )}
       </div>

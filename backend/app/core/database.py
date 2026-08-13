@@ -319,6 +319,41 @@ def update_document_stats(doc_id: str, indexed: bool, entity_count: int, chunk_c
     return False
 
 
+def delete_document(doc_id: str, user_id: str) -> Optional[dict]:
+    with DBContext() as db:
+        doc = db.query(Document).filter(Document.id == doc_id, Document.user_id == user_id).first()
+        if not doc:
+            return None
+        doc_dict = {
+            "id": doc.id,
+            "user_id": doc.user_id,
+            "topic_id": doc.topic_id,
+            "file_name": doc.file_name,
+            "file_path": doc.file_path,
+        }
+        db.delete(doc)
+        return doc_dict
+
+
+def delete_documents_for_section(user_id: str, topic_id: str) -> List[dict]:
+    with DBContext() as db:
+        docs = db.query(Document).filter(Document.user_id == user_id, Document.topic_id == topic_id).all()
+        doc_dicts = [
+            {
+                "id": d.id,
+                "user_id": d.user_id,
+                "topic_id": d.topic_id,
+                "file_name": d.file_name,
+                "file_path": d.file_path,
+            }
+            for d in docs
+        ]
+        for d in docs:
+            db.delete(d)
+        return doc_dicts
+
+
+
 def get_key_topics_for_user_section(user_id: str, topic_id: str) -> List[str]:
     with DBContext() as db:
         query = db.query(Document).filter(Document.user_id == user_id)

@@ -39,21 +39,21 @@ export default function TopicsPage() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-w-5xl mx-auto bg-[#FAF8F3]">
       {/* Back */}
       <motion.button
         initial={{ opacity: 0, x: -8 }}
         animate={{ opacity: 1, x: 0 }}
         onClick={() => navigate('/subjects')}
-        className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-6 text-sm font-medium"
+        className="flex items-center gap-2 text-[#6F6B63] hover:text-[#F28A45] transition-colors mb-6 text-sm font-bold cursor-pointer"
       >
         <ArrowLeft size={16} /> Back to Subjects
       </motion.button>
 
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Topics</h1>
-        <p className="text-slate-400 text-sm">Select a topic to start an AI tutoring session or take a quiz</p>
+        <h1 className="text-3xl font-black text-[#20201D] mb-2">Topics</h1>
+        <p className="text-[#6F6B63] text-sm font-medium">Select a topic to start an AI tutoring session or take a quiz</p>
       </motion.div>
 
       {/* Topics list */}
@@ -69,43 +69,43 @@ export default function TopicsPage() {
               initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.07 }}
-              className="glass-card p-5 flex items-center gap-4 group"
+              className="glass-card p-5 flex items-center gap-4 group border border-[#E7E1D8] shadow-2xs hover:border-[#F28A45]/40"
             >
               {/* Order number */}
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-500/20 flex items-center justify-center text-sm font-bold text-indigo-400 flex-shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-[#FFF0E4] border border-[#F28A45]/30 flex items-center justify-center text-sm font-black text-[#F28A45] flex-shrink-0">
                 {topic.order_index ?? i + 1}
               </div>
 
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-semibold text-slate-200 text-sm group-hover:text-white transition-colors">
+                  <h3 className="font-extrabold text-[#20201D] text-sm group-hover:text-[#F28A45] transition-colors">
                     {topic.title}
                   </h3>
                   <span className={`badge badge-${topic.difficulty_level}`}>
                     {DIFF_LABELS[topic.difficulty_level] ?? topic.difficulty_level}
                   </span>
                 </div>
-                <p className="text-slate-500 text-xs line-clamp-1">{topic.description}</p>
+                <p className="text-[#6F6B63] text-xs line-clamp-1 font-medium">{topic.description}</p>
               </div>
 
               {/* Actions */}
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
                   onClick={() => navigate(`/flashcards/${topic.id}`)}
-                  className="btn-ghost flex items-center gap-1.5 text-xs px-3 py-2"
+                  className="btn-ghost flex items-center gap-1.5 text-xs px-3 py-2 cursor-pointer"
                 >
-                  <BookOpen size={13} className="text-indigo-500" /> Flashcards
+                  <BookOpen size={13} className="text-[#F28A45]" /> Flashcards
                 </button>
                 <button
                   onClick={() => navigate(`/quiz/${topic.id}`)}
-                  className="btn-ghost flex items-center gap-1.5 text-xs px-3 py-2"
+                  className="btn-ghost flex items-center gap-1.5 text-xs px-3 py-2 cursor-pointer"
                 >
-                  <Trophy size={13} className="text-yellow-500" /> Quiz
+                  <Trophy size={13} className="text-[#D99A32]" /> Quiz
                 </button>
                 <button
                   onClick={() => startChat(topic)}
-                  className="btn-primary flex items-center gap-1.5 text-xs px-3 py-2"
+                  className="btn-primary flex items-center gap-1.5 text-xs px-3 py-2 cursor-pointer shadow-2xs"
                 >
                   <MessageSquare size={13} /> Chat
                 </button>

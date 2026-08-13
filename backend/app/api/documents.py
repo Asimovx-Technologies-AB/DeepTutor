@@ -13,7 +13,9 @@ from app.core import database as db
 from app.core.config import get_settings
 from app.rag.graph_rag import graph_rag
 from app.rag.graph_store import graph_store
+from app.rag.vector_store import vector_store
 from app.rag.section_scope import get_section_collection_id
+
 
 settings = get_settings()
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -143,7 +145,56 @@ async def get_knowledge_graph(topic_id: str, user: dict = Depends(get_current_us
     namespaced_topic = _user_section_collection_id(user["id"], topic_id)
     graph = graph_store.get_full_graph(namespaced_topic)
     stats = graph_store.get_graph_stats(namespaced_topic)
+
+    # Fallback 1: check un-namespaced topic_id if present
+    if not graph.get("nodes"):
+        fallback_graph = graph_store.get_full_graph(topic_id)
+        if fallback_graph.get("nodes"):
+            graph = fallback_graph
+            stats = graph_store.get_graph_stats(topic_id)
+
+    # Fallback 2: construct concept graph from document key_topics if graph store has no nodes
+    if not graph.get("nodes"):
+        docs = db.get_documents_for_user_and_topic(user["id"], topic_id)
+        if not docs:
+            # Also check any user documents if section is general
+            docs = db.get_documents_for_user(user["id"]) if topic_id == "general" else []
+
+        nodes = []
+        edges = []
+        seen_nodes = set()
+        for doc in docs:
+            key_topics = doc.get("key_topics", [])
+            for kt in key_topics:
+                node_id = str(kt).lower().strip()
+                if node_id and node_id not in seen_nodes:
+                    seen_nodes.add(node_id)
+                    nodes.append({
+                        "id": node_id,
+                        "name": str(kt),
+                        "type": "concept",
+                        "description": f"Concept extracted from {doc.get('file_name', 'uploaded document')}"
+                    })
+        if nodes:
+            doc_node_id = f"doc_{topic_id}"
+            nodes.insert(0, {
+                "id": doc_node_id,
+                "name": f"Section Knowledge Base ({topic_id})",
+                "type": "document",
+                "description": f"Knowledge base for {len(docs)} uploaded document(s)"
+            })
+            for n in nodes[1:]:
+                edges.append({
+                    "source": doc_node_id,
+                    "target": n["id"],
+                    "type": "contains_concept",
+                    "description": "Topic concept extracted from document"
+                })
+            graph = {"nodes": nodes, "edges": edges}
+            stats = {"node_count": len(nodes), "edge_count": len(edges)}
+
     return {"topic_id": topic_id, "stats": stats, "graph": graph}
+
 
 
 @router.get("/{doc_id}/markdown")
@@ -173,3 +224,93 @@ async def get_document_markdown(doc_id: str, user: dict = Depends(get_current_us
         "chunk_count": len(chunks),
         "markdown": "\n\n".join(md_lines),
     }
+
+
+@router.delete("/section/{section_id}")
+async def delete_section_documents(section_id: str, user: dict = Depends(get_current_user)):
+    """
+    Delete all documents/PDFs, vector store embeddings, graph store data,
+    and flashcards associated with a specific section/topic for the current user.
+    """
+    user_id = user["id"]
+    namespaced_topic = _user_section_collection_id(user_id, section_id)
+
+    # 1. Delete SQL database records
+    deleted_docs = db.delete_documents_for_section(user_id=user_id, topic_id=section_id)
+
+    # 2. Remove physical PDF / document files from disk
+    for doc in deleted_docs:
+        file_path = doc.get("file_path")
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                print(f"[documents] Failed to remove file {file_path}: {e}")
+
+    # Also clean up the section directory if present
+    upload_dir = Path(settings.UPLOAD_DIR) / user_id / section_id
+    if upload_dir.exists():
+        try:
+            import shutil
+            shutil.rmtree(upload_dir, ignore_errors=True)
+        except Exception as e:
+            print(f"[documents] Failed to remove upload_dir {upload_dir}: {e}")
+
+    # 3. Delete ChromaDB vector collection for this section
+    vector_store.delete_collection(namespaced_topic)
+
+    # 4. Delete NetworkX graph store for this section
+    graph_store.delete_graph(namespaced_topic)
+
+    # 5. Delete generated flashcards for this section
+    db.delete_flashcards_for_topic(section_id)
+
+    return {
+        "ok": True,
+        "deleted_count": len(deleted_docs),
+        "section_id": section_id,
+        "message": f"Successfully deleted {len(deleted_docs)} document(s) and all associated PDF vector/graph data for section '{section_id}'."
+    }
+
+
+@router.delete("/{doc_id}")
+async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
+    """
+    Delete a single document by ID.
+    If no remaining documents exist for the section, cleans up the section's vector and graph data.
+    """
+    user_id = user["id"]
+    doc = db.delete_document(doc_id=doc_id, user_id=user_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found or access denied.")
+
+    section_id = doc["topic_id"]
+    file_path = doc.get("file_path")
+
+    # Remove physical file from disk
+    if file_path and os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            print(f"[documents] Failed to remove file {file_path}: {e}")
+
+    # Remove from indexing status cache if present
+    _indexing_status.pop(doc_id, None)
+
+    # Check remaining documents in section for this user
+    remaining = db.get_documents_for_user_and_topic(user_id, section_id)
+    namespaced_topic = _user_section_collection_id(user_id, section_id)
+
+    if not remaining:
+        # No documents left for this section — delete vector store, graph store, flashcards
+        vector_store.delete_collection(namespaced_topic)
+        graph_store.delete_graph(namespaced_topic)
+        db.delete_flashcards_for_topic(section_id)
+
+    return {
+        "ok": True,
+        "doc_id": doc_id,
+        "file_name": doc["file_name"],
+        "message": f"Deleted document '{doc['file_name']}'."
+    }
+

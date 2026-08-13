@@ -26,7 +26,7 @@ interface Flashcard {
 }
 
 interface Props {
-  sessionId: string
+  sessionId?: string
   isOpen: boolean
   onClose: () => void
 }
@@ -123,32 +123,32 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-2xl shadow-2xl border border-slate-200 flex flex-col relative max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-2xl shadow-2xl border border-[#E7E1D8] flex flex-col relative max-h-[90vh] overflow-y-auto text-left"
       >
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 transition-colors z-20"
+          className="absolute top-5 right-5 p-2 text-[#969188] hover:text-[#20201D] rounded-full hover:bg-[#FAF8F3] transition-colors z-20 cursor-pointer"
         >
           <X size={20} />
         </button>
 
-        {/* ─── SETUP LAYER ─── */}
-        {setupStep ? (
-          <div className="space-y-6 text-left">
-            <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-              <div className="w-10 h-10 rounded-2xl bg-[#004789] text-white flex items-center justify-center shadow-md">
+        {setupStep || totalCards === 0 ? (
+          /* ─── SETUP / GENERATOR VIEW ─── */
+          <div className="space-y-6">
+            <div className="flex items-center gap-3 border-b border-[#E7E1D8] pb-4">
+              <div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] border border-[#F28A45]/30 text-[#F28A45] flex items-center justify-center shadow-2xs">
                 <BookOpen size={20} />
               </div>
               <div>
-                <h2 className="text-xl font-black text-slate-900">AI Study Flashcards Deck</h2>
-                <p className="text-xs text-slate-500 font-medium">Generate interactive study cards from your uploaded PDF text</p>
+                <h2 className="text-xl font-black text-[#20201D]">AI Study Flashcards Deck</h2>
+                <p className="text-xs text-[#6F6B63] font-medium">Generate interactive study cards from your uploaded PDF text</p>
               </div>
             </div>
 
             {/* Scope Selection */}
             <div>
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+              <label className="text-xs font-black text-[#969188] uppercase tracking-wider block mb-2">
                 1. Select Flashcard Scope
               </label>
               <div className="grid grid-cols-2 gap-3">
@@ -157,14 +157,14 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
                   onClick={() => setScopeMode('all')}
                   className={`p-4 rounded-2xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
                     scopeMode === 'all'
-                      ? 'border-[#004789] bg-blue-50/50 text-[#004789] shadow-sm font-bold'
-                      : 'border-slate-200 hover:border-blue-300 text-slate-700 hover:bg-slate-50'
+                      ? 'border-[#F28A45] bg-[#FFF0E4]/60 text-[#F28A45] shadow-2xs font-black'
+                      : 'border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] hover:bg-[#FFF9F2]'
                   }`}
                 >
-                  <Layers size={20} className={scopeMode === 'all' ? 'text-[#004789]' : 'text-slate-400'} />
+                  <Layers size={20} className={scopeMode === 'all' ? 'text-[#F28A45]' : 'text-[#969188]'} />
                   <div>
-                    <p className="text-sm font-extrabold">Entire Document</p>
-                    <p className="text-xs text-slate-500 mt-0.5">All topics combined</p>
+                    <p className="text-sm font-black">Entire Document</p>
+                    <p className="text-xs text-[#6F6B63] mt-0.5 font-medium">All topics combined</p>
                   </div>
                 </button>
 
@@ -173,14 +173,14 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
                   onClick={() => setScopeMode('specific')}
                   className={`p-4 rounded-2xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
                     scopeMode === 'specific'
-                      ? 'border-[#004789] bg-blue-50/50 text-[#004789] shadow-sm font-bold'
-                      : 'border-slate-200 hover:border-blue-300 text-slate-700 hover:bg-slate-50'
+                      ? 'border-[#F28A45] bg-[#FFF0E4]/60 text-[#F28A45] shadow-2xs font-black'
+                      : 'border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] hover:bg-[#FFF9F2]'
                   }`}
                 >
-                  <Sparkles size={20} className={scopeMode === 'specific' ? 'text-[#004789]' : 'text-slate-400'} />
+                  <Sparkles size={20} className={scopeMode === 'specific' ? 'text-[#F28A45]' : 'text-[#969188]'} />
                   <div>
-                    <p className="text-sm font-extrabold">Specific Concept</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Target 1 topic</p>
+                    <p className="text-sm font-black">Specific Concept</p>
+                    <p className="text-xs text-[#6F6B63] mt-0.5 font-medium">Target 1 topic</p>
                   </div>
                 </button>
               </div>
@@ -188,7 +188,7 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
 
             {scopeMode === 'specific' && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                <label className="text-xs font-black text-[#969188] uppercase tracking-wider block">
                   2. Choose Specific Concept
                 </label>
                 {availableTopics.length > 0 && (
@@ -198,10 +198,10 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
                         key={topic}
                         type="button"
                         onClick={() => { setSelectedTopic(topic); setCustomTopic(topic); }}
-                        className={`text-xs px-3 py-2 rounded-xl border transition-all cursor-pointer ${
+                        className={`text-xs px-3 py-2 rounded-xl border transition-all cursor-pointer font-bold ${
                           customTopic === topic
-                            ? 'bg-[#004789] text-white border-[#004789] font-bold shadow-sm'
-                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                            ? 'bg-[#F28A45] text-white border-[#F28A45] shadow-2xs'
+                            : 'bg-[#FAF8F3] text-[#20201D] border-[#E7E1D8] hover:bg-[#F4EFE7]'
                         }`}
                       >
                         {topic}
@@ -214,7 +214,7 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
                   value={customTopic}
                   onChange={(e) => setCustomTopic(e.target.value)}
                   placeholder="Type topic name..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-semibold text-slate-800 outline-none focus:bg-white focus:border-[#004789]"
+                  className="w-full bg-[#FAF8F3] border border-[#E7E1D8] rounded-xl px-4 py-3 text-xs font-bold text-[#20201D] outline-none focus:bg-white focus:border-[#F28A45]"
                 />
               </motion.div>
             )}
@@ -222,7 +222,7 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
             <button
               onClick={triggerGenerate}
               disabled={generating}
-              className="w-full bg-[#004789] hover:bg-[#003566] text-white font-bold py-3.5 px-6 rounded-2xl text-sm shadow-lg shadow-blue-900/20 transition-all flex items-center justify-center gap-2"
+              className="btn-primary w-full py-3.5 px-6 font-black text-sm shadow-2xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {generating ? (
                 <>
@@ -243,15 +243,15 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
             
             {/* FLASHCARD PROGRESS (1/5) Header & Progress Bar */}
             <div className="text-center">
-              <h3 className="text-xs font-black uppercase tracking-widest text-slate-900 mb-2">
+              <h3 className="text-xs font-black uppercase tracking-widest text-[#20201D] mb-2">
                 FLASHCARD PROGRESS ({currentIndex + 1}/{totalCards})
               </h3>
-              <div className="w-full max-w-lg mx-auto border border-blue-300/80 rounded-full h-7 bg-white relative p-1 overflow-hidden shadow-inner flex items-center justify-center">
+              <div className="w-full max-w-lg mx-auto border border-[#E7E1D8] rounded-full h-7 bg-[#F4EFE7] relative p-1 overflow-hidden flex items-center justify-center">
                 <div
-                  className="bg-[#004789] h-full rounded-full transition-all duration-500 absolute left-1 top-1 bottom-1"
+                  className="bg-[#F28A45] h-full rounded-full transition-all duration-500 absolute left-1 top-1 bottom-1"
                   style={{ width: `calc(${progressPct}% - 8px)` }}
                 />
-                <span className="relative z-10 text-[11px] font-bold text-slate-600">
+                <span className="relative z-10 text-[11px] font-black text-[#20201D]">
                   {progressPct}%
                 </span>
               </div>
@@ -260,10 +260,10 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
             {/* Interactive Flip Card Container */}
             <div
               onClick={() => setIsFlipped(!isFlipped)}
-              className="w-full bg-[#f8fafc] border border-slate-200/90 hover:border-blue-400 rounded-3xl p-8 shadow-md hover:shadow-lg text-center flex flex-col items-center justify-center min-h-[240px] cursor-pointer transition-all relative overflow-hidden group select-none"
+              className="w-full bg-[#FAF8F3] border border-[#E7E1D8] hover:border-[#F28A45]/50 rounded-3xl p-8 shadow-2xs text-center flex flex-col items-center justify-center min-h-[240px] cursor-pointer transition-all relative overflow-hidden group select-none"
             >
-              <div className="absolute top-4 right-4 text-[11px] font-bold text-slate-400 bg-white border border-slate-200 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
-                <RotateCcw size={12} className="text-indigo-600" />
+              <div className="absolute top-4 right-4 text-[11px] font-extrabold text-[#969188] bg-white border border-[#E7E1D8] px-3 py-1 rounded-full flex items-center gap-1.5 shadow-2xs">
+                <RotateCcw size={12} className="text-[#F28A45]" />
                 <span>Click to Flip Card</span>
               </div>
 
@@ -277,10 +277,10 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
                     transition={{ duration: 0.3 }}
                     className="space-y-3"
                   >
-                    <span className="text-xs font-extrabold text-[#004789] uppercase tracking-wider bg-blue-50 px-3 py-1 rounded-full">
+                    <span className="text-xs font-black text-[#F28A45] uppercase tracking-wider bg-[#FFF0E4] border border-[#F28A45]/20 px-3 py-1 rounded-full">
                       Question / Term
                     </span>
-                    <h2 className="text-lg sm:text-xl font-bold text-slate-900 leading-snug max-w-xl mx-auto">
+                    <h2 className="text-lg sm:text-xl font-black text-[#20201D] leading-snug max-w-xl mx-auto">
                       {currentCard?.front}
                     </h2>
                   </motion.div>
@@ -293,10 +293,10 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
                     transition={{ duration: 0.3 }}
                     className="space-y-3"
                   >
-                    <span className="text-xs font-extrabold text-emerald-700 uppercase tracking-wider bg-emerald-50 px-3 py-1 rounded-full">
+                    <span className="text-xs font-black text-[#4F8A68] uppercase tracking-wider bg-[#E3F0E5] border border-[#4F8A68]/20 px-3 py-1 rounded-full">
                       Answer / Explanation
                     </span>
-                    <p className="text-base font-semibold text-slate-800 leading-relaxed max-w-xl mx-auto">
+                    <p className="text-base font-bold text-[#20201D] leading-relaxed max-w-xl mx-auto">
                       {currentCard?.back}
                     </p>
                   </motion.div>
@@ -309,7 +309,7 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
               <button
                 onClick={handlePrev}
                 disabled={currentIndex === 0}
-                className="flex items-center gap-2 px-5 py-3 rounded-full border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
+                className="flex items-center gap-2 px-5 py-3 rounded-full border border-[#E7E1D8] bg-white text-[#20201D] text-xs font-extrabold hover:bg-[#FFF9F2] disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-2xs cursor-pointer"
               >
                 <ChevronLeft size={16} />
                 <span>Previous</span>
@@ -317,7 +317,7 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
 
               <button
                 onClick={() => setIsFlipped(!isFlipped)}
-                className="bg-[#004789] hover:bg-[#003566] text-white font-bold px-8 py-3 rounded-full text-sm shadow-md transition-all active:scale-[0.98]"
+                className="btn-primary font-black px-8 py-3 rounded-full text-sm shadow-2xs cursor-pointer"
               >
                 {isFlipped ? 'Show Question' : 'Reveal Answer'}
               </button>
@@ -325,7 +325,7 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
               <button
                 onClick={handleNext}
                 disabled={currentIndex === totalCards - 1}
-                className="flex items-center gap-2 px-5 py-3 rounded-full border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
+                className="flex items-center gap-2 px-5 py-3 rounded-full border border-[#E7E1D8] bg-white text-[#20201D] text-xs font-extrabold hover:bg-[#FFF9F2] disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-2xs cursor-pointer"
               >
                 <span>Next</span>
                 <ChevronRight size={16} />

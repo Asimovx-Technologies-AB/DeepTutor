@@ -29,15 +29,15 @@ interface Props {
 
 /* ─── Rich Vibrant Color Palette for Node Types ─────────────────── */
 const NODE_TYPE_COLORS: Record<string, { bg: string; border: string; glow: string }> = {
-  concept:    { bg: '#6366f1', border: '#818cf8', glow: 'rgba(99, 102, 241, 0.4)' },  // Indigo
-  person:     { bg: '#f59e0b', border: '#fbbf24', glow: 'rgba(245, 158, 11, 0.4)' },  // Amber
-  place:      { bg: '#10b981', border: '#34d399', glow: 'rgba(16, 185, 129, 0.4)' },  // Emerald
-  event:      { bg: '#ef4444', border: '#f87171', glow: 'rgba(239, 68, 68, 0.4)' },   // Red
+  concept:    { bg: '#F28A45', border: '#FFF0E4', glow: 'rgba(242, 138, 69, 0.4)' },  // Apricot Orange
+  person:     { bg: '#D99A32', border: '#FFF3D8', glow: 'rgba(217, 154, 50, 0.4)' },  // Warm Amber
+  place:      { bg: '#4F8A68', border: '#E3F0E5', glow: 'rgba(79, 138, 104, 0.4)' },  // Sage Green
+  event:      { bg: '#C85C52', border: '#FBE7E4', glow: 'rgba(200, 92, 82, 0.4)' },   // Soft Red
   formula:    { bg: '#06b6d4', border: '#22d3ee', glow: 'rgba(6, 182, 212, 0.4)' },   // Cyan
-  law:        { bg: '#8b5cf6', border: '#a78bfa', glow: 'rgba(139, 92, 246, 0.4)' },  // Purple
+  law:        { bg: '#A99BCB', border: '#F0ECF7', glow: 'rgba(169, 155, 203, 0.4)' },  // Soft Lavender
   theorem:    { bg: '#ec4899', border: '#f472b6', glow: 'rgba(236, 72, 153, 0.4)' },  // Pink
   document:   { bg: '#3b82f6', border: '#60a5fa', glow: 'rgba(59, 130, 246, 0.4)' },  // Blue
-  example_of: { bg: '#64748b', border: '#94a3b8', glow: 'rgba(100, 116, 139, 0.4)' }, // Slate
+  example_of: { bg: '#6F6B63', border: '#E7E1D8', glow: 'rgba(111, 107, 99, 0.4)' }, // Soft Ink
 }
 
 function getNodeColor(type?: string) {
@@ -83,7 +83,7 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string | null>(null)
-  const [darkMode, setDarkMode] = useState(true) // Default to high-tech dark space canvas
+  const [darkMode, setDarkMode] = useState(false) // Default to warm light theme matching DeepTutor design system
 
   const dragRef = useRef<{
     node: SimNode | null
