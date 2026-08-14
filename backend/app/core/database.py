@@ -28,6 +28,16 @@ with engine.connect() as conn:
         conn.commit()
     except Exception:
         pass
+    try:
+        conn.execute(text("ALTER TABLE users ADD COLUMN is_premium BOOLEAN DEFAULT 0"))
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        conn.execute(text("ALTER TABLE users ADD COLUMN plan VARCHAR DEFAULT 'free'"))
+        conn.commit()
+    except Exception:
+        pass
 
 
 def new_id() -> str:
@@ -62,24 +72,34 @@ def create_user(username: str, email: str, password_hash: str) -> dict:
             email=email,
             password_hash=password_hash,
             role="student",
+            is_premium=False,
+            plan="free",
             created_at=now_iso(),
         )
         db.add(user)
     return get_user_by_id(user_id)
 
 
+def _user_dict(user) -> dict:
+    is_prem = bool(getattr(user, "is_premium", False))
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "password_hash": user.password_hash,
+        "role": user.role,
+        "is_premium": is_prem,
+        "plan": getattr(user, "plan", "free") or ("premium" if is_prem else "free"),
+        "max_upload_size_mb": settings.PREMIUM_MAX_UPLOAD_SIZE_MB if is_prem else settings.FREE_MAX_UPLOAD_SIZE_MB,
+        "created_at": user.created_at,
+    }
+
+
 def get_user_by_email(email: str) -> Optional[dict]:
     with DBContext() as db:
         user = db.query(User).filter(User.email == email).first()
         if user:
-            return {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "password_hash": user.password_hash,
-                "role": user.role,
-                "created_at": user.created_at,
-            }
+            return _user_dict(user)
     return None
 
 
@@ -87,15 +107,18 @@ def get_user_by_id(user_id: str) -> Optional[dict]:
     with DBContext() as db:
         user = db.query(User).filter(User.id == user_id).first()
         if user:
-            return {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "password_hash": user.password_hash,
-                "role": user.role,
-                "created_at": user.created_at,
-            }
+            return _user_dict(user)
     return None
+
+
+def update_user_premium_status(user_id: str, is_premium: bool = True) -> Optional[dict]:
+    with DBContext() as db:
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
+            user.is_premium = is_premium
+            user.plan = "premium" if is_premium else "free"
+            db.commit()
+    return get_user_by_id(user_id)
 
 
 # ─── Session helpers ───────────────────────────────────────────────────────────

@@ -44,6 +44,8 @@ export const authApi = {
   register: (data: { username: string; email: string; password: string }) =>
     api.post('/auth/register', data),
   me: () => api.get('/auth/me'),
+  upgradePremium: (isPremium: boolean = true) =>
+    api.post('/auth/upgrade-premium', { is_premium: isPremium }),
 }
 
 // ─── Subjects ─────────────────────────────────────────────────
@@ -77,6 +79,7 @@ export const streamChatMessage = async ({
   onToken,
   onSources,
   onGraphContext,
+  onGrounding,
   onDone,
   onError,
   signal,
@@ -87,6 +90,7 @@ export const streamChatMessage = async ({
   onToken: (token: string) => void
   onSources: (sources: any[]) => void
   onGraphContext: (graph: any) => void
+  onGrounding?: (grounding: any) => void
   onDone: () => void
   onError: (err: any) => void
   signal?: AbortSignal
@@ -132,6 +136,8 @@ export const streamChatMessage = async ({
             onSources(evt.data)
           } else if (evt.type === 'graph_context') {
             onGraphContext(evt.data)
+          } else if (evt.type === 'grounding' && onGrounding) {
+            onGrounding(evt.data)
           } else if (evt.type === 'done') {
             isCompleted = true
             onDone()

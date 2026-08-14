@@ -170,14 +170,26 @@ class GraphRAGPipeline:
         # Invalidate query result cache for this topic (new data)
         await query_result_cache.invalidate(topic_id)
 
-        # Step 3: Entity extraction (sample up to 15 representative chunks to save LLM time)
+        # Signal 100% completion to UI immediately — document is ready for instant chat RAG
         if progress_callback:
-            await progress_callback("extracting_entities", 60)
+            await progress_callback("indexing_complete", 100)
 
+        # Step 3: Entity & Topic extraction (runs non-blocking graph enrichment)
         all_entities: List[Dict] = []
         all_relationships: List[Dict] = []
-        sample_step = max(1, len(chunks) // 15)
-        sample_chunks = chunks[::sample_step][:15]
+
+        # 3a. Instant heuristic extraction of key concept entities from section titles & headings
+        extracted_topics = extract_key_topics(chunks)
+        for topic in extracted_topics[:15]:
+            all_entities.append({
+                "name": topic,
+                "type": "concept",
+                "description": f"Key concept in {topic_id}"
+            })
+
+        # 3b. Sample top 3 representative chunks for deep LLM entity extraction
+        sample_step = max(1, len(chunks) // 3)
+        sample_chunks = chunks[::sample_step][:3]
 
         semaphore = asyncio.Semaphore(3)
 
@@ -374,40 +386,45 @@ class GraphRAGPipeline:
                         "score": 1.0,
                     }]
             else:
-                # Advanced retrieval pipeline (expand → HyDE → hybrid search → rerank → compress)
-                vector_chunks = await self._retrieve_chunks(effective_topic_id, question)
+                # Parallelize vector retrieval & graph retrieval
+                async def _get_vector_task():
+                    return await self._retrieve_chunks(effective_topic_id, question)
 
-            # ── Graph retrieval (non-page queries only) ────────────────────────
-            all_graph_nodes: List[Dict] = []
-            all_graph_edges: List[Dict] = []
-
-            if not requested_pages:
-                query_entities = await extract_query_entities(question)
-                for entity_term in query_entities[:3]:
-                    relevant = graph_store.find_relevant_entities(
-                        effective_topic_id, [entity_term]
-                    )
-                    for ent in relevant[:2]:
-                        subgraph = graph_store.search_neighbors(
-                            effective_topic_id,
-                            ent["id"],
-                            hops=settings.GRAPH_HOP_DEPTH,
+                async def _get_graph_task():
+                    if requested_pages:
+                        return {"entities": [], "relationships": []}
+                    query_entities = await extract_query_entities(question)
+                    all_graph_nodes: List[Dict] = []
+                    all_graph_edges: List[Dict] = []
+                    for entity_term in query_entities[:3]:
+                        relevant = graph_store.find_relevant_entities(
+                            effective_topic_id, [entity_term]
                         )
-                        all_graph_nodes.extend(subgraph["nodes"])
-                        all_graph_edges.extend(subgraph["edges"])
+                        for ent in relevant[:2]:
+                            subgraph = graph_store.search_neighbors(
+                                effective_topic_id,
+                                ent["id"],
+                                hops=settings.GRAPH_HOP_DEPTH,
+                            )
+                            all_graph_nodes.extend(subgraph["nodes"])
+                            all_graph_edges.extend(subgraph["edges"])
 
-                # Deduplicate graph nodes
-                seen_nodes: Set[str] = set()
-                unique_nodes: List[Dict] = []
-                for n in all_graph_nodes:
-                    if n["id"] not in seen_nodes:
-                        seen_nodes.add(n["id"])
-                        unique_nodes.append(n)
+                    seen_nodes: Set[str] = set()
+                    unique_nodes: List[Dict] = []
+                    for n in all_graph_nodes:
+                        if n["id"] not in seen_nodes:
+                            seen_nodes.add(n["id"])
+                            unique_nodes.append(n)
 
-                graph_context_data = {
-                    "entities": unique_nodes[:settings.GRAPH_TOP_ENTITIES],
-                    "relationships": all_graph_edges[:settings.GRAPH_TOP_EDGES],
-                }
+                    return {
+                        "entities": unique_nodes[:settings.GRAPH_TOP_ENTITIES],
+                        "relationships": all_graph_edges[:settings.GRAPH_TOP_EDGES],
+                    }
+
+                vector_chunks, graph_context_data = await asyncio.gather(
+                    _get_vector_task(),
+                    _get_graph_task(),
+                )
 
             # Build text representations
             if vector_chunks:
@@ -503,9 +520,17 @@ class GraphRAGPipeline:
             {"role": "user", "content": user_content},
         ]
 
-        # ── Step 6: Stream tokens ──────────────────────────────────────────────
+        # ── Step 6: Stream tokens & verify Self-RAG grounding ──────────────────
+        from app.rag.hallucination_guard import verify_response_grounding
+
+        accumulated_text = ""
         async for token in ollama.stream(messages):
+            accumulated_text += token
             yield f"data: {json.dumps({'type': 'token', 'data': token})}\n\n"
+
+        # Step 7: Self-RAG Hallucination Guard verification (non-blocking async thread)
+        grounding = await asyncio.to_thread(verify_response_grounding, accumulated_text, vector_chunks)
+        yield f"data: {json.dumps({'type': 'grounding', 'data': grounding})}\n\n"
 
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 

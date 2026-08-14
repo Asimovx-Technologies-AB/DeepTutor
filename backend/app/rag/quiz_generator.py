@@ -135,7 +135,7 @@ async def generate_quiz_for_section(
     # Try up to 2 times: once normally, once with a stricter reminder if parsing fails.
     for attempt in range(2):
         try:
-            response = await ollama.chat(messages, temperature=0.7)
+            response = await ollama.chat(messages, temperature=0.3)
         except Exception as e:
             print(f"[quiz_generator] Ollama call failed (attempt {attempt + 1}): {e}")
             continue

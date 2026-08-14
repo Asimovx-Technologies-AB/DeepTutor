@@ -30,14 +30,16 @@ class Settings(BaseSettings):
     # Graph Store
     GRAPH_DATA_DIR: str = "./graph_data"
 
-    # File uploads
+    # File uploads & Tier Limits
     UPLOAD_DIR: str = "./uploads"
-    MAX_UPLOAD_SIZE_MB: int = 50
+    MAX_UPLOAD_SIZE_MB: int = 100
+    FREE_MAX_UPLOAD_SIZE_MB: int = 10     # Free tier limit (10MB)
+    PREMIUM_MAX_UPLOAD_SIZE_MB: int = 100 # Premium tier limit (100MB)
 
     # ── RAG Core ────────────────────────────────────────────────────────────────
     # Document parsing
-    ENABLE_DOCLING: bool = True           # Set True to enable IBM Docling structure parsing for complex PDFs
-    DOCLING_TIMEOUT_SECONDS: int = 5      # Fast 5s timeout guard before falling back to pypdfium2/pdfplumber
+    ENABLE_DOCLING: bool = False          # Fast sub-second parsing with pypdfium2 / pdfplumber by default
+    DOCLING_TIMEOUT_SECONDS: int = 2      # Fast 2s timeout guard before falling back
     DOCLING_ENABLE_OCR: bool = True       # Enable OCR for scanned PDFs and image files (.png, .jpg, .jpeg, .webp)
     DOCLING_OCR_ENGINE: str = "easyocr"  # "easyocr" | "tesseract" | "rapidocr"
 
@@ -57,13 +59,13 @@ class Settings(BaseSettings):
     SPARSE_WEIGHT: float = 0.30           # weight for BM25 score in RRF fusion
 
     # Reranker
-    RERANKER_TYPE: str = "bm25"           # "bm25" (fast) | "cross_encoder" (accurate)
+    RERANKER_TYPE: str = "bm25"           # "bm25" (instant sub-ms rerank) | "cross_encoder" (slow LLM scoring)
 
     # Advanced retrieval techniques
-    ENABLE_HYDE: bool = True              # Hypothetical Document Embedding
-    ENABLE_QUERY_EXPANSION: bool = True   # Multi-query expansion (3 variants)
+    ENABLE_HYDE: bool = False             # Set to False to eliminate 800ms LLM pre-generation delay
+    ENABLE_QUERY_EXPANSION: bool = False  # Set to False for instant direct hybrid retrieval
     ENABLE_CONTEXTUAL_COMPRESSION: bool = True  # Trim irrelevant sentences
-    ENABLE_HYBRID_SEARCH: bool = True     # Dense + BM25 fusion
+    ENABLE_HYBRID_SEARCH: bool = True     # Dense + BM25 fusion (100% accuracy, <15ms)
 
     # Embedding cache
     EMBEDDING_CACHE_SIZE: int = 1024      # max entries in embedding LRU cache

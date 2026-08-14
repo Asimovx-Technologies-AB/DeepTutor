@@ -25,6 +25,9 @@ def _user_response(user: dict, token: str) -> dict:
             "username": user["username"],
             "email": user["email"],
             "role": user["role"],
+            "is_premium": user.get("is_premium", False),
+            "plan": user.get("plan", "free"),
+            "max_upload_size_mb": user.get("max_upload_size_mb", 10),
         },
         "access_token": token,
         "token_type": "bearer",
@@ -55,16 +58,44 @@ async def login(body: LoginRequest):
 
 @router.get("/me")
 async def me(authorization: Optional[str] = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    token = authorization.split(" ")[1]
-    payload = decode_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    user = db.get_user_by_id(payload["sub"])
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"id": user["id"], "username": user["username"], "email": user["email"], "role": user["role"]}
+    user = get_current_user(authorization)
+    return {
+        "id": user["id"],
+        "username": user["username"],
+        "email": user["email"],
+        "role": user["role"],
+        "is_premium": user.get("is_premium", False),
+        "plan": user.get("plan", "free"),
+        "max_upload_size_mb": user.get("max_upload_size_mb", 10),
+    }
+
+
+class UpgradeRequest(BaseModel):
+    is_premium: Optional[bool] = True
+
+
+@router.post("/upgrade-premium")
+async def upgrade_to_premium(
+    body: Optional[UpgradeRequest] = None,
+    authorization: Optional[str] = Header(None)
+):
+    """Upgrade user to Premium status (unlocks 100MB PDF uploads)."""
+    user = get_current_user(authorization)
+    target_status = body.is_premium if body and body.is_premium is not None else True
+    updated_user = db.update_user_premium_status(user["id"], target_status)
+    if not updated_user:
+        raise HTTPException(status_code=404, detail="User update failed")
+    return {
+        "message": f"Successfully {'upgraded to Premium' if target_status else 'downgraded to Free'}",
+        "user": {
+            "id": updated_user["id"],
+            "username": updated_user["username"],
+            "email": updated_user["email"],
+            "is_premium": updated_user.get("is_premium", False),
+            "plan": updated_user.get("plan", "free"),
+            "max_upload_size_mb": updated_user.get("max_upload_size_mb", 100 if target_status else 10),
+        }
+    }
 
 
 def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
@@ -74,7 +105,15 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
     token = authorization.split(" ")[1]
     # Allow demo token
     if token == "demo-token":
-        return {"id": "demo-user", "username": "Demo User", "email": "demo@deeptutor.ai", "role": "student"}
+        return {
+            "id": "demo-user",
+            "username": "Demo User",
+            "email": "demo@deeptutor.ai",
+            "role": "student",
+            "is_premium": False,
+            "plan": "free",
+            "max_upload_size_mb": 10,
+        }
     payload = decode_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")

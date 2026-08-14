@@ -18,6 +18,7 @@ import GraphContextPanel from '../components/GraphContextPanel'
 import GamifiedQuizGame from '../components/GamifiedQuizGame'
 import FlashcardsOverlay from '../components/FlashcardsOverlay'
 import McpDrawer from '../components/McpDrawer'
+import { UpgradeModal } from '../components/UpgradeModal'
 import type { Source } from '../components/SourceCard'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -33,6 +34,7 @@ interface ExtendedMessage {
   created_at: string
   sources?: Source[]
   graph_context?: GraphContextData
+  grounding?: any
 }
 
 // ─── Upload Status Badge ────────────────────────────────────────────────────────
@@ -106,6 +108,7 @@ export default function ChatPage() {
   const [showQuizGame, setShowQuizGame] = useState(false)
   const [showFlashcards, setShowFlashcards] = useState(false)
   const [showMcpDrawer, setShowMcpDrawer] = useState(false)
+  const [upgradeModalInfo, setUpgradeModalInfo] = useState<{ open: boolean; fileName?: string; sizeMb?: number }>({ open: false })
   const [liveGraphContext, setLiveGraphContext] = useState<GraphContextData>({ entities: [], relationships: [] })
   const [liveSources, setLiveSources] = useState<Source[]>([])
   const [extMessages, setExtMessages] = useState<ExtendedMessage[]>([])
@@ -246,6 +249,7 @@ export default function ChatPage() {
     let accContent = ''
     let accSources: Source[] = []
     let accGraph: GraphContextData = { entities: [], relationships: [] }
+    let accGrounding: any = null
 
     await streamChatMessage({
       sessionId: currentSessionId,
@@ -264,6 +268,9 @@ export default function ChatPage() {
         accGraph = g
         setLiveGraphContext(g)
       },
+      onGrounding: (gr) => {
+        accGrounding = gr
+      },
       onDone: () => {
         const assistantMsg: ExtendedMessage = {
           id: Date.now().toString() + '_ai',
@@ -272,6 +279,7 @@ export default function ChatPage() {
           created_at: new Date().toISOString(),
           sources: accSources,
           graph_context: accGraph,
+          grounding: accGrounding,
         }
         setExtMessages((prev) => [...prev, assistantMsg])
         clearStreamingContent()
@@ -410,6 +418,17 @@ export default function ChatPage() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+
+    const fileSizeMb = file.size / (1024 * 1024)
+    const isPremium = Boolean(user?.is_premium)
+    const maxLimitMb = isPremium ? 100 : 10
+
+    if (fileSizeMb > maxLimitMb && !isPremium) {
+      setUpgradeModalInfo({ open: true, fileName: file.name, sizeMb: fileSizeMb })
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
     setUploadingFile(true)
 
     try {
@@ -445,7 +464,11 @@ export default function ChatPage() {
         }
         setExtMessages((prev) => [...prev, infoMsg])
       } else {
-        throw new Error(data.detail ?? 'Upload failed')
+        const detailMsg = typeof data.detail === 'object' ? data.detail?.message : data.detail
+        if (data.detail?.requires_premium) {
+          setUpgradeModalInfo({ open: true, fileName: file.name, sizeMb: fileSizeMb })
+        }
+        throw new Error(detailMsg ?? 'Upload failed')
       }
     } catch (err: any) {
       const errMsg: ExtendedMessage = {
@@ -658,6 +681,7 @@ export default function ChatPage() {
                   content={msg.content}
                   isStreaming={msg.id === 'streaming'}
                   sources={msg.id === 'streaming' ? liveSources : msg.sources}
+                  grounding={msg.grounding}
                 />
               ))}
 
@@ -870,6 +894,12 @@ export default function ChatPage() {
         onClose={() => setShowFlashcards(false)}
       />
 
+      <UpgradeModal
+        isOpen={upgradeModalInfo.open}
+        exceededFileName={upgradeModalInfo.fileName}
+        exceededFileSizeMb={upgradeModalInfo.sizeMb}
+        onClose={() => setUpgradeModalInfo({ open: false })}
+      />
     </div>
   )
 }

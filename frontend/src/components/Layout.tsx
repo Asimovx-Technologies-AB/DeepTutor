@@ -26,6 +26,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
 import { healthApi, chatApi } from '../services/api'
 import ProfileModal from './ProfileModal'
+import UpgradeModal from './UpgradeModal'
 
 const NAV_ITEMS = [
   { to: '/dashboard', icon: Home, label: 'Home', badge: null },
@@ -43,6 +44,7 @@ export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [isOnline, setIsOnline] = useState<boolean>(true)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
+  const [isUpgradeOpen, setIsUpgradeOpen] = useState(false)
 
   const sessions = useChatStore((s) => s.sessions)
   const activeSession = useChatStore((s) => s.activeSession)
@@ -89,6 +91,8 @@ export default function Layout() {
     <div className="flex h-screen bg-[#FAF8F3] overflow-hidden text-[#20201D] font-sans antialiased">
       {/* Profile Modal */}
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
+      {/* Upgrade Modal */}
+      <UpgradeModal isOpen={isUpgradeOpen} onClose={() => setIsUpgradeOpen(false)} />
 
       {/* ─── LEFT SIDEBAR NAVIGATION ─── */}
       <aside
@@ -247,24 +251,38 @@ export default function Layout() {
           </div>
 
           {/* Compact Upgrade to Pro Card */}
-          <div className="bg-gradient-to-br from-[#FFF5EB] to-[#FFF9F2] border border-[#F28A45]/40 rounded-2xl p-4 space-y-2.5 shadow-2xs relative overflow-hidden">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg bg-[#F28A45] text-white flex items-center justify-center shadow-2xs">
-                <Crown size={13} />
+          {user?.is_premium ? (
+            <div className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border border-amber-500/30 rounded-2xl p-4 space-y-2 shadow-2xs">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow-2xs">
+                  <Crown size={13} />
+                </div>
+                <h4 className="text-xs font-black text-amber-900">Premium Active</h4>
               </div>
-              <h4 className="text-xs font-black text-[#20201D]">Upgrade to Pro</h4>
+              <p className="text-[11px] text-amber-800/90 font-medium leading-relaxed">
+                100MB PDF uploads & priority GraphRAG AI enabled.
+              </p>
             </div>
-            <p className="text-[11px] text-[#6F6B63] font-medium leading-relaxed">
-              Unlock unlimited learning, quizzes, and personalized AI insights.
-            </p>
-            <button
-              onClick={() => navigate('/app/dashboard')}
-              className="w-full bg-[#20201D] hover:bg-[#353531] text-white text-xs font-extrabold py-2 px-3 rounded-xl transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <span>Upgrade Now</span>
-              <ChevronRight size={13} />
-            </button>
-          </div>
+          ) : (
+            <div className="bg-gradient-to-br from-[#FFF5EB] to-[#FFF9F2] border border-[#F28A45]/40 rounded-2xl p-4 space-y-2.5 shadow-2xs relative overflow-hidden">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-[#F28A45] text-white flex items-center justify-center shadow-2xs">
+                  <Crown size={13} />
+                </div>
+                <h4 className="text-xs font-black text-[#20201D]">Upgrade to Pro</h4>
+              </div>
+              <p className="text-[11px] text-[#6F6B63] font-medium leading-relaxed">
+                Unlock 100MB PDF uploads, priority GraphRAG & AI features.
+              </p>
+              <button
+                onClick={() => setIsUpgradeOpen(true)}
+                className="w-full bg-[#20201D] hover:bg-[#353531] text-white text-xs font-extrabold py-2 px-3 rounded-xl transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>Upgrade Now</span>
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Sidebar Footer User Profile */}

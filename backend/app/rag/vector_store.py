@@ -253,9 +253,12 @@ class VectorStore:
             score = round(1 - dist, 4)
             if score < min_score:
                 continue
+            # Parent-Document Expansion pattern: if child chunk has parent_text, use parent_text for LLM context
+            effective_text = meta.get("parent_text") or doc
             chunks.append({
                 "id": doc_id,
-                "text": doc,
+                "text": effective_text,
+                "child_text": doc if meta.get("parent_text") else None,
                 "metadata": meta,
                 "score": score,
             })

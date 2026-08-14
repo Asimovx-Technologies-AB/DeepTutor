@@ -27,6 +27,7 @@ import {
 import { studyPlanApi, documentsApi, default as api } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
+import { UpgradeModal } from '../components/UpgradeModal'
 
 interface ScheduleDay {
   day: number
@@ -55,6 +56,7 @@ export default function StudyPlanPage() {
   const { user } = useAuthStore()
   const sessions = useChatStore((s) => s.sessions)
   const queryClient = useQueryClient()
+  const [upgradeModalInfo, setUpgradeModalInfo] = useState<{ open: boolean; fileName?: string; sizeMb?: number }>({ open: false })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Generator form state
@@ -502,8 +504,17 @@ export default function StudyPlanPage() {
                     accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.docx,.doc,.csv,.xlsx,.xls,.pptx,.ppt,.html,.json,.txt,.md"
                     className="hidden"
                     onChange={(e) => {
-                      if (e.target.files?.[0]) {
-                        setSelectedFile(e.target.files[0])
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const fileSizeMb = file.size / (1024 * 1024)
+                        const isPremium = Boolean(user?.is_premium)
+                        const maxLimitMb = isPremium ? 100 : 10
+                        if (fileSizeMb > maxLimitMb && !isPremium) {
+                          setUpgradeModalInfo({ open: true, fileName: file.name, sizeMb: fileSizeMb })
+                          if (fileInputRef.current) fileInputRef.current.value = ''
+                          return
+                        }
+                        setSelectedFile(file)
                         setSelectedSessionId('')
                       }
                     }}
@@ -705,6 +716,13 @@ export default function StudyPlanPage() {
           </div>
         )}
       </AnimatePresence>
+
+      <UpgradeModal
+        isOpen={upgradeModalInfo.open}
+        exceededFileName={upgradeModalInfo.fileName}
+        exceededFileSizeMb={upgradeModalInfo.sizeMb}
+        onClose={() => setUpgradeModalInfo({ open: false })}
+      />
     </div>
   )
 }

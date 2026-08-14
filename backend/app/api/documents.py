@@ -36,6 +36,8 @@ async def _run_indexing(doc_id: str, section_id: str, file_path: str, user_id: s
     async def progress_cb(stage: str, pct: int):
         _indexing_status[doc_id]["progress"] = pct
         _indexing_status[doc_id]["stage"] = stage
+        if pct >= 100:
+            _indexing_status[doc_id]["status"] = "done"
 
     # Use user-section-scoped collection so each user's uploaded section is isolated
     namespaced_topic = _user_section_collection_id(user_id, section_id)
@@ -75,13 +77,22 @@ async def upload_document(
             detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(list(allowed_exts)))}"
         )
 
-    # Check file size
+    # Check tier-based file size limit (Free: 10MB, Premium: 100MB)
     content = await file.read()
     size_mb = len(content) / (1024 * 1024)
-    if size_mb > settings.MAX_UPLOAD_SIZE_MB:
+    is_premium = user.get("is_premium", False)
+    tier_limit_mb = settings.PREMIUM_MAX_UPLOAD_SIZE_MB if is_premium else settings.FREE_MAX_UPLOAD_SIZE_MB
+
+    if size_mb > tier_limit_mb:
         raise HTTPException(
-            status_code=413,
-            detail=f"File too large ({size_mb:.1f}MB). Max: {settings.MAX_UPLOAD_SIZE_MB}MB"
+            status_code=400,
+            detail={
+                "code": "LIMIT_EXCEEDED",
+                "message": f"File size ({size_mb:.1f}MB) exceeds your {'Premium' if is_premium else 'Free'} plan limit of {tier_limit_mb}MB.",
+                "uploaded_mb": round(size_mb, 1),
+                "limit_mb": tier_limit_mb,
+                "requires_premium": not is_premium,
+            }
         )
 
     # Choose the section label for this upload.

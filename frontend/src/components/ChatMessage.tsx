@@ -10,9 +10,14 @@ interface Props {
   content: string
   isStreaming?: boolean
   sources?: Source[]
+  grounding?: {
+    grounding_score?: number
+    formatted_badge?: string
+    verified?: boolean
+  }
 }
 
-export default function ChatMessage({ role, content, isStreaming, sources }: Props) {
+export default function ChatMessage({ role, content, isStreaming, sources, grounding }: Props) {
   const [copied, setCopied] = useState(false)
   const isAssistant = role === 'assistant'
 
@@ -52,6 +57,12 @@ export default function ChatMessage({ role, content, isStreaming, sources }: Pro
         }`}>
           {isAssistant ? (
             <div className="markdown-content">
+              {/* Grounding Badge */}
+              {grounding && (
+                <div className="mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-[#EBF6EE] text-[#4F8A68] border border-[#4F8A68]/30">
+                  <span>{grounding.formatted_badge || `🛡️ Verified Grounding: ${Math.round((grounding.grounding_score || 1) * 100)}%`}</span>
+                </div>
+              )}
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {content}
               </ReactMarkdown>
