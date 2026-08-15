@@ -99,10 +99,11 @@ class OllamaClient:
         resolved_model = await self.get_working_chat_model(model)
         opts = {
             "temperature": temperature,
-            "num_ctx": 4096,
-            "num_predict": 768,
+            "num_ctx": getattr(settings, "OLLAMA_NUM_CTX", 4096),
+            "num_predict": getattr(settings, "OLLAMA_NUM_PREDICT", 2048),
             "top_k": 20,
             "top_p": 0.85,
+            "repeat_penalty": 1.1,
         }
         if options:
             opts.update(options)
@@ -111,7 +112,7 @@ class OllamaClient:
             "model": resolved_model,
             "messages": messages,
             "stream": False,
-            "keep_alive": "15m",
+            "keep_alive": "30m",
             "options": opts,
         }
         client = self._get_client()
@@ -134,10 +135,11 @@ class OllamaClient:
         resolved_model = await self.get_working_chat_model(model)
         opts = {
             "temperature": temperature,
-            "num_ctx": 4096,
-            "num_predict": 768,
+            "num_ctx": getattr(settings, "OLLAMA_NUM_CTX", 4096),
+            "num_predict": getattr(settings, "OLLAMA_NUM_PREDICT", 2048),
             "top_k": 20,
             "top_p": 0.85,
+            "repeat_penalty": 1.1,
         }
         if options:
             opts.update(options)
@@ -146,7 +148,7 @@ class OllamaClient:
             "model": resolved_model,
             "messages": messages,
             "stream": True,
-            "keep_alive": "15m",
+            "keep_alive": "30m",
             "options": opts,
         }
         try:

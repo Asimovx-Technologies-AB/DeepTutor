@@ -1,4 +1,4 @@
-# Deep Tutor MVP — Backend Dependencies
+# Deep Tutor — Advanced RAG Pipeline Dependencies
 fastapi>=0.111.0
 uvicorn[standard]>=0.30.0
 python-jose[cryptography]>=3.3.0
@@ -11,36 +11,48 @@ python-multipart>=0.0.9
 sqlalchemy>=2.0.0
 aiosqlite>=0.20.0
 
-# RAG — Core
-langchain>=0.2.0
-langchain-community>=0.2.0
-chromadb>=0.5.0
-networkx>=3.3
+# ── Stage 3: Vector Store ──────────────────────────────────────────────────────
+faiss-cpu>=1.8.0           # FAISS HNSW vector store (replaces ChromaDB as primary)
+chromadb>=0.5.0            # Kept as fallback vector backend
 
-# Document parsing — Primary (Docling) + Fallbacks
-docling>=2.0.0            # IBM Docling: structure-aware PDF parsing, OCR, tables, formulas
+# ── Stage 2: Multi-Provider Embeddings ────────────────────────────────────────
+openai>=1.30.0             # OpenAI embeddings (text-embedding-3-small/large)
+google-generativeai>=0.7.0 # Gemini embeddings (text-embedding-004)
 
-# RAG — Advanced Retrieval (NEW)
-rank-bm25>=0.2.2          # BM25+ reranking and hybrid search
-cachetools>=5.3.0         # TTL-aware LRU caches for embedding + query results
-scikit-learn>=1.4.0       # cosine similarity utilities
+# ── Stage 1: Document Parsers ─────────────────────────────────────────────────
+pymupdf>=1.24.0            # PyMuPDF: primary fast parser (fitz) — layout, formulas
+pdfplumber>=0.11.0         # Layout + table extraction fallback
+pypdf>=4.0.0               # Python PDF fallback
+pypdf2>=3.0.0              # Legacy PDF fallback
+docling>=2.0.0             # IBM Docling: OCR, table, formula, structure-aware
 
-# Document processing (fallbacks + OCR)
-pypdf2>=3.0.0
-pypdf>=4.0.0
-pdfplumber>=0.11.0
-unstructured>=0.14.0
+# OCR Engines
 pytesseract>=0.3.10
 easyocr>=1.7.0
 
+# Other Document Formats
+python-docx>=1.1.0
+openpyxl>=3.1.0
+python-pptx>=0.6.21
+beautifulsoup4>=4.12.0
 
-# HTTP / Async
+# ── Stage 2 / 4: Graph & Knowledge Extraction ─────────────────────────────────
+networkx>=3.3              # Kept as graph utility (traversal helpers)
+
+# ── Stage 4: Advanced Retrieval ───────────────────────────────────────────────
+rank-bm25>=0.2.2           # BM25+ for sparse hybrid search
+scikit-learn>=1.4.0        # cosine similarity utilities
+
+# ── Caching ───────────────────────────────────────────────────────────────────
+cachetools>=5.3.0          # TTL-aware LRU caches for embeddings + query results
+
+# ── HTTP / Async ──────────────────────────────────────────────────────────────
 httpx>=0.27.0
 aiofiles>=23.2.1
 
-# Utilities
+# ── Utilities ─────────────────────────────────────────────────────────────────
 python-dotenv>=1.0.0
 tenacity>=8.3.0
 
-# Model Context Protocol
+# ── Model Context Protocol ────────────────────────────────────────────────────
 mcp>=1.0.0

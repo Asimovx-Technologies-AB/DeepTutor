@@ -41,8 +41,26 @@ def _extract_json_list(text: str) -> List[str]:
     return re.findall(r'"([^"]{5,})"', text)
 
 
+STOPWORDS = {
+    "a", "about", "above", "after", "again", "against", "all", "am", "an", "and",
+    "any", "are", "aren't", "as", "at", "be", "because", "been", "before", "being",
+    "below", "between", "both", "but", "by", "can", "can't", "cannot", "could",
+    "did", "do", "does", "doing", "down", "during", "each", "few", "for", "from",
+    "further", "had", "has", "have", "having", "he", "her", "here", "hers", "herself",
+    "him", "himself", "his", "how", "i", "if", "in", "into", "is", "isn't", "it",
+    "its", "itself", "let's", "me", "more", "most", "my", "myself", "no", "nor",
+    "not", "of", "off", "on", "once", "only", "or", "other", "ought", "our", "ours",
+    "ourselves", "out", "over", "own", "same", "she", "should", "so", "some", "such",
+    "than", "that", "the", "their", "theirs", "them", "themselves", "then", "there",
+    "these", "they", "this", "those", "through", "to", "too", "under", "until", "up",
+    "very", "was", "wasn't", "we", "were", "weren't", "what", "when", "where", "which",
+    "while", "who", "whom", "why", "with", "would", "you", "your", "yours", "yourself",
+    "yourselves", "tell", "give", "explain", "describe", "find", "show", "know"
+}
+
+
 def _tokenize_simple(text: str) -> List[str]:
-    return [t.lower() for t in re.findall(r'\b\w+\b', text) if len(t) > 2]
+    return [t.lower() for t in re.findall(r'\b[a-zA-Z0-9_-]+\b', text) if len(t) > 2 and t.lower() not in STOPWORDS]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -70,7 +88,7 @@ JSON Array:"""
         self.n_variants = n_variants
 
     async def expand(self, query: str) -> List[str]:
-        """Returns [original_query] + [n_variants alternative phrasings]."""
+        """Returns [query, variant_1, variant_2, ...] (original always first)."""
         if not settings.ENABLE_QUERY_EXPANSION:
             return [query]
 
@@ -182,12 +200,8 @@ Relevant sentences:"""
         Keeps sentences that share at least 2 content tokens with the query.
         """
         query_tokens = set(_tokenize_simple(query))
-        # Remove very common words from query tokens
-        stopwords = {"what", "how", "why", "when", "where", "who", "does", "are",
-                     "the", "and", "for", "with", "this", "that", "from", "explain"}
-        query_tokens -= stopwords
 
-        if len(query_tokens) < 2:
+        if len(query_tokens) < 1:
             return chunks  # query too short to filter meaningfully
 
         compressed = []
@@ -257,13 +271,13 @@ Relevant sentences:"""
 class ConfidenceScorer:
     """
     Estimates how confident the RAG system is in its retrieved context.
-    Uses retrieval signal strength (chunk scores) + graph coverage.
+    Uses retrieval signal strength (chunk scores) + keyword match + graph coverage.
     Returns a float [0.0, 1.0] and a human-readable label.
     """
 
     THRESHOLDS = {
-        "high":   0.65,
-        "medium": 0.40,
+        "high":   0.60,
+        "medium": 0.35,
         "low":    0.20,
     }
 
@@ -280,23 +294,38 @@ class ConfidenceScorer:
         if not chunks:
             return 0.0, "out_of_scope"
 
-        # 1. Average retrieval score (cosine similarity)
+        # 1. Retrieval scores (cosine similarity)
         scores = [c.get("rerank_score", c.get("score", 0.0)) for c in chunks]
         avg_score = sum(scores) / len(scores) if scores else 0.0
         max_score = max(scores) if scores else 0.0
 
         # 2. Graph coverage bonus
-        graph_bonus = min(0.1, len(graph_entities) * 0.01)
+        graph_bonus = min(0.20, len(graph_entities) * 0.03)
 
-        # 3. Keyword coverage in retrieved text
+        # 3. Keyword coverage in retrieved text (excluding common English stopwords)
         query_tokens = set(_tokenize_simple(query))
-        combined_text = " ".join(c["text"] for c in chunks).lower()
+        combined_text = " ".join(c.get("text", "") for c in chunks).lower()
         doc_tokens = set(_tokenize_simple(combined_text))
-        kw_coverage = len(query_tokens & doc_tokens) / max(len(query_tokens), 1)
+
+        if query_tokens:
+            matched_tokens = query_tokens & doc_tokens
+            kw_coverage = len(matched_tokens) / len(query_tokens)
+        else:
+            kw_coverage = 0.5
+
+        # Strictly flag as OUT_OF_SCOPE if no keywords match and no graph entities exist
+        if query_tokens and kw_coverage == 0.0 and len(graph_entities) == 0:
+            # Dense embedding baseline noise is typically 0.35-0.55. Without any keyword or graph anchor, it is out of scope.
+            if max_score < 0.65 or len(query_tokens) <= 3:
+                return 0.05, "out_of_scope"
+
+        # If very weak keyword overlap (<15%), no graph entities, and low semantic score (<0.48)
+        if query_tokens and kw_coverage < 0.15 and len(graph_entities) == 0 and max_score < 0.48:
+            return 0.10, "out_of_scope"
 
         # Combined confidence
-        confidence = (0.5 * max_score + 0.3 * avg_score + 0.1 * kw_coverage + graph_bonus)
-        confidence = round(min(1.0, confidence), 4)
+        confidence = (0.45 * max_score + 0.25 * avg_score + 0.20 * kw_coverage + graph_bonus)
+        confidence = round(min(1.0, max(0.0, confidence)), 4)
 
         if confidence >= self.THRESHOLDS["high"]:
             label = "high"
@@ -320,13 +349,13 @@ class GracefulOutOfScopeHandler:
     """
 
     OUT_OF_SCOPE_RESPONSE = (
-        "I couldn't find information about **{topic}** in the uploaded document. "
-        "This topic may not be covered in your current study material.\n\n"
-        "💡 **Suggestions:**\n"
-        "- Try rephrasing your question using terms from the document\n"
-        "- Check if this topic is covered in a different section\n"
-        "- Upload a document that covers this topic\n\n"
-        "I can answer from my general knowledge if you'd like — just ask!"
+        "### 📚 Topic Not Found in Uploaded Material\n\n"
+        "I don't know about **\"{topic}\"** because it is not mentioned in your uploaded study material.\n\n"
+        "---\n\n"
+        "**💡 Suggestions:**\n"
+        "- **Check your document:** Make sure your question relates to the uploaded PDF.\n"
+        "- **Upload notes:** If you are studying a new topic, attach the relevant PDF using the **Attach PDF** button.\n"
+        "- **Rephrase:** Try using key terms or headings found in your study material."
     )
 
     def is_out_of_scope(self, confidence: float, label: str) -> bool:

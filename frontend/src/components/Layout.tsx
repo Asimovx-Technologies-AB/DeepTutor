@@ -75,6 +75,7 @@ export default function Layout() {
 
   const handleDeleteSession = async (e: React.MouseEvent, sid: string) => {
     e.stopPropagation()
+    if (!confirm('Are you sure you want to delete this chat session? All messages, documents, and data will be permanently removed from the database.')) return
     try {
       await chatApi.deleteSession(sid)
       removeSession(sid)
@@ -82,8 +83,9 @@ export default function Layout() {
         setActiveSession(null)
         navigate('/chat')
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error('Failed to delete session:', err)
+      alert('Failed to delete chat session from database. Please try again.')
     }
   }
 

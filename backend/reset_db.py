@@ -1,35 +1,87 @@
 import shutil
 from pathlib import Path
-from app.core.database import DBContext
+import bcrypt
+import uuid
+from datetime import datetime
+
+from app.core.database import DBContext, engine
 from app.core.models import (
-    User, ChatSession, ChatMessage, Document, 
+    Base, User, ChatSession, ChatMessage, Document, 
     Quiz, QuizQuestion, QuizAttempt, Flashcard, StudyPlan
 )
-from app.rag.vector_store import vector_store
+from app.rag.storage import active_vector_store, active_graph_store
 
-def wipe_all_data():
-    print("1. Wiping SQL database tables...")
-    with DBContext() as db:
-        db.query(ChatMessage).delete()
-        db.query(ChatSession).delete()
-        db.query(QuizQuestion).delete()
-        db.query(QuizAttempt).delete()
-        db.query(Quiz).delete()
-        db.query(Flashcard).delete()
-        db.query(StudyPlan).delete()
-        db.query(Document).delete()
-        db.query(User).delete()
+# Legacy stores
+try:
+    from app.rag.vector_store import vector_store
+except Exception:
+    vector_store = None
 
-    print("2. Resetting ChromaDB vector collections...")
+try:
+    from app.rag.graph_store import graph_store
+except Exception:
+    graph_store = None
+
+
+def wipe_all_data(reseed_default_user: bool = True):
+    print("==================================================")
+    print("   DeepTutor - Full Dataset & Database Reset      ")
+    print("==================================================")
+
+    print("\n1. Wiping SQL database tables...")
     try:
-        vector_store.reset()
+        with DBContext() as db:
+            db.query(ChatMessage).delete()
+            db.query(ChatSession).delete()
+            db.query(QuizQuestion).delete()
+            db.query(QuizAttempt).delete()
+            db.query(Quiz).delete()
+            db.query(Flashcard).delete()
+            db.query(StudyPlan).delete()
+            db.query(Document).delete()
+            db.query(User).delete()
+        print("   [OK] Cleared all SQL tables (Chats, Documents, Quizzes, Flashcards, Study Plans, Users).")
     except Exception as e:
-        print(f"Vector store reset note: {e}")
+        print(f"   [WARN] SQL clear warning: {e}")
+        # Fallback drop and recreate
+        try:
+            Base.metadata.drop_all(bind=engine)
+            Base.metadata.create_all(bind=engine)
+            print("   [OK] Re-created clean schema tables.")
+        except Exception as e2:
+            print(f"   [ERROR] Could not recreate tables: {e2}")
 
-    print("3. Deleting uploaded files and graph data...")
-    folders_to_clear = ["./uploads", "./graph_data"]
-    for folder in folders_to_clear:
-        path = Path(folder)
+    print("\n2. Resetting Active Vector Store & Knowledge Graph...")
+    try:
+        if hasattr(active_vector_store, "reset"):
+            active_vector_store.reset()
+            print("   [OK] Active Vector Store reset.")
+    except Exception as e:
+        print(f"   [INFO] Vector store reset note: {e}")
+
+    try:
+        if hasattr(active_graph_store, "reset"):
+            active_graph_store.reset()
+            print("   [OK] Active Graph Store reset.")
+    except Exception as e:
+        print(f"   [INFO] Graph store reset note: {e}")
+
+    if vector_store and hasattr(vector_store, "reset"):
+        try:
+            vector_store.reset()
+        except Exception:
+            pass
+
+    print("\n3. Clearing all data directories on disk...")
+    folders_to_clear = [
+        Path("./uploads"),
+        Path("./graph_data"),
+        Path("./faiss_data"),
+        Path("./lightrag_data"),
+        Path("./chroma_data"),
+    ]
+
+    for path in folders_to_clear:
         if path.exists():
             for item in path.iterdir():
                 if item.is_dir():
@@ -39,9 +91,37 @@ def wipe_all_data():
                         item.unlink()
                     except Exception:
                         pass
-            print(f"   Cleared contents of {folder}")
+            print(f"   [OK] Cleared contents of {path}")
+        else:
+            path.mkdir(parents=True, exist_ok=True)
+            print(f"   [OK] Initialized empty directory {path}")
 
-    print("[OK] All data successfully deleted! You can start fresh.")
+    if reseed_default_user:
+        print("\n4. Re-seeding default user account...")
+        default_email = "sreeharips385@gmail.com"
+        default_username = "i"
+        default_pass = "mypassword123"
+        hashed = bcrypt.hashpw(default_pass.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        
+        with DBContext() as db:
+            user = User(
+                id=str(uuid.uuid4()),
+                username=default_username,
+                email=default_email,
+                password_hash=hashed,
+                role="student",
+                is_premium=True,
+                plan="premium",
+                created_at=datetime.utcnow().isoformat(),
+            )
+            db.add(user)
+        print(f"   [OK] Created default user: {default_email} / {default_pass} (Premium enabled)")
+
+    print("\n==================================================")
+    print(" [SUCCESS] All dataset & database state reset!")
+    print("==================================================")
+
 
 if __name__ == "__main__":
-    wipe_all_data()
+    wipe_all_data(reseed_default_user=True)
+

@@ -169,6 +169,7 @@ def get_session(session_id: str) -> Optional[dict]:
 
 def delete_session(session_id: str) -> bool:
     with DBContext() as db:
+        db.query(ChatMessage).filter(ChatMessage.session_id == session_id).delete(synchronize_session=False)
         s = db.query(ChatSession).filter(ChatSession.id == session_id).first()
         if s:
             db.delete(s)
@@ -359,8 +360,9 @@ def delete_document(doc_id: str, user_id: str) -> Optional[dict]:
 
 
 def delete_documents_for_section(user_id: str, topic_id: str) -> List[dict]:
+    targets = {topic_id, topic_id.lower(), topic_id.upper(), topic_id.strip()}
     with DBContext() as db:
-        docs = db.query(Document).filter(Document.user_id == user_id, Document.topic_id == topic_id).all()
+        docs = db.query(Document).filter(Document.user_id == user_id, Document.topic_id.in_(targets)).all()
         doc_dicts = [
             {
                 "id": d.id,
@@ -374,6 +376,71 @@ def delete_documents_for_section(user_id: str, topic_id: str) -> List[dict]:
         for d in docs:
             db.delete(d)
         return doc_dicts
+
+
+def delete_section_all_data(user_id: str, topic_id: str) -> dict:
+    """
+    Comprehensively delete all database records for a section/topic:
+    - Documents
+    - Flashcards
+    - Quizzes, QuizQuestions, QuizAttempts
+    - StudyPlans
+    - ChatSessions & ChatMessages
+    """
+    targets = {topic_id, topic_id.lower(), topic_id.upper(), topic_id.strip()}
+    with DBContext() as db:
+        # 1. Documents
+        docs = db.query(Document).filter(
+            Document.user_id == user_id,
+            Document.topic_id.in_(targets)
+        ).all()
+        deleted_docs = [
+            {"id": d.id, "file_name": d.file_name, "file_path": d.file_path, "topic_id": d.topic_id}
+            for d in docs
+        ]
+        for d in docs:
+            db.delete(d)
+
+        # 2. Flashcards
+        deleted_flashcards = db.query(Flashcard).filter(
+            Flashcard.topic_id.in_(targets)
+        ).delete(synchronize_session=False)
+
+        # 3. Quizzes & Questions & Attempts
+        quizzes = db.query(Quiz).filter(
+            Quiz.topic_id.in_(targets)
+        ).all()
+        quiz_ids = [q.id for q in quizzes]
+        if quiz_ids:
+            db.query(QuizAttempt).filter(QuizAttempt.quiz_id.in_(quiz_ids)).delete(synchronize_session=False)
+            db.query(QuizQuestion).filter(QuizQuestion.quiz_id.in_(quiz_ids)).delete(synchronize_session=False)
+            for q in quizzes:
+                db.delete(q)
+
+        # 4. Study Plans
+        deleted_plans = db.query(StudyPlan).filter(
+            StudyPlan.user_id == user_id,
+            StudyPlan.topic_id.in_(targets)
+        ).delete(synchronize_session=False)
+
+        # 5. Chat Sessions & Messages (cascade deletes messages)
+        sessions = db.query(ChatSession).filter(
+            ChatSession.user_id == user_id,
+            (ChatSession.topic_id.in_(targets) | ChatSession.id.in_(targets))
+        ).all()
+        session_ids = [s.id for s in sessions]
+        if session_ids:
+            db.query(ChatMessage).filter(ChatMessage.session_id.in_(session_ids)).delete(synchronize_session=False)
+            for s in sessions:
+                db.delete(s)
+
+        return {
+            "deleted_docs": deleted_docs,
+            "deleted_flashcards_count": deleted_flashcards,
+            "deleted_quizzes_count": len(quizzes),
+            "deleted_plans_count": deleted_plans,
+            "deleted_sessions_count": len(sessions),
+        }
 
 
 

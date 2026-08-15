@@ -1,0 +1,42 @@
+{
+  "supervised_learning": {
+    "id": "supervised_learning",
+    "name": "Supervised Learning",
+    "type": "concept",
+    "description": "a type of machine learning where the algorithm is trained on labeled data",
+    "sources": [
+      "svm_notes.txt p.1"
+    ],
+    "mentions": 1
+  },
+  "support_vector_machines": {
+    "id": "support_vector_machines",
+    "name": "Support Vector Machines",
+    "type": "algorithm",
+    "description": "a supervised learning model used for classification and regression analysis",
+    "sources": [
+      "svm_notes.txt p.1"
+    ],
+    "mentions": 1
+  },
+  "classification_analysis": {
+    "id": "classification_analysis",
+    "name": "Classification Analysis",
+    "type": "concept",
+    "description": "the process of identifying categories or classes in data",
+    "sources": [
+      "svm_notes.txt p.1"
+    ],
+    "mentions": 1
+  },
+  "regression_analysis": {
+    "id": "regression_analysis",
+    "name": "Regression Analysis",
+    "type": "concept",
+    "description": "the process of predicting continuous values in data",
+    "sources": [
+      "svm_notes.txt p.1"
+    ],
+    "mentions": 1
+  }
+}

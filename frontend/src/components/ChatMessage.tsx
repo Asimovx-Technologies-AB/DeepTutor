@@ -57,10 +57,10 @@ export default function ChatMessage({ role, content, isStreaming, sources, groun
         }`}>
           {isAssistant ? (
             <div className="markdown-content">
-              {/* Grounding Badge */}
-              {grounding && (
+              {/* Grounding Badge (only for substantive answers) */}
+              {grounding && grounding.formatted_badge && !content.includes("Topic Not Found") && (
                 <div className="mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-[#EBF6EE] text-[#4F8A68] border border-[#4F8A68]/30">
-                  <span>{grounding.formatted_badge || `🛡️ Verified Grounding: ${Math.round((grounding.grounding_score || 1) * 100)}%`}</span>
+                  <span>{grounding.formatted_badge}</span>
                 </div>
               )}
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -79,8 +79,8 @@ export default function ChatMessage({ role, content, isStreaming, sources, groun
           )}
         </div>
 
-        {/* Source cards — shown below assistant messages */}
-        {isAssistant && sources && sources.length > 0 && !isStreaming && (
+        {/* Source cards — shown below assistant messages when not a missing topic notice */}
+        {isAssistant && sources && sources.length > 0 && !isStreaming && !content.includes("Topic Not Found") && (
           <SourceCard sources={sources} />
         )}
 
