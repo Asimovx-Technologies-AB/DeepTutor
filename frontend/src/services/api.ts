@@ -7,7 +7,10 @@ export const getApiBaseUrl = (): string => {
     const trimmed = envUrl.replace(/\/+$/, '')
     return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`
   }
-  return '/api'
+  if (import.meta.env.DEV) {
+    return '/api'
+  }
+  return 'https://deeptutor-api-udv2.onrender.com/api'
 }
 
 const api = axios.create({
