@@ -2,8 +2,10 @@ import axios from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
 export const getApiBaseUrl = (): string => {
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL
+  const envUrl = import.meta.env.VITE_API_BASE_URL
+  if (envUrl) {
+    const trimmed = envUrl.replace(/\/+$/, '')
+    return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`
   }
   return '/api'
 }
