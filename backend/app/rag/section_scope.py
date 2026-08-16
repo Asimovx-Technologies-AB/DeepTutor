@@ -92,8 +92,15 @@ async def get_section_context(
     # No query, or query search came back empty — fall back to a sample
     # of this SAME section's own documents (never another section's).
     try:
-        topic = active_vector_store._topic(collection_id)
-        return topic._docs[:top_k]
+        if hasattr(active_vector_store, "get_all_chunks"):
+            chunks = active_vector_store.get_all_chunks(collection_id)
+            if chunks:
+                return [c["text"] if isinstance(c, dict) else str(c) for c in chunks[:top_k]]
+        if hasattr(active_vector_store, "_topic"):
+            topic = active_vector_store._topic(collection_id)
+            return topic._docs[:top_k]
+        res = active_vector_store.search(collection_id, [0.0] * 3072, top_k=top_k, min_score=0.0)
+        return [r["text"] for r in res if r.get("text")]
     except Exception as e:
         print(f"[section_scope] Failed to read collection {collection_id}: {e}")
         return []

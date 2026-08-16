@@ -250,7 +250,7 @@ export const mcpApi = {
 export const studyPlanApi = {
   myPlans: () => api.get('/study-plan/my-plans'),
   get: (id: string) => api.get(`/study-plan/${id}`),
-  generate: (data: { topic_id?: string; target_date: string; hours_per_day?: number }) =>
+  generate: (data: { topic_id?: string; session_id?: string; target_date: string; hours_per_day?: number }) =>
     api.post('/study-plan/generate', data),
   toggleDay: (planId: string, dayNumber: number) =>
     api.post(`/study-plan/${planId}/toggle-day`, { day_number: dayNumber }),

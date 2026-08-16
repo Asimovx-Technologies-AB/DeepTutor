@@ -189,7 +189,7 @@ class GeminiClient:
         client = self._get_client()
 
         models_to_try = [resolved_model]
-        for fallback in ["gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-flash-latest"]:
+        for fallback in ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash"]:
             if fallback not in models_to_try:
                 models_to_try.append(fallback)
 
@@ -275,16 +275,18 @@ class GeminiClient:
         if not uncached_texts:
             return [cached_results[i] for i in range(len(texts))]
 
-        # 2. Batch call Gemini batchEmbedContents in chunks of 50
+        # 2. Batch call Gemini batchEmbedContents in chunks of 50 concurrently
         batch_size = 50
         headers = self._get_headers()
         url = f"{self.base_url}/{target_model}:batchEmbedContents"
         client = self._get_client()
 
-        for i in range(0, len(uncached_texts), batch_size):
-            chunk_texts = uncached_texts[i:i + batch_size]
-            chunk_indices = uncached_indices[i:i + batch_size]
+        batch_slices = [
+            (uncached_texts[i:i + batch_size], uncached_indices[i:i + batch_size])
+            for i in range(0, len(uncached_texts), batch_size)
+        ]
 
+        async def _fetch_one_batch(chunk_texts: List[str], chunk_indices: List[int]):
             requests_payload = [
                 {"model": target_model, "content": {"parts": [{"text": t}]}}
                 for t in chunk_texts
@@ -294,24 +296,23 @@ class GeminiClient:
             embeddings = None
             for attempt in range(3):
                 try:
-                    r = await client.post(url, headers=headers, json=payload, timeout=30)
+                    r = await client.post(url, headers=headers, json=payload, timeout=20)
                     if r.status_code == 200:
                         data = r.json()
                         raw_embs = data.get("embeddings", [])
                         embeddings = [e.get("values", []) for e in raw_embs]
                         break
                     elif r.status_code in (429, 503):
-                        await asyncio.sleep(1.0 * (attempt + 1))
+                        await asyncio.sleep(0.5 * (attempt + 1))
                         continue
                     else:
                         r.raise_for_status()
                 except Exception as e:
                     if attempt < 2:
-                        await asyncio.sleep(1.0)
+                        await asyncio.sleep(0.5)
                         continue
                     print(f"[GEMINI BATCH EMBED ERROR] {e}")
 
-            # Fallback if call failed
             dim = 3072 if "gemini-embedding" in target_model else 768
             if not embeddings or len(embeddings) != len(chunk_texts):
                 embeddings = []
@@ -321,10 +322,11 @@ class GeminiClient:
                     pseudo = [((h + j) % 1000) / 1000.0 for j in range(dim)]
                     embeddings.append(pseudo)
 
-            # Store in cache and result dict
             for orig_idx, t, emb in zip(chunk_indices, chunk_texts, embeddings):
                 cached_results[orig_idx] = emb
                 await self._embedding_cache.set(t, target_model, emb)
+
+        await asyncio.gather(*[_fetch_one_batch(texts_chunk, idxs_chunk) for texts_chunk, idxs_chunk in batch_slices])
 
         # Assemble final result in original order
         final_list = [cached_results[i] for i in range(len(texts))]

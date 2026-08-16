@@ -17,6 +17,7 @@ from app.rag.graph_store import graph_store
 from app.rag.vector_store import vector_store
 from app.rag.cache import query_result_cache
 from app.rag.section_scope import get_section_collection_id
+from app.rag.storage.s3_store import s3_store
 
 
 settings = get_settings()
@@ -116,6 +117,11 @@ async def upload_document(
         file_type=ext.lstrip("."),
     )
 
+    # Upload to AWS S3 Cloud Storage
+    s3_key = f"documents/{user['id']}/{section_id}/{file.filename}"
+    if s3_store.is_configured():
+        background_tasks.add_task(s3_store.upload_file, file_path, s3_key, file.content_type)
+
     # Clear any stale flashcards for this same section so generated cards stay aligned with the latest PDF.
     db.delete_flashcards_for_topic(section_id)
 
@@ -128,8 +134,9 @@ async def upload_document(
         "file_type": ext.lstrip("."),
         "size_mb": round(size_mb, 2),
         "topic_id": topic_id,
+        "s3_stored": s3_store.is_configured(),
         "status": "indexing",
-        "message": f"✅ {file.filename} uploaded. GraphRAG indexing started in background.",
+        "message": f"✅ {file.filename} uploaded to AWS S3 & GraphRAG indexing started in background.",
     }
 
 
@@ -253,7 +260,7 @@ async def delete_section_documents(section_id: str, user: dict = Depends(get_cur
     del_result = db.delete_section_all_data(user_id=user_id, topic_id=section_id)
     deleted_docs = del_result.get("deleted_docs", [])
 
-    # 2. Remove physical PDF / document files from disk
+    # 2. Remove physical PDF / document files from disk & AWS S3
     for doc in deleted_docs:
         file_path = doc.get("file_path")
         if file_path and os.path.exists(file_path):
@@ -261,6 +268,11 @@ async def delete_section_documents(section_id: str, user: dict = Depends(get_cur
                 os.remove(file_path)
             except Exception as e:
                 print(f"[documents] Failed to remove file {file_path}: {e}")
+
+        # Delete from AWS S3
+        if s3_store.is_configured() and doc.get("file_name"):
+            s3_key = f"documents/{user_id}/{section_id}/{doc.get('file_name')}"
+            s3_store.delete_file(s3_key)
 
     # Also clean up the section upload directories if present
     for base_p in [

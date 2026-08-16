@@ -41,8 +41,11 @@ class Settings(BaseSettings):
     GEMINI_EMBED_MODEL: str = "models/gemini-embedding-2"
 
     # ── Stage 3: Vector Store Backend ───────────────────────────────────────
-    # Switch via .env: VECTOR_STORE_BACKEND=faiss | chroma
-    VECTOR_STORE_BACKEND: str = "faiss"
+    # Switch via .env: VECTOR_STORE_BACKEND=pinecone | faiss | chroma
+    VECTOR_STORE_BACKEND: str = "pinecone"
+    PINECONE_API_KEY: str = ""
+    PINECONE_INDEX_NAME: str = "deeptutor"
+    PINECONE_ENVIRONMENT: str = "us-east-1"
     FAISS_DATA_DIR: str = "./faiss_data"
     FAISS_INDEX_TYPE: str = "hnsw"           # "hnsw" | "flat"
     FAISS_HNSW_M: int = 32                   # HNSW graph connectivity degree
@@ -76,9 +79,9 @@ class Settings(BaseSettings):
     MIN_CHUNK_CHARS: int = 80               # discard chunks smaller than this
 
     # ── Stage 4: Retrieval & Hybrid Search (Optimized for <10s response) ────
-    TOP_K_RETRIEVAL: int = 6                # candidates fetched before reranking
-    TOP_K_CHUNKS: int = 3                   # final chunks sent to LLM (fast prefill <200ms)
-    MIN_CHUNK_SCORE: float = 0.20           # similarity threshold
+    TOP_K_RETRIEVAL: int = 8                # candidates fetched before reranking
+    TOP_K_CHUNKS: int = 4                   # final chunks sent to LLM for comprehensive context
+    MIN_CHUNK_SCORE: float = 0.15           # similarity threshold (tolerant of typos)
     DENSE_WEIGHT: float = 0.70             # dense vector weight in RRF fusion
     SPARSE_WEIGHT: float = 0.30            # BM25 weight in RRF fusion
 
@@ -88,7 +91,7 @@ class Settings(BaseSettings):
     # Advanced retrieval toggles
     ENABLE_HYDE: bool = False               # False eliminates pre-generation delay
     ENABLE_QUERY_EXPANSION: bool = False    # False enables direct instant retrieval
-    ENABLE_CONTEXTUAL_COMPRESSION: bool = True
+    ENABLE_CONTEXTUAL_COMPRESSION: bool = False # Preserve full chunk context for rich explanations
     ENABLE_HYBRID_SEARCH: bool = True       # Dense + BM25 fusion (<10ms)
 
     # ── Embedding Cache ──────────────────────────────────────────────────────
@@ -107,6 +110,13 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE_MB: int = 100
     FREE_MAX_UPLOAD_SIZE_MB: int = 10
     PREMIUM_MAX_UPLOAD_SIZE_MB: int = 100
+
+    # ── AWS S3 Document Cloud Storage ─────────────────────────────────────────
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    AWS_S3_BUCKET_NAME: str = "deeptutor-documents-storage"
+    AWS_REGION: str = "eu-north-1"
+    ENABLE_S3_STORAGE: bool = True
 
     # ── Confidence / Grounding ───────────────────────────────────────────────
     MIN_CONFIDENCE_TO_STREAM: float = 0.0

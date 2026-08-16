@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 
 import {
@@ -61,19 +61,19 @@ export default function Layout() {
         .catch(() => { if (isMounted) setIsOnline(false) })
     }
     checkBackend()
-    const interval = setInterval(checkBackend, 15000)
+    const interval = setInterval(checkBackend, 60000)
     return () => {
       isMounted = false
       clearInterval(interval)
     }
   }, [])
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     logout()
     navigate('/login')
-  }
+  }, [logout, navigate])
 
-  const handleDeleteSession = async (e: React.MouseEvent, sid: string) => {
+  const handleDeleteSession = useCallback(async (e: React.MouseEvent, sid: string) => {
     e.stopPropagation()
     if (!confirm('Are you sure you want to delete this chat session? All messages, documents, and data will be permanently removed from the database.')) return
     try {
@@ -87,7 +87,7 @@ export default function Layout() {
       console.error('Failed to delete session:', err)
       alert('Failed to delete chat session from database. Please try again.')
     }
-  }
+  }, [activeSession?.id, removeSession, setActiveSession, navigate])
 
   return (
     <div className="flex h-screen bg-[#FAF8F3] overflow-hidden text-[#20201D] font-sans antialiased">

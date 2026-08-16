@@ -80,15 +80,16 @@ Your mission is to build deep, intuitive conceptual understanding for students w
 ==================================================
 STRICT GROUNDING & ACCURACY RULES (MANDATORY)
 ==================================================
-1. GROUNDING ONLY:
-   - Base every factual claim strictly on the provided CONTEXT (Document Passages & Knowledge Graph).
-   - Do NOT use outside/general knowledge to fill gaps or speculate, even if you "know" the answer.
-   - If the provided context does not contain enough information to answer, state clearly:
+1. ACCURATE TEACHING FROM MATERIAL:
+   - Base your answers primarily on the provided CONTEXT (Document Passages & Knowledge Graph).
+   - Synthesize and explain the concepts in the context clearly, intuitively, and thoroughly.
+   - Gracefully handle student spelling errors or typos (e.g., "mechanisam" -> "mechanism", "suport" -> "support").
+   - ONLY if the student asks about a completely unrelated topic with zero presence or connection in the document context (e.g. asking for a recipe when the document is about machine learning), state clearly:
      "The provided material doesn't cover this — I can't answer confidently from it."
 
 2. NO FABRICATION:
-   - Never invent facts, numbers, formulas, papers, or APIs not present in the context.
-   - If providing an intuitive analogy or pedagogical example, ALWAYS label it clearly: "(Example for intuition — not from source material)".
+   - Never invent false formulas, fake citations, or phantom numbers not present in the context.
+   - When providing an intuitive analogy or mental model to explain a concept from the text, label it: "(Example for intuition — not from source material)".
 
 3. NO INLINE CITATION TAGS (CRITICAL):
    - Do NOT include bracketed file names, page citations, or source tags like `[ml algorithams.pdf p.4]`, `[p.4]`, or `[file.pdf]` anywhere in your response, tables, or headings.
@@ -147,7 +148,7 @@ def _detect_simple_casual_query(text: str) -> Optional[str]:
 
     # 1. Greetings
     if t_clean in {
-        "hi", "hello", "hey", "hola", "hi there", "hello there", "hey there",
+        "hi","hai","hello", "hey", "hola", "hi there", "hello there", "hey there",
         "greetings", "good morning", "good afternoon", "good evening", "howdy", "sup", "yo"
     }:
         return "Hello! 👋 I'm **DeepTutor**, your AI academic tutor. What topic or concept would you like to explore today?"
@@ -314,18 +315,10 @@ class GraphRAGPipeline:
         # Invalidate query result cache for this topic (new data)
         await query_result_cache.invalidate(topic_id)
 
-        # Signal 100% to UI — document is immediately ready for chat RAG
-        if progress_callback:
-            await progress_callback("indexing_complete", 100)
-
-        print(f"[PIPELINE] Stage 3 complete: {total} chunks indexed in FAISS (topic: {topic_id})")
-
-        # ── Stage 2b + 3b: Graph Triplet Extraction (non-blocking background) ─
+        # ── Stage 2b + 3b: Instant Key Topics & Graph Nodes ───────────────────
         all_entities: List[Dict] = []
         all_relationships: List[Dict] = []
-        all_triplets = []
 
-        # Heuristic key topics from section headings (instant, no LLM)
         extracted_topics = _extract_key_topics_from_chunks(chunks)
         for topic in extracted_topics[:15]:
             all_entities.append({
@@ -334,61 +327,61 @@ class GraphRAGPipeline:
                 "description": f"Key concept in {topic_id}"
             })
 
-        # Sample representative chunks for deep LLM triplet extraction
-        sample_step = max(1, len(chunks) // 3)
-        sample_chunks = chunks[::sample_step][:3]
-
-        semaphore = asyncio.Semaphore(3)
-
-        async def _sem_extract(chunk: dict, index: int):
-            async with semaphore:
-                try:
-                    source = chunk["metadata"].get("source", "")
-                    page = chunk["metadata"].get("page", "")
-                    section = chunk["metadata"].get("section_title", "")
-                    source_info = f"{source} p.{page}" + (f" \u00a7{section}" if section else "")
-                    chunk_id = f"{topic_id}_{hash(chunk['text']) % 10**8}"
-                    entities, relationships, triplets = await extract_graph_triplets(
-                        chunk["text"], source_doc=source_info, chunk_id=chunk_id
-                    )
-                    if progress_callback:
-                        pct = 60 + int(((index + 1) / max(1, len(sample_chunks))) * 30)
-                        await progress_callback("extracting_triplets", min(90, pct))
-                    return entities, relationships, [t.to_dict() for t in triplets]
-                except Exception:
-                    return [], [], []
-
-        tasks = [_sem_extract(chunk, idx) for idx, chunk in enumerate(sample_chunks)]
-        results = await asyncio.gather(*tasks)
-
-        for entities, relationships, triplets in results:
-            all_entities.extend(entities)
-            all_relationships.extend(relationships)
-            all_triplets.extend(triplets)
-
-        # ── Stage 3b: Store entities, relations, triplets in JSON-KV graph ───
         _gs.add_entities(topic_id, all_entities)
-        _gs.add_relations(topic_id, all_relationships)
-        _gs.add_triplets(topic_id, all_triplets)
 
-        # Key topics for DB metadata
-        extracted_topics = _extract_key_topics_from_chunks(chunks)
-        top_entity_names = [
-            e["name"] for e in all_entities
-            if e.get("type") not in {"metadata"} and is_valid_academic_topic(e.get("name", ""))
-        ]
-        all_candidates = extracted_topics + top_entity_names
-        extracted_topics = deduplicate_and_rank_topics(all_candidates, max_topics=20)
+        # Signal 100% to UI immediately — document is ready for chat & search
+        if progress_callback:
+            await progress_callback("indexing_complete", 100)
+
+        print(f"[PIPELINE] Stage 3 complete: {total} chunks indexed in {settings.VECTOR_STORE_BACKEND} (topic: {topic_id})")
+
+        # ── Background Deep Triplet Extraction (Non-blocking async task) ──────
+        async def _background_triplet_extraction():
+            try:
+                sample_step = max(1, len(chunks) // 3)
+                sample_chunks = chunks[::sample_step][:3]
+                sem = asyncio.Semaphore(2)
+
+                async def _extract_one(chunk: dict):
+                    async with sem:
+                        try:
+                            source = chunk["metadata"].get("source", "")
+                            page = chunk["metadata"].get("page", "")
+                            section = chunk["metadata"].get("section_title", "")
+                            source_info = f"{source} p.{page}" + (f" §{section}" if section else "")
+                            chunk_id = f"{topic_id}_{hash(chunk['text']) % 10**8}"
+                            ents, rels, trips = await extract_graph_triplets(
+                                chunk["text"], source_doc=source_info, chunk_id=chunk_id
+                            )
+                            return ents, rels, [t.to_dict() for t in trips]
+                        except Exception:
+                            return [], [], []
+
+                results = await asyncio.gather(*[_extract_one(c) for c in sample_chunks])
+                bg_ents, bg_rels, bg_trips = [], [], []
+                for ents, rels, trips in results:
+                    bg_ents.extend(ents)
+                    bg_rels.extend(rels)
+                    bg_trips.extend(trips)
+
+                if bg_ents:
+                    _gs.add_entities(topic_id, bg_ents)
+                if bg_rels:
+                    _gs.add_relations(topic_id, bg_rels)
+                if bg_trips:
+                    _gs.add_triplets(topic_id, bg_trips)
+            except Exception as e:
+                print(f"[PIPELINE BG] Triplet extraction background error: {e}")
+
+        # Fire and forget background triplet extraction
+        asyncio.create_task(_background_triplet_extraction())
 
         stats = _gs.get_graph_stats(topic_id)
-        if progress_callback:
-            await progress_callback("done", 100)
-
         return {
             "chunks_indexed": total,
             "entities_extracted": len(all_entities),
             "relationships_extracted": len(all_relationships),
-            "triplets_extracted": len(all_triplets),
+            "triplets_extracted": 0,
             "graph_nodes": stats["node_count"],
             "graph_edges": stats["edge_count"],
             "extracted_topics": extracted_topics,
@@ -419,31 +412,23 @@ class GraphRAGPipeline:
         if cached is not None:
             return cached
 
-        # 2. Query expansion
-        query_variants = await query_expander.expand(question)
-
-        # 3. HyDE
-        hyde_task = hyde_engine.generate_hypothetical_document(question)
-
-        # 4. Embed all query variants + HyDE doc concurrently
-        embed_tasks = [embedding_pipeline.embed(q) for q in query_variants]
-        all_tasks = [hyde_task] + embed_tasks
-        all_results = await asyncio.gather(*all_tasks, return_exceptions=True)
-
-        hyde_doc = all_results[0] if isinstance(all_results[0], str) else question
-        query_embeddings = [
-            r for r in all_results[1:]
-            if isinstance(r, list)
-        ]
-
-        # Embed the HyDE hypothetical document
-        if settings.ENABLE_HYDE and hyde_doc != question:
-            try:
-                hyde_embedding = await embedding_pipeline.embed(hyde_doc)
-            except Exception:
-                hyde_embedding = query_embeddings[0] if query_embeddings else None
+        # 2. Query expansion & HyDE (fast-pathed when disabled)
+        if settings.ENABLE_QUERY_EXPANSION:
+            query_variants = await query_expander.expand(question)
         else:
+            query_variants = [question]
+
+        if settings.ENABLE_HYDE:
+            hyde_doc = await hyde_engine.generate_hypothetical_document(question)
+            embed_tasks = [embedding_pipeline.embed(q) for q in query_variants] + [embedding_pipeline.embed(hyde_doc)]
+            all_results = await asyncio.gather(*embed_tasks, return_exceptions=True)
+            query_embeddings = [r for r in all_results[:-1] if isinstance(r, list)]
+            hyde_embedding = all_results[-1] if isinstance(all_results[-1], list) else None
+        else:
+            hyde_doc = question
             hyde_embedding = None
+            query_embeddings = await asyncio.gather(*[embedding_pipeline.embed(q) for q in query_variants])
+            query_embeddings = [r for r in query_embeddings if isinstance(r, list)]
 
         # 5. Hybrid search for each embedding
         all_chunk_lists: List[List[Dict]] = []
@@ -689,7 +674,7 @@ class GraphRAGPipeline:
                 f"2. Do NOT repeat or continue explaining unrelated topics from Conversation History.\n"
                 f"3. Using the Document Context and Knowledge Graph as your primary reference: {prompt_instruction}\n"
                 f"4. Do NOT include bracketed file names or page numbers like [file.pdf p.4] or [p.4] anywhere in the response text. The UI displays sources separately.\n"
-                f"5. If the Student Question asks about a topic not mentioned in the Document Context, state clearly: 'The provided material doesn't cover this — I can't answer confidently from it.'"
+                f"5. If the Student Question is completely unrelated to anything in the Document Context, state: 'The provided material doesn't cover this — I can't answer confidently from it.' Otherwise, explain the concept thoroughly from the context."
             )
         else:
             user_content = (

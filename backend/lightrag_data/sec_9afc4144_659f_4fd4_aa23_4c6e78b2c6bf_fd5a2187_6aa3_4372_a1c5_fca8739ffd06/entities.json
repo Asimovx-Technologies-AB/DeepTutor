@@ -1,0 +1,266 @@
+{
+  "natural_language_processing_lab__northeastern_university": {
+    "id": "natural_language_processing_lab__northeastern_university",
+    "name": "Natural Language Processing Lab, Northeastern University",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_fd5a2187_6aa3_4372_a1c5_fca8739ffd06",
+    "sources": [],
+    "mentions": 1
+  },
+  "chapter_1": {
+    "id": "chapter_1",
+    "name": "Chapter 1",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_fd5a2187_6aa3_4372_a1c5_fca8739ffd06",
+    "sources": [],
+    "mentions": 1
+  },
+  "chapter_2": {
+    "id": "chapter_2",
+    "name": "Chapter 2",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_fd5a2187_6aa3_4372_a1c5_fca8739ffd06",
+    "sources": [],
+    "mentions": 1
+  },
+  "whisk_all_ingredients_until_sugar_dissolves_": {
+    "id": "whisk_all_ingredients_until_sugar_dissolves_",
+    "name": "Whisk all ingredients until sugar dissolves.",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_fd5a2187_6aa3_4372_a1c5_fca8739ffd06",
+    "sources": [],
+    "mentions": 1
+  },
+  "the_function_name__printg__is_incorrect___it_should_be__printf__": {
+    "id": "the_function_name__printg__is_incorrect___it_should_be__printf__",
+    "name": "The function name ’printg’ is incorrect . It should be ’printf’.",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_fd5a2187_6aa3_4372_a1c5_fca8739ffd06",
+    "sources": [],
+    "mentions": 1
+  },
+  "tom_starts_with_12_marbles_": {
+    "id": "tom_starts_with_12_marbles_",
+    "name": "Tom starts with 12 marbles.",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_fd5a2187_6aa3_4372_a1c5_fca8739ffd06",
+    "sources": [],
+    "mentions": 1
+  },
+  "initial_quantity__jack_starts_with_7_apples_": {
+    "id": "initial_quantity__jack_starts_with_7_apples_",
+    "name": "Initial Quantity: Jack starts with 7 apples.",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_fd5a2187_6aa3_4372_a1c5_fca8739ffd06",
+    "sources": [],
+    "mentions": 1
+  },
+  "chapter_3": {
+    "id": "chapter_3",
+    "name": "Chapter 3",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_fd5a2187_6aa3_4372_a1c5_fca8739ffd06",
+    "sources": [],
+    "mentions": 1
+  },
+  "user_____": {
+    "id": "user_____",
+    "name": "USER 女孩 →",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_fd5a2187_6aa3_4372_a1c5_fca8739ffd06",
+    "sources": [],
+    "mentions": 1
+  },
+  "tom_jenkins___person_name": {
+    "id": "tom_jenkins___person_name",
+    "name": "Tom Jenkins - Person Name",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_fd5a2187_6aa3_4372_a1c5_fca8739ffd06",
+    "sources": [],
+    "mentions": 1
+  },
+  "include_specific_examples_of_environmental_issues_": {
+    "id": "include_specific_examples_of_environmental_issues_",
+    "name": "Include specific examples of environmental issues.",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_fd5a2187_6aa3_4372_a1c5_fca8739ffd06",
+    "sources": [],
+    "mentions": 1
+  },
+  "chapter_4": {
+    "id": "chapter_4",
+    "name": "Chapter 4",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_fd5a2187_6aa3_4372_a1c5_fca8739ffd06",
+    "sources": [],
+    "mentions": 1
+  },
+  "chapter_5": {
+    "id": "chapter_5",
+    "name": "Chapter 5",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_fd5a2187_6aa3_4372_a1c5_fca8739ffd06",
+    "sources": [],
+    "mentions": 1
+  },
+  "large_language_models": {
+    "id": "large_language_models",
+    "name": "Large Language Models",
+    "type": "system",
+    "description": "Advanced AI models trained on vast amounts of text data to understand and generate human-like language.",
+    "sources": [
+      "llm.pdf p.1"
+    ],
+    "mentions": 1
+  },
+  "natural_language_processing": {
+    "id": "natural_language_processing",
+    "name": "Natural Language Processing",
+    "type": "concept",
+    "description": "A field of computer science and artificial intelligence concerned with giving computers the ability to understand text and spoken words.",
+    "sources": [
+      "llm.pdf p.1"
+    ],
+    "mentions": 1
+  },
+  "nlp_book": {
+    "id": "nlp_book",
+    "name": "NLP Book",
+    "type": "system",
+    "description": "An introductory educational resource and open-source book covering foundational NLP and language model concepts.",
+    "sources": [
+      "llm.pdf p.1"
+    ],
+    "mentions": 1
+  },
+  "self_attention": {
+    "id": "self_attention",
+    "name": "Self-Attention",
+    "type": "concept",
+    "description": "An attention mechanism where a bias term representing positional distance can be added to the query-key product.",
+    "sources": [
+      "llm.pdf p.91"
+    ],
+    "mentions": 1
+  },
+  "relative_positional_embedding": {
+    "id": "relative_positional_embedding",
+    "name": "Relative Positional Embedding",
+    "type": "method",
+    "description": "A method of encoding token positions based on the relative distance or offset between query and key tokens.",
+    "sources": [
+      "llm.pdf p.91"
+    ],
+    "mentions": 1
+  },
+  "t5_bias": {
+    "id": "t5_bias",
+    "name": "T5 Bias",
+    "type": "algorithm",
+    "description": "A relative positional embedding technique that assigns query-key position offsets into learnable bucket parameters.",
+    "sources": [
+      "llm.pdf p.91"
+    ],
+    "mentions": 1
+  },
+  "position_offset": {
+    "id": "position_offset",
+    "name": "Position Offset",
+    "type": "formula",
+    "description": "The difference between query position index i and key position index j, defined as d(i, j) = i - j.",
+    "sources": [
+      "llm.pdf p.91"
+    ],
+    "mentions": 1
+  },
+  "logarithmic_bucketing": {
+    "id": "logarithmic_bucketing",
+    "name": "Logarithmic Bucketing",
+    "type": "method",
+    "description": "A binning scheme where smaller relative offsets map directly to unique buckets while larger offsets are mapped logarithmically to handle long sequence lengths.",
+    "sources": [
+      "llm.pdf p.91"
+    ],
+    "mentions": 1
+  },
+  "reinforcement_learning_system": {
+    "id": "reinforcement_learning_system",
+    "name": "Reinforcement Learning System",
+    "type": "system",
+    "description": "A framework involving an agent interacting with an environment to learn optimal behaviors through feedback.",
+    "sources": [
+      "llm.pdf p.181"
+    ],
+    "mentions": 1
+  },
+  "agent": {
+    "id": "agent",
+    "name": "Agent",
+    "type": "concept",
+    "description": "The learner or decision-maker, which in the context of LLMs is the LLM itself.",
+    "sources": [
+      "llm.pdf p.181"
+    ],
+    "mentions": 1
+  },
+  "environment": {
+    "id": "environment",
+    "name": "Environment",
+    "type": "concept",
+    "description": "Everything external to the agent that provides feedback and a framework for learning.",
+    "sources": [
+      "llm.pdf p.181"
+    ],
+    "mentions": 1
+  },
+  "state": {
+    "id": "state",
+    "name": "State",
+    "type": "concept",
+    "description": "The current situation of the environment, represented by context tokens in language modeling.",
+    "sources": [
+      "llm.pdf p.181"
+    ],
+    "mentions": 1
+  },
+  "action": {
+    "id": "action",
+    "name": "Action",
+    "type": "concept",
+    "description": "Possible decisions the agent can make, represented by predicted tokens in the vocabulary.",
+    "sources": [
+      "llm.pdf p.181"
+    ],
+    "mentions": 1
+  },
+  "reward": {
+    "id": "reward",
+    "name": "Reward",
+    "type": "concept",
+    "description": "Feedback from the environment evaluating the success of an action.",
+    "sources": [
+      "llm.pdf p.181"
+    ],
+    "mentions": 1
+  },
+  "policy": {
+    "id": "policy",
+    "name": "Policy",
+    "type": "formula",
+    "description": "The probability distribution over tokens predicted by the LLM given preceding context tokens.",
+    "sources": [
+      "llm.pdf p.181"
+    ],
+    "mentions": 1
+  },
+  "value_function": {
+    "id": "value_function",
+    "name": "Value Function",
+    "type": "formula",
+    "description": "A function assessing the expected discounted return for an agent starting from a state and following a policy.",
+    "sources": [
+      "llm.pdf p.181"
+    ],
+    "mentions": 1
+  }
+}

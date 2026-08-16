@@ -15,8 +15,8 @@ from app.rag.ollama_client import ollama
 from app.rag.section_scope import get_section_collection_id
 from app.rag.storage import active_vector_store, active_graph_store
 from app.rag.graph_store import graph_store
-from app.rag.vector_store import vector_store
 from app.rag.cache import query_result_cache
+from app.rag.storage.s3_store import s3_store
 
 settings = get_settings()
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -83,7 +83,7 @@ async def delete_session(session_id: str, user: dict = Depends(get_current_user)
     if topic_id and topic_id != "general" and topic_id != session_id:
         db.delete_section_all_data(user_id=user_id, topic_id=topic_id)
 
-    # 2. Clean up uploaded physical files
+    # 2. Clean up uploaded physical files & AWS S3
     deleted_docs = del_result.get("deleted_docs", [])
     for doc in deleted_docs:
         file_path = doc.get("file_path")
@@ -92,6 +92,10 @@ async def delete_session(session_id: str, user: dict = Depends(get_current_user)
                 os.remove(file_path)
             except Exception:
                 pass
+
+        if s3_store.is_configured() and doc.get("file_name"):
+            s3_key = f"documents/{user_id}/{doc.get('topic_id', session_id)}/{doc.get('file_name')}"
+            s3_store.delete_file(s3_key)
 
     for tid in [session_id, topic_id]:
         if not tid or tid == "general":

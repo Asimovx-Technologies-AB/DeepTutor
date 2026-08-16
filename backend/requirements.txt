@@ -10,8 +10,10 @@ python-multipart>=0.0.9
 # Database
 sqlalchemy>=2.0.0
 aiosqlite>=0.20.0
+psycopg2-binary>=2.9.9
 
 # ── Stage 3: Vector Store ──────────────────────────────────────────────────────
+pinecone>=5.0.0            # Pinecone Serverless cloud vector database
 faiss-cpu>=1.8.0           # FAISS HNSW vector store (replaces ChromaDB as primary)
 chromadb>=0.5.0            # Kept as fallback vector backend
 
@@ -56,3 +58,9 @@ tenacity>=8.3.0
 
 # ── Model Context Protocol ────────────────────────────────────────────────────
 mcp>=1.0.0
+
+# ── Cloud Storage ─────────────────────────────────────────────────────────────
+boto3>=1.34.0
+gunicorn>=22.0.0
+
+

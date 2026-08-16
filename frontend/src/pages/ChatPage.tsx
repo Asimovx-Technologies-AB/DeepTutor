@@ -168,6 +168,7 @@ export default function ChatPage() {
   const abortControllerRef = useRef<AbortController | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const skipNextFetchRef = useRef<string | null>(null)
+  const messagesCacheRef = useRef<Map<string, ExtendedMessage[]>>(new Map())
 
   // Fetch knowledge graph for active session/topic
   const fetchKnowledgeGraph = useCallback(async () => {
@@ -190,7 +191,7 @@ export default function ChatPage() {
     }
   }, [showGraphPanel, fetchKnowledgeGraph])
 
-  // Fetch sessions
+  // Fetch sessions (cached for 30s for fast sidebar navigation)
   const { refetch: refetchSessions } = useQuery({
     queryKey: ['chat-sessions'],
     queryFn: async () => {
@@ -202,7 +203,7 @@ export default function ChatPage() {
       }
       return res.data
     },
-    staleTime: 0,
+    staleTime: 30000,
   })
 
   const handleSend = useCallback(async (text?: string) => {
@@ -319,6 +320,12 @@ export default function ChatPage() {
       setActiveSession(found)
     }
 
+    // 0ms instant display from local memory cache
+    const cached = messagesCacheRef.current.get(sessionId)
+    if (cached && cached.length > 0) {
+      setExtMessages(cached)
+    }
+
     chatApi
       .messages(sessionId)
       .then((res) => {
@@ -336,6 +343,7 @@ export default function ChatPage() {
           sources: m.metadata?.sources ?? [],
           graph_context: m.metadata?.graph_context ?? null,
         }))
+        messagesCacheRef.current.set(sessionId, msgs)
         setExtMessages(msgs)
         setMessages(res.data)
       })
@@ -386,10 +394,15 @@ export default function ChatPage() {
     return { today, yesterday, lastWeek, older }
   }, [sessions, searchQuery])
 
-  // Auto-scroll
+  // 60FPS throttled auto-scroll without layout thrashing
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [extMessages, streamingContent])
+    const el = bottomRef.current
+    if (!el) return
+    const raf = requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth', block: 'end' })
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [extMessages, streamingContent, isStreaming])
 
   const handleDeleteSession = async (e?: React.MouseEvent, sId?: string) => {
     if (e) e.stopPropagation()

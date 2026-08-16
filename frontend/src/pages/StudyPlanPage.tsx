@@ -84,13 +84,14 @@ export default function StudyPlanPage() {
   const [generating, setGenerating] = useState(false)
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
 
-  // Fetch my study plans
+  // Fetch my study plans with 60s stale cache
   const { data: plans = [], isLoading } = useQuery<StudyPlan[]>({
     queryKey: ['study-plans'],
     queryFn: async () => {
       const res = await studyPlanApi.myPlans()
       return res.data || []
     },
+    staleTime: 60_000,
   })
 
   // Selected plan to view
@@ -179,19 +180,22 @@ export default function StudyPlanPage() {
 
     try {
       let topicId = 'general'
+      let sessionId: string | undefined = undefined
 
       // If user uploaded a new file directly in the Study Plan generator
       if (selectedFile) {
         topicId = `plan_${Date.now()}`
         await documentsApi.upload(topicId, selectedFile)
       } else if (selectedSessionId) {
+        sessionId = selectedSessionId
         const session = sessions.find((s) => s.id === selectedSessionId)
-        topicId = session?.topic_id || selectedSessionId
+        topicId = session?.topic_id || selectedSessionId || 'general'
       }
 
       // Generate Study Plan
       const res = await studyPlanApi.generate({
         topic_id: topicId,
+        session_id: sessionId,
         target_date: targetDate,
         hours_per_day: hoursPerDay,
       })

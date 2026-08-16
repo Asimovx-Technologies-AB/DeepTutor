@@ -20,7 +20,11 @@ async def test_pdf_flashcards_generation():
     topic_id = "test_pdf_flashcards_topic"
     user_id = "test_user_id"
 
-    # Register test session in DB so user ownership validation passes
+    # Register test user & session in DB so foreign key & ownership validation pass
+    with db.DBContext() as s:
+        if not db.get_user_by_id(user_id):
+            u = db.User(id=user_id, username="test_flashcard_user", email=f"test_fc_{user_id}@test.com", password_hash="dummy_pass", role="student")
+            s.add(u)
     db.create_session(user_id, topic_id, "Test PDF Flashcards Session")
 
     # Add dummy PDF chunks with page metadata to vector store

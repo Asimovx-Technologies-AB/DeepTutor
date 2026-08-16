@@ -68,9 +68,29 @@ class _TopicGraph:
         self._relations_path = self.dir / "relations.json"
         self._triplets_path = self.dir / "triplets.json"
 
-        self._entities: Dict[str, Dict] = _load_json(self._entities_path, {})
-        self._relations: Dict[str, Dict] = _load_json(self._relations_path, {})
-        self._triplets: List[Dict] = _load_json(self._triplets_path, [])
+        # 1. Try loading from Neon Cloud PostgreSQL first
+        cloud_graph = None
+        try:
+            from app.core import database as db
+            cloud_graph = db.get_knowledge_graph(topic_id)
+        except Exception:
+            pass
+
+        if cloud_graph and (cloud_graph.get("entities") or cloud_graph.get("relations") or cloud_graph.get("triplets")):
+            self._entities: Dict[str, Dict] = cloud_graph.get("entities", {})
+            self._relations: Dict[str, Dict] = cloud_graph.get("relations", {})
+            self._triplets: List[Dict] = cloud_graph.get("triplets", [])
+        else:
+            self._entities: Dict[str, Dict] = _load_json(self._entities_path, {})
+            self._relations: Dict[str, Dict] = _load_json(self._relations_path, {})
+            self._triplets: List[Dict] = _load_json(self._triplets_path, [])
+
+    def _sync_to_cloud(self):
+        try:
+            from app.core import database as db
+            db.save_knowledge_graph(self.topic_id, self._entities, self._relations, self._triplets)
+        except Exception as e:
+            print(f"[GRAPH KV] Cloud sync error for {self.topic_id}: {e}")
 
     # ── Entities ──────────────────────────────────────────────────────────────
     def add_entities(self, entities: List[Dict]) -> None:
@@ -98,6 +118,7 @@ class _TopicGraph:
             changed = True
         if changed:
             _save_json(self._entities_path, self._entities)
+            self._sync_to_cloud()
 
     # ── Relations ─────────────────────────────────────────────────────────────
     def add_relations(self, relations: List[Dict]) -> None:
@@ -121,6 +142,7 @@ class _TopicGraph:
                 changed = True
         if changed:
             _save_json(self._relations_path, self._relations)
+            self._sync_to_cloud()
 
     # ── Triplets ──────────────────────────────────────────────────────────────
     def add_triplets(self, triplets: List[Dict]) -> None:
@@ -150,6 +172,7 @@ class _TopicGraph:
                 changed = True
         if changed:
             _save_json(self._triplets_path, self._triplets)
+            self._sync_to_cloud()
 
     # ── Entity lookup ─────────────────────────────────────────────────────────
     def get_entity(self, name: str) -> Optional[Dict]:
@@ -302,6 +325,11 @@ class _TopicGraph:
         import shutil
         try:
             shutil.rmtree(self.dir, ignore_errors=True)
+        except Exception:
+            pass
+        try:
+            from app.core import database as db
+            db.delete_knowledge_graph(self.topic_id)
         except Exception:
             pass
         self._entities = {}
