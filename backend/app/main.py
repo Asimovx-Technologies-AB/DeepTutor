@@ -102,21 +102,30 @@ async def health():
     except Exception:
         gs_stats = {"backend": settings.GRAPH_STORE_BACKEND}
 
+    # Database health check
+    db_status = "connected"
+    db_type = "Neon PostgreSQL (Cloud)" if "postgres" in settings.DATABASE_URL else "SQLite"
+    try:
+        from app.core.database import DBContext
+        from sqlalchemy import text
+        with DBContext() as db_session:
+            db_session.execute(text("SELECT 1"))
+    except Exception as e:
+        db_status = f"error: {e}"
+
     return {
         "api": "ok",
         "version": settings.APP_VERSION,
+        "database": {
+            "status": db_status,
+            "type": db_type,
+        },
         "pipeline": {
             "stage1_parser": settings.PRIMARY_PARSER,
             "stage1_chunker": f"semantic_{settings.CHUNK_MIN_WORDS}_{settings.CHUNK_MAX_WORDS}w",
             "stage2_embedder": settings.EMBEDDING_PROVIDER,
             "stage3_vector_store": settings.VECTOR_STORE_BACKEND,
             "stage3_graph_store": settings.GRAPH_STORE_BACKEND,
-        },
-        "ollama": {
-            "status": "connected" if ollama_ok else "disconnected",
-            "url": settings.OLLAMA_BASE_URL,
-            "chat_model": settings.OLLAMA_CHAT_MODEL,
-            "embed_model": settings.OLLAMA_EMBED_MODEL,
         },
         "vector_store": vs_stats,
         "graph_store": gs_stats,
