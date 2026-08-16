@@ -1,10 +1,6 @@
 {
   "rewrites": [
     {
-      "source": "/api/:match*",
-      "destination": "https://deeptutor-api-udv2.onrender.com/api/:match*"
-    },
-    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
