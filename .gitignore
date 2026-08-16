@@ -58,6 +58,7 @@ backend/deepeval_ragas_evaluation.json
 *.log
 .env
 .env.local
+!frontend/.env.production
 
 # IDE & System
 .vscode/
