@@ -59,15 +59,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routers
-app.include_router(auth.router, prefix="/api")
-app.include_router(chat.router, prefix="/api")
-app.include_router(documents.router, prefix="/api")
-app.include_router(quiz.router, prefix="/api")
-app.include_router(flashcards.router, prefix="/api")
-app.include_router(progress.router, prefix="/api")
-app.include_router(study_plan.router, prefix="/api")
-app.include_router(leaderboard.router, prefix="/api")
+# Routers (supports both /api/path and /path)
+all_routers = [
+    auth.router,
+    chat.router,
+    documents.router,
+    quiz.router,
+    flashcards.router,
+    progress.router,
+    study_plan.router,
+    leaderboard.router,
+]
+for r in all_routers:
+    app.include_router(r, prefix="/api")
+    app.include_router(r)
+
 app.include_router(mcp.router)
 
 
@@ -82,6 +88,7 @@ async def root():
     }
 
 
+@app.get("/health")
 @app.get("/api/health")
 async def health():
     from app.rag.ollama_client import ollama
