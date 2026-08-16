@@ -222,10 +222,11 @@ export const progressApi = {
 
 // ─── Documents ────────────────────────────────────────────────
 export const documentsApi = {
-  upload: (topicId: string, file: File) => {
+  upload: (topicId: string, file: File, sectionId?: string) => {
     const form = new FormData()
     form.append('file', file)
     form.append('topic_id', topicId)
+    if (sectionId) form.append('section_id', sectionId)
     return api.post('/documents/upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
