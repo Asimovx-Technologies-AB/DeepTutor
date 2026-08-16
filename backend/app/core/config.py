@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     # Switch via .env: LLM_PROVIDER=gemini | ollama
     LLM_PROVIDER: str = "gemini"             # "gemini" | "ollama"
     GEMINI_API_KEY: str = ""
-    GEMINI_CHAT_MODEL: str = "gemini-3.5-flash"  # or gemini-3-flash-preview, gemini-flash-latest
+    GEMINI_CHAT_MODEL: str = "gemini-3.1-flash-lite"
     GEMINI_TIMEOUT: int = 60
 
     # ── Ollama local settings ────────────────────────────────────────────────
