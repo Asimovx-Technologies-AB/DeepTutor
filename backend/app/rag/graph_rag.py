@@ -204,27 +204,26 @@ def _deduplicate_chunks(chunks_lists: List[List[Dict]]) -> List[Dict]:
     return list(seen.values())
 
 
+from app.rag.topic_sanitizer import is_valid_academic_topic, clean_and_format_topic, deduplicate_and_rank_topics
+
+
 def _extract_key_topics_from_chunks(chunks: List[Dict]) -> List[str]:
     """
-    Extract key topics from semantic chunks using section titles and headings.
-    Replaces extract_key_topics() from the legacy document_processor module.
+    Extract clean, high-yield key academic concepts from semantic chunks.
+    Filters out boilerplate section headings ('Results and Discussion', 'Methodology'),
+    table noise, and citations.
     """
-    topics: List[str] = []
-    seen: set = set()
+    raw_topics: List[str] = []
     for chunk in chunks:
         meta = chunk.get("metadata", {})
         section_title = meta.get("section_title", "")
-        if section_title and len(section_title) >= 3 and section_title.lower() not in seen:
-            seen.add(section_title.lower())
-            topics.append(section_title)
+        if section_title:
+            raw_topics.append(section_title)
         section_path = meta.get("section_path", "")
-        if section_path and section_path not in topics:
+        if section_path:
             for part in section_path.split(" > "):
-                part = part.strip()
-                if part and part.lower() not in seen and len(part) >= 3:
-                    seen.add(part.lower())
-                    topics.append(part)
-    return topics[:25]
+                raw_topics.append(part.strip())
+    return deduplicate_and_rank_topics(raw_topics, max_topics=20)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -352,11 +351,10 @@ class GraphRAGPipeline:
         extracted_topics = _extract_key_topics_from_chunks(chunks)
         top_entity_names = [
             e["name"] for e in all_entities
-            if e.get("type") not in {"metadata"} and 4 <= len(e.get("name", "")) <= 45
+            if e.get("type") not in {"metadata"} and is_valid_academic_topic(e.get("name", ""))
         ]
-        for ent_name in top_entity_names:
-            if ent_name and ent_name not in extracted_topics and len(extracted_topics) < 25:
-                extracted_topics.append(ent_name)
+        all_candidates = extracted_topics + top_entity_names
+        extracted_topics = deduplicate_and_rank_topics(all_candidates, max_topics=20)
 
         stats = _gs.get_graph_stats(topic_id)
         if progress_callback:

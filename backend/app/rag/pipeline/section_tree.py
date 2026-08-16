@@ -41,6 +41,8 @@ class SectionNode:
         }
 
 
+from app.rag.topic_sanitizer import is_valid_academic_topic, clean_and_format_topic
+
 _HEADING_PATTERNS = [
     # Markdown headings  # H1 / ## H2 / ...
     re.compile(r'^(#{1,6})\s+(.+)$'),
@@ -50,7 +52,7 @@ _HEADING_PATTERNS = [
 
 
 def _detect_heading(line: str) -> Optional[tuple[int, str]]:
-    """Return (level, title) if line looks like a heading, else None."""
+    """Return (level, title) if line looks like a valid academic heading, else None."""
     line = line.strip()
     if not line or len(line) > 120:
         return None
@@ -58,17 +60,25 @@ def _detect_heading(line: str) -> Optional[tuple[int, str]]:
     # Markdown #-headings
     m = _HEADING_PATTERNS[0].match(line)
     if m:
-        return len(m.group(1)), m.group(2).strip()
+        raw_title = m.group(2).strip()
+        clean_title = clean_and_format_topic(raw_title)
+        if clean_title:
+            return len(m.group(1)), clean_title
 
     # Numbered sections
     m = _HEADING_PATTERNS[1].match(line)
     if m:
-        level = m.group(1).count(".") + 1
-        return min(level, 6), m.group(2).strip()
+        raw_title = m.group(2).strip()
+        clean_title = clean_and_format_topic(raw_title)
+        if clean_title:
+            level = m.group(1).count(".") + 1
+            return min(level, 6), clean_title
 
-    # ALL CAPS (2–10 words, max 80 chars)
-    if line.isupper() and 2 <= len(line.split()) <= 10 and len(line) <= 80:
-        return 1, line.title()
+    # ALL CAPS (2–8 words, max 70 chars, must be valid lexical heading, not table/code data)
+    if line.isupper() and 2 <= len(line.split()) <= 8 and len(line) <= 70:
+        clean_title = clean_and_format_topic(line)
+        if clean_title:
+            return 1, clean_title
 
     return None
 

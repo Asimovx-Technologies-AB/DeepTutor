@@ -8,7 +8,7 @@ import {
   CheckCircle, AlertCircle, Loader2, Trophy, Trash2,
   Mic, MicOff, Search, Share2, Download,
   ChevronDown, LogOut, Network,
-  Clock, ArrowRight, Menu, X, Zap, Cpu,
+  Clock, ArrowRight, Menu, X, Zap,
   ListChecks, Star, Lightbulb
 } from 'lucide-react'
 import { useChatStore } from '../stores/chatStore'
@@ -18,7 +18,6 @@ import ChatMessage from '../components/ChatMessage'
 import GraphContextPanel from '../components/GraphContextPanel'
 import GamifiedQuizGame from '../components/GamifiedQuizGame'
 import FlashcardsOverlay from '../components/FlashcardsOverlay'
-import McpDrawer from '../components/McpDrawer'
 import { UpgradeModal } from '../components/UpgradeModal'
 import type { Source } from '../components/SourceCard'
 
@@ -108,7 +107,6 @@ export default function ChatPage() {
   const [showGraphPanel, setShowGraphPanel] = useState(false)
   const [showQuizGame, setShowQuizGame] = useState(false)
   const [showFlashcards, setShowFlashcards] = useState(false)
-  const [showMcpDrawer, setShowMcpDrawer] = useState(false)
   const [upgradeModalInfo, setUpgradeModalInfo] = useState<{ open: boolean; fileName?: string; sizeMb?: number }>({ open: false })
   const [liveGraphContext, setLiveGraphContext] = useState<GraphContextData>({ entities: [], relationships: [] })
   const [liveSources, setLiveSources] = useState<Source[]>([])
@@ -1033,26 +1031,6 @@ export default function ChatPage() {
               <span>Explore 3D Graph</span> <ArrowRight size={14} />
             </div>
           </motion.div>
-
-          {/* 4. MCP Tools Card */}
-          <motion.div
-            whileHover={{ scale: 1.02 }}
-            onClick={() => { setShowMcpDrawer(true); setMobileRightOpen(false); }}
-            className="p-4 sm:p-5 rounded-3xl bg-[#F0ECF7]/60 border border-[#A99BCB]/30 shadow-2xs hover:shadow-xs transition-all cursor-pointer group relative overflow-hidden"
-          >
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[#F0ECF7] text-[#A99BCB] border border-[#A99BCB]/30 flex items-center justify-center mb-3 shadow-2xs group-hover:scale-105 transition-transform">
-              <Cpu size={22} />
-            </div>
-            <h4 className="text-base font-extrabold text-[#20201D] group-hover:text-[#A99BCB] transition-colors">
-              MCP Tool Extensions
-            </h4>
-            <p className="text-xs text-[#6F6B63] mt-1.5 leading-relaxed font-medium">
-              Manage external Model Context Protocol sandboxes & math solvers.
-            </p>
-            <div className="mt-4 flex items-center gap-1.5 text-xs font-extrabold text-[#A99BCB] group-hover:translate-x-1 transition-transform">
-              <span>Configure MCP Tools</span> <ArrowRight size={14} />
-            </div>
-          </motion.div>
         </div>
 
         <div className="pt-4 border-t border-[#E7E1D8] text-center">
@@ -1068,11 +1046,6 @@ export default function ChatPage() {
         relationships={liveGraphContext.relationships}
         isOpen={showGraphPanel}
         onClose={() => setShowGraphPanel(false)}
-      />
-
-      <McpDrawer
-        isOpen={showMcpDrawer}
-        onClose={() => setShowMcpDrawer(false)}
       />
 
       <GamifiedQuizGame
