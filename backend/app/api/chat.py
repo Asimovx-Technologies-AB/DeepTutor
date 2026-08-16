@@ -151,10 +151,18 @@ async def send_message(
     topic_id = _user_section_collection_id(user["id"], session.get("topic_id") or "", session_id=session_id)
 
     if not await ollama.is_available():
-        response_text = (
-            "⚠️ **Ollama is not running.** Please start it with `ollama serve` "
-            "and make sure you have pulled a model: `ollama pull llama3.1`"
-        )
+        provider = getattr(settings, "LLM_PROVIDER", "gemini").lower()
+        if provider == "gemini":
+            response_text = (
+                "⚠️ **Gemini API key is not configured.**\n\n"
+                "Please add your Gemini API key in `backend/.env`:\n"
+                "```env\nLLM_PROVIDER=gemini\nGEMINI_API_KEY=your_actual_key\n```"
+            )
+        else:
+            response_text = (
+                "⚠️ **Ollama is not running.** Please start it with `ollama serve` "
+                "and make sure you have pulled a model: `ollama pull llama3.1`"
+            )
         msg = db.add_message(session_id, "assistant", response_text)
         return msg
 
@@ -205,15 +213,23 @@ async def stream_message(
     topic_id = _user_section_collection_id(user_id, session.get("topic_id") or "", session_id=session_id)
 
     async def event_generator():
-        # If Ollama not available, send helpful error
+        # If LLM not available, send helpful provider-specific error
         if not await ollama.is_available():
-            msg = (
-                "⚠️ **Ollama is not running.**\n\n"
-                "To start the local LLM:\n"
-                "```bash\nollama serve\n```\n"
-                "Then pull a model:\n"
-                "```bash\nollama pull llama3.1\n```"
-            )
+            provider = getattr(settings, "LLM_PROVIDER", "gemini").lower()
+            if provider == "gemini":
+                msg = (
+                    "⚠️ **Gemini API key is not configured.**\n\n"
+                    "Please add your Gemini API key in `backend/.env`:\n"
+                    "```env\nLLM_PROVIDER=gemini\nGEMINI_API_KEY=your_actual_key\n```"
+                )
+            else:
+                msg = (
+                    "⚠️ **Ollama is not running.**\n\n"
+                    "To start the local LLM:\n"
+                    "```bash\nollama serve\n```\n"
+                    "Then pull a model:\n"
+                    "```bash\nollama pull llama3.1\n```"
+                )
             for char in msg:
                 yield f"data: {json.dumps({'type': 'token', 'data': char})}\n\n"
             db.add_message(session_id, "assistant", msg)

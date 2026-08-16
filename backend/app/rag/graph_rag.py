@@ -87,28 +87,52 @@ STRICT GROUNDING & ACCURACY RULES (MANDATORY)
      "The provided material doesn't cover this — I can't answer confidently from it."
 
 2. NO FABRICATION:
-   - Never invent facts, numbers, formulas, papers, APIs, or citations not present in the context.
-   - Never invent page numbers, section names, or sources unless they appear in the context.
-   - If asked for something not in the context (e.g., "give a simple analogy" or "give an example"), you may provide an intuitive pedagogical example, but you MUST label it clearly: "(Example for intuition — not from source material)".
+   - Never invent facts, numbers, formulas, papers, or APIs not present in the context.
+   - If providing an intuitive analogy or pedagogical example, ALWAYS label it clearly: "(Example for intuition — not from source material)".
 
-3. CITE YOUR SOURCE:
-   - After each factual claim or explanation, indicate where it came from, e.g., [p.12] or [Section: Support Vector Machines].
-   - If multiple context chunks are provided, cite each relevant page/section.
+3. NO INLINE CITATION TAGS (CRITICAL):
+   - Do NOT include bracketed file names, page citations, or source tags like `[ml algorithams.pdf p.4]`, `[p.4]`, or `[file.pdf]` anywhere in your response, tables, or headings.
+   - Write clean, fluid, and readable prose directly. The system UI displays sources separately.
 
-4. EXPRESS UNCERTAINTY HONESTLY:
-   - If the context is ambiguous, partial, or conflicting, say so instead of resolving it blindly.
-   - Use calibrated language: "The document states..." vs "The document suggests...".
+4. OUTPUT FORMATTING TEMPLATE (Follow this clean structure):
+   # 📚 [Topic / Concept Name]
 
-5. NO SILENT ASSUMPTIONS:
-   - If a question requires an assumption not supported by context, state the assumption explicitly rather than stating it as established fact.
+   ### 💡 Big-Picture Concept
+   [Accessible, high-level definition grounded strictly in the material]
 
-6. SELF-CHECK & STUDENT PEDAGOGY:
-   - Make explanations simple, accessible, and structured for student learning:
-     * 💡 Simple Big-Picture Concept (intuitive and accessible)
-     * 🔑 Key Concepts Breakdown (clean bullet points or tables)
-     * ⚙️ How It Works Step-by-Step (logical mechanism)
-     * 📌 Key Takeaway (1-2 memorable summary sentences)
-   - Ensure every factual claim is strictly traceable to the provided context before outputting.
+   > **Intuitive Analogy (Mental Model):**
+   > *(Example for intuition — not from source material)*: [Memorable real-world analogy].
+
+   ---
+
+   ### 🔑 Key Concepts Breakdown
+   | Concept | Core Explanation / Definition |
+   | :--- | :--- |
+   | **[Concept 1]** | [Clear explanation] |
+   | **[Concept 2]** | [Clear explanation] |
+
+   ---
+
+   ### ⚙️ How It Works Step-by-Step
+   1. **[Step 1 Name]:** [Clear explanation]
+   2. **[Step 2 Name]:** [Clear explanation]
+   3. **[Step 3 Name]:** [Clear explanation]
+
+   ---
+
+   ### ⚖️ Strengths vs. Limitations
+   #### ✅ Strengths
+   - **[Strength 1]:** [Details]
+   - **[Strength 2]:** [Details]
+
+   #### ⚠️ Limitations
+   - **[Limitation 1]:** [Details]
+   - **[Limitation 2]:** [Details]
+
+   ---
+
+   ### 📌 Summary Takeaway
+   [1-2 high-yield sentences summarizing the core concept].
 """
 
 
@@ -642,9 +666,10 @@ class GraphRAGPipeline:
             )
         else:
             prompt_instruction = (
-                "Please explain this topic clearly and educationally for a student. "
-                "Structure the explanation with an intuitive real-world analogy, a clean concepts breakdown (using a table or bullet points), "
-                "how it works step-by-step, advantages & limitations, and a concise summary takeaway."
+                "Please explain this topic clearly and educationally for a student following the Output Formatting Template: "
+                "(1) # 📚 [Topic Title], (2) 💡 Big-Picture Concept + Blockquote Intuitive Analogy, "
+                "(3) 🔑 Key Concepts Breakdown Table, (4) ⚙️ How It Works Step-by-Step with numbered steps, "
+                "(5) ⚖️ Strengths vs. Limitations (with ✅ and ⚠️ subheadings), and (6) 📌 Summary Takeaway."
             )
 
         if graph_context_text or vector_context_text:
@@ -663,7 +688,8 @@ class GraphRAGPipeline:
                 f"1. Focus exclusively on answering the immediate Student Question ('{question}').\n"
                 f"2. Do NOT repeat or continue explaining unrelated topics from Conversation History.\n"
                 f"3. Using the Document Context and Knowledge Graph as your primary reference: {prompt_instruction}\n"
-                f"4. If the Student Question asks about a topic not mentioned in the Document Context, state clearly: 'The provided material doesn't cover this — I can't answer confidently from it.'"
+                f"4. Do NOT include bracketed file names or page numbers like [file.pdf p.4] or [p.4] anywhere in the response text. The UI displays sources separately.\n"
+                f"5. If the Student Question asks about a topic not mentioned in the Document Context, state clearly: 'The provided material doesn't cover this — I can't answer confidently from it.'"
             )
         else:
             user_content = (
@@ -671,7 +697,8 @@ class GraphRAGPipeline:
                 f"{question}\n\n"
                 f"## Instructions\n"
                 f"1. Focus exclusively on answering the immediate Student Question ('{question}').\n"
-                f"2. {prompt_instruction}"
+                f"2. Do NOT include bracketed file names or page numbers like [file.pdf p.4] or [p.4] anywhere in the response text.\n"
+                f"3. {prompt_instruction}"
             )
 
         messages = [

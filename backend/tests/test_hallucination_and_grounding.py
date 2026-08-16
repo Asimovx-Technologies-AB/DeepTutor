@@ -21,6 +21,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+import pytest
 from app.rag.ollama_client import ollama
 from app.rag.graph_rag import SYSTEM_PROMPT
 from app.rag.hallucination_guard import verify_response_grounding
@@ -51,6 +52,7 @@ SAMPLE_CONTEXT_CHUNKS = [
 ]
 
 
+@pytest.mark.asyncio
 async def test_in_scope_grounded_response():
     print("\n" + "=" * 60)
     print("TEST 1: In-Scope Question with Real Document Context")
@@ -98,6 +100,7 @@ async def test_in_scope_grounded_response():
         print("✅ Zero unverified claims detected.")
 
 
+@pytest.mark.asyncio
 async def test_out_of_scope_hallucination_prevention():
     print("\n" + "=" * 60)
     print("TEST 2: Out-of-Scope Question (Testing Refusal to Hallucinate)")
@@ -144,7 +147,7 @@ async def test_out_of_scope_hallucination_prevention():
         print("❌ WARNING: The model attempted to answer using outside knowledge.")
 
 
-async def test_hallucination_guard_detector():
+def test_hallucination_guard_detector():
     print("\n" + "=" * 60)
     print("TEST 3: Hallucination Guard Unit Test (Grounding vs Hallucination)")
     print("=" * 60)

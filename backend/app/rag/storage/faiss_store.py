@@ -192,7 +192,22 @@ class _TopicIndex:
         new_metas = [metas[i] for i in new_idx]
         new_embs = [embeddings[i] for i in new_idx]
 
-        vecs = np.array(new_embs, dtype=np.float32)
+        # Determine target dimension from majority or existing index
+        target_dim = self._index.d if self._index is not None else max((len(e) for e in new_embs if isinstance(e, (list, tuple))), default=3072)
+
+        # Standardize all vectors to target_dim (prevent inhomogeneous shape errors)
+        fixed_embs = []
+        for e in new_embs:
+            if not isinstance(e, (list, tuple)):
+                fixed_embs.append([0.0] * target_dim)
+            elif len(e) == target_dim:
+                fixed_embs.append(e)
+            elif len(e) < target_dim:
+                fixed_embs.append(list(e) + [0.0] * (target_dim - len(e)))
+            else:
+                fixed_embs.append(list(e[:target_dim]))
+
+        vecs = np.array(fixed_embs, dtype=np.float32)
         vecs = self._normalize(vecs)
         dim = vecs.shape[1]
 

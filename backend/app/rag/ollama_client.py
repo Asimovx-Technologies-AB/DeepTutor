@@ -21,9 +21,20 @@ class OllamaClient:
         self._resolved_chat_model: Optional[str] = None
         self._resolved_embed_model: Optional[str] = None
         self._client: Optional[httpx.AsyncClient] = None
+        self._client_loop = None
 
     def _get_client(self) -> httpx.AsyncClient:
-        if self._client is None or self._client.is_closed:
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+
+        if (
+            self._client is None 
+            or self._client.is_closed 
+            or self._client_loop != current_loop
+        ):
+            self._client_loop = current_loop
             limits = httpx.Limits(max_keepalive_connections=30, max_connections=60)
             self._client = httpx.AsyncClient(timeout=self.timeout, limits=limits)
         return self._client
@@ -248,5 +259,81 @@ class OllamaClient:
         return await asyncio.gather(*[_sem_embed(t) for t in texts])
 
 
-# Singleton
-ollama = OllamaClient()
+class UnifiedLLMClient:
+    """
+    Unified LLM Client that seamlessly delegates to GeminiClient or OllamaClient
+    based on settings.LLM_PROVIDER (defaults to 'gemini').
+    Preserves 100% backward compatibility for all modules importing `ollama`.
+    """
+    def __init__(self):
+        self.ollama_client = OllamaClient()
+
+    @property
+    def provider(self) -> str:
+        return getattr(settings, "LLM_PROVIDER", "gemini").lower()
+
+    async def is_available(self) -> bool:
+        if self.provider == "gemini":
+            from app.rag.gemini_client import gemini
+            if await gemini.is_available():
+                return True
+            # Fallback check if Ollama is running
+            return await self.ollama_client.is_available()
+        return await self.ollama_client.is_available()
+
+    async def get_working_chat_model(self, requested_model: Optional[str] = None) -> str:
+        if self.provider == "gemini":
+            from app.rag.gemini_client import gemini
+            return await gemini.get_working_chat_model(requested_model)
+        return await self.ollama_client.get_working_chat_model(requested_model)
+
+    async def chat(
+        self,
+        messages: List[Dict[str, str]],
+        model: Optional[str] = None,
+        temperature: float = 0.2,
+        options: Optional[Dict] = None,
+    ) -> str:
+        if self.provider == "gemini":
+            from app.rag.gemini_client import gemini
+            if await gemini.is_available():
+                return await gemini.chat(messages, model, temperature, options)
+        return await self.ollama_client.chat(messages, model, temperature, options)
+
+    async def stream(
+        self,
+        messages: List[Dict[str, str]],
+        model: Optional[str] = None,
+        temperature: float = 0.2,
+        options: Optional[Dict] = None,
+    ) -> AsyncGenerator[str, None]:
+        if self.provider == "gemini":
+            from app.rag.gemini_client import gemini
+            if await gemini.is_available():
+                async for token in gemini.stream(messages, model, temperature, options):
+                    yield token
+                return
+        async for token in self.ollama_client.stream(messages, model, temperature, options):
+            yield token
+
+    async def embed(self, text: str, model: Optional[str] = None) -> List[float]:
+        if self.provider == "gemini":
+            from app.rag.gemini_client import gemini
+            if await gemini.is_available():
+                return await gemini.embed(text, model)
+        return await self.ollama_client.embed(text, model)
+
+    async def embed_batch(
+        self, texts: List[str], model: Optional[str] = None
+    ) -> List[List[float]]:
+        if self.provider == "gemini":
+            from app.rag.gemini_client import gemini
+            if await gemini.is_available():
+                return await gemini.embed_batch(texts, model)
+        return await self.ollama_client.embed_batch(texts, model)
+
+
+# Singleton — provides backward compatibility for all existing callers
+ollama = UnifiedLLMClient()
+llm = ollama
+

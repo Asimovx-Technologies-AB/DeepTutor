@@ -11,8 +11,10 @@ from app.core.database import (
     get_session, get_messages, get_documents_for_user_and_topic,
     get_quizzes_by_topic, get_flashcards_by_topic, get_study_plans_for_user
 )
+import pytest
 from app.api.chat import delete_session
 
+@pytest.mark.asyncio
 async def test_section_deletion():
     print("1. Creating test user and section/session data...")
     user = create_user("testuser_del", f"testdel_{int(asyncio.get_event_loop().time())}@test.com", "testpass123")

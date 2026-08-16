@@ -79,29 +79,13 @@ async def _embed_batch_openai(texts: List[str]) -> List[List[float]]:
 # Provider: Gemini
 # ══════════════════════════════════════════════════════════════════════════════
 async def _embed_gemini(text: str) -> List[float]:
-    if not settings.GEMINI_API_KEY:
-        raise RuntimeError("GEMINI_API_KEY not set in config.")
-    try:
-        import google.generativeai as genai
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        result = await asyncio.to_thread(
-            genai.embed_content,
-            model=settings.GEMINI_EMBED_MODEL,
-            content=text,
-        )
-        return result["embedding"]
-    except ImportError:
-        raise RuntimeError("google-generativeai not installed. Run: pip install google-generativeai")
+    from app.rag.gemini_client import gemini
+    return await gemini.embed(text)
 
 
 async def _embed_batch_gemini(texts: List[str]) -> List[List[float]]:
-    semaphore = asyncio.Semaphore(5)  # Gemini rate limit
-
-    async def _one(t: str) -> List[float]:
-        async with semaphore:
-            return await _embed_gemini(t)
-
-    return await asyncio.gather(*[_one(t) for t in texts])
+    from app.rag.gemini_client import gemini
+    return await gemini.embed_batch(texts)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -163,7 +147,7 @@ class EmbeddingPipeline:
             return vecs
         except Exception as e:
             print(f"[EMBED WARN] {self.provider} batch embed error: {e}. Using pseudo-embeddings.")
-            dim = self._dim or 768
+            dim = self._dim or (3072 if self.provider == "gemini" else 768)
             return [_pseudo_embed(t, dim) for t in texts]
 
     async def embed_chunks(self, chunks: List[dict]) -> List[List[float]]:
@@ -174,7 +158,7 @@ class EmbeddingPipeline:
     @property
     def embedding_dim(self) -> int:
         """Return known embedding dimension (auto-detected on first call)."""
-        return self._dim or 768
+        return self._dim or (3072 if self.provider == "gemini" else 768)
 
 
 # Singleton

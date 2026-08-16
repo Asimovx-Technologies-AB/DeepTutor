@@ -18,7 +18,14 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./deep_tutor.db"
 
-    # ── LLM / Chat (Ollama local) ────────────────────────────────────────────
+    # ── LLM / Chat Provider ──────────────────────────────────────────────────
+    # Switch via .env: LLM_PROVIDER=gemini | ollama
+    LLM_PROVIDER: str = "gemini"             # "gemini" | "ollama"
+    GEMINI_API_KEY: str = ""
+    GEMINI_CHAT_MODEL: str = "gemini-3.5-flash"  # or gemini-3-flash-preview, gemini-flash-latest
+    GEMINI_TIMEOUT: int = 60
+
+    # ── Ollama local settings ────────────────────────────────────────────────
     OLLAMA_BASE_URL: str = "http://127.0.0.1:11434"
     OLLAMA_CHAT_MODEL: str = "llama3.1"      # or qwen2.5, phi3.5, gemma2
     OLLAMA_EMBED_MODEL: str = "nomic-embed-text"
@@ -28,11 +35,10 @@ class Settings(BaseSettings):
 
     # ── Stage 2: Embedding Provider ─────────────────────────────────────────
     # Switch via .env: EMBEDDING_PROVIDER=ollama | openai | gemini
-    EMBEDDING_PROVIDER: str = "ollama"
+    EMBEDDING_PROVIDER: str = "gemini"
     OPENAI_API_KEY: str = ""
     OPENAI_EMBED_MODEL: str = "text-embedding-3-small"   # or text-embedding-3-large
-    GEMINI_API_KEY: str = ""
-    GEMINI_EMBED_MODEL: str = "models/text-embedding-004"
+    GEMINI_EMBED_MODEL: str = "models/gemini-embedding-2"
 
     # ── Stage 3: Vector Store Backend ───────────────────────────────────────
     # Switch via .env: VECTOR_STORE_BACKEND=faiss | chroma
