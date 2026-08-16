@@ -21,15 +21,17 @@ export default function NotificationPopup() {
   const [isOpen, setIsOpen] = useState(false)
   const [showToast, setShowToast] = useState(true)
 
-  // Fetch real progress & study plan summaries
+  // Fetch real progress & study plan summaries with 2-minute stale caching
   const { data: progress } = useQuery({
     queryKey: ['progress-summary'],
     queryFn: () => progressApi.summary().then((r) => r.data),
+    staleTime: 120_000,
   })
 
   const { data: plans } = useQuery({
     queryKey: ['study-plans'],
     queryFn: () => studyPlanApi.myPlans().then((r: any) => r.data),
+    staleTime: 120_000,
   })
 
   const activePlan = plans?.[0]

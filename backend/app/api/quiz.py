@@ -25,6 +25,10 @@ class SubmitQuizRequest(BaseModel):
     answers: Dict[str, str]  # question_id -> option_letter (A/B/C/D)
 
 
+from app.rag.topic_sanitizer import is_valid_academic_topic, clean_and_format_topic, deduplicate_and_rank_topics
+from app.rag.storage import active_graph_store
+
+
 @router.get("/suggestions")
 async def get_topic_suggestions(
     topic_id: Optional[str] = None,
@@ -33,10 +37,8 @@ async def get_topic_suggestions(
 ):
     """
     Extract clean, high-value AI-suggested concepts directly from uploaded PDF documents.
-    Filters out author names, page reference strings, locations, and metadata headers.
+    Filters out author names, page reference strings, table noise, citations, and boilerplate.
     """
-    suggestions = set()
-
     target_tid = topic_id
     if session_id:
         sess = db.get_session(session_id)
@@ -46,41 +48,26 @@ async def get_topic_suggestions(
     target_tid = (target_tid or "general").strip() or "general"
     namespaced_topic = get_section_collection_id(user['id'], target_tid)
 
-    # Fetch text content for this section to strictly verify suggestion relevance
-    section_text_lower = ""
-    try:
-        from app.rag.vector_store import vector_store
-        col = vector_store._collection(namespaced_topic)
-        docs_data = col.get(include=["documents"]).get("documents") or []
-        section_text_lower = " ".join(docs_data).lower()
-    except Exception:
-        pass
-
-    # Noisy words & metadata headers to ignore
-    STOP_TOPICS = {
-        "institution", "keywords plus", "author", "authors", "editor", "volume", "issue",
-        "pages", "journal", "abstract", "introduction", "conclusion", "references", "figure",
-        "table", "index", "ieee", "south africa", "science core collection", "sci-expanded",
-        "web of science", "elsevier", "springer", "wiley", "taylor", "francis", "thomson reuters",
-        "google scholar", "scopus", "proceedings", "conference", "symposium", "department",
-        "university", "faculty", "edition", "published", "copyright", "rights reserved",
-        "tc", "tp", "cpp", "lr", "roc", "usa", "uk", "china", "india", "japan", "germany"
-    }
+    raw_candidates: List[str] = []
 
     # 1. Fetch DB key topics extracted during document vectorization
     db_extracted_topics = db.get_key_topics_for_user_section(user['id'], target_tid)
-
-    # Filter out noisy DB topics
-    clean_db_topics = []
     for kt in db_extracted_topics:
-        if kt and len(kt) >= 3:
-            kt_clean = kt.strip()
-            kt_lower = kt_clean.lower()
-            if kt_lower not in STOP_TOPICS and not any(stop in kt_lower for stop in ["http", "doi:", "isbn", "page"]):
-                if not re.match(r'^[A-Z]{1,2}$', kt_clean):  # ignore single/double letter noise
-                    clean_db_topics.append(kt_clean)
+        if kt:
+            raw_candidates.append(kt)
 
-    # 2. Extract concept/algorithm/method entities from NetworkX Knowledge Graph
+    # 2. Extract concept/algorithm/method entities from LightRAG JSON-KV Knowledge Graph
+    try:
+        lightrag_entities = active_graph_store.get_entities(namespaced_topic)
+        for ent in lightrag_entities:
+            name = ent.get("name")
+            ent_type = (ent.get("type") or "").lower()
+            if name and ent_type not in {"metadata"}:
+                raw_candidates.append(name)
+    except Exception:
+        pass
+
+    # 3. Fallback: NetworkX graph store entities
     try:
         from app.rag.graph_store import graph_store
         graph = graph_store.get_full_graph(namespaced_topic)
@@ -88,63 +75,26 @@ async def get_topic_suggestions(
         for n in nodes:
             name = n.get("name") or n.get("id")
             ent_type = (n.get("type") or "").lower()
-
-            # Skip metadata nodes
-            if ent_type in {"metadata"}:
-                continue
-
-            if name and 4 <= len(name) <= 45:
-                name_clean = name.strip()
-                name_lower = name_clean.lower()
-
-                # Filter out page strings (e.g. 'ml algorithams.pdf p.8')
-                if ".pdf" in name_lower or "p." in name_lower or "page" in name_lower:
-                    continue
-
-                # Ensure candidate concept actually exists in the current section's document text
-                if section_text_lower and name_lower not in section_text_lower:
-                    continue
-
-                if name_lower not in STOP_TOPICS and not any(stop in name_lower for stop in ["http", "doi:", "isbn"]):
-                    # Fix common OCR typos
-                    if name_lower == "cikit-learn":
-                        name_clean = "Scikit-Learn"
-                    suggestions.add(name_clean)
+            if name and ent_type not in {"metadata"}:
+                raw_candidates.append(name)
     except Exception:
         pass
 
-    # Filter candidates
-    clean_list = []
+    # 4. Clean, format, and deduplicate with topic sanitizer
+    clean_list = deduplicate_and_rank_topics(raw_candidates, max_topics=15)
 
-    # Ensure DB vectorization topics come first in priority
-    for kt in clean_db_topics:
-        if kt and kt not in clean_list and len(clean_list) < 15:
-            clean_list.append(kt)
-
-    for s in suggestions:
-        s_lower = s.lower()
-        if (
-            len(s) >= 4
-            and s not in clean_list
-            and s_lower not in STOP_TOPICS
-            and not re.search(r'\.pdf|\bp\.\d+|\bpages?\b', s_lower)
-            and not re.match(r'^[A-Z]\.\s*[A-Z]\.', s)  # Initials like H. T. Abbas
-        ):
-            clean_list.append(s)
-
-    # Provide high-value AI fallback concepts if list is short
-    if len(clean_list) < 6:
+    # Provide high-yield pedagogical fallback concepts if list is short
+    if len(clean_list) < 4:
         fallbacks = [
-            "Key Themes",
-            "Main Ideas",
-            "Important Entities",
-            "Major Events",
-            "Summary Overview",
-            "Core Concepts",
-            "Important Details"
+            "Core Principles & Definitions",
+            "Key Algorithms & Methods",
+            "Theoretical Frameworks",
+            "Comparative Analysis",
+            "Practical Applications",
+            "Important Case Studies"
         ]
         for f in fallbacks:
-            if f not in clean_list and len(clean_list) < 15:
+            if f not in clean_list and len(clean_list) < 10:
                 clean_list.append(f)
 
     return {"suggestions": clean_list[:15]}

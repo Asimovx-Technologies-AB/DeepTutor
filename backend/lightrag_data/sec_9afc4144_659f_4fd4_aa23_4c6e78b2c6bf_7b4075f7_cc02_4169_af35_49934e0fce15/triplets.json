@@ -1,0 +1,114 @@
+[
+  {
+    "head": "Classical Machine Learning",
+    "relation": "PART_OF",
+    "tail": "Machine Learning",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_7b4075f7_cc02_4169_af35_49934e0fce15_73424668",
+    "source_doc": "ml algorithams.pdf p.1 §Research Paper"
+  },
+  {
+    "head": "Perceptron",
+    "relation": "PART_OF",
+    "tail": "Classical Machine Learning",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_7b4075f7_cc02_4169_af35_49934e0fce15_73424668",
+    "source_doc": "ml algorithams.pdf p.1 §Research Paper"
+  },
+  {
+    "head": "Support Vector Machines",
+    "relation": "PART_OF",
+    "tail": "Classical Machine Learning",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_7b4075f7_cc02_4169_af35_49934e0fce15_73424668",
+    "source_doc": "ml algorithams.pdf p.1 §Research Paper"
+  },
+  {
+    "head": "Random Forests",
+    "relation": "EXTENDS",
+    "tail": "Decision Trees",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_7b4075f7_cc02_4169_af35_49934e0fce15_73424668",
+    "source_doc": "ml algorithams.pdf p.1 §Research Paper"
+  },
+  {
+    "head": "Bibliometric Analysis",
+    "relation": "APPLIES_TO",
+    "tail": "Classical Machine Learning",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_7b4075f7_cc02_4169_af35_49934e0fce15_73424668",
+    "source_doc": "ml algorithams.pdf p.1 §Research Paper"
+  },
+  {
+    "head": "Bibliometric study",
+    "relation": "USES",
+    "tail": "Web of Science Core Collection",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_7b4075f7_cc02_4169_af35_49934e0fce15_58294919",
+    "source_doc": "ml algorithams.pdf p.15"
+  },
+  {
+    "head": "Science Citation Index Expanded",
+    "relation": "PART_OF",
+    "tail": "Web of Science Core Collection",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_7b4075f7_cc02_4169_af35_49934e0fce15_58294919",
+    "source_doc": "ml algorithams.pdf p.15"
+  },
+  {
+    "head": "Bibliometric study",
+    "relation": "USES",
+    "tail": "Microsoft Excel 365",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_7b4075f7_cc02_4169_af35_49934e0fce15_58294919",
+    "source_doc": "ml algorithams.pdf p.15"
+  },
+  {
+    "head": "Microsoft Excel 365",
+    "relation": "APPLIES_TO",
+    "tail": "TC2022",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_7b4075f7_cc02_4169_af35_49934e0fce15_58294919",
+    "source_doc": "ml algorithams.pdf p.15"
+  },
+  {
+    "head": "TC2022",
+    "relation": "DEFINES",
+    "tail": "Classic ML research documents",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_7b4075f7_cc02_4169_af35_49934e0fce15_58294919",
+    "source_doc": "ml algorithams.pdf p.15"
+  },
+  {
+    "head": "ROC Curves",
+    "relation": "PART_OF",
+    "tail": "ROC Space",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_7b4075f7_cc02_4169_af35_49934e0fce15_70956073",
+    "source_doc": "ml algorithams.pdf p.28"
+  },
+  {
+    "head": "ROC Convex Hull",
+    "relation": "EXTENDS",
+    "tail": "ROC Curves",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_7b4075f7_cc02_4169_af35_49934e0fce15_70956073",
+    "source_doc": "ml algorithams.pdf p.28"
+  },
+  {
+    "head": "ROC Curves",
+    "relation": "APPLIES_TO",
+    "tail": "Probabilistic Classifiers",
+    "confidence": 0.92,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_7b4075f7_cc02_4169_af35_49934e0fce15_70956073",
+    "source_doc": "ml algorithams.pdf p.28"
+  },
+  {
+    "head": "ROC Analysis",
+    "relation": "APPLIES_TO",
+    "tail": "Class Imbalance",
+    "confidence": 0.88,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_7b4075f7_cc02_4169_af35_49934e0fce15_70956073",
+    "source_doc": "ml algorithams.pdf p.28"
+  }
+]

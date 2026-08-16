@@ -1,0 +1,114 @@
+[
+  {
+    "head": "Bibliometric analysis",
+    "relation": "APPLIES_TO",
+    "tail": "Machine learning",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_5ffc22a8_c60a_4300_9ad4_652280b9fa37_882ecb98_7d6a_4448_9a33_1a67912e83df_68479210",
+    "source_doc": "ml algorithams.pdf p.1 §Research Paper"
+  },
+  {
+    "head": "Perceptron",
+    "relation": "PART_OF",
+    "tail": "Machine learning",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_5ffc22a8_c60a_4300_9ad4_652280b9fa37_882ecb98_7d6a_4448_9a33_1a67912e83df_68479210",
+    "source_doc": "ml algorithams.pdf p.1 §Research Paper"
+  },
+  {
+    "head": "Random forests",
+    "relation": "EXTENDS",
+    "tail": "Decision trees",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_5ffc22a8_c60a_4300_9ad4_652280b9fa37_882ecb98_7d6a_4448_9a33_1a67912e83df_68479210",
+    "source_doc": "ml algorithams.pdf p.1 §Research Paper"
+  },
+  {
+    "head": "Support vector machines",
+    "relation": "PART_OF",
+    "tail": "Machine learning",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_5ffc22a8_c60a_4300_9ad4_652280b9fa37_882ecb98_7d6a_4448_9a33_1a67912e83df_68479210",
+    "source_doc": "ml algorithams.pdf p.1 §Research Paper"
+  },
+  {
+    "head": "Bibliometric study",
+    "relation": "APPLIES_TO",
+    "tail": "Machine learning",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_5ffc22a8_c60a_4300_9ad4_652280b9fa37_882ecb98_7d6a_4448_9a33_1a67912e83df_17290969",
+    "source_doc": "ml algorithams.pdf p.15"
+  },
+  {
+    "head": "Science Citation Index Expanded",
+    "relation": "PART_OF",
+    "tail": "Web of Science Core Collection",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_5ffc22a8_c60a_4300_9ad4_652280b9fa37_882ecb98_7d6a_4448_9a33_1a67912e83df_17290969",
+    "source_doc": "ml algorithams.pdf p.15"
+  },
+  {
+    "head": "Bibliometric study",
+    "relation": "USES",
+    "tail": "Web of Science Core Collection",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_5ffc22a8_c60a_4300_9ad4_652280b9fa37_882ecb98_7d6a_4448_9a33_1a67912e83df_17290969",
+    "source_doc": "ml algorithams.pdf p.15"
+  },
+  {
+    "head": "Bibliometric study",
+    "relation": "USES",
+    "tail": "Microsoft Excel 365",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_5ffc22a8_c60a_4300_9ad4_652280b9fa37_882ecb98_7d6a_4448_9a33_1a67912e83df_17290969",
+    "source_doc": "ml algorithams.pdf p.15"
+  },
+  {
+    "head": "ROC analysis",
+    "relation": "DEFINES",
+    "tail": "ROC curves",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_5ffc22a8_c60a_4300_9ad4_652280b9fa37_882ecb98_7d6a_4448_9a33_1a67912e83df_95592289",
+    "source_doc": "ml algorithams.pdf p.28"
+  },
+  {
+    "head": "ROC curves",
+    "relation": "APPLIES_TO",
+    "tail": "Classifier performance",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_5ffc22a8_c60a_4300_9ad4_652280b9fa37_882ecb98_7d6a_4448_9a33_1a67912e83df_95592289",
+    "source_doc": "ml algorithams.pdf p.28"
+  },
+  {
+    "head": "ROC curves",
+    "relation": "COMPARED_TO",
+    "tail": "Accuracy measures",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_5ffc22a8_c60a_4300_9ad4_652280b9fa37_882ecb98_7d6a_4448_9a33_1a67912e83df_95592289",
+    "source_doc": "ml algorithams.pdf p.28"
+  },
+  {
+    "head": "ROC analysis",
+    "relation": "DEFINES",
+    "tail": "ROC space",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_5ffc22a8_c60a_4300_9ad4_652280b9fa37_882ecb98_7d6a_4448_9a33_1a67912e83df_95592289",
+    "source_doc": "ml algorithams.pdf p.28"
+  },
+  {
+    "head": "ROC curves",
+    "relation": "USES",
+    "tail": "ROC convex hull",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_5ffc22a8_c60a_4300_9ad4_652280b9fa37_882ecb98_7d6a_4448_9a33_1a67912e83df_95592289",
+    "source_doc": "ml algorithams.pdf p.28"
+  },
+  {
+    "head": "ROC curves",
+    "relation": "USES",
+    "tail": "Probabilistic classifiers",
+    "confidence": 0.8,
+    "source_chunk_id": "sec_5ffc22a8_c60a_4300_9ad4_652280b9fa37_882ecb98_7d6a_4448_9a33_1a67912e83df_95592289",
+    "source_doc": "ml algorithams.pdf p.28"
+  }
+]

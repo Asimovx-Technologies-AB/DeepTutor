@@ -4,15 +4,31 @@ from typing import List, Optional, Dict
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session
 from app.core.config import get_settings
-from app.core.models import Base, User, ChatSession, ChatMessage, Document, Quiz, QuizQuestion, QuizAttempt, Flashcard, StudyPlan
+from app.core.models import Base, User, ChatSession, ChatMessage, Document, Quiz, QuizQuestion, QuizAttempt, Flashcard, StudyPlan, KnowledgeGraph
 
 settings = get_settings()
 
-# Initialize SQLite database engine
-# connect_args={"check_same_thread": False} is required for SQLite multithreaded access in FastAPI
+# Initialize database engine (supports Cloud PostgreSQL & SQLite)
+db_url = settings.DATABASE_URL.replace("sqlite+aiosqlite://", "sqlite://")
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}
+
+engine_kwargs = {
+    "pool_pre_ping": True,
+}
+if db_url.startswith("postgresql"):
+    engine_kwargs.update({
+        "pool_size": 20,
+        "max_overflow": 30,
+        "pool_recycle": 300,
+    })
+
 engine = create_engine(
-    settings.DATABASE_URL.replace("sqlite+aiosqlite://", "sqlite://"),
-    connect_args={"check_same_thread": False}
+    db_url,
+    connect_args=connect_args,
+    **engine_kwargs
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -90,7 +106,7 @@ def _user_dict(user) -> dict:
         "role": user.role,
         "is_premium": is_prem,
         "plan": getattr(user, "plan", "free") or ("premium" if is_prem else "free"),
-        "max_upload_size_mb": settings.PREMIUM_MAX_UPLOAD_SIZE_MB if is_prem else settings.FREE_MAX_UPLOAD_SIZE_MB,
+        "max_upload_size_mb": 100 if is_prem else 10,
         "created_at": user.created_at,
     }
 
@@ -98,20 +114,22 @@ def _user_dict(user) -> dict:
 def get_user_by_email(email: str) -> Optional[dict]:
     with DBContext() as db:
         user = db.query(User).filter(User.email == email).first()
-        if user:
-            return _user_dict(user)
-    return None
+        return _user_dict(user) if user else None
+
+
+def get_user_by_username(username: str) -> Optional[dict]:
+    with DBContext() as db:
+        user = db.query(User).filter(User.username == username).first()
+        return _user_dict(user) if user else None
 
 
 def get_user_by_id(user_id: str) -> Optional[dict]:
     with DBContext() as db:
         user = db.query(User).filter(User.id == user_id).first()
-        if user:
-            return _user_dict(user)
-    return None
+        return _user_dict(user) if user else None
 
 
-def update_user_premium_status(user_id: str, is_premium: bool = True) -> Optional[dict]:
+def update_user_tier(user_id: str, is_premium: bool) -> Optional[dict]:
     with DBContext() as db:
         user = db.query(User).filter(User.id == user_id).first()
         if user:
@@ -124,16 +142,24 @@ def update_user_premium_status(user_id: str, is_premium: bool = True) -> Optiona
 # ─── Session helpers ───────────────────────────────────────────────────────────
 def create_session(user_id: str, topic_id: str, title: str) -> dict:
     sid = new_id()
+    started = now_iso()
     with DBContext() as db:
         session = ChatSession(
             id=sid,
             user_id=user_id,
             topic_id=topic_id,
             session_title=title,
-            started_at=now_iso(),
+            started_at=started,
         )
         db.add(session)
-    return get_session(sid)
+    return {
+        "id": sid,
+        "user_id": user_id,
+        "topic_id": topic_id,
+        "session_title": title,
+        "started_at": started,
+        "ended_at": None,
+    }
 
 
 def get_sessions_for_user(user_id: str) -> List[dict]:
@@ -169,6 +195,7 @@ def get_session(session_id: str) -> Optional[dict]:
 
 def delete_session(session_id: str) -> bool:
     with DBContext() as db:
+        db.query(ChatMessage).filter(ChatMessage.session_id == session_id).delete(synchronize_session=False)
         s = db.query(ChatSession).filter(ChatSession.id == session_id).first()
         if s:
             db.delete(s)
@@ -179,28 +206,27 @@ def delete_session(session_id: str) -> bool:
 # ─── Message helpers ───────────────────────────────────────────────────────────
 def add_message(session_id: str, role: str, content: str, metadata: dict = None) -> dict:
     msg_id = new_id()
+    meta = metadata or {}
+    created_at = now_iso()
     with DBContext() as db:
         msg = ChatMessage(
             id=msg_id,
             session_id=session_id,
             role=role,
             content=content,
-            created_at=now_iso(),
+            created_at=created_at,
         )
-        msg.meta = metadata or {}
+        msg.meta = meta
         db.add(msg)
-    
-    # Return serializable dict
-    with DBContext() as db:
-        msg_obj = db.query(ChatMessage).filter(ChatMessage.id == msg_id).first()
-        return {
-            "id": msg_obj.id,
-            "session_id": msg_obj.session_id,
-            "role": msg_obj.role,
-            "content": msg_obj.content,
-            "metadata": msg_obj.meta,
-            "created_at": msg_obj.created_at,
-        }
+        db.commit()
+    return {
+        "id": msg_id,
+        "session_id": session_id,
+        "role": role,
+        "content": content,
+        "metadata": meta,
+        "created_at": created_at,
+    }
 
 
 def get_messages(session_id: str, last_n: int = 20) -> List[dict]:
@@ -359,8 +385,9 @@ def delete_document(doc_id: str, user_id: str) -> Optional[dict]:
 
 
 def delete_documents_for_section(user_id: str, topic_id: str) -> List[dict]:
+    targets = {topic_id, topic_id.lower(), topic_id.upper(), topic_id.strip()}
     with DBContext() as db:
-        docs = db.query(Document).filter(Document.user_id == user_id, Document.topic_id == topic_id).all()
+        docs = db.query(Document).filter(Document.user_id == user_id, Document.topic_id.in_(targets)).all()
         doc_dicts = [
             {
                 "id": d.id,
@@ -374,6 +401,76 @@ def delete_documents_for_section(user_id: str, topic_id: str) -> List[dict]:
         for d in docs:
             db.delete(d)
         return doc_dicts
+
+
+def delete_section_all_data(user_id: str, topic_id: str) -> dict:
+    """
+    Comprehensively delete all database records for a section/topic:
+    - Documents
+    - Flashcards
+    - Quizzes, QuizQuestions, QuizAttempts
+    - StudyPlans
+    - ChatSessions & ChatMessages
+    """
+    targets = {topic_id, topic_id.lower(), topic_id.upper(), topic_id.strip()}
+    with DBContext() as db:
+        # 1. Documents
+        docs = db.query(Document).filter(
+            Document.user_id == user_id,
+            Document.topic_id.in_(targets)
+        ).all()
+        deleted_docs = [
+            {"id": d.id, "file_name": d.file_name, "file_path": d.file_path, "topic_id": d.topic_id}
+            for d in docs
+        ]
+        for d in docs:
+            db.delete(d)
+
+        # 2. Flashcards
+        deleted_flashcards = db.query(Flashcard).filter(
+            Flashcard.topic_id.in_(targets)
+        ).delete(synchronize_session=False)
+
+        # 3. Quizzes & Questions & Attempts
+        quizzes = db.query(Quiz).filter(
+            Quiz.topic_id.in_(targets)
+        ).all()
+        quiz_ids = [q.id for q in quizzes]
+        if quiz_ids:
+            db.query(QuizAttempt).filter(QuizAttempt.quiz_id.in_(quiz_ids)).delete(synchronize_session=False)
+            db.query(QuizQuestion).filter(QuizQuestion.quiz_id.in_(quiz_ids)).delete(synchronize_session=False)
+            for q in quizzes:
+                db.delete(q)
+
+        # 4. Study Plans
+        deleted_plans = db.query(StudyPlan).filter(
+            StudyPlan.user_id == user_id,
+            StudyPlan.topic_id.in_(targets)
+        ).delete(synchronize_session=False)
+
+        # 5. Chat Sessions & Messages (cascade deletes messages)
+        sessions = db.query(ChatSession).filter(
+            ChatSession.user_id == user_id,
+            (ChatSession.topic_id.in_(targets) | ChatSession.id.in_(targets))
+        ).all()
+        session_ids = [s.id for s in sessions]
+        if session_ids:
+            db.query(ChatMessage).filter(ChatMessage.session_id.in_(session_ids)).delete(synchronize_session=False)
+            for s in sessions:
+                db.delete(s)
+
+        # 6. Cloud Knowledge Graphs (Neon PostgreSQL)
+        db.query(KnowledgeGraph).filter(
+            KnowledgeGraph.topic_id.in_(targets)
+        ).delete(synchronize_session=False)
+
+        return {
+            "deleted_docs": deleted_docs,
+            "deleted_flashcards_count": deleted_flashcards,
+            "deleted_quizzes_count": len(quizzes),
+            "deleted_plans_count": deleted_plans,
+            "deleted_sessions_count": len(sessions),
+        }
 
 
 
@@ -739,4 +836,49 @@ def get_leaderboard_rankings(current_user_id: str) -> dict:
             "top_3": top_3,
             "current_user_rank": user_rank_info
         }
+
+
+# ─── Cloud Knowledge Graph helpers ─────────────────────────────────────────────
+def get_knowledge_graph(topic_id: str) -> Optional[dict]:
+    with DBContext() as db:
+        g = db.query(KnowledgeGraph).filter(KnowledgeGraph.topic_id == topic_id).first()
+        if not g:
+            return None
+        return {
+            "topic_id": g.topic_id,
+            "user_id": g.user_id,
+            "entities": g.entities,
+            "relations": g.relations,
+            "triplets": g.triplets,
+            "updated_at": g.updated_at,
+        }
+
+
+def save_knowledge_graph(topic_id: str, entities: dict, relations: dict, triplets: list, user_id: Optional[str] = None) -> dict:
+    with DBContext() as db:
+        g = db.query(KnowledgeGraph).filter(KnowledgeGraph.topic_id == topic_id).first()
+        if not g:
+            g = KnowledgeGraph(
+                topic_id=topic_id,
+                user_id=user_id,
+                updated_at=now_iso(),
+            )
+            g.entities = entities
+            g.relations = relations
+            g.triplets = triplets
+            db.add(g)
+        else:
+            g.entities = entities
+            g.relations = relations
+            g.triplets = triplets
+            g.updated_at = now_iso()
+            if user_id:
+                g.user_id = user_id
+    return get_knowledge_graph(topic_id) or {"entities": entities, "relations": relations, "triplets": triplets}
+
+
+def delete_knowledge_graph(topic_id: str):
+    with DBContext() as db:
+        db.query(KnowledgeGraph).filter(KnowledgeGraph.topic_id == topic_id).delete()
+
 

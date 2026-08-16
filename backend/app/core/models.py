@@ -194,3 +194,48 @@ class StudyPlan(Base):
     @completed_days.setter
     def completed_days(self, value):
         self._completed_days = json.dumps(value or [])
+
+
+class KnowledgeGraph(Base):
+    __tablename__ = 'knowledge_graphs'
+
+    topic_id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=True)
+    _entities = Column("entities", Text, default="{}")
+    _relations = Column("relations", Text, default="{}")
+    _triplets = Column("triplets", Text, default="[]")
+    updated_at = Column(String, default=lambda: datetime.utcnow().isoformat())
+
+    @property
+    def entities(self):
+        try:
+            return json.loads(self._entities)
+        except Exception:
+            return {}
+
+    @entities.setter
+    def entities(self, value):
+        self._entities = json.dumps(value or {})
+
+    @property
+    def relations(self):
+        try:
+            return json.loads(self._relations)
+        except Exception:
+            return {}
+
+    @relations.setter
+    def relations(self, value):
+        self._relations = json.dumps(value or {})
+
+    @property
+    def triplets(self):
+        try:
+            return json.loads(self._triplets)
+        except Exception:
+            return []
+
+    @triplets.setter
+    def triplets(self, value):
+        self._triplets = json.dumps(value or [])
+

@@ -1,0 +1,304 @@
+{
+  "research_paper": {
+    "id": "research_paper",
+    "name": "Research Paper",
+    "type": "concept",
+    "description": "Key concept in sec_f552c9d6_f8ec_4cdc_bb0a_9c3491df1357_98254e00_64b9_4613_a69d_167ce6464dff",
+    "sources": [],
+    "mentions": 1
+  },
+  "classical_machine_learning_algorithms_overview": {
+    "id": "classical_machine_learning_algorithms_overview",
+    "name": "Classical Machine Learning Algorithms Overview",
+    "type": "concept",
+    "description": "Key concept in sec_f552c9d6_f8ec_4cdc_bb0a_9c3491df1357_98254e00_64b9_4613_a69d_167ce6464dff",
+    "sources": [],
+    "mentions": 1
+  },
+  "decision_trees": {
+    "id": "decision_trees",
+    "name": "Decision Trees",
+    "type": "concept",
+    "description": "Key concept in sec_f552c9d6_f8ec_4cdc_bb0a_9c3491df1357_98254e00_64b9_4613_a69d_167ce6464dff",
+    "sources": [
+      "ml algorithams.pdf p.1 §Research Paper"
+    ],
+    "mentions": 2
+  },
+  "na_ve_bayes": {
+    "id": "na_ve_bayes",
+    "name": "Naïve Bayes",
+    "type": "concept",
+    "description": "Key concept in sec_f552c9d6_f8ec_4cdc_bb0a_9c3491df1357_98254e00_64b9_4613_a69d_167ce6464dff",
+    "sources": [],
+    "mentions": 1
+  },
+  "support_vector_machines": {
+    "id": "support_vector_machines",
+    "name": "Support Vector Machines",
+    "type": "concept",
+    "description": "Key concept in sec_f552c9d6_f8ec_4cdc_bb0a_9c3491df1357_98254e00_64b9_4613_a69d_167ce6464dff",
+    "sources": [
+      "ml algorithams.pdf p.1 §Research Paper"
+    ],
+    "mentions": 2
+  },
+  "logistic_regression": {
+    "id": "logistic_regression",
+    "name": "Logistic Regression",
+    "type": "concept",
+    "description": "Key concept in sec_f552c9d6_f8ec_4cdc_bb0a_9c3491df1357_98254e00_64b9_4613_a69d_167ce6464dff",
+    "sources": [
+      "ml algorithams.pdf p.1 §Research Paper"
+    ],
+    "mentions": 2
+  },
+  "linear_regression": {
+    "id": "linear_regression",
+    "name": "Linear Regression",
+    "type": "concept",
+    "description": "Key concept in sec_f552c9d6_f8ec_4cdc_bb0a_9c3491df1357_98254e00_64b9_4613_a69d_167ce6464dff",
+    "sources": [
+      "ml algorithams.pdf p.1 §Research Paper"
+    ],
+    "mentions": 2
+  },
+  "classical_machine_learning_limitations_and_prospects": {
+    "id": "classical_machine_learning_limitations_and_prospects",
+    "name": "Classical Machine Learning Limitations and Prospects",
+    "type": "concept",
+    "description": "Key concept in sec_f552c9d6_f8ec_4cdc_bb0a_9c3491df1357_98254e00_64b9_4613_a69d_167ce6464dff",
+    "sources": [],
+    "mentions": 1
+  },
+  "bibliometric_analysis": {
+    "id": "bibliometric_analysis",
+    "name": "Bibliometric Analysis",
+    "type": "concept",
+    "description": "Key concept in sec_f552c9d6_f8ec_4cdc_bb0a_9c3491df1357_98254e00_64b9_4613_a69d_167ce6464dff",
+    "sources": [
+      "ml algorithams.pdf p.1 §Research Paper",
+      "ml algorithams.pdf p.15 §Results and Discussion"
+    ],
+    "mentions": 3
+  },
+  "results_and_discussion": {
+    "id": "results_and_discussion",
+    "name": "Results and Discussion",
+    "type": "concept",
+    "description": "Key concept in sec_f552c9d6_f8ec_4cdc_bb0a_9c3491df1357_98254e00_64b9_4613_a69d_167ce6464dff",
+    "sources": [],
+    "mentions": 1
+  },
+  "characteristics_of_publication_outputs": {
+    "id": "characteristics_of_publication_outputs",
+    "name": "Characteristics of publication outputs",
+    "type": "concept",
+    "description": "Key concept in sec_f552c9d6_f8ec_4cdc_bb0a_9c3491df1357_98254e00_64b9_4613_a69d_167ce6464dff",
+    "sources": [],
+    "mentions": 1
+  },
+  "tpr_cpp202_ipir_cpp202_cpir_cpp202_fpr_cpp202_rpr_cpp202": {
+    "id": "tpr_cpp202_ipir_cpp202_cpir_cpp202_fpr_cpp202_rpr_cpp202",
+    "name": "Tpr Cpp202 Ipir Cpp202 Cpir Cpp202 Fpr Cpp202 Rpr Cpp202",
+    "type": "concept",
+    "description": "Key concept in sec_f552c9d6_f8ec_4cdc_bb0a_9c3491df1357_98254e00_64b9_4613_a69d_167ce6464dff",
+    "sources": [],
+    "mentions": 1
+  },
+  "_tc2022___c2022_": {
+    "id": "_tc2022___c2022_",
+    "name": "(Tc2022) (C2022)",
+    "type": "concept",
+    "description": "Key concept in sec_f552c9d6_f8ec_4cdc_bb0a_9c3491df1357_98254e00_64b9_4613_a69d_167ce6464dff",
+    "sources": [],
+    "mentions": 1
+  },
+  "discussion": {
+    "id": "discussion",
+    "name": "Discussion",
+    "type": "concept",
+    "description": "Key concept in sec_f552c9d6_f8ec_4cdc_bb0a_9c3491df1357_98254e00_64b9_4613_a69d_167ce6464dff",
+    "sources": [],
+    "mentions": 1
+  },
+  "open_research_challenges_and_opportunities_relative_to_global_south_regions": {
+    "id": "open_research_challenges_and_opportunities_relative_to_global_south_regions",
+    "name": "Open Research Challenges and Opportunities Relative to Global South Regions",
+    "type": "concept",
+    "description": "Key concept in sec_f552c9d6_f8ec_4cdc_bb0a_9c3491df1357_98254e00_64b9_4613_a69d_167ce6464dff",
+    "sources": [],
+    "mentions": 1
+  },
+  "machine_learning": {
+    "id": "machine_learning",
+    "name": "Machine Learning",
+    "type": "concept",
+    "description": "a subfield of artificial intelligence",
+    "sources": [
+      "ml algorithams.pdf p.1 §Research Paper",
+      "ml algorithams.pdf p.15 §Results and Discussion"
+    ],
+    "mentions": 2
+  },
+  "classical_machine_learning": {
+    "id": "classical_machine_learning",
+    "name": "Classical Machine Learning",
+    "type": "algorithm",
+    "description": "a type of machine learning algorithm",
+    "sources": [
+      "ml algorithams.pdf p.1 §Research Paper"
+    ],
+    "mentions": 1
+  },
+  "perceptron": {
+    "id": "perceptron",
+    "name": "Perceptron",
+    "type": "formula",
+    "description": "a mathematical formula for a simple neural network",
+    "sources": [
+      "ml algorithams.pdf p.1 §Research Paper"
+    ],
+    "mentions": 1
+  },
+  "random_forests": {
+    "id": "random_forests",
+    "name": "Random Forests",
+    "type": "algorithm",
+    "description": "an ensemble learning method used for classification and regression tasks",
+    "sources": [
+      "ml algorithams.pdf p.1 §Research Paper"
+    ],
+    "mentions": 1
+  },
+  "web_of_science_core_collection": {
+    "id": "web_of_science_core_collection",
+    "name": "Web of Science Core Collection",
+    "type": "system",
+    "description": "A database that indexes scientific literature across various disciplines.",
+    "sources": [
+      "ml algorithams.pdf p.15 §Results and Discussion"
+    ],
+    "mentions": 1
+  },
+  "science_citation_index_expended__sci_expanded_": {
+    "id": "science_citation_index_expended__sci_expanded_",
+    "name": "Science Citation Index Expended (SCI-EXPANDED)",
+    "type": "database",
+    "description": "An expanded version of the Science Citation Index, providing more comprehensive coverage of scientific literature.",
+    "sources": [
+      "ml algorithams.pdf p.15 §Results and Discussion"
+    ],
+    "mentions": 1
+  },
+  "py__year_published_": {
+    "id": "py__year_published_",
+    "name": "PY (year published)",
+    "type": "parameter",
+    "description": "A parameter used to filter publications by publication year.",
+    "sources": [
+      "ml algorithams.pdf p.15 §Results and Discussion"
+    ],
+    "mentions": 1
+  },
+  "ts__topic_": {
+    "id": "ts__topic_",
+    "name": "TS (topic)",
+    "type": "parameter",
+    "description": "A parameter used to filter publications by topic.",
+    "sources": [
+      "ml algorithams.pdf p.15 §Results and Discussion"
+    ],
+    "mentions": 1
+  },
+  "tc__citations_": {
+    "id": "tc__citations_",
+    "name": "TC (citations)",
+    "type": "parameter",
+    "description": "A parameter used to filter publications by citation count.",
+    "sources": [
+      "ml algorithams.pdf p.15 §Results and Discussion"
+    ],
+    "mentions": 1
+  },
+  "tc2022__total_number_of_citations_from_the_web_of_science_core_collection_since_": {
+    "id": "tc2022__total_number_of_citations_from_the_web_of_science_core_collection_since_",
+    "name": "TC2022 (total number of citations from the Web of Science Core Collection since publication year until the end of 2022)",
+    "type": "parameter",
+    "description": "A parameter used to filter publications by total citations since publication.",
+    "sources": [
+      "ml algorithams.pdf p.15 §Results and Discussion"
+    ],
+    "mentions": 1
+  },
+  "excel": {
+    "id": "excel",
+    "name": "EXCEL",
+    "type": "software",
+    "description": "A spreadsheet software application developed by Microsoft.",
+    "sources": [
+      "ml algorithams.pdf p.15 §Results and Discussion"
+    ],
+    "mentions": 1
+  },
+  "microsoft_excel_365": {
+    "id": "microsoft_excel_365",
+    "name": "Microsoft Excel 365",
+    "type": "software",
+    "description": "A version of the EXCEL software application.",
+    "sources": [
+      "ml algorithams.pdf p.15 §Results and Discussion"
+    ],
+    "mentions": 1
+  },
+  "roc_analysis": {
+    "id": "roc_analysis",
+    "name": "ROC Analysis",
+    "type": "concept",
+    "description": "a technique for visualizing and evaluating classifier performance",
+    "sources": [
+      "ml algorithams.pdf p.28"
+    ],
+    "mentions": 1
+  },
+  "receiver_operating_characteristic__roc__curves": {
+    "id": "receiver_operating_characteristic__roc__curves",
+    "name": "Receiver Operating Characteristic (ROC) Curves",
+    "type": "concept",
+    "description": "a useful technique for visualizing and evaluating classifier performance",
+    "sources": [
+      "ml algorithams.pdf p.28"
+    ],
+    "mentions": 1
+  },
+  "machine_learning__ml_": {
+    "id": "machine_learning__ml_",
+    "name": "Machine Learning (ML)",
+    "type": "algorithm",
+    "description": "a subset of artificial intelligence that involves the use of algorithms and statistical models to enable machines to perform a specific task",
+    "sources": [
+      "ml algorithams.pdf p.28"
+    ],
+    "mentions": 1
+  },
+  "pattern_recognition_letters": {
+    "id": "pattern_recognition_letters",
+    "name": "Pattern Recognition Letters",
+    "type": "system",
+    "description": "a journal that publishes research papers on pattern recognition and machine learning",
+    "sources": [
+      "ml algorithams.pdf p.28"
+    ],
+    "mentions": 1
+  },
+  "classifier_performance_evaluation": {
+    "id": "classifier_performance_evaluation",
+    "name": "Classifier Performance Evaluation",
+    "type": "concept",
+    "description": "the process of assessing the accuracy and reliability of classification models",
+    "sources": [
+      "ml algorithams.pdf p.28"
+    ],
+    "mentions": 1
+  }
+}

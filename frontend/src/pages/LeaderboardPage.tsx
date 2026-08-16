@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Trophy,
@@ -39,26 +40,14 @@ interface LeaderboardData {
 
 export default function LeaderboardPage() {
   const currentUser = useAuthStore((s) => s.user)
-  const [data, setData] = useState<LeaderboardData | null>(null)
-  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState<'all' | 'top' | 'mine'>('all')
 
-  useEffect(() => {
-    fetchLeaderboard()
-  }, [])
-
-  const fetchLeaderboard = async () => {
-    setLoading(true)
-    try {
-      const res = await leaderboardApi.getRankings()
-      setData(res.data)
-    } catch (error) {
-      console.error('Failed to fetch leaderboard rankings:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const { data, isLoading: loading } = useQuery<LeaderboardData>({
+    queryKey: ['leaderboard-rankings'],
+    queryFn: () => leaderboardApi.getRankings().then((r) => r.data),
+    staleTime: 60_000,
+  })
 
   if (loading) {
     return (

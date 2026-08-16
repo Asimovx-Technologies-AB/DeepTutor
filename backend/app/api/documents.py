@@ -12,9 +12,12 @@ from app.api.auth import get_current_user
 from app.core import database as db
 from app.core.config import get_settings
 from app.rag.graph_rag import graph_rag
+from app.rag.storage import active_vector_store, active_graph_store
 from app.rag.graph_store import graph_store
 from app.rag.vector_store import vector_store
+from app.rag.cache import query_result_cache
 from app.rag.section_scope import get_section_collection_id
+from app.rag.storage.s3_store import s3_store
 
 
 settings = get_settings()
@@ -114,6 +117,11 @@ async def upload_document(
         file_type=ext.lstrip("."),
     )
 
+    # Upload to AWS S3 Cloud Storage
+    s3_key = f"documents/{user['id']}/{section_id}/{file.filename}"
+    if s3_store.is_configured():
+        background_tasks.add_task(s3_store.upload_file, file_path, s3_key, file.content_type)
+
     # Clear any stale flashcards for this same section so generated cards stay aligned with the latest PDF.
     db.delete_flashcards_for_topic(section_id)
 
@@ -126,8 +134,9 @@ async def upload_document(
         "file_type": ext.lstrip("."),
         "size_mb": round(size_mb, 2),
         "topic_id": topic_id,
+        "s3_stored": s3_store.is_configured(),
         "status": "indexing",
-        "message": f"✅ {file.filename} uploaded. GraphRAG indexing started in background.",
+        "message": f"✅ {file.filename} uploaded to AWS S3 & GraphRAG indexing started in background.",
     }
 
 
@@ -240,16 +249,18 @@ async def get_document_markdown(doc_id: str, user: dict = Depends(get_current_us
 @router.delete("/section/{section_id}")
 async def delete_section_documents(section_id: str, user: dict = Depends(get_current_user)):
     """
-    Delete all documents/PDFs, vector store embeddings, graph store data,
-    and flashcards associated with a specific section/topic for the current user.
+    Comprehensively delete all documents/PDFs, FAISS vectors, JSON-KV graphs,
+    quizzes, flashcards, study plans, chat sessions, and physical files
+    for a specific section/topic for the current user.
     """
     user_id = user["id"]
     namespaced_topic = _user_section_collection_id(user_id, section_id)
 
-    # 1. Delete SQL database records
-    deleted_docs = db.delete_documents_for_section(user_id=user_id, topic_id=section_id)
+    # 1. Delete all SQL database records (documents, flashcards, quizzes, study plans, chat sessions)
+    del_result = db.delete_section_all_data(user_id=user_id, topic_id=section_id)
+    deleted_docs = del_result.get("deleted_docs", [])
 
-    # 2. Remove physical PDF / document files from disk
+    # 2. Remove physical PDF / document files from disk & AWS S3
     for doc in deleted_docs:
         file_path = doc.get("file_path")
         if file_path and os.path.exists(file_path):
@@ -258,29 +269,54 @@ async def delete_section_documents(section_id: str, user: dict = Depends(get_cur
             except Exception as e:
                 print(f"[documents] Failed to remove file {file_path}: {e}")
 
-    # Also clean up the section directory if present
-    upload_dir = Path(settings.UPLOAD_DIR) / user_id / section_id
-    if upload_dir.exists():
-        try:
-            import shutil
-            shutil.rmtree(upload_dir, ignore_errors=True)
-        except Exception as e:
-            print(f"[documents] Failed to remove upload_dir {upload_dir}: {e}")
+        # Delete from AWS S3
+        if s3_store.is_configured() and doc.get("file_name"):
+            s3_key = f"documents/{user_id}/{section_id}/{doc.get('file_name')}"
+            s3_store.delete_file(s3_key)
 
-    # 3. Delete ChromaDB vector collection for this section
-    vector_store.delete_collection(namespaced_topic)
+    # Also clean up the section upload directories if present
+    for base_p in [
+        Path(settings.UPLOAD_DIR) / user_id / section_id,
+        Path(settings.UPLOAD_DIR) / section_id,
+    ]:
+        if base_p.exists():
+            try:
+                import shutil
+                shutil.rmtree(base_p, ignore_errors=True)
+            except Exception as e:
+                print(f"[documents] Failed to remove upload_dir {base_p}: {e}")
 
-    # 4. Delete NetworkX graph store for this section
-    graph_store.delete_graph(namespaced_topic)
+    # 3. Delete active FAISS vector store + fallback ChromaDB
+    try:
+        active_vector_store.delete_collection(namespaced_topic)
+        active_vector_store.delete_collection(section_id)
+        vector_store.delete_collection(namespaced_topic)
+        vector_store.delete_collection(section_id)
+    except Exception as e:
+        print(f"[documents] Vector store delete note: {e}")
 
-    # 5. Delete generated flashcards for this section
-    db.delete_flashcards_for_topic(section_id)
+    # 4. Delete active JSON-KV graph store + fallback NetworkX
+    try:
+        active_graph_store.delete_graph(namespaced_topic)
+        active_graph_store.delete_graph(section_id)
+        graph_store.delete_graph(namespaced_topic)
+        graph_store.delete_graph(section_id)
+    except Exception as e:
+        print(f"[documents] Graph store delete note: {e}")
+
+    # 5. Invalidate query cache for this section
+    try:
+        await query_result_cache.invalidate(namespaced_topic)
+        await query_result_cache.invalidate(section_id)
+    except Exception:
+        pass
 
     return {
         "ok": True,
-        "deleted_count": len(deleted_docs),
         "section_id": section_id,
-        "message": f"Successfully deleted {len(deleted_docs)} document(s) and all associated PDF vector/graph data for section '{section_id}'."
+        "deleted_count": len(deleted_docs),
+        "details": del_result,
+        "message": f"Successfully deleted section '{section_id}' and all associated database records, files, vectors, and graph data."
     }
 
 
@@ -314,9 +350,28 @@ async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
 
     if not remaining:
         # No documents left for this section — delete vector store, graph store, flashcards
-        vector_store.delete_collection(namespaced_topic)
-        graph_store.delete_graph(namespaced_topic)
+        try:
+            active_vector_store.delete_collection(namespaced_topic)
+            active_vector_store.delete_collection(section_id)
+            vector_store.delete_collection(namespaced_topic)
+            vector_store.delete_collection(section_id)
+        except Exception:
+            pass
+
+        try:
+            active_graph_store.delete_graph(namespaced_topic)
+            active_graph_store.delete_graph(section_id)
+            graph_store.delete_graph(namespaced_topic)
+            graph_store.delete_graph(section_id)
+        except Exception:
+            pass
+
         db.delete_flashcards_for_topic(section_id)
+        try:
+            await query_result_cache.invalidate(namespaced_topic)
+            await query_result_cache.invalidate(section_id)
+        except Exception:
+            pass
 
     return {
         "ok": True,

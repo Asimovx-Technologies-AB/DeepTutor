@@ -1,10 +1,6 @@
-"""
-Chat API with GraphRAG-powered streaming.
-SSE stream emits multi-type events: token | sources | graph_context | done
-
-Each user's documents are stored in their own ChromaDB collection, namespaced as:
-  {user_id}_{topic_id}
-"""
+import os
+import shutil
+from pathlib import Path
 import asyncio
 import json
 from typing import Optional
@@ -13,10 +9,16 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from app.api.auth import get_current_user, decode_token
 from app.core import database as db
+from app.core.config import get_settings
 from app.rag.graph_rag import graph_rag
 from app.rag.ollama_client import ollama
 from app.rag.section_scope import get_section_collection_id
+from app.rag.storage import active_vector_store, active_graph_store
+from app.rag.graph_store import graph_store
+from app.rag.cache import query_result_cache
+from app.rag.storage.s3_store import s3_store
 
+settings = get_settings()
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
@@ -65,8 +67,73 @@ async def get_messages(session_id: str, user: dict = Depends(get_current_user)):
 
 @router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str, user: dict = Depends(get_current_user)):
+    user_id = user["id"]
+    session = db.get_session(session_id)
+    if not session:
+        # Also clean up any possible leftover session id data
+        db.delete_session(session_id)
+        db.delete_section_all_data(user_id=user_id, topic_id=session_id)
+        return {"ok": True, "session_id": session_id}
+
+    topic_id = session.get("topic_id") or ""
+
+    # 1. Delete SQL database records for this session & its topic
     db.delete_session(session_id)
-    return {"ok": True}
+    del_result = db.delete_section_all_data(user_id=user_id, topic_id=session_id)
+    if topic_id and topic_id != "general" and topic_id != session_id:
+        db.delete_section_all_data(user_id=user_id, topic_id=topic_id)
+
+    # 2. Clean up uploaded physical files & AWS S3
+    deleted_docs = del_result.get("deleted_docs", [])
+    for doc in deleted_docs:
+        file_path = doc.get("file_path")
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+
+        if s3_store.is_configured() and doc.get("file_name"):
+            s3_key = f"documents/{user_id}/{doc.get('topic_id', session_id)}/{doc.get('file_name')}"
+            s3_store.delete_file(s3_key)
+
+    for tid in [session_id, topic_id]:
+        if not tid or tid == "general":
+            continue
+        for base_p in [
+            Path(settings.UPLOAD_DIR) / user_id / tid,
+            Path(settings.UPLOAD_DIR) / tid,
+        ]:
+            if base_p.exists():
+                try:
+                    shutil.rmtree(base_p, ignore_errors=True)
+                except Exception:
+                    pass
+
+    # 3. Clean up FAISS, JSON-KV, ChromaDB, NetworkX
+    target_ids = [session_id]
+    if topic_id and topic_id != "general" and topic_id != session_id:
+        target_ids.append(topic_id)
+
+    for tid in target_ids:
+        namespaced_topic = _user_section_collection_id(user_id, tid, session_id=session_id)
+        for t in [namespaced_topic, tid]:
+            try:
+                active_vector_store.delete_collection(t)
+                vector_store.delete_collection(t)
+            except Exception:
+                pass
+            try:
+                active_graph_store.delete_graph(t)
+                graph_store.delete_graph(t)
+            except Exception:
+                pass
+            try:
+                await query_result_cache.invalidate(t)
+            except Exception:
+                pass
+
+    return {"ok": True, "session_id": session_id}
 
 
 # ─── Non-streaming message ─────────────────────────────────────────────────────
@@ -88,10 +155,18 @@ async def send_message(
     topic_id = _user_section_collection_id(user["id"], session.get("topic_id") or "", session_id=session_id)
 
     if not await ollama.is_available():
-        response_text = (
-            "⚠️ **Ollama is not running.** Please start it with `ollama serve` "
-            "and make sure you have pulled a model: `ollama pull llama3.1`"
-        )
+        provider = getattr(settings, "LLM_PROVIDER", "gemini").lower()
+        if provider == "gemini":
+            response_text = (
+                "⚠️ **Gemini API key is not configured.**\n\n"
+                "Please add your Gemini API key in `backend/.env`:\n"
+                "```env\nLLM_PROVIDER=gemini\nGEMINI_API_KEY=your_actual_key\n```"
+            )
+        else:
+            response_text = (
+                "⚠️ **Ollama is not running.** Please start it with `ollama serve` "
+                "and make sure you have pulled a model: `ollama pull llama3.1`"
+            )
         msg = db.add_message(session_id, "assistant", response_text)
         return msg
 
@@ -142,15 +217,23 @@ async def stream_message(
     topic_id = _user_section_collection_id(user_id, session.get("topic_id") or "", session_id=session_id)
 
     async def event_generator():
-        # If Ollama not available, send helpful error
+        # If LLM not available, send helpful provider-specific error
         if not await ollama.is_available():
-            msg = (
-                "⚠️ **Ollama is not running.**\n\n"
-                "To start the local LLM:\n"
-                "```bash\nollama serve\n```\n"
-                "Then pull a model:\n"
-                "```bash\nollama pull llama3.1\n```"
-            )
+            provider = getattr(settings, "LLM_PROVIDER", "gemini").lower()
+            if provider == "gemini":
+                msg = (
+                    "⚠️ **Gemini API key is not configured.**\n\n"
+                    "Please add your Gemini API key in `backend/.env`:\n"
+                    "```env\nLLM_PROVIDER=gemini\nGEMINI_API_KEY=your_actual_key\n```"
+                )
+            else:
+                msg = (
+                    "⚠️ **Ollama is not running.**\n\n"
+                    "To start the local LLM:\n"
+                    "```bash\nollama serve\n```\n"
+                    "Then pull a model:\n"
+                    "```bash\nollama pull llama3.1\n```"
+                )
             for char in msg:
                 yield f"data: {json.dumps({'type': 'token', 'data': char})}\n\n"
             db.add_message(session_id, "assistant", msg)

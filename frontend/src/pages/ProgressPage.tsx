@@ -64,26 +64,31 @@ export default function ProgressPage() {
   const { data: summary } = useQuery({
     queryKey: ['progress-summary'],
     queryFn: () => progressApi.summary().then((r) => r.data),
+    staleTime: 60_000,
   })
 
   const { data: weeklyData = [] } = useQuery({
     queryKey: ['progress-weekly'],
     queryFn: () => progressApi.weekly().then((r) => r.data),
+    staleTime: 60_000,
   })
 
   const { data: recentQuizzes = [] } = useQuery({
     queryKey: ['progress-recent-quizzes'],
     queryFn: () => progressApi.recentQuizzes().then((r) => r.data),
+    staleTime: 60_000,
   })
 
   const { data: calendarDays = [] } = useQuery({
     queryKey: ['progress-calendar'],
     queryFn: () => progressApi.calendar().then((r) => r.data),
+    staleTime: 60_000,
   })
 
   const { data: topicProgress = [] } = useQuery({
     queryKey: ['progress-topics'],
     queryFn: () => progressApi.topics().then((r) => r.data),
+    staleTime: 60_000,
   })
 
   // Subject radar data from actual topicProgress or defaults

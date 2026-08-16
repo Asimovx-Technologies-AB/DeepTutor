@@ -1,0 +1,82 @@
+{
+  "ml_algorithams_pdf_p_1__research_paper___IS_A___classical_machine_learning": {
+    "id": "ml_algorithams_pdf_p_1__research_paper___IS_A___classical_machine_learning",
+    "source_entity": "ml algorithams.pdf p.1 §Research Paper",
+    "target_entity": "Classical Machine Learning",
+    "type": "IS_A",
+    "description": "a subfield of machine learning",
+    "sources": [
+      "ml algorithams.pdf p.1 §Research Paper"
+    ]
+  },
+  "ml_algorithams_pdf_p_1__research_paper___USES___perceptron": {
+    "id": "ml_algorithams_pdf_p_1__research_paper___USES___perceptron",
+    "source_entity": "ml algorithams.pdf p.1 §Research Paper",
+    "target_entity": "Perceptron",
+    "type": "USES",
+    "description": "an analysis technique used to study the impact of publications",
+    "sources": [
+      "ml algorithams.pdf p.1 §Research Paper"
+    ]
+  },
+  "ml_algorithams_pdf_p_15__results_and_discussion___USES___bibliometric_analysis": {
+    "id": "ml_algorithams_pdf_p_15__results_and_discussion___USES___bibliometric_analysis",
+    "source_entity": "ml algorithams.pdf p.15 §Results and Discussion",
+    "target_entity": "Bibliometric Analysis",
+    "type": "USES",
+    "description": "The field of machine learning is used in bibliometric analysis.",
+    "sources": [
+      "ml algorithams.pdf p.15 §Results and Discussion"
+    ]
+  },
+  "ml_algorithams_pdf_p_15__results_and_discussion___IS___science_citation_index_expended__sci_expanded_": {
+    "id": "ml_algorithams_pdf_p_15__results_and_discussion___IS___science_citation_index_expended__sci_expanded_",
+    "source_entity": "ml algorithams.pdf p.15 §Results and Discussion",
+    "target_entity": "Science Citation Index Expended (SCI-EXPANDED)",
+    "type": "IS",
+    "description": "The Web of Science Core Collection indexes publications in the SCI-EXPANDED database.",
+    "sources": [
+      "ml algorithams.pdf p.15 §Results and Discussion"
+    ]
+  },
+  "ml_algorithams_pdf_p_15__results_and_discussion___APPLIES_TO___tc2022__total_number_of_citations_from_the_web_of_science_core_collection_since_": {
+    "id": "ml_algorithams_pdf_p_15__results_and_discussion___APPLIES_TO___tc2022__total_number_of_citations_from_the_web_of_science_core_collection_since_",
+    "source_entity": "ml algorithams.pdf p.15 §Results and Discussion",
+    "target_entity": "TC2022 (total number of citations from the Web of Science Core Collection since publication year until the end of 2022)",
+    "type": "APPLIES_TO",
+    "description": "The parameter PY (year published) applies to the calculation of TC2022.",
+    "sources": [
+      "ml algorithams.pdf p.15 §Results and Discussion"
+    ]
+  },
+  "ml_algorithams_pdf_p_15__results_and_discussion___IS___microsoft_excel_365": {
+    "id": "ml_algorithams_pdf_p_15__results_and_discussion___IS___microsoft_excel_365",
+    "source_entity": "ml algorithams.pdf p.15 §Results and Discussion",
+    "target_entity": "Microsoft Excel 365",
+    "type": "IS",
+    "description": "The EXCEL software application is used in Microsoft Excel 365.",
+    "sources": [
+      "ml algorithams.pdf p.15 §Results and Discussion"
+    ]
+  },
+  "ml_algorithams_pdf_p_28___DEFINES___receiver_operating_characteristic__roc__curves": {
+    "id": "ml_algorithams_pdf_p_28___DEFINES___receiver_operating_characteristic__roc__curves",
+    "source_entity": "ml algorithams.pdf p.28",
+    "target_entity": "Receiver Operating Characteristic (ROC) Curves",
+    "type": "DEFINES",
+    "description": "a technique for visualizing and evaluating classifier performance",
+    "sources": [
+      "ml algorithams.pdf p.28"
+    ]
+  },
+  "ml_algorithams_pdf_p_28___APPLIES_TO___classifier_performance_evaluation": {
+    "id": "ml_algorithams_pdf_p_28___APPLIES_TO___classifier_performance_evaluation",
+    "source_entity": "ml algorithams.pdf p.28",
+    "target_entity": "Classifier Performance Evaluation",
+    "type": "APPLIES_TO",
+    "description": "a subset of artificial intelligence that involves the use of algorithms and statistical models to enable machines to perform a specific task",
+    "sources": [
+      "ml algorithams.pdf p.28"
+    ]
+  }
+}

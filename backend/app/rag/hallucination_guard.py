@@ -57,6 +57,17 @@ def verify_response_grounding(
             "formatted_badge": "🛡️ Verified Grounding: 100%",
         }
 
+    # If the response is a polite "Topic Not Found" or out-of-scope notice, do not display a false Grounding Warning
+    if "topic not found" in response_text.lower() or "could not find information" in response_text.lower():
+        return {
+            "grounding_score": 1.0,
+            "verified": True,
+            "matched_sentences": 0,
+            "total_sentences": 0,
+            "unverified_claims": [],
+            "formatted_badge": None,
+        }
+
     # Aggregate all PDF source context text
     full_context_text = " ".join([
         (c.get("text") or "") + " " + (c.get("child_text") or "")

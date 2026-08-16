@@ -1,0 +1,132 @@
+{
+  "ml_algorithams_pdf_p_1__research_paper___APPLIES_TO___machine_learning": {
+    "id": "ml_algorithams_pdf_p_1__research_paper___APPLIES_TO___machine_learning",
+    "source_entity": "ml algorithams.pdf p.1 §Research Paper",
+    "target_entity": "Machine learning",
+    "type": "APPLIES_TO",
+    "description": "Used to analyze the literature and evolution of machine learning research.",
+    "sources": [
+      "ml algorithams.pdf p.1 §Research Paper"
+    ]
+  },
+  "ml_algorithams_pdf_p_1__research_paper___PART_OF___machine_learning": {
+    "id": "ml_algorithams_pdf_p_1__research_paper___PART_OF___machine_learning",
+    "source_entity": "ml algorithams.pdf p.1 §Research Paper",
+    "target_entity": "Machine learning",
+    "type": "PART_OF",
+    "description": "A foundational algorithm within the broader field of machine learning.",
+    "sources": [
+      "ml algorithams.pdf p.1 §Research Paper"
+    ]
+  },
+  "ml_algorithams_pdf_p_1__research_paper___EXTENDS___decision_trees": {
+    "id": "ml_algorithams_pdf_p_1__research_paper___EXTENDS___decision_trees",
+    "source_entity": "ml algorithams.pdf p.1 §Research Paper",
+    "target_entity": "Decision trees",
+    "type": "EXTENDS",
+    "description": "An ensemble method that builds upon and combines multiple decision trees.",
+    "sources": [
+      "ml algorithams.pdf p.1 §Research Paper"
+    ]
+  },
+  "ml_algorithams_pdf_p_15___APPLIES_TO___machine_learning": {
+    "id": "ml_algorithams_pdf_p_15___APPLIES_TO___machine_learning",
+    "source_entity": "ml algorithams.pdf p.15",
+    "target_entity": "Machine learning",
+    "type": "APPLIES_TO",
+    "description": "The bibliometric study is conducted on classic research documents within the machine learning domain.",
+    "sources": [
+      "ml algorithams.pdf p.15"
+    ]
+  },
+  "ml_algorithams_pdf_p_15___PART_OF___web_of_science_core_collection": {
+    "id": "ml_algorithams_pdf_p_15___PART_OF___web_of_science_core_collection",
+    "source_entity": "ml algorithams.pdf p.15",
+    "target_entity": "Web of Science Core Collection",
+    "type": "PART_OF",
+    "description": "SCI-EXPANDED is a database index that is part of the Web of Science Core Collection.",
+    "sources": [
+      "ml algorithams.pdf p.15"
+    ]
+  },
+  "ml_algorithams_pdf_p_15___USES___web_of_science_core_collection": {
+    "id": "ml_algorithams_pdf_p_15___USES___web_of_science_core_collection",
+    "source_entity": "ml algorithams.pdf p.15",
+    "target_entity": "Web of Science Core Collection",
+    "type": "USES",
+    "description": "The study retrieves publication and citation data from the Web of Science Core Collection.",
+    "sources": [
+      "ml algorithams.pdf p.15"
+    ]
+  },
+  "ml_algorithams_pdf_p_15___USES___microsoft_excel_365": {
+    "id": "ml_algorithams_pdf_p_15___USES___microsoft_excel_365",
+    "source_entity": "ml algorithams.pdf p.15",
+    "target_entity": "Microsoft Excel 365",
+    "type": "USES",
+    "description": "The study utilizes Excel for examining records and executing manual formulas.",
+    "sources": [
+      "ml algorithams.pdf p.15"
+    ]
+  },
+  "ml_algorithams_pdf_p_28___DEFINES___roc_curves": {
+    "id": "ml_algorithams_pdf_p_28___DEFINES___roc_curves",
+    "source_entity": "ml algorithams.pdf p.28",
+    "target_entity": "ROC curves",
+    "type": "DEFINES",
+    "description": "ROC analysis introduces and defines the use of ROC curves.",
+    "sources": [
+      "ml algorithams.pdf p.28"
+    ]
+  },
+  "ml_algorithams_pdf_p_28___APPLIES_TO___classifier_performance": {
+    "id": "ml_algorithams_pdf_p_28___APPLIES_TO___classifier_performance",
+    "source_entity": "ml algorithams.pdf p.28",
+    "target_entity": "Classifier performance",
+    "type": "APPLIES_TO",
+    "description": "ROC curves are used to visualize and evaluate classifier performance.",
+    "sources": [
+      "ml algorithams.pdf p.28"
+    ]
+  },
+  "ml_algorithams_pdf_p_28___COMPARED_TO___accuracy_measures": {
+    "id": "ml_algorithams_pdf_p_28___COMPARED_TO___accuracy_measures",
+    "source_entity": "ml algorithams.pdf p.28",
+    "target_entity": "Accuracy measures",
+    "type": "COMPARED_TO",
+    "description": "ROC curves provide advantages over simple accuracy measures by being unaffected by class imbalance.",
+    "sources": [
+      "ml algorithams.pdf p.28"
+    ]
+  },
+  "ml_algorithams_pdf_p_28___DEFINES___roc_space": {
+    "id": "ml_algorithams_pdf_p_28___DEFINES___roc_space",
+    "source_entity": "ml algorithams.pdf p.28",
+    "target_entity": "ROC space",
+    "type": "DEFINES",
+    "description": "ROC analysis discusses and defines the concept of the ROC space.",
+    "sources": [
+      "ml algorithams.pdf p.28"
+    ]
+  },
+  "ml_algorithams_pdf_p_28___USES___roc_convex_hull": {
+    "id": "ml_algorithams_pdf_p_28___USES___roc_convex_hull",
+    "source_entity": "ml algorithams.pdf p.28",
+    "target_entity": "ROC convex hull",
+    "type": "USES",
+    "description": "ROC curves utilize the ROC convex hull to identify optimal classifiers.",
+    "sources": [
+      "ml algorithams.pdf p.28"
+    ]
+  },
+  "ml_algorithams_pdf_p_28___USES___probabilistic_classifiers": {
+    "id": "ml_algorithams_pdf_p_28___USES___probabilistic_classifiers",
+    "source_entity": "ml algorithams.pdf p.28",
+    "target_entity": "Probabilistic classifiers",
+    "type": "USES",
+    "description": "ROC curves are generated from the predictions of probabilistic classifiers.",
+    "sources": [
+      "ml algorithams.pdf p.28"
+    ]
+  }
+}

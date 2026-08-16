@@ -1,7 +1,7 @@
+import React, { useState, memo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Bot, User, Copy, Check } from 'lucide-react'
-import { useState } from 'react'
 import { motion } from 'framer-motion'
 import SourceCard, { type Source } from './SourceCard'
 
@@ -17,7 +17,7 @@ interface Props {
   }
 }
 
-export default function ChatMessage({ role, content, isStreaming, sources, grounding }: Props) {
+const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding }: Props) => {
   const [copied, setCopied] = useState(false)
   const isAssistant = role === 'assistant'
 
@@ -29,9 +29,9 @@ export default function ChatMessage({ role, content, isStreaming, sources, groun
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.2 }}
       className={`flex gap-4 group ${isAssistant ? '' : 'flex-row-reverse'}`}
     >
       {/* Avatar */}
@@ -57,10 +57,10 @@ export default function ChatMessage({ role, content, isStreaming, sources, groun
         }`}>
           {isAssistant ? (
             <div className="markdown-content">
-              {/* Grounding Badge */}
-              {grounding && (
+              {/* Grounding Badge (only for substantive answers) */}
+              {grounding && grounding.formatted_badge && !content.includes("Topic Not Found") && (
                 <div className="mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-[#EBF6EE] text-[#4F8A68] border border-[#4F8A68]/30">
-                  <span>{grounding.formatted_badge || `🛡️ Verified Grounding: ${Math.round((grounding.grounding_score || 1) * 100)}%`}</span>
+                  <span>{grounding.formatted_badge}</span>
                 </div>
               )}
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -79,8 +79,8 @@ export default function ChatMessage({ role, content, isStreaming, sources, groun
           )}
         </div>
 
-        {/* Source cards — shown below assistant messages */}
-        {isAssistant && sources && sources.length > 0 && !isStreaming && (
+        {/* Source cards — shown below assistant messages when not a missing topic notice */}
+        {isAssistant && sources && sources.length > 0 && !isStreaming && !content.includes("Topic Not Found") && (
           <SourceCard sources={sources} />
         )}
 
@@ -88,7 +88,7 @@ export default function ChatMessage({ role, content, isStreaming, sources, groun
         {isAssistant && content && !isStreaming && (
           <button
             onClick={handleCopy}
-            className="absolute -bottom-6 left-2 opacity-0 group-hover:opacity-100 transition-opacity text-[#969188] hover:text-[#F28A45] flex items-center gap-1.5 text-xs font-bold bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-lg border border-[#E7E1D8] shadow-2xs"
+            className="absolute -bottom-6 left-2 opacity-0 group-hover:opacity-100 transition-opacity text-[#969188] hover:text-[#F28A45] flex items-center gap-1.5 text-xs font-bold bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-lg border border-[#E7E1D8] shadow-2xs cursor-pointer"
           >
             {copied ? <><Check size={12} className="text-[#4F8A68]" /> Copied</> : <><Copy size={12} /> Copy</>}
           </button>
@@ -97,3 +97,12 @@ export default function ChatMessage({ role, content, isStreaming, sources, groun
     </motion.div>
   )
 }
+
+export default memo(ChatMessageComponent, (prevProps, nextProps) => {
+  // Only re-render if streaming state or content or sources changed
+  if (prevProps.isStreaming !== nextProps.isStreaming) return false
+  if (prevProps.content !== nextProps.content) return false
+  if (prevProps.sources !== nextProps.sources) return false
+  if (prevProps.grounding !== nextProps.grounding) return false
+  return true
+})

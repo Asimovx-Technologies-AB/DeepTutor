@@ -64,15 +64,17 @@ async def get_section_context(
         print(f"[section_scope] Denied: user {user_id} does not own section {section_id}")
         return []
 
+    from app.rag.storage import active_vector_store
+
     collection_id = get_section_collection_id(user_id, section_id)
 
     try:
-        col = vector_store._collection(collection_id)
+        count = active_vector_store.count(collection_id)
     except Exception as e:
-        print(f"[section_scope] No collection for {collection_id}: {e}")
+        print(f"[section_scope] Error accessing collection {collection_id}: {e}")
         return []
 
-    if col.count() == 0:
+    if count == 0:
         print(f"[section_scope] Collection {collection_id} exists but is empty.")
         return []
 
@@ -80,7 +82,7 @@ async def get_section_context(
         try:
             emb = await ollama.embed(query)
             if emb:
-                results = vector_store.search(collection_id, emb, top_k=top_k)
+                results = active_vector_store.search_hybrid(collection_id, emb, query, top_k=top_k)
                 chunks = [r["text"] for r in results if r.get("text")]
                 if chunks:
                     return chunks
@@ -90,9 +92,15 @@ async def get_section_context(
     # No query, or query search came back empty — fall back to a sample
     # of this SAME section's own documents (never another section's).
     try:
-        data = col.get(include=["documents"])
-        docs = data.get("documents", []) or []
-        return docs[:top_k]
+        if hasattr(active_vector_store, "get_all_chunks"):
+            chunks = active_vector_store.get_all_chunks(collection_id)
+            if chunks:
+                return [c["text"] if isinstance(c, dict) else str(c) for c in chunks[:top_k]]
+        if hasattr(active_vector_store, "_topic"):
+            topic = active_vector_store._topic(collection_id)
+            return topic._docs[:top_k]
+        res = active_vector_store.search(collection_id, [0.0] * 3072, top_k=top_k, min_score=0.0)
+        return [r["text"] for r in res if r.get("text")]
     except Exception as e:
         print(f"[section_scope] Failed to read collection {collection_id}: {e}")
         return []

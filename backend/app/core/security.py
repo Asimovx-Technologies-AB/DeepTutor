@@ -1,7 +1,13 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import bcrypt
-from jose import JWTError, jwt
+
+try:
+    import jwt
+    from jwt.exceptions import PyJWTError as JWTError
+except ImportError:
+    from jose import JWTError, jwt
+
 from app.core.config import get_settings
 
 settings = get_settings()

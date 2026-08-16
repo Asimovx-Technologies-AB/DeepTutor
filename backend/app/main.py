@@ -1,10 +1,9 @@
 """
-FastAPI main application.
+FastAPI main application — DeepTutor v2 (4-Stage RAG Pipeline).
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-import os
 from pathlib import Path
 from app.core.config import get_settings
 from app.api import auth, chat, documents, quiz, flashcards, progress, study_plan, leaderboard, mcp
@@ -14,31 +13,40 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create required directories
-    for dir_path in [settings.UPLOAD_DIR, settings.CHROMA_PERSIST_DIR, settings.GRAPH_DATA_DIR]:
+    # Startup: create all required directories
+    dirs = [
+        settings.UPLOAD_DIR,
+        settings.FAISS_DATA_DIR,
+        settings.LIGHTRAG_DATA_DIR,
+        settings.CHROMA_PERSIST_DIR,  # keep for legacy fallback
+        settings.GRAPH_DATA_DIR,       # keep for legacy fallback
+    ]
+    for dir_path in dirs:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
-    print(f"[START] {settings.APP_NAME} v{settings.APP_VERSION} started")
-    print(f"[OLLAMA] Base URL: {settings.OLLAMA_BASE_URL} | Model: {settings.OLLAMA_CHAT_MODEL}")
-    print(f"[GRAPHRAG] ChromaDB @ {settings.CHROMA_PERSIST_DIR} | Graph @ {settings.GRAPH_DATA_DIR}")
-    # Backend reloaded with 3-Step Silent Grounding Check Answering Engine System Prompt
+
+    print(f"[START] {settings.APP_NAME} v{settings.APP_VERSION}")
+    print(f"[LLM]   Ollama @ {settings.OLLAMA_BASE_URL} | Chat: {settings.OLLAMA_CHAT_MODEL}")
+    print(f"[EMBED] Provider: {settings.EMBEDDING_PROVIDER.upper()} | Model: {settings.OLLAMA_EMBED_MODEL}")
+    print(f"[STORE] Vector: {settings.VECTOR_STORE_BACKEND.upper()} @ {settings.FAISS_DATA_DIR}")
+    print(f"[STORE] Graph:  {settings.GRAPH_STORE_BACKEND.upper()} @ {settings.LIGHTRAG_DATA_DIR}")
+    print(f"[CHUNK] Semantic chunker: {settings.CHUNK_MIN_WORDS}–{settings.CHUNK_MAX_WORDS} words/chunk")
+
+    # Report active parser
     try:
-        from app.rag.document_processor import get_parser_info
-        info = get_parser_info()
-        primary = info.get("primary", "pdfplumber").upper()
-        ocr = info.get("ocr_enabled", False)
-        version = info.get("docling_version") or ""
-        print(f"[PARSER] Primary={primary} {version} | OCR={ocr} | Chunking={info.get('chunking_strategy')}")
+        from app.rag.pipeline.parser import document_parser
+        print(f"[PARSER] Primary: {settings.PRIMARY_PARSER.upper()} | Docling: {settings.ENABLE_DOCLING}")
     except Exception:
         pass
-    print(f"[MCP] FastMCP Server & Client Manager initialized")
+
+    print("[MCP] FastMCP Server & Client Manager initialized")
     yield
     print("[STOP] Shutting down...")
 
 
 app = FastAPI(
     title="Deep Tutor API",
-    description="AI Tutor backend with GraphRAG + Local LLM + MCP",
-    version="1.0.0",
+    description="AI Tutor — 4-Stage RAG Pipeline: PyMuPDF + FAISS HNSW + LightRAG JSON-KV + Hybrid Search",
+    version=settings.APP_VERSION,
     lifespan=lifespan,
 )
 
@@ -69,6 +77,7 @@ async def root():
         "name": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "status": "running",
+        "architecture": "4-Stage RAG Pipeline",
         "docs": "/docs",
     }
 
@@ -76,16 +85,41 @@ async def root():
 @app.get("/api/health")
 async def health():
     from app.rag.ollama_client import ollama
-    from app.rag.document_processor import get_parser_info
     from app.rag.cache import embedding_cache, query_result_cache
+    from app.rag.storage import active_vector_store, active_graph_store
+
     ollama_ok = await ollama.is_available()
-    parser_info = get_parser_info()
+
+    # Vector store stats
+    try:
+        vs_stats = active_vector_store.cache_stats()
+    except Exception:
+        vs_stats = {"backend": settings.VECTOR_STORE_BACKEND}
+
+    # Graph store stats
+    try:
+        gs_stats = {"backend": settings.GRAPH_STORE_BACKEND, "data_dir": settings.LIGHTRAG_DATA_DIR}
+    except Exception:
+        gs_stats = {"backend": settings.GRAPH_STORE_BACKEND}
+
     return {
         "api": "ok",
-        "ollama": "connected" if ollama_ok else "disconnected",
-        "ollama_url": settings.OLLAMA_BASE_URL,
-        "model": settings.OLLAMA_CHAT_MODEL,
-        "parser": parser_info,
+        "version": settings.APP_VERSION,
+        "pipeline": {
+            "stage1_parser": settings.PRIMARY_PARSER,
+            "stage1_chunker": f"semantic_{settings.CHUNK_MIN_WORDS}_{settings.CHUNK_MAX_WORDS}w",
+            "stage2_embedder": settings.EMBEDDING_PROVIDER,
+            "stage3_vector_store": settings.VECTOR_STORE_BACKEND,
+            "stage3_graph_store": settings.GRAPH_STORE_BACKEND,
+        },
+        "ollama": {
+            "status": "connected" if ollama_ok else "disconnected",
+            "url": settings.OLLAMA_BASE_URL,
+            "chat_model": settings.OLLAMA_CHAT_MODEL,
+            "embed_model": settings.OLLAMA_EMBED_MODEL,
+        },
+        "vector_store": vs_stats,
+        "graph_store": gs_stats,
         "cache": {
             "embedding": embedding_cache.stats(),
             "query": query_result_cache.stats(),

@@ -1,7 +1,6 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   MessageSquare, Star, BookOpen, CalendarCheck,
   Flame, ArrowRight, Brain, Zap, Clock, Send,
@@ -45,18 +44,20 @@ export default function DashboardPage() {
     { id: 3, text: 'Review 5 Flashcards', completed: false },
   ])
 
-  const toggleGoal = (id: number) => {
+  const toggleGoal = useCallback((id: number) => {
     setGoals(prev => prev.map(g => g.id === id ? { ...g, completed: !g.completed } : g))
-  }
+  }, [])
 
   const { data: progress } = useQuery({
     queryKey: ['progress-summary'],
     queryFn: () => progressApi.summary().then((r) => r.data),
+    staleTime: 60000,
   })
 
   const { data: sessions } = useQuery({
     queryKey: ['chat-sessions'],
     queryFn: () => chatApi.sessions().then((r) => r.data),
+    staleTime: 60000,
   })
 
   const recentSessions = sessions?.slice(0, 4) ?? []
@@ -65,12 +66,12 @@ export default function DashboardPage() {
   const hour = new Date().getHours()
   const timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
-  const handleQuickAsk = (e?: React.FormEvent, customText?: string) => {
+  const handleQuickAsk = useCallback((e?: React.FormEvent, customText?: string) => {
     if (e) e.preventDefault()
     const textToSend = customText || quickPrompt
     if (!textToSend.trim()) return
     navigate('/chat', { state: { initialPrompt: textToSend } })
-  }
+  }, [quickPrompt, navigate])
 
   const completedGoalsCount = goals.filter(g => g.completed).length
   const goalPct = Math.round((completedGoalsCount / goals.length) * 100)
@@ -82,11 +83,7 @@ export default function DashboardPage() {
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
 
       {/* ─── 1. TOP HEADER & HEADER ACTIONS ─── */}
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E7E1D8]/60 pb-5"
-      >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E7E1D8]/60 pb-5">
         <div>
           <h1 className="text-[28px] sm:text-[32px] leading-[36px] sm:leading-[40px] tracking-[-0.6px] font-bold text-[#20201D] flex items-center gap-2">
             <span>{timeGreeting}, <span className="text-[#F28A45] font-bold">{user?.username || 'adwaid'}</span></span>
@@ -123,7 +120,7 @@ export default function DashboardPage() {
             <ChevronRight size={14} className="text-[#969188]" />
           </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* ─── 2. MAIN 2-COLUMN DASHBOARD GRID (CENTRAL LEARNING + RIGHT INSIGHTS PANEL) ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -186,41 +183,37 @@ export default function DashboardPage() {
 
             {/* Quick Actions Chips */}
             <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-              <motion.button
-                whileHover={{ y: -2 }}
+              <button
                 onClick={() => handleQuickAsk(undefined, "Explain the core concept of Machine Learning")}
-                className="flex items-center gap-1.5 bg-white hover:bg-[#FFF0E4] border border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shadow-2xs cursor-pointer"
+                className="flex items-center gap-1.5 bg-white hover:bg-[#FFF0E4] hover:-translate-y-0.5 border border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-transform duration-150 shadow-2xs cursor-pointer active:scale-[0.98]"
               >
                 <img src="/assets/illustrations/lightbulb.png" alt="Lightbulb" className="w-4 h-4 object-contain" />
                 <span>Explain a concept</span>
-              </motion.button>
+              </button>
 
-              <motion.button
-                whileHover={{ y: -2 }}
+              <button
                 onClick={() => handleQuickAsk(undefined, "Can you give me a real-world example of Linear Regression")}
-                className="flex items-center gap-1.5 bg-white hover:bg-[#E3F0E5] border border-[#E7E1D8] hover:border-[#4F8A68]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shadow-2xs cursor-pointer"
+                className="flex items-center gap-1.5 bg-white hover:bg-[#E3F0E5] hover:-translate-y-0.5 border border-[#E7E1D8] hover:border-[#4F8A68]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-transform duration-150 shadow-2xs cursor-pointer active:scale-[0.98]"
               >
                 <img src="/assets/illustrations/cs_code.png" alt="Code" className="w-4 h-4 object-contain" />
                 <span>Give me an example</span>
-              </motion.button>
+              </button>
 
-              <motion.button
-                whileHover={{ y: -2 }}
+              <button
                 onClick={() => handleQuickAsk(undefined, "Quiz me with 3 questions on Neural Networks")}
-                className="flex items-center gap-1.5 bg-white hover:bg-[#F0ECF7] border border-[#E7E1D8] hover:border-[#A99BCB]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shadow-2xs cursor-pointer"
+                className="flex items-center gap-1.5 bg-white hover:bg-[#F0ECF7] hover:-translate-y-0.5 border border-[#E7E1D8] hover:border-[#A99BCB]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-transform duration-150 shadow-2xs cursor-pointer active:scale-[0.98]"
               >
                 <img src="/assets/illustrations/checklist_clipboard.png" alt="Quiz" className="w-4 h-4 object-contain" />
                 <span>Quiz me</span>
-              </motion.button>
+              </button>
 
-              <motion.button
-                whileHover={{ y: -2 }}
+              <button
                 onClick={() => handleQuickAsk(undefined, "Help me study and summarize my uploaded document")}
-                className="flex items-center gap-1.5 bg-white hover:bg-[#FFF0E4] border border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shadow-2xs cursor-pointer"
+                className="flex items-center gap-1.5 bg-white hover:bg-[#FFF0E4] hover:-translate-y-0.5 border border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-transform duration-150 shadow-2xs cursor-pointer active:scale-[0.98]"
               >
                 <img src="/assets/illustrations/open_book.png" alt="Study" className="w-4 h-4 object-contain" />
                 <span>Help me study</span>
-              </motion.button>
+              </button>
             </div>
           </div>
 
@@ -417,10 +410,9 @@ export default function DashboardPage() {
                 <span className="text-[#20201D] font-black">80%</span>
               </div>
               <div className="w-full bg-[#F4EFE7] rounded-full h-2 overflow-hidden">
-                <motion.div
-                  className="bg-[#4F8A68] h-full rounded-full"
-                  animate={{ width: `80%` }}
-                  transition={{ duration: 0.4 }}
+                <div
+                  className="bg-[#4F8A68] h-full rounded-full transition-all duration-300"
+                  style={{ width: '80%' }}
                 />
               </div>
             </div>

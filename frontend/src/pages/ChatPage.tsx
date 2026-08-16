@@ -8,7 +8,8 @@ import {
   CheckCircle, AlertCircle, Loader2, Trophy, Trash2,
   Mic, MicOff, Search, Share2, Download,
   ChevronDown, LogOut, Network,
-  Clock, ArrowRight, Menu, X, Zap, Cpu
+  Clock, ArrowRight, Menu, X, Zap,
+  ListChecks, Star, Lightbulb
 } from 'lucide-react'
 import { useChatStore } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
@@ -17,7 +18,6 @@ import ChatMessage from '../components/ChatMessage'
 import GraphContextPanel from '../components/GraphContextPanel'
 import GamifiedQuizGame from '../components/GamifiedQuizGame'
 import FlashcardsOverlay from '../components/FlashcardsOverlay'
-import McpDrawer from '../components/McpDrawer'
 import { UpgradeModal } from '../components/UpgradeModal'
 import type { Source } from '../components/SourceCard'
 
@@ -107,7 +107,6 @@ export default function ChatPage() {
   const [showGraphPanel, setShowGraphPanel] = useState(false)
   const [showQuizGame, setShowQuizGame] = useState(false)
   const [showFlashcards, setShowFlashcards] = useState(false)
-  const [showMcpDrawer, setShowMcpDrawer] = useState(false)
   const [upgradeModalInfo, setUpgradeModalInfo] = useState<{ open: boolean; fileName?: string; sizeMb?: number }>({ open: false })
   const [liveGraphContext, setLiveGraphContext] = useState<GraphContextData>({ entities: [], relationships: [] })
   const [liveSources, setLiveSources] = useState<Source[]>([])
@@ -169,6 +168,7 @@ export default function ChatPage() {
   const abortControllerRef = useRef<AbortController | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const skipNextFetchRef = useRef<string | null>(null)
+  const messagesCacheRef = useRef<Map<string, ExtendedMessage[]>>(new Map())
 
   // Fetch knowledge graph for active session/topic
   const fetchKnowledgeGraph = useCallback(async () => {
@@ -191,7 +191,7 @@ export default function ChatPage() {
     }
   }, [showGraphPanel, fetchKnowledgeGraph])
 
-  // Fetch sessions
+  // Fetch sessions (cached for 30s for fast sidebar navigation)
   const { refetch: refetchSessions } = useQuery({
     queryKey: ['chat-sessions'],
     queryFn: async () => {
@@ -203,7 +203,7 @@ export default function ChatPage() {
       }
       return res.data
     },
-    staleTime: 0,
+    staleTime: 30000,
   })
 
   const handleSend = useCallback(async (text?: string) => {
@@ -211,7 +211,8 @@ export default function ChatPage() {
     if (!content || isStreaming) return
 
     let currentSessionId: string = activeSession?.id || ''
-    if (!currentSessionId) {
+    const isKnownSession = sessions.some((s) => s.id === currentSessionId)
+    if (!currentSessionId || !isKnownSession) {
       try {
         const res = await chatApi.createSession('', content.slice(0, 30) || 'New Chat')
         currentSessionId = res.data.id
@@ -317,31 +318,46 @@ export default function ChatPage() {
     const found = sessions.find((s) => s.id === sessionId)
     if (found) {
       setActiveSession(found)
-    } else {
-      setActiveSession({
-        id: sessionId,
-        user_id: user?.id || '',
-        topic_id: '',
-        session_title: 'Chat Session',
-        started_at: new Date().toISOString(),
-      })
+    }
+
+    // 0ms instant display from local memory cache
+    const cached = messagesCacheRef.current.get(sessionId)
+    if (cached && cached.length > 0) {
+      setExtMessages(cached)
     }
 
     chatApi
       .messages(sessionId)
       .then((res) => {
+        if (!found) {
+          setActiveSession({
+            id: sessionId,
+            user_id: user?.id || '',
+            topic_id: '',
+            session_title: 'Chat Session',
+            started_at: new Date().toISOString(),
+          })
+        }
         const msgs: ExtendedMessage[] = res.data.map((m: any) => ({
           ...m,
           sources: m.metadata?.sources ?? [],
           graph_context: m.metadata?.graph_context ?? null,
         }))
+        messagesCacheRef.current.set(sessionId, msgs)
         setExtMessages(msgs)
         setMessages(res.data)
       })
       .catch((err) => {
         console.error('Failed to load session messages:', err)
+        if (err.response?.status === 404 || err.response?.status === 401) {
+          // Stale or deleted session ID — cleanly reset and navigate to clean chat
+          setActiveSession(null)
+          setExtMessages([])
+          setMessages([])
+          navigate('/chat', { replace: true })
+        }
       })
-  }, [sessionId, sessions])
+  }, [sessionId, sessions, user?.id, navigate, setActiveSession, setMessages])
 
   // Automatically submit initial prompt if navigated from Dashboard Quick Ask
   useEffect(() => {
@@ -378,27 +394,39 @@ export default function ChatPage() {
     return { today, yesterday, lastWeek, older }
   }, [sessions, searchQuery])
 
-  // Auto-scroll
+  // 60FPS throttled auto-scroll without layout thrashing
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [extMessages, streamingContent])
+    const el = bottomRef.current
+    if (!el) return
+    const raf = requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth', block: 'end' })
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [extMessages, streamingContent, isStreaming])
 
-  const handleDeleteSession = async (e: React.MouseEvent, sId: string) => {
-    e.stopPropagation()
-    if (!confirm('Are you sure you want to delete this chat session?')) return
+  const handleDeleteSession = async (e?: React.MouseEvent, sId?: string) => {
+    if (e) e.stopPropagation()
+    const targetId = sId || activeSession?.id
+    if (!targetId) return
+    if (!confirm('Are you sure you want to delete this chat session? All messages, documents, and study materials for this session will be permanently removed.')) return
     try {
-      await chatApi.deleteSession(sId)
-      removeSession(sId)
-      if (activeSession?.id === sId) {
-        const remaining = sessions.filter((s) => s.id !== sId)
+      await chatApi.deleteSession(targetId)
+      removeSession(targetId)
+      if (activeSession?.id === targetId) {
+        setActiveSession(null)
+        setExtMessages([])
+        setMessages([])
+        const remaining = sessions.filter((s) => s.id !== targetId)
         if (remaining.length > 0) {
           navigate(`/chat/${remaining[0].id}`)
         } else {
           navigate('/chat')
         }
       }
+      refetchSessions()
     } catch (err) {
       console.error('Failed to delete session:', err)
+      alert('Failed to delete session from database. Please try again.')
     }
   }
 
@@ -433,7 +461,8 @@ export default function ChatPage() {
 
     try {
       let targetSessionId: string = activeSession?.id || ''
-      if (!targetSessionId) {
+      const isKnownSession = sessions.some((s) => s.id === targetSessionId)
+      if (!targetSessionId || !isKnownSession) {
         const newSess = await chatApi.createSession('', file.name.slice(0, 30))
         targetSessionId = newSess.data.id
         skipNextFetchRef.current = targetSessionId
@@ -442,10 +471,11 @@ export default function ChatPage() {
         navigate(`/chat/${newSess.data.id}`)
       }
 
-      const topicId = activeSession?.topic_id || targetSessionId || activeSession?.id || 'general'
+      const topicId = targetSessionId || 'general'
       const formData = new FormData()
       formData.append('file', file)
       formData.append('topic_id', topicId)
+      formData.append('section_id', topicId)
 
       const res = await fetch('/api/documents/upload', {
         method: 'POST',
@@ -464,6 +494,11 @@ export default function ChatPage() {
         }
         setExtMessages((prev) => [...prev, infoMsg])
       } else {
+        if (res.status === 401) {
+          logout()
+          navigate('/login')
+          throw new Error('Your login session expired. Please log in again.')
+        }
         const detailMsg = typeof data.detail === 'object' ? data.detail?.message : data.detail
         if (data.detail?.requires_premium) {
           setUpgradeModalInfo({ open: true, fileName: file.name, sizeMb: fileSizeMb })
@@ -507,12 +542,74 @@ export default function ChatPage() {
         )}
       </AnimatePresence>
 
-      {/* ─── MAIN CHAT WORKSPACE AREA ───────────────────────────────────────────── */}
+      {/* ─── MOBILE LEFT DRAWER (CHAT HISTORY) ─── */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-[#E7E1D8] p-4 flex flex-col justify-between shadow-2xl transition-transform duration-300 md:hidden ${
+          mobileLeftOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#E7E1D8]">
+            <div className="flex items-center gap-2">
+              <MessageSquare size={18} className="text-[#F28A45]" />
+              <h3 className="text-xs font-extrabold uppercase text-[#6F6B63] tracking-wider">
+                Chat History
+              </h3>
+            </div>
+            <button
+              onClick={() => setMobileLeftOpen(false)}
+              className="text-[#969188] hover:text-[#20201D] p-1.5 rounded-xl hover:bg-[#F4EFE7]"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <button
+            onClick={() => {
+              setActiveSession(null)
+              navigate('/chat')
+              setMobileLeftOpen(false)
+            }}
+            className="w-full btn-primary font-bold text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 shadow-2xs cursor-pointer"
+          >
+            <Plus size={15} />
+            <span>New Chat</span>
+          </button>
+
+          <div className="space-y-1.5 max-h-[65vh] overflow-y-auto">
+            {sessions.map((s) => {
+              const isSelected = activeSession?.id === s.id
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => {
+                    navigate(`/chat/${s.id}`)
+                    setMobileLeftOpen(false)
+                  }}
+                  className={`group flex items-center justify-between px-3 py-2.5 rounded-xl text-xs cursor-pointer transition-all ${
+                    isSelected
+                      ? 'bg-[#FFF0E4] text-[#F28A45] font-extrabold border border-[#F28A45]/30 shadow-2xs'
+                      : 'text-[#6F6B63] hover:text-[#20201D] hover:bg-[#F4EFE7] font-medium'
+                  }`}
+                >
+                  <span className="truncate pr-2">{s.session_title || 'Untitled Chat'}</span>
+                  <button
+                    onClick={(e) => handleDeleteSession(e, s.id)}
+                    className="text-[#969188] hover:text-[#C85C52] hover:bg-[#FBE7E4] p-1.5 rounded-lg transition-colors"
+                    title="Delete session"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </aside>
 
       {/* ─── MAIN CHAT WORKSPACE AREA ───────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col bg-[#FAF8F3] overflow-hidden relative">
 
-        
         {/* Hidden File Input */}
         <input
           ref={fileInputRef}
@@ -546,6 +643,17 @@ export default function ChatPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {activeSession && (
+              <button
+                onClick={(e) => handleDeleteSession(e, activeSession.id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-[#FBE7E4] border border-[#E7E1D8] hover:border-[#C85C52]/40 text-[#6F6B63] hover:text-[#C85C52] text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+                title="Delete this chat session & database records"
+              >
+                <Trash2 size={13} className="text-[#C85C52]" />
+                <span className="hidden sm:inline">Delete Section</span>
+              </button>
+            )}
+
             {/* Mobile Right Drawer Trigger */}
             <button
               onClick={() => setMobileRightOpen(true)}
@@ -596,6 +704,55 @@ export default function ChatPage() {
               {/* Clean Multi-Tool Input Container */}
               <div className="w-full bg-white border border-[#E7E1D8] rounded-3xl p-3.5 sm:p-5 shadow-xs focus-within:border-[#F28A45] focus-within:ring-2 focus-within:ring-[#F28A45]/20 transition-all text-left">
                 
+                {/* 3 Quick Study Tool Action Buttons */}
+                <div className="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b border-[#E7E1D8]">
+                  <span className="text-[11px] font-black uppercase text-[#6F6B63] tracking-wider mr-1 flex items-center gap-1">
+                    <Sparkles size={13} className="text-[#F28A45]" /> Tools:
+                  </span>
+                  
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const topic = input.trim() || 'the main topic in my study material'
+                      handleSend(`Summarize ${topic} into 5-7 clear, high-yield bullet points for quick revision.`)
+                    }}
+                    disabled={isStreaming}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FAF8F3] hover:bg-[#FFF0E4] border border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] hover:text-[#F28A45] text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
+                    title="Generate 5-7 key bullet points"
+                  >
+                    <ListChecks size={13} className="text-[#F28A45]" />
+                    <span>Bullet Points</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const topic = input.trim() || 'this subject'
+                      handleSend(`What are the most important exam-critical points, core formulas, and common misconceptions about ${topic}?`)
+                    }}
+                    disabled={isStreaming}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FAF8F3] hover:bg-[#FFF3D8] border border-[#E7E1D8] hover:border-[#D99A32]/40 text-[#20201D] hover:text-[#D99A32] text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
+                    title="Highlight key exam-critical formulas & concepts"
+                  >
+                    <Star size={13} className="text-[#D99A32]" />
+                    <span>Important Points</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const topic = input.trim() || 'the central concept'
+                      handleSend(`Explain ${topic} using a simple, intuitive real-world analogy and visual mental model.`)
+                    }}
+                    disabled={isStreaming}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FAF8F3] hover:bg-[#E3F0E5] border border-[#E7E1D8] hover:border-[#4F8A68]/40 text-[#20201D] hover:text-[#4F8A68] text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
+                    title="Explain with a simple real-world analogy"
+                  >
+                    <Lightbulb size={13} className="text-[#4F8A68]" />
+                    <span>Simple Analogy</span>
+                  </button>
+                </div>
+
                 <textarea
                   ref={textareaRef}
                   value={input}
@@ -710,6 +867,52 @@ export default function ChatPage() {
         {allMessages.length > 0 && (
           <div className="p-3 sm:p-4 border-t border-[#E7E1D8] bg-white">
             <div className="max-w-4xl mx-auto bg-[#FAF8F3] border border-[#E7E1D8] rounded-2xl p-3 sm:p-3.5 focus-within:border-[#F28A45] focus-within:ring-2 focus-within:ring-[#F28A45]/20 transition-all">
+              
+              {/* Quick Study Tool Pill Buttons */}
+              <div className="flex flex-wrap items-center gap-1.5 mb-2.5 pb-2 border-b border-[#E7E1D8]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const topic = input.trim() || 'the previous topic'
+                    handleSend(`Summarize ${topic} into 5-7 clear, high-yield bullet points for quick revision.`)
+                  }}
+                  disabled={isStreaming}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white hover:bg-[#FFF0E4] border border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] hover:text-[#F28A45] text-[11px] font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
+                  title="Generate bullet points"
+                >
+                  <ListChecks size={12} className="text-[#F28A45]" />
+                  <span>Bullet Points</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const topic = input.trim() || 'this topic'
+                    handleSend(`What are the most important exam-critical points, core formulas, and common misconceptions for ${topic}?`)
+                  }}
+                  disabled={isStreaming}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white hover:bg-[#FFF3D8] border border-[#E7E1D8] hover:border-[#D99A32]/40 text-[#20201D] hover:text-[#D99A32] text-[11px] font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
+                  title="Important exam points"
+                >
+                  <Star size={12} className="text-[#D99A32]" />
+                  <span>Important Points</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const topic = input.trim() || 'this concept'
+                    handleSend(`Explain ${topic} with a simple real-world analogy and visual mental model.`)
+                  }}
+                  disabled={isStreaming}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white hover:bg-[#E3F0E5] border border-[#E7E1D8] hover:border-[#4F8A68]/40 text-[#20201D] hover:text-[#4F8A68] text-[11px] font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
+                  title="Simple analogy"
+                >
+                  <Lightbulb size={12} className="text-[#4F8A68]" />
+                  <span>Simple Analogy</span>
+                </button>
+              </div>
+
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -841,26 +1044,6 @@ export default function ChatPage() {
               <span>Explore 3D Graph</span> <ArrowRight size={14} />
             </div>
           </motion.div>
-
-          {/* 4. MCP Tools Card */}
-          <motion.div
-            whileHover={{ scale: 1.02 }}
-            onClick={() => { setShowMcpDrawer(true); setMobileRightOpen(false); }}
-            className="p-4 sm:p-5 rounded-3xl bg-[#F0ECF7]/60 border border-[#A99BCB]/30 shadow-2xs hover:shadow-xs transition-all cursor-pointer group relative overflow-hidden"
-          >
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[#F0ECF7] text-[#A99BCB] border border-[#A99BCB]/30 flex items-center justify-center mb-3 shadow-2xs group-hover:scale-105 transition-transform">
-              <Cpu size={22} />
-            </div>
-            <h4 className="text-base font-extrabold text-[#20201D] group-hover:text-[#A99BCB] transition-colors">
-              MCP Tool Extensions
-            </h4>
-            <p className="text-xs text-[#6F6B63] mt-1.5 leading-relaxed font-medium">
-              Manage external Model Context Protocol sandboxes & math solvers.
-            </p>
-            <div className="mt-4 flex items-center gap-1.5 text-xs font-extrabold text-[#A99BCB] group-hover:translate-x-1 transition-transform">
-              <span>Configure MCP Tools</span> <ArrowRight size={14} />
-            </div>
-          </motion.div>
         </div>
 
         <div className="pt-4 border-t border-[#E7E1D8] text-center">
@@ -876,11 +1059,6 @@ export default function ChatPage() {
         relationships={liveGraphContext.relationships}
         isOpen={showGraphPanel}
         onClose={() => setShowGraphPanel(false)}
-      />
-
-      <McpDrawer
-        isOpen={showMcpDrawer}
-        onClose={() => setShowMcpDrawer(false)}
       />
 
       <GamifiedQuizGame
