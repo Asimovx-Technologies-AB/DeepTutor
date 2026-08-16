@@ -44,10 +44,8 @@ function UploadStatus({ docId, onDone }: { docId: string; onDone: (stats: any) =
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/documents/${docId}/status`, {
-          headers: { Authorization: `Bearer ${useAuthStore.getState().token}` },
-        })
-        const data = await res.json()
+        const res = await documentsApi.status(docId)
+        const data = res.data
         setStatus(data)
         if (data.status === 'done' || data.status === 'error') {
           clearInterval(interval)
@@ -56,7 +54,7 @@ function UploadStatus({ docId, onDone }: { docId: string; onDone: (stats: any) =
       } catch { clearInterval(interval) }
     }, 2000)
     return () => clearInterval(interval)
-  }, [docId])
+  }, [docId, onDone])
 
   const isDone = status.status === 'done'
   const isError = status.status === 'error'
@@ -472,44 +470,32 @@ export default function ChatPage() {
       }
 
       const topicId = targetSessionId || 'general'
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('topic_id', topicId)
-      formData.append('section_id', topicId)
+      const res = await documentsApi.upload(topicId, file, topicId)
+      const data = res.data
 
-      const res = await fetch('/api/documents/upload', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      })
-      const data = await res.json()
-
-      if (res.ok) {
-        setUploadStatuses((prev) => [...prev, data.id])
-        const infoMsg: ExtendedMessage = {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: `📄 **${file.name}** uploaded successfully!\n\n🧠 **GraphRAG indexing started** — Extracting entities and knowledge graph nodes from your PDF. You can start asking questions right away.`,
-          created_at: new Date().toISOString(),
-        }
-        setExtMessages((prev) => [...prev, infoMsg])
-      } else {
-        if (res.status === 401) {
-          logout()
-          navigate('/login')
-          throw new Error('Your login session expired. Please log in again.')
-        }
-        const detailMsg = typeof data.detail === 'object' ? data.detail?.message : data.detail
-        if (data.detail?.requires_premium) {
-          setUpgradeModalInfo({ open: true, fileName: file.name, sizeMb: fileSizeMb })
-        }
-        throw new Error(detailMsg ?? 'Upload failed')
+      setUploadStatuses((prev) => [...prev, data.id])
+      const infoMsg: ExtendedMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `📄 **${file.name}** uploaded successfully!\n\n🧠 **GraphRAG indexing started** — Extracting entities and knowledge graph nodes from your PDF. You can start asking questions right away.`,
+        created_at: new Date().toISOString(),
       }
+      setExtMessages((prev) => [...prev, infoMsg])
     } catch (err: any) {
+      if (err.response?.status === 401) {
+        logout()
+        navigate('/login')
+        return
+      }
+      const data = err.response?.data
+      const detailMsg = typeof data?.detail === 'object' ? data?.detail?.message : data?.detail
+      if (data?.detail?.requires_premium) {
+        setUpgradeModalInfo({ open: true, fileName: file.name, sizeMb: fileSizeMb })
+      }
       const errMsg: ExtendedMessage = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `❌ Upload failed: ${err.message}`,
+        content: `❌ Upload failed: ${detailMsg || err.message || 'Unknown error'}`,
         created_at: new Date().toISOString(),
       }
       setExtMessages((prev) => [...prev, errMsg])
