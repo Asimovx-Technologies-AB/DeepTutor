@@ -294,6 +294,17 @@ class ConfidenceScorer:
         if not chunks:
             return 0.0, "out_of_scope"
 
+        # Check for missing page notice
+        if any("system_notice" in str(c.get("id", "")) or "Page Missing" in str(c.get("metadata", {}).get("page", "")) for c in chunks):
+            return 0.0, "out_of_scope"
+
+        # If chunks were retrieved specifically for a page query, assign high confidence
+        q_lower = query.lower()
+        has_page_query = any(w in q_lower for w in ["page", "pages", "pg", "p."])
+        has_page_chunks = any(c.get("metadata", {}).get("page") is not None for c in chunks)
+        if has_page_query and has_page_chunks:
+            return 1.0, "high"
+
         # 1. Retrieval scores (cosine similarity)
         scores = [c.get("rerank_score", c.get("score", 0.0)) for c in chunks]
         avg_score = sum(scores) / len(scores) if scores else 0.0

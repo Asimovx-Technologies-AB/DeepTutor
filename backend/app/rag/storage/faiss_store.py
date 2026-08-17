@@ -427,15 +427,33 @@ class FAISSVectorStore:
     # ── Page-filtered retrieval ───────────────────────────────────────────────
     def get_chunks_by_pages(self, topic_id: str, pages: List[int]) -> List[Dict]:
         """Return all chunks matching given page numbers (metadata filter)."""
+        if not pages:
+            return []
         topic = self._topic(topic_id)
+        if topic.count() == 0 and topic_id.startswith("sec_"):
+            parts = topic_id.split("_", 2)
+            if len(parts) >= 3:
+                raw_topic = parts[2]
+                fallback_t = self._topic(raw_topic)
+                if fallback_t.count() > 0:
+                    topic = fallback_t
+
         if topic.count() == 0:
             return []
-        target = set(str(p) for p in pages) | set(pages)
-        return [
-            {"id": id_, "text": doc, "metadata": meta, "score": 1.0}
-            for id_, doc, meta in zip(topic._ids, topic._docs, topic._metas)
-            if meta.get("page") in target or str(meta.get("page")) in {str(p) for p in pages}
-        ]
+
+        target = set(int(p) for p in pages) | set(str(p) for p in pages)
+        results = []
+        for id_, doc, meta in zip(topic._ids, topic._docs, topic._metas):
+            p_val = meta.get("page")
+            if p_val in target or (p_val is not None and str(p_val) in target):
+                effective_text = meta.get("parent_text") or doc
+                results.append({
+                    "id": id_,
+                    "text": effective_text,
+                    "metadata": meta,
+                    "score": 1.0,
+                })
+        return results
 
     # ── Utility ───────────────────────────────────────────────────────────────
     def count(self, topic_id: str) -> int:

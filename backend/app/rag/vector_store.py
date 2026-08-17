@@ -371,6 +371,14 @@ class VectorStore:
         Returns list of chunks where chunk.metadata.page in pages. Skips vector search completely.
         """
         collection = self._collection(topic_id)
+        if collection.count() == 0 and topic_id.startswith("sec_"):
+            parts = topic_id.split("_", 2)
+            if len(parts) >= 3:
+                raw_topic = parts[2]
+                fallback_c = self._collection(raw_topic)
+                if fallback_c.count() > 0:
+                    collection = fallback_c
+
         if collection.count() == 0 or not pages:
             return []
 

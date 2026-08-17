@@ -336,31 +336,83 @@ class PineconeVectorStore:
 
     def get_chunks_by_pages(self, topic_id: str, pages: List[int]) -> List[Dict]:
         """Return all chunks matching given page numbers."""
+        if not pages:
+            return []
+        target = set(int(p) for p in pages) | set(str(p) for p in pages)
         namespace = self._sanitize_namespace(topic_id)
+        
+        # 1. Check in-memory document cache
         cached = self._doc_caches.get(namespace, [])
         if cached:
-            target = set(str(p) for p in pages) | set(pages)
-            return [
+            matched = [
                 {"id": d["id"], "text": d["text"], "metadata": d["metadata"], "score": 1.0}
                 for d in cached
-                if d["metadata"].get("page") in target or str(d["metadata"].get("page")) in {str(p) for p in pages}
+                if d.get("metadata", {}).get("page") in target or str(d.get("metadata", {}).get("page")) in target
             ]
+            if matched:
+                return matched
 
         index = self._get_index()
+        int_pages = [int(p) for p in pages]
+        str_pages = [str(p) for p in pages]
+        all_matches = []
+        # Normalized non-zero vector to prevent cosine 0/0 error in Pinecone
+        dummy_vec = [1.0 / (3072 ** 0.5)] * 3072
+
+        # 2. Try integer filter on Pinecone
         try:
+            filter_query = {"page": int_pages[0]} if len(int_pages) == 1 else {"page": {"$in": int_pages}}
             res = index.query(
-                vector=[0.0] * 3072,
-                top_k=20,
+                vector=dummy_vec,
+                top_k=50,
                 include_metadata=True,
                 namespace=namespace,
-                filter={"page": {"$in": pages}},
+                filter=filter_query,
             )
-            return [
-                {"id": m.get("id"), "text": m.get("metadata", {}).get("text", ""), "metadata": m.get("metadata", {}), "score": 1.0}
-                for m in res.get("matches", [])
-            ]
-        except Exception:
-            return []
+            for m in res.get("matches", []):
+                meta = m.get("metadata", {})
+                text = meta.get("text", "")
+                all_matches.append({
+                    "id": m.get("id"),
+                    "text": text,
+                    "metadata": meta,
+                    "score": 1.0,
+                })
+        except Exception as e:
+            print(f"[PINECONE] Error querying int pages: {e}")
+
+        # 3. Try string filter if no int matches
+        if not all_matches:
+            try:
+                filter_query = {"page": str_pages[0]} if len(str_pages) == 1 else {"page": {"$in": str_pages}}
+                res = index.query(
+                    vector=dummy_vec,
+                    top_k=50,
+                    include_metadata=True,
+                    namespace=namespace,
+                    filter=filter_query,
+                )
+                for m in res.get("matches", []):
+                    meta = m.get("metadata", {})
+                    text = meta.get("text", "")
+                    all_matches.append({
+                        "id": m.get("id"),
+                        "text": text,
+                        "metadata": meta,
+                        "score": 1.0,
+                    })
+            except Exception as e:
+                print(f"[PINECONE] Error querying str pages: {e}")
+
+        # 4. Fallback: if topic_id starts with sec_, try the underlying raw topic namespace
+        if not all_matches and topic_id.startswith("sec_"):
+            parts = topic_id.split("_", 2)
+            if len(parts) >= 3:
+                raw_topic = parts[2]
+                if raw_topic != topic_id:
+                    return self.get_chunks_by_pages(raw_topic, pages)
+
+        return all_matches
 
     def count(self, topic_id: str) -> int:
         """Get vector count in topic namespace."""

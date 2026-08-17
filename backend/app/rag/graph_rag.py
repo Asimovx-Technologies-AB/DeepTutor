@@ -190,26 +190,40 @@ def extract_requested_pages(text: str) -> List[int]:
     """
     Extract page numbers requested in user question.
     Handles:
+    - 'explain page number 33' -> [33]
     - 'page number 94 and 95' -> [94, 95]
     - 'pages 94-96' or 'pages 94 to 96' -> [94, 95, 96]
-    - 'page 94' -> [94]
-    - 'p. 94', 'p94' -> [94]
+    - 'page 94', 'page no 94', 'page no. 94', 'page #94' -> [94]
+    - 'p. 94', 'p94', 'pg 94', 'pg. 94', 'pg94' -> [94]
+    - '33rd page', '33th page', '33nd page', '33st page' -> [33]
     """
+    if not text:
+        return []
     pages: Set[int] = set()
     text_lower = text.lower()
 
-    range_pattern = r'(?:pages?|p\.?)\\s*(?:numbers?|no\\.?|nums?)?\\s*(\\d+)\\s*(?:-|to)\\s*(\\d+)'
-    for match in re.finditer(r'(?:pages?|p\.?)\s*(?:numbers?|no\.?|nums?)?\s*(\d+)\s*(?:-|to)\s*(\d+)', text_lower):
+    # 1. Page ranges: "pages 94-96", "pages 94 to 96", "p. 94-96", "pg 94-96", "page no 94-96"
+    for match in re.finditer(r'(?:pages?|p\.?|pg\.?)\s*(?:numbers?|no\.?|nums?|#)?\s*(\d+)\s*(?:-|to)\s*(\d+)', text_lower):
         start, end = int(match.group(1)), int(match.group(2))
-        if start <= end and (end - start) <= 50:
+        if 0 < start <= end and (end - start) <= 50:
             pages.update(range(start, end + 1))
 
-    for match in re.finditer(r'(?:pages?|p\.?)\s*(?:numbers?|no\.?|nums?)?\s*(\d+(?:\s*(?:,|and|&)\s*\d+)+)', text_lower):
+    # 2. Comma / and list: "pages 94, 95 and 96", "page no 94, 95", "page 94 and 95"
+    for match in re.finditer(r'(?:pages?|p\.?|pg\.?)\s*(?:numbers?|no\.?|nums?|#)?\s*(\d+(?:\s*(?:,|and|&)\s*\d+)+)', text_lower):
         nums = re.findall(r'\d+', match.group(1))
-        pages.update([int(n) for n in nums])
+        pages.update([int(n) for n in nums if int(n) > 0])
 
-    for match in re.finditer(r'(?:pages?|p\.?)\s*(?:numbers?|no\.?|nums?)?\s*(\d+)', text_lower):
-        pages.add(int(match.group(1)))
+    # 3. Single page references: "page 33", "page number 33", "page no 33", "page no. 33", "page #33", "pg 33", "pg. 33", "pg33", "p. 33", "p.33", "p33"
+    for match in re.finditer(r'(?:pages?|p\.?|pg\.?)\s*(?:numbers?|no\.?|nums?|#)?\s*(\d+)', text_lower):
+        num = int(match.group(1))
+        if num > 0:
+            pages.add(num)
+
+    # 4. Ordinal page references: "33rd page", "33th page", "33nd page", "33st page"
+    for match in re.finditer(r'(\d+)(?:st|nd|rd|th)?\s+pages?', text_lower):
+        num = int(match.group(1))
+        if num > 0:
+            pages.add(num)
 
     return sorted(list(pages))
 
@@ -511,26 +525,45 @@ class GraphRAGPipeline:
         effective_topic_id = topic_id or ""
 
         # ── Step 1: Retrieval ──────────────────────────────────────────────────
-        if effective_topic_id and _vs.count(effective_topic_id) > 0:
-            requested_pages = extract_requested_pages(question)
+        requested_pages = extract_requested_pages(question)
 
+        if effective_topic_id:
             if requested_pages:
-                # Direct exact page metadata filter — skips vector search completely
+                # Direct exact page metadata filter — retrieve page chunks directly
                 page_chunks = _vs.get_chunks_by_pages(effective_topic_id, requested_pages)
+                # Fallback to base topic if namespaced topic had no chunks
+                if not page_chunks and "_" in effective_topic_id:
+                    fallback_id = effective_topic_id.split("_", 2)[-1]
+                    page_chunks = _vs.get_chunks_by_pages(fallback_id, requested_pages)
+
                 if page_chunks:
                     vector_chunks = page_chunks
+                    # Also attempt lightweight graph context retrieval
+                    try:
+                        graph_context_data = _gs.get_entity_context_for_query(
+                            effective_topic_id,
+                            question,
+                            hop_depth=1,
+                        )
+                    except Exception:
+                        graph_context_data = {"entities": [], "relations": [], "triplets": [], "context_text": ""}
                 else:
                     missing_str = ", ".join([str(p) for p in requested_pages])
-                    vector_chunks = [{
-                        "id": "system_notice",
-                        "text": (
-                            f"[SYSTEM NOTICE: Page(s) {missing_str} do not exist in the uploaded document. "
-                            f"No content could be retrieved for page(s) {missing_str}.]"
-                        ),
-                        "metadata": {"source": "System", "page": f"Page Missing ({missing_str})"},
-                        "score": 1.0,
-                    }]
-            else:
+                    missing_msg = (
+                        f"### 📄 Page {missing_str} Not Found in Document\n\n"
+                        f"I checked your uploaded study material, but **Page {missing_str}** was not found or has no extractable text.\n\n"
+                        f"---\n\n"
+                        f"**💡 Suggestions:**\n"
+                        f"- Check the total page count of your uploaded document.\n"
+                        f"- Try asking for a different page number (e.g. *\"Explain page 1\"*).\n"
+                        f"- You can also ask directly about any concept by name (e.g. *\"What is Support Vector Machines?\"*)."
+                    )
+                    for word in missing_msg.split(" "):
+                        yield f"data: {json.dumps({'type': 'token', 'data': word + ' '})}\n\n"
+                    yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                    return
+
+            elif _vs.count(effective_topic_id) > 0:
                 # Parallelize vector retrieval & graph retrieval
                 async def _get_vector_task():
                     return await self._retrieve_chunks(effective_topic_id, question)
@@ -551,13 +584,13 @@ class GraphRAGPipeline:
                     _get_graph_task(),
                 )
 
-            # Build text representations (focused on top 3 most relevant chunks for fast prefill)
+            # Build text representations (for page queries, include all page chunks up to top 6)
             if vector_chunks:
-                top_chunks = vector_chunks[:settings.TOP_K_CHUNKS]
+                top_chunks = vector_chunks[:6] if requested_pages else vector_chunks[:settings.TOP_K_CHUNKS]
                 vector_context_text = "\n\n".join([
                     f"[{c['metadata'].get('source', 'doc')} p.{c['metadata'].get('page', '')}]"
                     + (f" §{c['metadata'].get('section_title', '')}" if c['metadata'].get('section_title') else "")
-                    + f"\n{c['text'][:1200]}"
+                    + f"\n{c['text'][:2000]}"
                     for c in top_chunks
                 ])
 
@@ -581,11 +614,14 @@ class GraphRAGPipeline:
                     ])
 
         # ── Step 2: Confidence scoring + out-of-scope detection ───────────────
-        confidence_score, confidence_label = confidence_scorer.score(
-            chunks=vector_chunks,
-            graph_entities=graph_context_data.get("entities", []),
-            query=question,
-        )
+        if requested_pages and vector_chunks and not any("system_notice" in str(c.get("id", "")) for c in vector_chunks):
+            confidence_score, confidence_label = 1.0, "high"
+        else:
+            confidence_score, confidence_label = confidence_scorer.score(
+                chunks=vector_chunks,
+                graph_entities=graph_context_data.get("entities", []),
+                query=question,
+            )
 
         # ── Step 3: Emit SSE events ────────────────────────────────────────────
         if vector_chunks:
@@ -622,16 +658,19 @@ class GraphRAGPipeline:
             history_text += f"{role_label}: {msg['content'][:500]}\n"
 
         requested_pages_list = extract_requested_pages(question) if question else []
+        q_lower = question.lower() if question else ""
+
         if (requested_pages_list and vector_chunks and
                 not any("Missing" in str(c.get("metadata", {}).get("page", "")) for c in vector_chunks)):
             pages_str = ", ".join(str(p) for p in requested_pages_list)
             prompt_instruction = (
-                f"Answer using ONLY the following content from page {pages_str}.\n"
-                f"Begin your answer by clearly stating you are describing page {pages_str}."
+                f"The student specifically asked for an explanation of Page {pages_str}.\n"
+                f"Explain and summarize ALL concepts, definitions, formulas, workflows, and details presented on Page {pages_str} thoroughly, clearly, and faithfully based on the Document Context.\n"
+                f"Structure your response starting with:\n"
+                f"# 📄 Page {pages_str} Explanation & Summary\n\n"
+                f"Follow with clear conceptual explanations, structured breakdown tables/steps, and key takeaways from that page."
             )
-        # Determine dynamic response format based on student request / tool mode
-        q_lower = question.lower() if question else ""
-        if any(w in q_lower for w in ["bullet point", "bullet points", "5-7 clear", "quick revision", "summarize into"]):
+        elif any(w in q_lower for w in ["bullet point", "bullet points", "5-7 clear", "quick revision", "summarize into"]):
             prompt_instruction = (
                 "The student specifically asked for bullet points. "
                 "Provide ONLY a crisp, high-yield summary formatted as 5 to 7 structured bullet points with bold key terms. "
