@@ -19,7 +19,9 @@ import GraphContextPanel from '../components/GraphContextPanel'
 import GamifiedQuizGame from '../components/GamifiedQuizGame'
 import FlashcardsOverlay from '../components/FlashcardsOverlay'
 import { UpgradeModal } from '../components/UpgradeModal'
+import ConfirmModal from '../components/ConfirmModal'
 import type { Source } from '../components/SourceCard'
+
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 interface GraphContextData {
@@ -149,7 +151,9 @@ export default function ChatPage() {
   const [showQuizGame, setShowQuizGame] = useState(false)
   const [showFlashcards, setShowFlashcards] = useState(false)
   const [upgradeModalInfo, setUpgradeModalInfo] = useState<{ open: boolean; fileName?: string; sizeMb?: number }>({ open: false })
+  const [confirmDeleteSessionId, setConfirmDeleteSessionId] = useState<string | null>(null)
   const [liveGraphContext, setLiveGraphContext] = useState<GraphContextData>({ entities: [], relationships: [] })
+
   const [liveSources, setLiveSources] = useState<Source[]>([])
   const [extMessages, setExtMessages] = useState<ExtendedMessage[]>([])
   const [selectedModel, setSelectedModel] = useState('DeepTutor AI (Llama 3.1)')
@@ -445,14 +449,21 @@ export default function ChatPage() {
     return () => cancelAnimationFrame(raf)
   }, [extMessages, isStreaming])
 
-  const handleDeleteSession = async (e?: React.MouseEvent, sId?: string) => {
+  const handleDeleteSession = (e?: React.MouseEvent, sId?: string) => {
     if (e) e.stopPropagation()
     const targetId = sId || activeSession?.id
     if (!targetId) return
-    if (!confirm('Are you sure you want to delete this chat session? All messages, documents, and study materials for this session will be permanently removed.')) return
+    setConfirmDeleteSessionId(targetId)
+  }
+
+  const executeDeleteSession = async () => {
+    const targetId = confirmDeleteSessionId
+    if (!targetId) return
+    setConfirmDeleteSessionId(null)
     try {
       await chatApi.deleteSession(targetId)
       removeSession(targetId)
+      messagesCacheRef.current.delete(targetId)
       if (activeSession?.id === targetId) {
         setActiveSession(null)
         setExtMessages([])
@@ -467,9 +478,9 @@ export default function ChatPage() {
       refetchSessions()
     } catch (err) {
       console.error('Failed to delete session:', err)
-      alert('Failed to delete session from database. Please try again.')
     }
   }
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value)
@@ -1088,9 +1099,21 @@ export default function ChatPage() {
         exceededFileSizeMb={upgradeModalInfo.sizeMb}
         onClose={() => setUpgradeModalInfo({ open: false })}
       />
+
+      <ConfirmModal
+        isOpen={Boolean(confirmDeleteSessionId)}
+        title="Delete Chat Session?"
+        message="Are you sure you want to delete this chat session? All messages, uploaded documents, and study materials for this session will be permanently removed."
+        confirmText="Delete Session"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={executeDeleteSession}
+        onCancel={() => setConfirmDeleteSessionId(null)}
+      />
     </div>
   )
 }
+
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 

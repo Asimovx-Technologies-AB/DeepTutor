@@ -15,8 +15,10 @@ import { progressApi, chatApi } from '../services/api'
 
 import NotificationPopup from '../components/NotificationPopup'
 import ProfileModal from '../components/ProfileModal'
+import WeakAreaAlertBanner from '../components/WeakAreaAlertBanner'
 
 export default function DashboardPage() {
+
   const { user } = useAuthStore()
   const navigate = useNavigate()
 
@@ -122,7 +124,11 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Automated Student Weak Area Alert Banner */}
+      <WeakAreaAlertBanner />
+
       {/* ─── 2. MAIN 2-COLUMN DASHBOARD GRID (CENTRAL LEARNING + RIGHT INSIGHTS PANEL) ─── */}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         {/* ─── CENTRAL COLUMN (Lg: col-span-8) ─── */}

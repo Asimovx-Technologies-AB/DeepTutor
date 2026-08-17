@@ -1,12 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   BarChart, Bar, Cell
 } from 'recharts'
-import { TrendingUp, Flame, BookOpen, Trophy, Sparkles, Target, HelpCircle, Download, Award, Layers, Calendar } from 'lucide-react'
+import { TrendingUp, Flame, BookOpen, Trophy, Sparkles, Target, HelpCircle, Download, Award, Layers, Calendar, AlertTriangle, CheckCircle2, MessageSquare, ArrowRight, ShieldAlert } from 'lucide-react'
 import { progressApi } from '../services/api'
+
 
 const INTENSITY_COLORS = [
   'bg-[#F4EFE7]',
@@ -61,11 +63,20 @@ function StatBadge({
 }
 
 export default function ProgressPage() {
+  const navigate = useNavigate()
+
   const { data: summary } = useQuery({
     queryKey: ['progress-summary'],
     queryFn: () => progressApi.summary().then((r) => r.data),
     staleTime: 60_000,
   })
+
+  const { data: analysis } = useQuery({
+    queryKey: ['progress-analysis'],
+    queryFn: () => progressApi.analysis().then((r) => r.data),
+    staleTime: 30_000,
+  })
+
 
   const { data: weeklyData = [] } = useQuery({
     queryKey: ['progress-weekly'],
@@ -464,6 +475,108 @@ ${recentQuizzes.map((q: any) => `- ${q.full_name || q.name}: ${q.score}% (${q.da
           </div>
         )}
       </motion.div>
+
+      {/* 🎯 Automated Weak vs Strong Areas Analysis Card */}
+      {analysis && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="glass-card p-6 sm:p-7 border border-[#E7E1D8] shadow-2xs space-y-6 bg-gradient-to-br from-[#FFFDF9] to-[#FAF5EB]"
+        >
+          <div className="flex items-center justify-between border-b border-[#E7E1D8] pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#F28A45]/15 border border-[#F28A45]/30 flex items-center justify-center text-[#F28A45]">
+                <ShieldAlert size={22} />
+              </div>
+              <div>
+                <h2 className="font-black text-[#20201D] text-lg">Automated Performance Analysis</h2>
+                <p className="text-xs font-bold text-[#6F6B63]">AI automatically identifies your weak & strong topics to guide your study</p>
+              </div>
+            </div>
+            <span className="text-xs font-extrabold text-[#4F8A68] bg-[#E3F0E5] px-3 py-1 rounded-full border border-[#4F8A68]/30 flex items-center gap-1.5">
+              <Sparkles size={13} />
+              Real-time Analytics
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Weak Areas List */}
+            <div className="p-5 rounded-2xl border border-[#F28A45]/30 bg-[#FFF9F2] space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-sm text-[#20201D] flex items-center gap-2">
+                  <AlertTriangle size={17} className="text-[#F28A45]" />
+                  <span>Weak Areas Needed Attention</span>
+                </h3>
+                <span className="text-xs font-extrabold text-[#F28A45] bg-[#F28A45]/15 px-2 py-0.5 rounded-full">
+                  {analysis.weak_areas.length} topics
+                </span>
+              </div>
+
+              {analysis.weak_areas.length === 0 ? (
+                <div className="p-4 text-center text-xs font-bold text-[#4F8A68] bg-[#E3F0E5]/60 rounded-xl border border-[#4F8A68]/30">
+                  🎉 No weak areas detected! All studied topics are above 65% mastery.
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {analysis.weak_areas.map((w: any, idx: number) => (
+                    <div key={idx} className="p-3 rounded-xl bg-white border border-[#E7E1D8] shadow-2xs flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-black text-[#20201D]">{w.subject}</p>
+                        <p className="text-[11px] font-semibold text-[#6F6B63]">{w.recommendation}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const prompt = `Can you explain the key concepts of '${w.subject}' with simple examples?`
+                          navigate('/chat', { state: { initialPrompt: prompt } })
+                        }}
+                        className="btn-primary text-[11px] font-black py-1.5 px-3 rounded-lg flex items-center gap-1 flex-shrink-0 cursor-pointer"
+                      >
+                        <MessageSquare size={12} />
+                        <span>Ask AI</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Strong Areas List */}
+            <div className="p-5 rounded-2xl border border-[#4F8A68]/30 bg-[#F4FAF5] space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-sm text-[#20201D] flex items-center gap-2">
+                  <CheckCircle2 size={17} className="text-[#4F8A68]" />
+                  <span>Strong Areas (High Mastery)</span>
+                </h3>
+                <span className="text-xs font-extrabold text-[#4F8A68] bg-[#E3F0E5] px-2 py-0.5 rounded-full">
+                  {analysis.strong_areas.length} topics
+                </span>
+              </div>
+
+              {analysis.strong_areas.length === 0 ? (
+                <div className="p-4 text-center text-xs font-bold text-[#6F6B63] bg-white rounded-xl border border-[#E7E1D8]">
+                  Keep studying & taking quizzes to unlock high-mastery strong topics!
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {analysis.strong_areas.map((s: any, idx: number) => (
+                    <div key={idx} className="p-3 rounded-xl bg-white border border-[#E7E1D8] shadow-2xs flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-black text-[#20201D]">{s.subject}</p>
+                        <p className="text-[11px] font-bold text-[#4F8A68]">High Mastery ({s.score}%)</p>
+                      </div>
+                      <span className="text-xs font-black text-[#4F8A68] bg-[#E3F0E5] px-2.5 py-1 rounded-lg">
+                        🌟 Mastered
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      )}
     </div>
   )
 }
+

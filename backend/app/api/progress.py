@@ -273,3 +273,65 @@ async def get_topic_progress(user: dict = Depends(get_current_user)):
         })
         
     return result
+
+
+@router.get("/analysis")
+async def get_automated_progress_analysis(user: dict = Depends(get_current_user)):
+    """
+    Automated analysis endpoint:
+    Identifies weak areas (< 65% mastery or low quiz scores),
+    strong areas (>= 75% mastery), and generates actionable automated study alerts.
+    """
+    topics_list = await get_topic_progress(user)
+    
+    weak_areas = []
+    strong_areas = []
+    moderate_areas = []
+    
+    for t in topics_list:
+        score = t["mastery"]
+        if score < 65.0 or (t["quizzes_taken"] > 0 and score < 70.0):
+            weak_areas.append({
+                **t,
+                "recommendation": f"Review {t['subject']} material or take a practice quiz to improve your score."
+            })
+        elif score >= 75.0:
+            strong_areas.append(t)
+        else:
+            moderate_areas.append(t)
+
+    # Sort weak areas ascending by score (weakest first)
+    weak_areas.sort(key=lambda x: x["score"])
+    strong_areas.sort(key=lambda x: x["score"], reverse=True)
+
+    has_weakness = len(weak_areas) > 0
+    primary_weakness = weak_areas[0] if has_weakness else None
+
+    # Generate automated alert payload
+    if primary_weakness:
+        alert_title = f"⚠️ Weak Area Detected: {primary_weakness['subject']}"
+        alert_message = f"Your mastery score in '{primary_weakness['subject']}' is currently {primary_weakness['score']}%. Practice a quiz or ask DeepTutor to clarify concepts."
+        alert_level = "warning"
+    elif len(topics_list) == 0:
+        alert_title = "📚 Start Your Learning Journey"
+        alert_message = "Upload a PDF study document or ask questions to enable automated performance analysis."
+        alert_level = "info"
+    else:
+        alert_title = "🌟 High Mastery Across Topics!"
+        alert_message = f"Great work! You are performing well in all {len(topics_list)} studied topics. Keep up your daily streak."
+        alert_level = "success"
+
+    return {
+        "has_weakness": has_weakness,
+        "primary_weakness": primary_weakness,
+        "weak_areas": weak_areas,
+        "strong_areas": strong_areas,
+        "moderate_areas": moderate_areas,
+        "total_topics_analyzed": len(topics_list),
+        "alert": {
+            "title": alert_title,
+            "message": alert_message,
+            "level": alert_level,
+        }
+    }
+
