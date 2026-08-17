@@ -8,34 +8,41 @@ from app.core.models import Base, User, ChatSession, ChatMessage, Document, Quiz
 
 settings = get_settings()
 
-# Initialize database engine (supports Cloud PostgreSQL & SQLite)
+# Initialize database engine (supports Cloud PostgreSQL & SQLite with automatic local fallback)
 db_url = settings.DATABASE_URL.replace("sqlite+aiosqlite://", "sqlite://")
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 
-connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}
+def _create_engine_with_fallback(primary_url: str):
+    if primary_url.startswith("postgresql"):
+        try:
+            eng = create_engine(
+                primary_url,
+                pool_pre_ping=True,
+                pool_size=20,
+                max_overflow=30,
+                pool_recycle=300,
+                connect_args={"connect_timeout": 5},
+            )
+            # Test connection
+            with eng.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return eng
+        except Exception as e:
+            print(f"[DATABASE] Warning: PostgreSQL unreachable ({e}). Falling back to local SQLite.")
+            return create_engine("sqlite:///./deep_tutor.db", connect_args={"check_same_thread": False})
+    else:
+        return create_engine(primary_url, connect_args={"check_same_thread": False})
 
-engine_kwargs = {
-    "pool_pre_ping": True,
-}
-if db_url.startswith("postgresql"):
-    engine_kwargs.update({
-        "pool_size": 20,
-        "max_overflow": 30,
-        "pool_recycle": 300,
-    })
-
-engine = create_engine(
-    db_url,
-    connect_args=connect_args,
-    **engine_kwargs
-)
-
+engine = _create_engine_with_fallback(db_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 db_session = scoped_session(SessionLocal)
 
 # Create tables automatically on startup
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"[DATABASE] Base.metadata.create_all warning: {e}")
 
 # Auto-migrate missing columns for existing SQLite database
 with engine.connect() as conn:

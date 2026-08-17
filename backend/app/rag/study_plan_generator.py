@@ -27,8 +27,7 @@ Return ONLY valid JSON in this exact structure:
       "focus": "Specific concepts or sections to read & understand",
       "estimated_hours": {hours_per_day},
       "recommended_action": "Read Chapter 1, review AI Study Notes",
-      "key_concepts": ["Concept 1", "Concept 2"],
-      "study_notes": "Key study notes & core takeaways for Day 1 concept..."
+      "key_concepts": ["Concept 1", "Concept 2"]
     }}
   ]
 }}
@@ -37,7 +36,6 @@ Rules:
 - Generate a schedule spanning exactly {total_days} days (Day 1 up to Day {total_days}).
 - Spread the document topics logically over the {total_days} days.
 - Reserve the final day (Day {total_days}) for full review, final quiz, and practice.
-- Include a concise 2-3 sentence 'study_notes' summary for each day topic.
 - The schedule MUST be strictly based on the document context below.
 - Response MUST contain ONLY valid JSON. No conversational commentary.
 
@@ -246,12 +244,9 @@ async def generate_study_plan(
             for i in range(total_days)
         ]
 
-    # Ensure study_notes is present for each day
+    # Initialize study_notes as empty so full structured briefs are generated on-demand
     for item in schedule:
-        if not item.get("study_notes"):
-            t_name = item.get("topic", "Topic")
-            f_name = item.get("focus", "Focus area")
-            item["study_notes"] = f"Key notes on {t_name}: Focus on understanding {f_name} and reviewing core definitions."
+        item["study_notes"] = ""
 
     plan = db.create_study_plan(
         user_id=user_id,
