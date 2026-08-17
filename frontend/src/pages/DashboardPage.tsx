@@ -98,10 +98,33 @@ export default function DashboardPage() {
     navigate('/chat', { state: { initialPrompt: textToSend } })
   }, [quickPrompt, navigate])
 
-  // Calculate real active days this week from weeklyData
-  const activeDaysThisWeek = weeklyData.filter((d: any) => (d.sessions > 0 || d.score > 0)).length
-  const currentStreak = progress?.streak_days ?? 0
-  const effectiveActiveDays = Math.max(activeDaysThisWeek, currentStreak > 0 ? Math.min(currentStreak, 7) : (progress?.total_sessions ? 1 : 0))
+  // Calculate real active days this week based on today's day of week (0 = Monday ... 6 = Sunday)
+  const now = new Date()
+  const todayDayOfWeek = (now.getDay() + 6) % 7
+
+  const weekDayStatus = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((dayLetter, dayIdx) => {
+    const isToday = dayIdx === todayDayOfWeek
+    const isFuture = dayIdx > todayDayOfWeek
+
+    // Check if active on this day
+    let isDone = false
+    if (isToday) {
+      isDone = (progress?.streak_days ?? 0) > 0 || (progress?.total_sessions ?? 0) > 0
+    } else if (!isFuture) {
+      const daysAgo = todayDayOfWeek - dayIdx
+      isDone = (progress?.streak_days ?? 0) > daysAgo
+    }
+
+    return {
+      dayLetter,
+      dayIdx,
+      isDone,
+      isToday,
+      isFuture,
+    }
+  })
+
+  const effectiveActiveDays = weekDayStatus.filter((d) => d.isDone).length
   const goalProgressPct = Math.min(100, Math.round((effectiveActiveDays / targetGoalDays) * 100))
 
   return (
@@ -376,27 +399,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* TUTOR REMEMBERS SECTION (EDITORIAL BORDERLESS PLANT ILLUSTRATION) */}
-          <div className="bg-[#FFF9F2] border border-[#F28A45]/30 rounded-3xl p-5 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4 relative overflow-hidden">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 flex-shrink-0 select-none">
-                <img src="/assets/illustrations/plant.png" alt="Plant" className="w-full h-full object-contain filter drop-shadow-xs" />
-              </div>
-              <div>
-                <h4 className="text-xs font-black text-[#20201D]">Your tutor remembers</h4>
-                <p className="text-xs text-[#6F6B63] font-semibold leading-relaxed mt-0.5">
-                  You already understand linear regression well, but classification is still a bit unclear. Let's strengthen it! 💪
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => navigate('/chat', { state: { initialPrompt: 'Review Classification concepts and reinforce understanding.' } })}
-              className="btn-orange-outline text-xs whitespace-nowrap self-stretch sm:self-auto cursor-pointer"
-            >
-              Review Classification &rarr;
-            </button>
-          </div>
-
         </div>
 
         {/* ─── RIGHT INSIGHTS PANEL (Lg: col-span-4, ~300-330px) ─── */}
@@ -448,23 +450,32 @@ export default function DashboardPage() {
                 
                 {/* 7 Day Indicators M T W T F S S */}
                 <div className="flex items-center justify-between pt-1">
-                  {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, idx) => {
-                    const isDayDone = idx < effectiveActiveDays
-                    return (
-                      <div key={idx} className="flex flex-col items-center gap-1">
-                        <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-colors ${
-                            isDayDone ? 'bg-[#4F8A68] text-white shadow-2xs' : 'border border-[#E7E1D8] text-[#969188]'
-                          }`}
-                        >
-                          {isDayDone ? '✓' : ''}
-                        </div>
-                        <span className={`text-[10px] font-extrabold ${isDayDone ? 'text-[#4F8A68]' : 'text-[#969188]'}`}>
-                          {day}
-                        </span>
+                  {weekDayStatus.map((d) => (
+                    <div key={d.dayIdx} className="flex flex-col items-center gap-1">
+                      <div
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-colors ${
+                          d.isDone
+                            ? 'bg-[#4F8A68] text-white shadow-2xs'
+                            : d.isToday
+                              ? 'border-2 border-[#F28A45] text-[#F28A45] bg-[#FFF0E4]'
+                              : 'border border-[#E7E1D8] text-[#969188]'
+                        }`}
+                      >
+                        {d.isDone ? '✓' : ''}
                       </div>
-                    )
-                  })}
+                      <span
+                        className={`text-[10px] font-extrabold ${
+                          d.isDone
+                            ? 'text-[#4F8A68]'
+                            : d.isToday
+                              ? 'text-[#F28A45] font-black'
+                              : 'text-[#969188]'
+                        }`}
+                      >
+                        {d.dayLetter}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
