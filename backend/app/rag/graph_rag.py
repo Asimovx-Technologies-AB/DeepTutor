@@ -95,7 +95,11 @@ STRICT GROUNDING & ACCURACY RULES (MANDATORY)
    - Do NOT include bracketed file names, page citations, or source tags like `[ml algorithams.pdf p.4]`, `[p.4]`, or `[file.pdf]` anywhere in your response, tables, or headings.
    - Write clean, fluid, and readable prose directly. The system UI displays sources separately.
 
-4. OUTPUT FORMATTING TEMPLATE (Follow this clean structure):
+4. CLEAN MATH & TABLE FORMATTING:
+   - Always ensure LaTeX equations and formulas are complete and properly closed with `$` or `$$`.
+   - Never use raw unescaped vertical bars `|` inside Markdown table cells (use `\mid` or `P(c given h)` for conditional probabilities) so table columns do not break.
+
+5. OUTPUT FORMATTING TEMPLATE (Follow this clean structure):
    # 📚 [Topic / Concept Name]
 
    ### 💡 Big-Picture Concept
