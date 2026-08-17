@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Network, X, ZoomIn, ZoomOut, RefreshCw, Maximize2, Minimize2,
@@ -66,7 +66,7 @@ interface SimEdge {
   description: string
 }
 
-export default function GraphContextPanel({ entities, relationships, isOpen, onClose }: Props) {
+function GraphContextPanel({ entities, relationships, isOpen, onClose }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const animRef = useRef<number>(0)
@@ -1050,3 +1050,5 @@ export default function GraphContextPanel({ entities, relationships, isOpen, onC
     </AnimatePresence>
   )
 }
+
+export default memo(GraphContextPanel)

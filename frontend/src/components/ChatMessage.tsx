@@ -1,4 +1,4 @@
-import React, { useState, memo } from 'react'
+import React, { useState, memo, useDeferredValue } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Bot, User, Copy, Check } from 'lucide-react'
@@ -20,6 +20,10 @@ interface Props {
 const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding }: Props) => {
   const [copied, setCopied] = useState(false)
   const isAssistant = role === 'assistant'
+  
+  // Use React 19 deferred value during streaming so UI thread stays responsive to scrolling and typing
+  const deferredContent = useDeferredValue(content)
+  const displayContent = isStreaming ? deferredContent : content
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content)
@@ -64,7 +68,7 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding }
                 </div>
               )}
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {content}
+                {displayContent}
               </ReactMarkdown>
               {isStreaming && (
                 <span className="inline-flex gap-1.5 ml-1.5 align-middle">

@@ -7,6 +7,7 @@ import { chatApi } from './services/api'
 import { lazy, Suspense } from 'react'
 import Layout from './components/Layout'
 import MouseSpotlight from './components/MouseSpotlight'
+import ServerWarmupNotice from './components/ServerWarmupNotice'
 
 // Lazy-loaded pages for fast code splitting
 const LandingPage = lazy(() => import('./pages/LandingPage'))
@@ -32,10 +33,14 @@ function PageFallback() {
   )
 }
 
-
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1, staleTime: 30_000 },
+    queries: {
+      retry: 1,
+      staleTime: 5 * 60 * 1000,    // 5 minutes instant cached navigation
+      gcTime: 10 * 60 * 1000,       // 10 minutes garbage collection
+      refetchOnWindowFocus: false,  // Avoid repeated network calls on tab switch
+    },
   },
 })
 
@@ -94,6 +99,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <ServerWarmupNotice />
         <GlobalSessionLoader />
         <Suspense fallback={<PageFallback />}>
           <Routes>
