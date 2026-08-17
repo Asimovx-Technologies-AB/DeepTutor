@@ -25,6 +25,7 @@ class DayNotesRequest(BaseModel):
     topic_id: Optional[str] = "general"
     day_topic: str
     key_concepts: Optional[List[str]] = []
+    force_regenerate: Optional[bool] = False
 
 
 @router.post("/day-notes")
@@ -32,14 +33,14 @@ async def get_day_notes(
     body: DayNotesRequest,
     user: dict = Depends(get_current_user),
 ):
-    # 1. Zero-token cache check: if already generated and saved in this study plan, return immediately
-    if body.plan_id and body.day_number is not None:
+    # 1. Zero-token cache check: if already generated, has full structured markdown format, and not force-regenerated
+    if not body.force_regenerate and body.plan_id and body.day_number is not None:
         plan = db.get_study_plan(body.plan_id)
         if plan and plan.get("schedule"):
             for item in plan["schedule"]:
                 if item.get("day") == body.day_number:
                     saved_notes = item.get("study_notes")
-                    if saved_notes and len(saved_notes.strip()) > 40:
+                    if saved_notes and len(saved_notes.strip()) > 150 and ("##" in saved_notes or "#" in saved_notes):
                         return {"day_topic": body.day_topic, "notes": saved_notes, "cached": True}
 
     # 2. Generate via LLM RAG

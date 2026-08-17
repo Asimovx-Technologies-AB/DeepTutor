@@ -47,7 +47,8 @@ DOCUMENT CONTEXT:
 JSON:"""
 
 
-DAY_NOTES_PROMPT_TEMPLATE = """You are an expert academic tutor. Generate comprehensive, structured, easy-to-study notes for a student studying the topic below from their uploaded textbook PDF.
+DAY_NOTES_PROMPT_TEMPLATE = """You are an expert AI academic tutor. Generate a comprehensive, crystal-clear, intuitive, and structured study brief for a student studying the topic below from their uploaded material.
+Explain the concepts in simple, accessible language while maintaining absolute academic rigor and accuracy.
 
 DAY TOPIC: {day_topic}
 KEY CONCEPTS: {key_concepts}
@@ -59,23 +60,28 @@ Format your response strictly using clean, beautiful Markdown with the following
 
 # 📌 {day_topic} — Study Notes
 
-## 💡 Overview & Core Objectives
-[Clear 2-3 sentence overview of this topic]
+## 💡 Big-Picture Overview (In Simple Words)
+[Clear, intuitive 2-3 sentence overview explaining what this concept is and why it matters in plain, simple terms]
 
-## 🔑 Key Definitions & Terms
-- **Concept 1**: Clear explanation and definition from PDF.
-- **Concept 2**: Clear explanation and definition from PDF.
-- **Concept 3**: Clear explanation and definition from PDF.
+## 🔑 Core Definitions & Key Terms
+- **[Key Term 1]**: [Clear, intuitive definition and explanation grounded in material]
+- **[Key Term 2]**: [Clear, intuitive definition and explanation grounded in material]
+- **[Key Term 3]**: [Clear, intuitive definition and explanation grounded in material]
 
-## 📝 In-Depth Breakdown & Formulae / Rules
-- **Core Principle**: Step-by-step breakdown of how this works.
-- **Key Takeaways**: Essential points to remember for exams.
+## ⚙️ How It Works (Step-by-Step)
+1. **[Step 1 / Core Mechanism]**: [Clear explanation of how the process or concept works]
+2. **[Step 2 / Core Mechanism]**: [Clear explanation of how the process or concept works]
+3. **[Step 3 / Core Mechanism]**: [Clear explanation of how the process or concept works]
+
+## 📝 High-Yield Exam Takeaways
+- **Key Advantage / Strength**: [Why this method or concept is used]
+- **Key Challenge / Limitation**: [Important trade-offs, constraints, or common exam traps]
 
 ## 🎯 Quick Self-Check Review
-1. **Q**: [Practice question on this topic]
-   **A**: [Short answer]
-2. **Q**: [Practice question on this topic]
-   **A**: [Short answer]
+1. **Q**: [High-yield practice review question on this topic]
+   **A**: [Concise, accurate answer]
+2. **Q**: [High-yield practice review question on this topic]
+   **A**: [Concise, accurate answer]
 """
 
 

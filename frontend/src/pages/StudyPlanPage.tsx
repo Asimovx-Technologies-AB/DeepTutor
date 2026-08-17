@@ -110,13 +110,19 @@ export default function StudyPlanPage() {
     },
   })
 
-  const handleOpenStudyNotes = async (dayItem: ScheduleDay) => {
-    // 1. Zero-token instant open: if already generated and saved in this plan, open immediately!
-    if (dayItem.study_notes && dayItem.study_notes.trim().length > 40) {
+  const handleOpenStudyNotes = async (dayItem: ScheduleDay, forceRegenerate = false) => {
+    // 1. Check if the study_notes is already a full structured brief (has markdown headers and substantive text)
+    const isFullNote =
+      dayItem.study_notes &&
+      dayItem.study_notes.trim().length > 150 &&
+      (dayItem.study_notes.includes('##') || dayItem.study_notes.includes('#'))
+
+    // 2. Zero-token instant open: if already a full structured note and not force-regenerating, open immediately!
+    if (!forceRegenerate && isFullNote) {
       setActiveNotesModal({
         dayNum: dayItem.day,
         topic: dayItem.topic,
-        notes: dayItem.study_notes,
+        notes: dayItem.study_notes!,
         loading: false,
       })
       return
@@ -125,7 +131,7 @@ export default function StudyPlanPage() {
     setActiveNotesModal({
       dayNum: dayItem.day,
       topic: dayItem.topic,
-      notes: `### 📌 ${dayItem.topic}\n\nLoading AI Study Notes from document context...`,
+      notes: `### 📌 ${dayItem.topic}\n\nGenerating comprehensive AI Study Notes from document context...`,
       loading: true,
     })
 
@@ -136,6 +142,7 @@ export default function StudyPlanPage() {
         topic_id: currentPlan?.topic_id || 'general',
         day_topic: dayItem.topic,
         key_concepts: dayItem.key_concepts || [],
+        force_regenerate: forceRegenerate,
       })
       if (res.data?.notes) {
         setActiveNotesModal({
@@ -684,6 +691,18 @@ export default function StudyPlanPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const dayItem = currentPlan?.schedule.find((s) => s.day === activeNotesModal.dayNum)
+                      if (dayItem) handleOpenStudyNotes(dayItem, true)
+                    }}
+                    disabled={activeNotesModal.loading}
+                    className="p-2 rounded-xl text-slate-500 hover:text-[#F28A45] hover:bg-[#FFF0E4] transition-colors disabled:opacity-40"
+                    title="Regenerate Full Study Brief"
+                  >
+                    <Sparkles size={18} />
+                  </button>
+
                   <button
                     onClick={() => speakNotes(activeNotesModal.notes)}
                     className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors"
