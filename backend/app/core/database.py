@@ -778,8 +778,8 @@ def save_study_plan_day_notes(plan_id: str, day_number: int, notes: str) -> Opti
     """Persists generated AI study notes for a specific day in the study plan to eliminate repeated token usage."""
     with DBContext() as db:
         p = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
-        if p and p.schedule:
-            sched = list(p.schedule)
+        if p:
+            sched = list(p.schedule)  # reads from _schedule JSON
             updated = False
             for item in sched:
                 if item.get("day") == day_number:
@@ -787,9 +787,11 @@ def save_study_plan_day_notes(plan_id: str, day_number: int, notes: str) -> Opti
                     updated = True
                     break
             if updated:
-                p.schedule = sched
+                # Write directly to the raw column so SQLAlchemy detects the change
+                p._schedule = json.dumps(sched)
                 from sqlalchemy.orm.attributes import flag_modified
-                flag_modified(p, "schedule")
+                flag_modified(p, "_schedule")
+                db.flush()
     return get_study_plan(plan_id)
 
 
