@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -85,6 +85,41 @@ function UploadStatus({ docId, onDone }: { docId: string; onDone: (stats: any) =
   )
 }
 
+// ─── Streaming Message Component (Isolated Subscription to prevent ChatPage re-render storm) ───
+const StreamingMessageBubble = memo(function StreamingMessageBubble({ liveSources }: { liveSources: Source[] }) {
+  const isStreaming = useChatStore((s) => s.isStreaming)
+  const streamingContent = useChatStore((s) => s.streamingContent)
+
+  if (!isStreaming) return null
+
+  if (!streamingContent) {
+    return (
+      <div className="flex gap-3 sm:gap-4">
+        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-[#FFF0E4] text-[#F28A45] border border-[#F28A45]/30 flex items-center justify-center flex-shrink-0 shadow-xs">
+          <Sparkles size={16} />
+        </div>
+        <div className="bg-white border border-[#E7E1D8] rounded-2xl px-4 sm:px-5 py-3 sm:py-4 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <span className="flex gap-1">
+              <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
+            </span>
+            <span className="text-xs font-bold text-[#6F6B63]">Searching GraphRAG knowledge base...</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <ChatMessage
+      role="assistant"
+      content={streamingContent}
+      isStreaming={true}
+      sources={liveSources}
+    />
+  )
+})
+
 // ─── Main Component ─────────────────────────────────────────────────────────────
 export default function ChatPage() {
   const { sessionId } = useParams<{ sessionId?: string }>()
@@ -92,11 +127,18 @@ export default function ChatPage() {
   const location = useLocation()
   const { user, token, logout } = useAuthStore()
 
-  const {
-    sessions, activeSession, isStreaming, streamingContent,
-    setSessions, setActiveSession, setMessages, addMessage, removeSession,
-    setStreaming, appendStreamToken, clearStreamingContent,
-  } = useChatStore()
+  // Selective Zustand subscriptions — does NOT subscribe to streamingContent directly!
+  const sessions = useChatStore((s) => s.sessions)
+  const activeSession = useChatStore((s) => s.activeSession)
+  const isStreaming = useChatStore((s) => s.isStreaming)
+  const setSessions = useChatStore((s) => s.setSessions)
+  const setActiveSession = useChatStore((s) => s.setActiveSession)
+  const setMessages = useChatStore((s) => s.setMessages)
+  const addMessage = useChatStore((s) => s.addMessage)
+  const removeSession = useChatStore((s) => s.removeSession)
+  const setStreaming = useChatStore((s) => s.setStreaming)
+  const appendStreamToken = useChatStore((s) => s.appendStreamToken)
+  const clearStreamingContent = useChatStore((s) => s.clearStreamingContent)
 
   const [input, setInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -400,7 +442,7 @@ export default function ChatPage() {
       el.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth', block: 'end' })
     })
     return () => cancelAnimationFrame(raf)
-  }, [extMessages, streamingContent, isStreaming])
+  }, [extMessages, isStreaming])
 
   const handleDeleteSession = async (e?: React.MouseEvent, sId?: string) => {
     if (e) e.stopPropagation()
@@ -505,12 +547,7 @@ export default function ChatPage() {
     }
   }
 
-  const streamingMsg: ExtendedMessage | null =
-    isStreaming && streamingContent
-      ? { id: 'streaming', role: 'assistant', content: streamingContent, created_at: '' }
-      : null
-
-  const allMessages = streamingMsg ? [...extMessages, streamingMsg] : extMessages
+  const allMessages = extMessages
 
   return (
     <div className="flex flex-col md:flex-row h-screen w-full bg-[#FAF8F3] overflow-hidden text-[#20201D] font-sans">
@@ -815,34 +852,20 @@ export default function ChatPage() {
           )}
 
           {/* ACTIVE CHAT THREAD */}
-          {allMessages.length > 0 && (
+          {(extMessages.length > 0 || isStreaming) && (
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-4xl mx-auto w-full">
-              {allMessages.map((msg) => (
+              {extMessages.map((msg) => (
                 <ChatMessage
                   key={msg.id}
                   role={msg.role}
                   content={msg.content}
-                  isStreaming={msg.id === 'streaming'}
-                  sources={msg.id === 'streaming' ? liveSources : msg.sources}
+                  sources={msg.sources}
                   grounding={msg.grounding}
                 />
               ))}
 
-              {isStreaming && !streamingContent && (
-                <div className="flex gap-3 sm:gap-4">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-[#FFF0E4] text-[#F28A45] border border-[#F28A45]/30 flex items-center justify-center flex-shrink-0 shadow-xs">
-                    <Sparkles size={16} />
-                  </div>
-                  <div className="bg-white border border-[#E7E1D8] rounded-2xl px-4 sm:px-5 py-3 sm:py-4">
-                    <div className="flex items-center gap-2">
-                      <span className="flex gap-1">
-                        <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
-                      </span>
-                      <span className="text-xs font-bold text-[#6F6B63]">Searching GraphRAG knowledge base...</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <StreamingMessageBubble liveSources={liveSources} />
+
               <div ref={bottomRef} />
             </div>
           )}
