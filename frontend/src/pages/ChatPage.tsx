@@ -327,10 +327,11 @@ export default function ChatPage() {
       },
       onError: (err) => {
         console.error('Stream error:', err)
+        const fallbackMsg = `⚠️ **Connection Error:** ${err?.message || 'Server did not respond'}.\n\nIf the AI server is waking up or indexing your PDF, please wait a moment and send your question again.`
         const fallback: ExtendedMessage = {
           id: Date.now().toString() + '_fallback',
           role: 'assistant',
-          content: accContent || `⚠️ **Error communicating with AI backend:** ${err?.message || 'Server error'}. Please verify that FastAPI backend is running on http://localhost:8000.`,
+          content: accContent || fallbackMsg,
           created_at: new Date().toISOString(),
         }
         setExtMessages((prev) => [...prev, fallback])

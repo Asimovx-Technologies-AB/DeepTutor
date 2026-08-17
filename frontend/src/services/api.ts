@@ -100,16 +100,39 @@ export const streamChatMessage = async ({
   onError: (err: any) => void
   signal?: AbortSignal
 }) => {
-  try {
-    const baseUrl = getApiBaseUrl()
-    const url = `${baseUrl}/chat/sessions/${sessionId}/message/stream?content=${encodeURIComponent(content)}`
-    const headers: Record<string, string> = { Accept: 'text/event-stream' }
-    if (token) headers.Authorization = `Bearer ${token}`
+  const baseUrl = getApiBaseUrl()
+  const url = `${baseUrl}/chat/sessions/${sessionId}/message/stream?content=${encodeURIComponent(content)}`
+  const headers: Record<string, string> = { Accept: 'text/event-stream' }
+  if (token) headers.Authorization = `Bearer ${token}`
 
-    const res = await fetch(url, { headers, signal })
+  let res: Response | null = null
+  let attempts = 0
+  const maxAttempts = 2
 
-    if (!res.ok) {
+  while (attempts < maxAttempts) {
+    try {
+      attempts++
+      res = await fetch(url, { headers, signal })
+      if (res.ok) break
+      if (attempts < maxAttempts && (res.status === 502 || res.status === 503 || res.status === 504)) {
+        await new Promise((r) => setTimeout(r, 1200))
+        continue
+      }
       throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    } catch (fetchErr: any) {
+      if (signal?.aborted || fetchErr?.name === 'AbortError') return
+      if (attempts < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 1500))
+        continue
+      }
+      onError(fetchErr)
+      return
+    }
+  }
+
+  try {
+    if (!res || !res.ok) {
+      throw new Error(res ? `HTTP ${res.status}: ${res.statusText}` : 'Connection failed')
     }
 
     if (!res.body) {
@@ -158,7 +181,7 @@ export const streamChatMessage = async ({
       onDone()
     }
   } catch (err: any) {
-    if (err.name === 'AbortError') return
+    if (signal?.aborted || err?.name === 'AbortError') return
     onError(err)
   }
 }
