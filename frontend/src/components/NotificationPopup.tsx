@@ -40,6 +40,52 @@ export default function NotificationPopup() {
   const currentStreak = progress?.streak_days ?? 1
   const totalXp = progress?.total_xp ?? 150
 
+  // Dynamic Study Plan Deadline Analysis (Strictly Overdue & Deadline Only)
+  let planNotification: NotificationItem | null = null
+
+  if (activePlan) {
+    const todayDate = new Date()
+    todayDate.setHours(0, 0, 0, 0)
+
+    let daysRemaining = 0
+    if (activePlan.target_date) {
+      const targetDate = new Date(activePlan.target_date)
+      targetDate.setHours(0, 0, 0, 0)
+      const diffMs = targetDate.getTime() - todayDate.getTime()
+      daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+    }
+
+    const completedDaysCount = activePlan.completed_days?.length ?? 0
+    const totalDaysCount = activePlan.schedule?.length ?? 5
+    const planTitle = activePlan.title || 'Study Plan'
+
+    if (daysRemaining === 0) {
+      planNotification = {
+        id: 'plan-target-today',
+        type: 'plan',
+        title: `🎯 Today's Goal: ${planTitle}`,
+        message: `Today is your target completion date for '${planTitle}'. Finish your remaining topics to complete your goal!`,
+        timeAgo: 'Just now',
+        actionText: 'Continue Learning',
+        actionPath: '/study-plan',
+        unread: true,
+      }
+    } else if (daysRemaining < 0) {
+      planNotification = {
+        id: 'plan-catchup',
+        type: 'plan',
+        title: `⏰ Catch Up Plan: ${planTitle}`,
+        message: `You have unfinished topics in '${planTitle}'. Resume learning anytime at your own pace!`,
+        timeAgo: 'Reminder',
+        actionText: 'Open Study Plan',
+        actionPath: '/study-plan',
+        unread: true,
+      }
+    }
+
+
+  }
+
   const rawNotifications: NotificationItem[] = [
     {
       id: 'streak-1',
@@ -51,29 +97,10 @@ export default function NotificationPopup() {
       actionPath: '/chat',
       unread: true,
     },
-    {
-      id: 'plan-1',
-      type: 'plan',
-      title: '📅 Study Plan Reminder',
-      message: activePlan
-        ? `Target Date: ${activePlan.target_date}. Complete today's focus topic in your ${activePlan.title || 'custom plan'}.`
-        : "Today's Focus: Supervised Learning (2 hrs). 4 topics remaining in your Machine Learning plan.",
-      timeAgo: '10m ago',
-      actionText: 'View Study Plan',
-      actionPath: '/study-plan',
-      unread: true,
-    },
-    {
-      id: 'tip-1',
-      type: 'tip',
-      title: '💡 AI Tutor Suggestion',
-      message: 'Review Gradient Descent formulas before moving on to Neural Networks.',
-      timeAgo: '1h ago',
-      actionText: 'Start Lesson',
-      actionPath: '/chat',
-      unread: false,
-    },
+    ...(planNotification ? [planNotification] : []),
   ]
+
+
 
   const notifications = rawNotifications.filter((n) => {
     if (n.type === 'streak' && !streakAlertsEnabled) return false
