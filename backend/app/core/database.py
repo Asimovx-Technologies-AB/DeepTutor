@@ -775,23 +775,58 @@ def toggle_study_plan_day(plan_id: str, day_number: int) -> Optional[dict]:
 
 
 def save_study_plan_day_notes(plan_id: str, day_number: int, notes: str) -> Optional[dict]:
-    """Persists generated AI study notes for a specific day in the study plan to eliminate repeated token usage."""
-    with DBContext() as db:
-        p = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
-        if p:
-            sched = list(p.schedule)  # reads from _schedule JSON
-            updated = False
-            for item in sched:
-                if item.get("day") == day_number:
-                    item["study_notes"] = notes
-                    updated = True
-                    break
-            if updated:
-                # Write directly to the raw column so SQLAlchemy detects the change
-                p._schedule = json.dumps(sched)
-                from sqlalchemy.orm.attributes import flag_modified
-                flag_modified(p, "_schedule")
-                db.flush()
+    """
+    Persists AI study notes for a specific day directly via the app's own DB session.
+    Uses a raw SQL UPDATE through SessionLocal to guarantee the write is committed
+    on the correct connection without ORM property-tracking issues.
+    """
+    import sys
+    session = SessionLocal()
+    try:
+        # 1. Read current schedule
+        row = session.execute(
+            text("SELECT schedule FROM study_plans WHERE id = :pid"),
+            {"pid": plan_id}
+        ).fetchone()
+
+        if not row:
+            print(f"[DB] save_study_plan_day_notes: plan {plan_id} not found", flush=True)
+            return None
+
+        try:
+            sched = json.loads(row[0] or "[]")
+        except Exception:
+            sched = []
+
+        # 2. Inject the notes into the matching day
+        updated = False
+        for item in sched:
+            if item.get("day") == day_number:
+                item["study_notes"] = notes
+                updated = True
+                break
+
+        if not updated:
+            print(f"[DB] save_study_plan_day_notes: day {day_number} not found in plan {plan_id}. Days: {[i.get('day') for i in sched]}", flush=True)
+            return get_study_plan(plan_id)
+
+        # 3. Commit the updated JSON back with a raw UPDATE
+        new_sched_json = json.dumps(sched)
+        result = session.execute(
+            text("UPDATE study_plans SET schedule = :sched WHERE id = :pid"),
+            {"sched": new_sched_json, "pid": plan_id}
+        )
+        session.commit()
+        print(f"[DB] Saved study notes: plan={plan_id} day={day_number} len={len(notes)} rows={result.rowcount}", file=sys.stdout, flush=True)
+
+    except Exception as e:
+        session.rollback()
+        import traceback
+        print(f"[DB] save_study_plan_day_notes ERROR: {e}", flush=True)
+        traceback.print_exc()
+    finally:
+        session.close()
+
     return get_study_plan(plan_id)
 
 

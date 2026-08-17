@@ -35,25 +35,40 @@ async def get_day_notes(
 ):
     # 1. Zero-token cache check: if already generated, has full structured markdown format, and not force-regenerated
     if not body.force_regenerate and body.plan_id and body.day_number is not None:
-        plan = db.get_study_plan(body.plan_id)
-        if plan and plan.get("schedule"):
-            for item in plan["schedule"]:
-                if item.get("day") == body.day_number:
-                    saved_notes = item.get("study_notes")
-                    if saved_notes and len(saved_notes.strip()) > 150 and ("##" in saved_notes or "#" in saved_notes):
-                        return {"day_topic": body.day_topic, "notes": saved_notes, "cached": True}
+        try:
+            plan = db.get_study_plan(body.plan_id)
+            if plan and plan.get("schedule"):
+                for item in plan["schedule"]:
+                    if item.get("day") == body.day_number:
+                        saved_notes = item.get("study_notes")
+                        if saved_notes and len(saved_notes.strip()) > 150 and ("##" in saved_notes or "#" in saved_notes):
+                            return {"day_topic": body.day_topic, "notes": saved_notes, "cached": True}
+        except Exception as cache_err:
+            print(f"[day-notes] Cache check error (non-fatal): {cache_err}")
 
     # 2. Generate via LLM RAG
-    notes = await generate_day_study_notes(
-        topic_id=body.topic_id or "general",
-        day_topic=body.day_topic,
-        key_concepts=body.key_concepts or [],
-        user_id=user["id"],
-    )
+    try:
+        notes = await generate_day_study_notes(
+            topic_id=body.topic_id or "general",
+            day_topic=body.day_topic,
+            key_concepts=body.key_concepts or [],
+            user_id=user["id"],
+        )
+    except Exception as gen_err:
+        import traceback
+        print(f"[day-notes] Generation error: {gen_err}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {str(gen_err)}")
+
+    if not notes:
+        raise HTTPException(status_code=500, detail="AI returned empty notes. Please try again.")
 
     # 3. Automatically persist to DB so future views cost 0 tokens
-    if body.plan_id and body.day_number is not None and notes:
-        db.save_study_plan_day_notes(body.plan_id, body.day_number, notes)
+    if body.plan_id and body.day_number is not None:
+        try:
+            db.save_study_plan_day_notes(body.plan_id, body.day_number, notes)
+        except Exception as save_err:
+            print(f"[day-notes] Save error (non-fatal): {save_err}")
 
     return {"day_topic": body.day_topic, "notes": notes, "cached": False}
 
