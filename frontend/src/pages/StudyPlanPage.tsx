@@ -167,8 +167,18 @@ export default function StudyPlanPage() {
       } else {
         setActiveNotesModal((prev) => (prev ? { ...prev, loading: false } : null))
       }
-    } catch {
-      setActiveNotesModal((prev) => (prev ? { ...prev, loading: false } : null))
+    } catch (err: any) {
+      console.error('[StudyNotes] Failed to generate notes:', err)
+      const errMsg = err?.response?.data?.detail || err?.message || 'Unknown error'
+      setActiveNotesModal((prev) =>
+        prev
+          ? {
+              ...prev,
+              loading: false,
+              notes: `### ⚠️ Could Not Generate Notes\n\n**Error:** ${errMsg}\n\nPlease try again. If the problem persists, check that the backend is running and your PDF is uploaded for this topic.`,
+            }
+          : null
+      )
     }
   }
 
