@@ -75,12 +75,13 @@ function UploadStatus({ docId, onDone }: { docId: string; onDone: (stats: any) =
        <Loader2 size={16} className="animate-spin" />}
       <span>
         {isDone
-          ? `✅ GraphRAG indexed — ${status.stats?.entities_extracted ?? 0} entities, ${status.stats?.graph_nodes ?? 0} graph nodes`
+          ? `✅ Document processed successfully`
           : isError
-          ? `❌ Indexing failed: ${status.error}`
-          : `🧠 GraphRAG indexing... ${status.progress ?? 0}% (${status.stage ?? 'processing'})`
+          ? `❌ Processing failed: ${status.error}`
+          : `Processing... ${status.progress ?? 0}%`
         }
       </span>
+
     </motion.div>
   )
 }
@@ -518,7 +519,8 @@ export default function ChatPage() {
       const infoMsg: ExtendedMessage = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `📄 **${file.name}** uploaded successfully!\n\n🧠 **GraphRAG indexing started** — Extracting entities and knowledge graph nodes from your PDF. You can start asking questions right away.`,
+        content: `📄 **${file.name}** uploaded successfully!\n\nProcessing document... You can start asking questions right away.`,
+
         created_at: new Date().toISOString(),
       }
       setExtMessages((prev) => [...prev, infoMsg])
