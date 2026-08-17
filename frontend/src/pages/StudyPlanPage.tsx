@@ -111,15 +111,28 @@ export default function StudyPlanPage() {
   })
 
   const handleOpenStudyNotes = async (dayItem: ScheduleDay) => {
+    // 1. Zero-token instant open: if already generated and saved in this plan, open immediately!
+    if (dayItem.study_notes && dayItem.study_notes.trim().length > 40) {
+      setActiveNotesModal({
+        dayNum: dayItem.day,
+        topic: dayItem.topic,
+        notes: dayItem.study_notes,
+        loading: false,
+      })
+      return
+    }
+
     setActiveNotesModal({
       dayNum: dayItem.day,
       topic: dayItem.topic,
-      notes: dayItem.study_notes || `### 📌 ${dayItem.topic}\n\nLoading AI Study Notes...`,
+      notes: `### 📌 ${dayItem.topic}\n\nLoading AI Study Notes from document context...`,
       loading: true,
     })
 
     try {
       const res = await api.post('/study-plan/day-notes', {
+        plan_id: currentPlan?.id,
+        day_number: dayItem.day,
         topic_id: currentPlan?.topic_id || 'general',
         day_topic: dayItem.topic,
         key_concepts: dayItem.key_concepts || [],
@@ -131,11 +144,24 @@ export default function StudyPlanPage() {
           notes: res.data.notes,
           loading: false,
         })
+        // Save to React Query client-side cache so reopening uses 0 tokens & 0ms latency
+        queryClient.setQueryData(['study-plans'], (oldPlans: StudyPlan[] | undefined) => {
+          if (!oldPlans) return oldPlans
+          return oldPlans.map((p) => {
+            if (p.id === currentPlan?.id) {
+              const updatedSchedule = p.schedule.map((item) =>
+                item.day === dayItem.day ? { ...item, study_notes: res.data.notes } : item
+              )
+              return { ...p, schedule: updatedSchedule }
+            }
+            return p
+          })
+        })
       } else {
-        setActiveNotesModal((prev) => prev ? { ...prev, loading: false } : null)
+        setActiveNotesModal((prev) => (prev ? { ...prev, loading: false } : null))
       }
     } catch {
-      setActiveNotesModal((prev) => prev ? { ...prev, loading: false } : null)
+      setActiveNotesModal((prev) => (prev ? { ...prev, loading: false } : null))
     }
   }
 

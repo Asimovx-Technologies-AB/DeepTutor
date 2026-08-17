@@ -767,6 +767,25 @@ def toggle_study_plan_day(plan_id: str, day_number: int) -> Optional[dict]:
     return get_study_plan(plan_id)
 
 
+def save_study_plan_day_notes(plan_id: str, day_number: int, notes: str) -> Optional[dict]:
+    """Persists generated AI study notes for a specific day in the study plan to eliminate repeated token usage."""
+    with DBContext() as db:
+        p = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
+        if p and p.schedule:
+            sched = list(p.schedule)
+            updated = False
+            for item in sched:
+                if item.get("day") == day_number:
+                    item["study_notes"] = notes
+                    updated = True
+                    break
+            if updated:
+                p.schedule = sched
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(p, "schedule")
+    return get_study_plan(plan_id)
+
+
 def delete_study_plan(plan_id: str) -> bool:
     with DBContext() as db:
         p = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
