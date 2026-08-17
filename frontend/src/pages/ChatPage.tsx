@@ -250,15 +250,14 @@ export default function ChatPage() {
     let content = (text ?? input).trim()
     if (!content || isStreaming) return
 
-    let currentSessionId: string = activeSession?.id || ''
-    const isKnownSession = sessions.some((s) => s.id === currentSessionId)
-    if (!currentSessionId || !isKnownSession) {
+    let currentSessionId: string = sessionId || activeSession?.id || ''
+    if (!currentSessionId) {
       try {
         const res = await chatApi.createSession('', content.slice(0, 30) || 'New Chat')
         currentSessionId = res.data.id
         skipNextFetchRef.current = currentSessionId
         setActiveSession(res.data)
-        await refetchSessions()
+        refetchSessions()
         navigate(`/chat/${res.data.id}`)
       } catch (err) {
         console.error('Auto session creation failed', err)
@@ -339,7 +338,7 @@ export default function ChatPage() {
         setStreaming(false)
       },
     })
-  }, [input, isStreaming, activeSession, token, navigate, refetchSessions, setActiveSession, addMessage, appendStreamToken, clearStreamingContent, setStreaming])
+  }, [sessionId, input, isStreaming, activeSession, token, navigate, refetchSessions, setActiveSession, addMessage, appendStreamToken, clearStreamingContent, setStreaming])
 
   // Load session messages when sessionId changes
   useEffect(() => {
@@ -500,14 +499,13 @@ export default function ChatPage() {
     setUploadingFile(true)
 
     try {
-      let targetSessionId: string = activeSession?.id || ''
-      const isKnownSession = sessions.some((s) => s.id === targetSessionId)
-      if (!targetSessionId || !isKnownSession) {
+      let targetSessionId: string = sessionId || activeSession?.id || ''
+      if (!targetSessionId) {
         const newSess = await chatApi.createSession('', file.name.slice(0, 30))
         targetSessionId = newSess.data.id
         skipNextFetchRef.current = targetSessionId
         setActiveSession(newSess.data)
-        await refetchSessions()
+        refetchSessions()
         navigate(`/chat/${newSess.data.id}`)
       }
 
