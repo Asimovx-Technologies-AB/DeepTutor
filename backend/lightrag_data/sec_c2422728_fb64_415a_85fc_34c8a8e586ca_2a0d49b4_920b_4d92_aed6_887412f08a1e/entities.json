@@ -1,0 +1,228 @@
+{
+  "the_national_anthem": {
+    "id": "the_national_anthem",
+    "name": "THE National Anthem",
+    "type": "concept",
+    "description": "Key concept in sec_c2422728_fb64_415a_85fc_34c8a8e586ca_2a0d49b4_920b_4d92_aed6_887412f08a1e",
+    "sources": [],
+    "mentions": 1
+  },
+  "textbook_development_committee": {
+    "id": "textbook_development_committee",
+    "name": "Textbook Development Committee",
+    "type": "concept",
+    "description": "Key concept in sec_c2422728_fb64_415a_85fc_34c8a8e586ca_2a0d49b4_920b_4d92_aed6_887412f08a1e",
+    "sources": [],
+    "mentions": 1
+  },
+  "which_of_the_following_statements_is_correct_": {
+    "id": "which_of_the_following_statements_is_correct_",
+    "name": "Which of the following statements is correct?",
+    "type": "concept",
+    "description": "Key concept in sec_c2422728_fb64_415a_85fc_34c8a8e586ca_2a0d49b4_920b_4d92_aed6_887412f08a1e",
+    "sources": [],
+    "mentions": 1
+  },
+  "a_graphic_illustration_of_two_waves": {
+    "id": "a_graphic_illustration_of_two_waves",
+    "name": "A graphic illustration of two waves",
+    "type": "concept",
+    "description": "Key concept in sec_c2422728_fb64_415a_85fc_34c8a8e586ca_2a0d49b4_920b_4d92_aed6_887412f08a1e",
+    "sources": [],
+    "mentions": 1
+  },
+  "the_focal_length_of_a_lens_is_20_cm_": {
+    "id": "the_focal_length_of_a_lens_is_20_cm_",
+    "name": "The focal length of a lens is 20 cm.",
+    "type": "concept",
+    "description": "Key concept in sec_c2422728_fb64_415a_85fc_34c8a8e586ca_2a0d49b4_920b_4d92_aed6_887412f08a1e",
+    "sources": [],
+    "mentions": 1
+  },
+  "find_the_most_appropriate_statement_related_to_a_telescope_": {
+    "id": "find_the_most_appropriate_statement_related_to_a_telescope_",
+    "name": "Find the most appropriate statement related to a telescope.",
+    "type": "concept",
+    "description": "Key concept in sec_c2422728_fb64_415a_85fc_34c8a8e586ca_2a0d49b4_920b_4d92_aed6_887412f08a1e",
+    "sources": [],
+    "mentions": 1
+  },
+  "a_b_c": {
+    "id": "a_b_c",
+    "name": "A B C",
+    "type": "concept",
+    "description": "Key concept in sec_c2422728_fb64_415a_85fc_34c8a8e586ca_2a0d49b4_920b_4d92_aed6_887412f08a1e",
+    "sources": [],
+    "mentions": 1
+  },
+  "find_the_most_appropriate_answer_": {
+    "id": "find_the_most_appropriate_answer_",
+    "name": "Find the most appropriate answer.",
+    "type": "concept",
+    "description": "Key concept in sec_c2422728_fb64_415a_85fc_34c8a8e586ca_2a0d49b4_920b_4d92_aed6_887412f08a1e",
+    "sources": [],
+    "mentions": 1
+  },
+  "fill_in_the_blanks_appropriately_": {
+    "id": "fill_in_the_blanks_appropriately_",
+    "name": "Fill in the blanks appropriately:",
+    "type": "concept",
+    "description": "Key concept in sec_c2422728_fb64_415a_85fc_34c8a8e586ca_2a0d49b4_920b_4d92_aed6_887412f08a1e",
+    "sources": [],
+    "mentions": 1
+  },
+  "observe_the_diagram_": {
+    "id": "observe_the_diagram_",
+    "name": "Observe the diagram.",
+    "type": "concept",
+    "description": "Key concept in sec_c2422728_fb64_415a_85fc_34c8a8e586ca_2a0d49b4_920b_4d92_aed6_887412f08a1e",
+    "sources": [],
+    "mentions": 1
+  },
+  "observe_figure_4_36_": {
+    "id": "observe_figure_4_36_",
+    "name": "Observe figure 4.36.",
+    "type": "concept",
+    "description": "Key concept in sec_c2422728_fb64_415a_85fc_34c8a8e586ca_2a0d49b4_920b_4d92_aed6_887412f08a1e",
+    "sources": [],
+    "mentions": 1
+  },
+  "constitution_of_india": {
+    "id": "constitution_of_india",
+    "name": "Constitution OF India",
+    "type": "concept",
+    "description": "Key concept in sec_c2422728_fb64_415a_85fc_34c8a8e586ca_2a0d49b4_920b_4d92_aed6_887412f08a1e",
+    "sources": [],
+    "mentions": 1
+  },
+  "lens": {
+    "id": "lens",
+    "name": "Lens",
+    "type": "system",
+    "description": "A transparent medium with two refracting surfaces.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.30"
+    ],
+    "mentions": 1
+  },
+  "refraction": {
+    "id": "refraction",
+    "name": "Refraction",
+    "type": "concept",
+    "description": "The bending of light as it passes through a lens.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.30"
+    ],
+    "mentions": 1
+  },
+  "optic_centre": {
+    "id": "optic_centre",
+    "name": "Optic centre",
+    "type": "concept",
+    "description": "The midpoint of a lens.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.30"
+    ],
+    "mentions": 1
+  },
+  "centres_of_curvature": {
+    "id": "centres_of_curvature",
+    "name": "Centres of curvature",
+    "type": "concept",
+    "description": "The centers of the spheres that form the refracting surfaces of a lens.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.30"
+    ],
+    "mentions": 1
+  },
+  "optic_axis": {
+    "id": "optic_axis",
+    "name": "Optic axis",
+    "type": "concept",
+    "description": "An imaginary line passing through the centres of curvature and the optic centre.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.30"
+    ],
+    "mentions": 1
+  },
+  "aperture": {
+    "id": "aperture",
+    "name": "Aperture",
+    "type": "concept",
+    "description": "The area of the lens through which light passes.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.30"
+    ],
+    "mentions": 1
+  },
+  "principal_focus": {
+    "id": "principal_focus",
+    "name": "Principal focus",
+    "type": "concept",
+    "description": "A specific point where light rays converge or appear to diverge after passing through a lens.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.30"
+    ],
+    "mentions": 1
+  },
+  "white_light": {
+    "id": "white_light",
+    "name": "White Light",
+    "type": "concept",
+    "description": "A composite light containing multiple spectral colors.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.58"
+    ],
+    "mentions": 1
+  },
+  "filter": {
+    "id": "filter",
+    "name": "Filter",
+    "type": "system",
+    "description": "An optical device that transmits specific colors and blocks others.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.58"
+    ],
+    "mentions": 1
+  },
+  "primary_colours": {
+    "id": "primary_colours",
+    "name": "Primary Colours",
+    "type": "concept",
+    "description": "Fundamental colors that cannot be created by mixing other colors.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.58"
+    ],
+    "mentions": 1
+  },
+  "secondary_colours": {
+    "id": "secondary_colours",
+    "name": "Secondary Colours",
+    "type": "concept",
+    "description": "Colors formed by the combination of two primary colors.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.58"
+    ],
+    "mentions": 1
+  },
+  "opaque_objects": {
+    "id": "opaque_objects",
+    "name": "Opaque Objects",
+    "type": "concept",
+    "description": "Objects that reflect specific wavelengths of light to the eye.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.58"
+    ],
+    "mentions": 1
+  },
+  "light_reflection": {
+    "id": "light_reflection",
+    "name": "Light Reflection",
+    "type": "method",
+    "description": "The process by which light bounces off an object to determine its perceived color.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.58"
+    ],
+    "mentions": 1
+  }
+}

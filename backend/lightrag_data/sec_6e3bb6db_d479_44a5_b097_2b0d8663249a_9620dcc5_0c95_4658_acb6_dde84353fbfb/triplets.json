@@ -1,0 +1,66 @@
+[
+  {
+    "head": "Lens",
+    "relation": "USES",
+    "tail": "Refraction",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9620dcc5_0c95_4658_acb6_dde84353fbfb_71587393",
+    "source_doc": "Hsslive-15_Physics Eng.pdf p.30"
+  },
+  {
+    "head": "Optic axis",
+    "relation": "DEFINES",
+    "tail": "Optic centre",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9620dcc5_0c95_4658_acb6_dde84353fbfb_71587393",
+    "source_doc": "Hsslive-15_Physics Eng.pdf p.30"
+  },
+  {
+    "head": "Refracting surfaces",
+    "relation": "PART_OF",
+    "tail": "Lens",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9620dcc5_0c95_4658_acb6_dde84353fbfb_71587393",
+    "source_doc": "Hsslive-15_Physics Eng.pdf p.30"
+  },
+  {
+    "head": "Aperture",
+    "relation": "DEFINES",
+    "tail": "Lens",
+    "confidence": 0.8,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9620dcc5_0c95_4658_acb6_dde84353fbfb_71587393",
+    "source_doc": "Hsslive-15_Physics Eng.pdf p.30"
+  },
+  {
+    "head": "Filter",
+    "relation": "BLOCKS",
+    "tail": "Non-component Colours",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9620dcc5_0c95_4658_acb6_dde84353fbfb_12599261",
+    "source_doc": "Hsslive-15_Physics Eng.pdf p.58"
+  },
+  {
+    "head": "Secondary Colours",
+    "relation": "EXTENDS",
+    "tail": "Primary Colours",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9620dcc5_0c95_4658_acb6_dde84353fbfb_12599261",
+    "source_doc": "Hsslive-15_Physics Eng.pdf p.58"
+  },
+  {
+    "head": "Opaque Objects",
+    "relation": "USES",
+    "tail": "Light Reflection",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9620dcc5_0c95_4658_acb6_dde84353fbfb_12599261",
+    "source_doc": "Hsslive-15_Physics Eng.pdf p.58"
+  },
+  {
+    "head": "Filter",
+    "relation": "TRANSMITS",
+    "tail": "White Light Components",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9620dcc5_0c95_4658_acb6_dde84353fbfb_12599261",
+    "source_doc": "Hsslive-15_Physics Eng.pdf p.58"
+  }
+]

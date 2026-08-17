@@ -39,50 +39,256 @@ interface ExtendedMessage {
   grounding?: any
 }
 
-// ─── Upload Status Badge ────────────────────────────────────────────────────────
-function UploadStatus({ docId, onDone }: { docId: string; onDone: (stats: any) => void }) {
-  const [status, setStatus] = useState<any>({ status: 'indexing', progress: 0 })
+export interface ActiveUpload {
+  docId: string
+  fileName: string
+  sizeMb?: number
+}
+
+// ─── Aesthetic Document Indexing Status Card ─────────────────────────────────────
+function UploadStatusCard({
+  upload,
+  onDone,
+  onError,
+  onDismiss,
+}: {
+  upload: ActiveUpload
+  onDone: (docId: string, stats: any) => void
+  onError: (docId: string, error: string) => void
+  onDismiss: (docId: string) => void
+}) {
+  const [status, setStatus] = useState<any>({ status: 'indexing', progress: 10, stage: 'parsing' })
+  const hasTriggeredDoneRef = useRef(false)
 
   useEffect(() => {
+    let doneTimer: any = null
     const interval = setInterval(async () => {
       try {
-        const res = await documentsApi.status(docId)
+        const res = await documentsApi.status(upload.docId)
         const data = res.data
         setStatus(data)
-        if (data.status === 'done' || data.status === 'error') {
+        if (data.status === 'done') {
           clearInterval(interval)
-          if (data.status === 'done') onDone(data.stats)
+          if (!hasTriggeredDoneRef.current) {
+            hasTriggeredDoneRef.current = true
+            onDone(upload.docId, data.stats)
+          }
+          doneTimer = setTimeout(() => {
+            onDismiss(upload.docId)
+          }, 4500)
+        } else if (data.status === 'error') {
+          clearInterval(interval)
+          onError(upload.docId, data.error || 'Document processing encountered an error')
         }
-      } catch { clearInterval(interval) }
-    }, 2000)
-    return () => clearInterval(interval)
-  }, [docId, onDone])
+      } catch {
+        // network polling retry
+      }
+    }, 1500)
+
+    return () => {
+      clearInterval(interval)
+      if (doneTimer) clearTimeout(doneTimer)
+    }
+  }, [upload.docId, onDone, onError, onDismiss])
 
   const isDone = status.status === 'done'
   const isError = status.status === 'error'
+  const rawProgress = typeof status.progress === 'number' ? status.progress : 0
+  const displayProgress = isDone ? 100 : Math.max(10, rawProgress)
+
+  const stageInfo = useMemo(() => {
+    if (isDone) {
+      return {
+        label: 'Knowledge Base Ready',
+        step: 'Complete',
+        badgeColor: 'bg-[#E3F0E5] text-[#4F8A68] border-[#4F8A68]/30',
+        description: 'All chunks, vector embeddings & GraphRAG nodes indexed successfully',
+      }
+    }
+    if (isError) {
+      return {
+        label: 'Processing Failed',
+        step: 'Error',
+        badgeColor: 'bg-[#FBE7E4] text-[#C85C52] border-[#C85C52]/30',
+        description: status.error || 'Could not parse document. Please verify the file.',
+      }
+    }
+    if (displayProgress < 30) {
+      return {
+        label: 'Parsing Document Structure',
+        step: 'Stage 1/4',
+        badgeColor: 'bg-[#FFF0E4] text-[#F28A45] border-[#F28A45]/30',
+        description: 'Extracting text, formulas & table layouts via Docling / PyMuPDF cascade...',
+      }
+    }
+    if (displayProgress < 60) {
+      return {
+        label: 'Semantic Chunking',
+        step: 'Stage 2/4',
+        badgeColor: 'bg-[#FFF3D8] text-[#D99A32] border-[#D99A32]/30',
+        description: 'Building section tree & context-preserving semantic study chunks...',
+      }
+    }
+    if (displayProgress < 85) {
+      return {
+        label: 'Generating Vector Embeddings',
+        step: 'Stage 3/4',
+        badgeColor: 'bg-[#F0ECF7] text-[#8C76B2] border-[#8C76B2]/30',
+        description: 'Indexing high-dimensional semantic embeddings into vector store...',
+      }
+    }
+    return {
+      label: 'Constructing GraphRAG',
+      step: 'Stage 4/4',
+      badgeColor: 'bg-[#E3F0E5] text-[#4F8A68] border-[#4F8A68]/30',
+      description: 'Extracting key concepts & entity relationship triplets for deep reasoning...',
+    }
+  }, [isDone, isError, displayProgress, status.error])
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }}
-      className={`flex items-center gap-2.5 text-xs sm:text-sm px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl border font-semibold ${
-        isDone ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700' :
-        isError ? 'bg-red-500/10 border-red-500/20 text-red-600' :
-        'bg-slate-100 border-slate-200 text-slate-800'
+      initial={{ opacity: 0, y: -8, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -8, scale: 0.96 }}
+      transition={{ duration: 0.35, ease: 'easeOut' }}
+      className={`relative overflow-hidden rounded-2xl border p-4 sm:p-5 shadow-xs transition-all ${
+        isDone
+          ? 'bg-gradient-to-r from-[#F4FAF5] via-white to-[#F4FAF5] border-[#4F8A68]/40'
+          : isError
+          ? 'bg-gradient-to-r from-[#FFF5F4] via-white to-[#FFF5F4] border-[#C85C52]/40'
+          : 'bg-gradient-to-r from-[#FFFDF9] via-white to-[#FFF9F2] border-[#F28A45]/35'
       }`}
     >
-      {isDone ? <CheckCircle size={16} /> :
-       isError ? <AlertCircle size={16} /> :
-       <Loader2 size={16} className="animate-spin" />}
-      <span>
-        {isDone
-          ? `✅ Document processed successfully`
-          : isError
-          ? `❌ Processing failed: ${status.error}`
-          : `Processing... ${status.progress ?? 0}%`
-        }
-      </span>
+      {/* Background glowing ambient light while processing */}
+      {!isDone && !isError && (
+        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-44 h-44 bg-[#F28A45]/10 rounded-full blur-2xl pointer-events-none animate-pulse" />
+      )}
+
+      <div className="flex items-start justify-between gap-3 relative z-10">
+        
+        {/* Left Icon with animated spinner */}
+        <div className="flex items-center gap-3.5 flex-1 min-w-0">
+          <div className="relative flex-shrink-0">
+            <div
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center border shadow-2xs transition-transform ${
+                isDone
+                  ? 'bg-[#E3F0E5] text-[#4F8A68] border-[#4F8A68]/30 scale-105'
+                  : isError
+                  ? 'bg-[#FBE7E4] text-[#C85C52] border-[#C85C52]/30'
+                  : 'bg-[#FFF0E4] text-[#F28A45] border-[#F28A45]/30'
+              }`}
+            >
+              {isDone ? (
+                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }}>
+                  <CheckCircle size={24} className="text-[#4F8A68]" />
+                </motion.div>
+              ) : isError ? (
+                <AlertCircle size={22} className="text-[#C85C52]" />
+              ) : (
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 4, ease: 'linear' }}
+                >
+                  <Sparkles size={22} className="text-[#F28A45]" />
+                </motion.div>
+              )}
+            </div>
+
+            {/* Orbital ring while indexing */}
+            {!isDone && !isError && (
+              <div className="absolute -inset-1 rounded-2xl border-2 border-[#F28A45]/40 border-t-[#F28A45] animate-spin pointer-events-none" />
+            )}
+          </div>
+
+          {/* Title & Live Stage */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-extrabold text-sm text-[#20201D] truncate max-w-[220px] sm:max-w-md">
+                {upload.fileName}
+              </span>
+              {upload.sizeMb !== undefined && (
+                <span className="text-[10px] font-bold text-[#6F6B63] bg-[#F4EFE7] px-2 py-0.5 rounded-md border border-[#E7E1D8]">
+                  {upload.sizeMb.toFixed(1)} MB
+                </span>
+              )}
+              <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border ${stageInfo.badgeColor}`}>
+                {stageInfo.step} • {stageInfo.label}
+              </span>
+            </div>
+
+            <p className="text-xs text-[#6F6B63] font-medium mt-1 truncate">
+              {stageInfo.description}
+            </p>
+          </div>
+        </div>
+
+        {/* Right Percentage & Close Button */}
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="text-right">
+            <span className={`text-xl sm:text-2xl font-black tracking-tight ${isDone ? 'text-[#4F8A68]' : isError ? 'text-[#C85C52]' : 'text-[#F28A45]'}`}>
+              {displayProgress}%
+            </span>
+          </div>
+
+          <button
+            onClick={() => onDismiss(upload.docId)}
+            className="text-[#969188] hover:text-[#20201D] p-1.5 rounded-xl hover:bg-[#F4EFE7] transition-colors cursor-pointer"
+            title="Dismiss notification"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+      </div>
+
+      {/* Animated Gradient Progress Bar with Shimmer */}
+      <div className="mt-3.5 w-full bg-[#F4EFE7] h-2.5 rounded-full overflow-hidden p-0.5 border border-[#E7E1D8] relative">
+        <motion.div
+          className={`h-full rounded-full transition-all relative ${
+            isDone
+              ? 'bg-[#4F8A68]'
+              : isError
+              ? 'bg-[#C85C52]'
+              : 'bg-gradient-to-r from-[#F28A45] via-[#FFB070] to-[#F28A45]'
+          }`}
+          initial={{ width: '8%' }}
+          animate={{ width: `${displayProgress}%` }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+        >
+          {/* Shimmer sweep */}
+          {!isDone && !isError && (
+            <motion.div
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent rounded-full"
+              animate={{ x: ['-100%', '100%'] }}
+              transition={{ repeat: Infinity, duration: 1.6, ease: 'easeInOut' }}
+            />
+          )}
+        </motion.div>
+      </div>
+
+      {/* Done Stats Pill */}
+      {isDone && status.stats && (
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-3 pt-2.5 border-t border-[#E7E1D8]/60 flex items-center justify-between text-xs font-bold text-[#4F8A68]"
+        >
+          <div className="flex items-center gap-3 flex-wrap">
+            <span>✨ {status.stats.chunks_indexed || 0} Chunks Indexed</span>
+            <span>•</span>
+            <span>🧠 {status.stats.entities_extracted || 0} Graph Entities</span>
+            {status.stats.extracted_topics?.length > 0 && (
+              <>
+                <span>•</span>
+                <span className="text-[#6F6B63]">Topics: {status.stats.extracted_topics.slice(0, 3).join(', ')}</span>
+              </>
+            )}
+          </div>
+          <span className="text-[11px] font-extrabold uppercase bg-[#E3F0E5] px-2.5 py-0.5 rounded-full">
+            Ready to study
+          </span>
+        </motion.div>
+      )}
 
     </motion.div>
   )
@@ -146,7 +352,7 @@ export default function ChatPage() {
   const [input, setInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [uploadingFile, setUploadingFile] = useState(false)
-  const [uploadStatuses, setUploadStatuses] = useState<string[]>([])
+  const [activeUploads, setActiveUploads] = useState<ActiveUpload[]>([])
   const [showGraphPanel, setShowGraphPanel] = useState(false)
   const [showQuizGame, setShowQuizGame] = useState(false)
   const [showFlashcards, setShowFlashcards] = useState(false)
@@ -495,20 +701,50 @@ export default function ChatPage() {
     }
   }
 
+  const handleUploadDone = useCallback((docId: string, stats: any) => {
+    setActiveUploads((prev) => {
+      const upload = prev.find((u) => u.docId === docId)
+      const fileName = upload?.fileName || 'Document'
+
+      const successMsg: ExtendedMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `📄 **${fileName}** is fully processed and indexed!\n\n${
+          stats?.chunks_indexed
+            ? `📊 **Knowledge Breakdown:**\n- **Chunks Indexed:** ${stats.chunks_indexed}\n- **Graph Entities:** ${stats.entities_extracted || 0}\n`
+            : ''
+        }${stats?.extracted_topics?.length ? `- **Key Topics:** ${stats.extracted_topics.slice(0, 5).join(', ')}\n` : ''}\n💡 *You can now ask questions, generate practice quizzes, or study flashcards for this material.*`,
+        created_at: new Date().toISOString(),
+      }
+      setExtMessages((existing) => [...existing, successMsg])
+      return prev
+    })
+  }, [])
+
+  const handleUploadError = useCallback((docId: string, error: string) => {
+    setActiveUploads((prev) => {
+      const upload = prev.find((u) => u.docId === docId)
+      const fileName = upload?.fileName || 'Document'
+      const errorMsg: ExtendedMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `❌ **Failed to process ${fileName}**: ${error}`,
+        created_at: new Date().toISOString(),
+      }
+      setExtMessages((existing) => [...existing, errorMsg])
+      return prev
+    })
+  }, [])
+
+  const handleDismissUpload = useCallback((docId: string) => {
+    setActiveUploads((prev) => prev.filter((u) => u.docId !== docId))
+  }, [])
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
     const fileSizeMb = file.size / (1024 * 1024)
-    const isPremium = Boolean(user?.is_premium)
-    const maxLimitMb = isPremium ? 100 : 10
-
-    if (fileSizeMb > maxLimitMb && !isPremium) {
-      setUpgradeModalInfo({ open: true, fileName: file.name, sizeMb: fileSizeMb })
-      if (fileInputRef.current) fileInputRef.current.value = ''
-      return
-    }
-
     setUploadingFile(true)
 
     try {
@@ -526,15 +762,11 @@ export default function ChatPage() {
       const res = await documentsApi.upload(topicId, file, topicId)
       const data = res.data
 
-      setUploadStatuses((prev) => [...prev, data.id])
-      const infoMsg: ExtendedMessage = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `📄 **${file.name}** uploaded successfully!\n\nProcessing document... You can start asking questions right away.`,
-
-        created_at: new Date().toISOString(),
-      }
-      setExtMessages((prev) => [...prev, infoMsg])
+      // Track aesthetic live progress card — do NOT post success message until indexing is done!
+      setActiveUploads((prev) => [
+        ...prev.filter((u) => u.docId !== data.id),
+        { docId: data.id, fileName: file.name, sizeMb: fileSizeMb },
+      ])
     } catch (err: any) {
       if (err.response?.status === 401) {
         logout()
@@ -701,15 +933,17 @@ export default function ChatPage() {
           </div>
         </header>
 
-        {/* Upload Status Notification */}
-        {uploadStatuses.length > 0 && (
-          <div className="px-4 sm:px-6 py-2 border-b border-[#E7E1D8] bg-[#FFF9F2]">
+        {/* Aesthetic Document Processing Banner */}
+        {activeUploads.length > 0 && (
+          <div className="px-4 sm:px-6 py-3 border-b border-[#E7E1D8] bg-[#FAF8F3]/90 backdrop-blur-sm space-y-3">
             <AnimatePresence>
-              {uploadStatuses.map((docId) => (
-                <UploadStatus
-                  key={docId}
-                  docId={docId}
-                  onDone={() => setUploadStatuses((prev) => prev.filter((id) => id !== docId))}
+              {activeUploads.map((upload) => (
+                <UploadStatusCard
+                  key={upload.docId}
+                  upload={upload}
+                  onDone={handleUploadDone}
+                  onError={handleUploadError}
+                  onDismiss={handleDismissUpload}
                 />
               ))}
             </AnimatePresence>

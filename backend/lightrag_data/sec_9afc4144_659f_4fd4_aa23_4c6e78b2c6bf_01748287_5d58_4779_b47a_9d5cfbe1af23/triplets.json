@@ -1,0 +1,98 @@
+[
+  {
+    "head": "Zollverein",
+    "relation": "ABOLISHES",
+    "tail": "Tariff barriers",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_01748287_5d58_4779_b47a_9d5cfbe1af23_95912183",
+    "source_doc": "history.pdf p.1"
+  },
+  {
+    "head": "Modernisation",
+    "relation": "STRENGTHENS",
+    "tail": "Autocratic monarchies",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_01748287_5d58_4779_b47a_9d5cfbe1af23_95912183",
+    "source_doc": "history.pdf p.1"
+  },
+  {
+    "head": "Railways",
+    "relation": "STIMULATES",
+    "tail": "Economic nationalism",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_01748287_5d58_4779_b47a_9d5cfbe1af23_95912183",
+    "source_doc": "history.pdf p.1"
+  },
+  {
+    "head": "Conservatism",
+    "relation": "REQUIRES",
+    "tail": "Traditional institutions",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_01748287_5d58_4779_b47a_9d5cfbe1af23_95912183",
+    "source_doc": "history.pdf p.1"
+  },
+  {
+    "head": "Vernacular language",
+    "relation": "APPLIES_TO",
+    "tail": "Nation-building",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_01748287_5d58_4779_b47a_9d5cfbe1af23_78582963",
+    "source_doc": "history.pdf p.6"
+  },
+  {
+    "head": "Nationalist symbols",
+    "relation": "DEFINES",
+    "tail": "Nationalist sentiments",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_01748287_5d58_4779_b47a_9d5cfbe1af23_78582963",
+    "source_doc": "history.pdf p.6"
+  },
+  {
+    "head": "Industrialisation",
+    "relation": "EXTENDS",
+    "tail": "Textile production",
+    "confidence": 0.8,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_01748287_5d58_4779_b47a_9d5cfbe1af23_78582963",
+    "source_doc": "history.pdf p.6"
+  },
+  {
+    "head": "Feudal dues",
+    "relation": "REQUIRES",
+    "tail": "Peasants",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_01748287_5d58_4779_b47a_9d5cfbe1af23_78582963",
+    "source_doc": "history.pdf p.6"
+  },
+  {
+    "head": "Nationalism",
+    "relation": "DEFINES",
+    "tail": "Nation-state",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_01748287_5d58_4779_b47a_9d5cfbe1af23_54869930",
+    "source_doc": "history.pdf p.10"
+  },
+  {
+    "head": "Prussian Army",
+    "relation": "USES",
+    "tail": "German Empire",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_01748287_5d58_4779_b47a_9d5cfbe1af23_54869930",
+    "source_doc": "history.pdf p.10"
+  },
+  {
+    "head": "Bureaucracy",
+    "relation": "PART_OF",
+    "tail": "German Empire",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_01748287_5d58_4779_b47a_9d5cfbe1af23_54869930",
+    "source_doc": "history.pdf p.10"
+  },
+  {
+    "head": "Liberal Ideology",
+    "relation": "COMPARED_TO",
+    "tail": "Conservatism",
+    "confidence": 0.75,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_01748287_5d58_4779_b47a_9d5cfbe1af23_54869930",
+    "source_doc": "history.pdf p.10"
+  }
+]

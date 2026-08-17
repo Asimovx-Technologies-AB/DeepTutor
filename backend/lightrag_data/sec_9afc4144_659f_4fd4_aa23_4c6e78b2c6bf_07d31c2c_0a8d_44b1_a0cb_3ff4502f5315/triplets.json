@@ -1,0 +1,106 @@
+[
+  {
+    "head": "Lens",
+    "relation": "USES",
+    "tail": "Refraction",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_07d31c2c_0a8d_44b1_a0cb_3ff4502f5315_71587393",
+    "source_doc": "Hsslive-15_Physics Eng.pdf p.30"
+  },
+  {
+    "head": "Optic axis",
+    "relation": "DEFINES",
+    "tail": "Optic centre",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_07d31c2c_0a8d_44b1_a0cb_3ff4502f5315_71587393",
+    "source_doc": "Hsslive-15_Physics Eng.pdf p.30"
+  },
+  {
+    "head": "Refracting surfaces",
+    "relation": "PART_OF",
+    "tail": "Lens",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_07d31c2c_0a8d_44b1_a0cb_3ff4502f5315_71587393",
+    "source_doc": "Hsslive-15_Physics Eng.pdf p.30"
+  },
+  {
+    "head": "Aperture",
+    "relation": "DEFINES",
+    "tail": "Lens",
+    "confidence": 0.8,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_07d31c2c_0a8d_44b1_a0cb_3ff4502f5315_71587393",
+    "source_doc": "Hsslive-15_Physics Eng.pdf p.30"
+  },
+  {
+    "head": "Filter",
+    "relation": "BLOCKS",
+    "tail": "Non-component colours",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_07d31c2c_0a8d_44b1_a0cb_3ff4502f5315_12599261",
+    "source_doc": "Hsslive-15_Physics Eng.pdf p.58"
+  },
+  {
+    "head": "Filter",
+    "relation": "TRANSMITS",
+    "tail": "Component colours",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_07d31c2c_0a8d_44b1_a0cb_3ff4502f5315_12599261",
+    "source_doc": "Hsslive-15_Physics Eng.pdf p.58"
+  },
+  {
+    "head": "Opaque Objects",
+    "relation": "USES",
+    "tail": "Light Reflection",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_07d31c2c_0a8d_44b1_a0cb_3ff4502f5315_12599261",
+    "source_doc": "Hsslive-15_Physics Eng.pdf p.58"
+  },
+  {
+    "head": "Secondary Colours",
+    "relation": "PART_OF",
+    "tail": "White Light",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_07d31c2c_0a8d_44b1_a0cb_3ff4502f5315_12599261",
+    "source_doc": "Hsslive-15_Physics Eng.pdf p.58"
+  },
+  {
+    "head": "Transformer",
+    "relation": "USES",
+    "tail": "Multi-Head Attention",
+    "confidence": 1.0,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_07d31c2c_0a8d_44b1_a0cb_3ff4502f5315_59880081",
+    "source_doc": "Screenshot 2026-08-17 171746.png p.1"
+  },
+  {
+    "head": "Transformer",
+    "relation": "USES",
+    "tail": "Positional Encoding",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_07d31c2c_0a8d_44b1_a0cb_3ff4502f5315_59880081",
+    "source_doc": "Screenshot 2026-08-17 171746.png p.1"
+  },
+  {
+    "head": "Multi-Head Attention",
+    "relation": "USES",
+    "tail": "Softmax",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_07d31c2c_0a8d_44b1_a0cb_3ff4502f5315_59880081",
+    "source_doc": "Screenshot 2026-08-17 171746.png p.1"
+  },
+  {
+    "head": "Transformer",
+    "relation": "USES",
+    "tail": "Layer Normalization",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_07d31c2c_0a8d_44b1_a0cb_3ff4502f5315_59880081",
+    "source_doc": "Screenshot 2026-08-17 171746.png p.1"
+  },
+  {
+    "head": "Transformer",
+    "relation": "USES",
+    "tail": "Feed Forward Network",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144_659f_4fd4_aa23_4c6e78b2c6bf_07d31c2c_0a8d_44b1_a0cb_3ff4502f5315_59880081",
+    "source_doc": "Screenshot 2026-08-17 171746.png p.1"
+  }
+]

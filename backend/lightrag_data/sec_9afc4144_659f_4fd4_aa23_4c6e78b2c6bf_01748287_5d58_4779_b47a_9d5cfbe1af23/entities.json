@@ -1,0 +1,182 @@
+{
+  "zollverein": {
+    "id": "zollverein",
+    "name": "Zollverein",
+    "type": "system",
+    "description": "A customs union formed to abolish tariff barriers and unify economic territory.",
+    "sources": [
+      "history.pdf p.1"
+    ],
+    "mentions": 1
+  },
+  "economic_nationalism": {
+    "id": "economic_nationalism",
+    "name": "Economic Nationalism",
+    "type": "concept",
+    "description": "The ideology linking economic interests and market unification to national identity.",
+    "sources": [
+      "history.pdf p.1"
+    ],
+    "mentions": 1
+  },
+  "conservatism": {
+    "id": "conservatism",
+    "name": "Conservatism",
+    "type": "concept",
+    "description": "A political philosophy advocating for the preservation of traditional institutions like monarchy and the Church.",
+    "sources": [
+      "history.pdf p.1"
+    ],
+    "mentions": 1
+  },
+  "modernisation": {
+    "id": "modernisation",
+    "name": "Modernisation",
+    "type": "method",
+    "description": "The process of adopting efficient bureaucracy, modern armies, and dynamic economies to strengthen state power.",
+    "sources": [
+      "history.pdf p.1"
+    ],
+    "mentions": 1
+  },
+  "feudalism": {
+    "id": "feudalism",
+    "name": "Feudalism",
+    "type": "system",
+    "description": "A traditional social and economic structure characterized by serfdom and hierarchical land ownership.",
+    "sources": [
+      "history.pdf p.1"
+    ],
+    "mentions": 1
+  },
+  "railways": {
+    "id": "railways",
+    "name": "Railways",
+    "type": "system",
+    "description": "Infrastructure network used to stimulate mobility and economic integration.",
+    "sources": [
+      "history.pdf p.1"
+    ],
+    "mentions": 1
+  },
+  "nation_building": {
+    "id": "nation_building",
+    "name": "Nation-building",
+    "type": "concept",
+    "description": "The process of constructing or structuring a national identity using cultural and linguistic tools.",
+    "sources": [
+      "history.pdf p.6"
+    ],
+    "mentions": 1
+  },
+  "vernacular_language": {
+    "id": "vernacular_language",
+    "name": "Vernacular language",
+    "type": "concept",
+    "description": "The native language used by the common people to foster national sentiment.",
+    "sources": [
+      "history.pdf p.6"
+    ],
+    "mentions": 1
+  },
+  "nationalist_symbols": {
+    "id": "nationalist_symbols",
+    "name": "Nationalist symbols",
+    "type": "concept",
+    "description": "Cultural elements like music and dance used to represent national identity and resistance.",
+    "sources": [
+      "history.pdf p.6"
+    ],
+    "mentions": 1
+  },
+  "industrialisation": {
+    "id": "industrialisation",
+    "name": "Industrialisation",
+    "type": "concept",
+    "description": "The development of industries in a region or country on a wide scale.",
+    "sources": [
+      "history.pdf p.6"
+    ],
+    "mentions": 1
+  },
+  "feudal_dues": {
+    "id": "feudal_dues",
+    "name": "Feudal dues",
+    "type": "concept",
+    "description": "Economic obligations imposed on peasants by the aristocracy.",
+    "sources": [
+      "history.pdf p.6"
+    ],
+    "mentions": 1
+  },
+  "textile_production": {
+    "id": "textile_production",
+    "name": "Textile production",
+    "type": "method",
+    "description": "The manufacturing process of cloth, often transitioning from home-based to machine-based.",
+    "sources": [
+      "history.pdf p.6"
+    ],
+    "mentions": 1
+  },
+  "nationalism": {
+    "id": "nationalism",
+    "name": "Nationalism",
+    "type": "concept",
+    "description": "A political ideology centered on the nation-state and national identity.",
+    "sources": [
+      "history.pdf p.10"
+    ],
+    "mentions": 1
+  },
+  "liberal_ideology": {
+    "id": "liberal_ideology",
+    "name": "Liberal Ideology",
+    "type": "concept",
+    "description": "A system of ideas reflecting social and political visions, often associated with democracy and parliamentary governance.",
+    "sources": [
+      "history.pdf p.10"
+    ],
+    "mentions": 1
+  },
+  "nation_state": {
+    "id": "nation_state",
+    "name": "Nation-state",
+    "type": "system",
+    "description": "A sovereign state whose citizens or subjects are relatively homogeneous in factors such as language or common descent.",
+    "sources": [
+      "history.pdf p.10"
+    ],
+    "mentions": 1
+  },
+  "prussian_army": {
+    "id": "prussian_army",
+    "name": "Prussian Army",
+    "type": "system",
+    "description": "The military force of Prussia that played a central role in German unification.",
+    "sources": [
+      "history.pdf p.10"
+    ],
+    "mentions": 1
+  },
+  "german_empire": {
+    "id": "german_empire",
+    "name": "German Empire",
+    "type": "system",
+    "description": "The unified German state established in 1871 under Prussian leadership.",
+    "sources": [
+      "history.pdf p.10"
+    ],
+    "mentions": 1
+  },
+  "bureaucracy": {
+    "id": "bureaucracy",
+    "name": "Bureaucracy",
+    "type": "system",
+    "description": "The administrative system used to manage state affairs and support political unification.",
+    "sources": [
+      "history.pdf p.10"
+    ],
+    "mentions": 1
+  }
+}

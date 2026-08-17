@@ -553,14 +553,6 @@ export default function StudyPlanPage() {
                     onChange={(e) => {
                       const file = e.target.files?.[0]
                       if (file) {
-                        const fileSizeMb = file.size / (1024 * 1024)
-                        const isPremium = Boolean(user?.is_premium)
-                        const maxLimitMb = isPremium ? 100 : 10
-                        if (fileSizeMb > maxLimitMb && !isPremium) {
-                          setUpgradeModalInfo({ open: true, fileName: file.name, sizeMb: fileSizeMb })
-                          if (fileInputRef.current) fileInputRef.current.value = ''
-                          return
-                        }
                         setSelectedFile(file)
                         setSelectedSessionId('')
                       }

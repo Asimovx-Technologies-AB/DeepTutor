@@ -1,0 +1,98 @@
+[
+  {
+    "head": "Bibliometric Analysis",
+    "relation": "APPLIES_TO",
+    "tail": "Machine Learning",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9897ac6a_cafc_41a6_9de6_bd5e54a24139_36194729",
+    "source_doc": "ml algorithams.pdf p.1 §Research Paper"
+  },
+  {
+    "head": "Random Forests",
+    "relation": "EXTENDS",
+    "tail": "Decision Trees",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9897ac6a_cafc_41a6_9de6_bd5e54a24139_36194729",
+    "source_doc": "ml algorithams.pdf p.1 §Research Paper"
+  },
+  {
+    "head": "Machine Learning",
+    "relation": "DEFINES",
+    "tail": "Perceptron",
+    "confidence": 0.8,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9897ac6a_cafc_41a6_9de6_bd5e54a24139_36194729",
+    "source_doc": "ml algorithams.pdf p.1 §Research Paper"
+  },
+  {
+    "head": "Machine Learning",
+    "relation": "DEFINES",
+    "tail": "Support Vector Machines",
+    "confidence": 0.8,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9897ac6a_cafc_41a6_9de6_bd5e54a24139_36194729",
+    "source_doc": "ml algorithams.pdf p.1 §Research Paper"
+  },
+  {
+    "head": "Bibliometric Study",
+    "relation": "APPLIES_TO",
+    "tail": "Machine Learning",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9897ac6a_cafc_41a6_9de6_bd5e54a24139_62999847",
+    "source_doc": "ml algorithams.pdf p.15"
+  },
+  {
+    "head": "SCI-EXPANDED",
+    "relation": "DEFINES",
+    "tail": "Machine Learning",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9897ac6a_cafc_41a6_9de6_bd5e54a24139_62999847",
+    "source_doc": "ml algorithams.pdf p.15"
+  },
+  {
+    "head": "Microsoft Excel",
+    "relation": "USES",
+    "tail": "Citation Analysis",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9897ac6a_cafc_41a6_9de6_bd5e54a24139_62999847",
+    "source_doc": "ml algorithams.pdf p.15"
+  },
+  {
+    "head": "Bibliometric Study",
+    "relation": "REQUIRES",
+    "tail": "SCI-EXPANDED",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9897ac6a_cafc_41a6_9de6_bd5e54a24139_62999847",
+    "source_doc": "ml algorithams.pdf p.15"
+  },
+  {
+    "head": "ROC analysis",
+    "relation": "IMPROVES",
+    "tail": "Classifier evaluation",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9897ac6a_cafc_41a6_9de6_bd5e54a24139_41267233",
+    "source_doc": "ml algorithams.pdf p.28"
+  },
+  {
+    "head": "ROC curves",
+    "relation": "USES",
+    "tail": "Probabilistic classifiers",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9897ac6a_cafc_41a6_9de6_bd5e54a24139_41267233",
+    "source_doc": "ml algorithams.pdf p.28"
+  },
+  {
+    "head": "ROC convex hull",
+    "relation": "DEFINES",
+    "tail": "Optimal classifiers",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9897ac6a_cafc_41a6_9de6_bd5e54a24139_41267233",
+    "source_doc": "ml algorithams.pdf p.28"
+  },
+  {
+    "head": "ROC curves",
+    "relation": "EXTENDS",
+    "tail": "Accuracy metrics",
+    "confidence": 0.8,
+    "source_chunk_id": "sec_6e3bb6db_d479_44a5_b097_2b0d8663249a_9897ac6a_cafc_41a6_9de6_bd5e54a24139_41267233",
+    "source_doc": "ml algorithams.pdf p.28"
+  }
+]

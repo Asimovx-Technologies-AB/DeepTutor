@@ -1,0 +1,62 @@
+{
+  "hsslive_15_physics_eng_pdf_p_30___DEFINES___refraction": {
+    "id": "hsslive_15_physics_eng_pdf_p_30___DEFINES___refraction",
+    "source_entity": "Hsslive-15_Physics Eng.pdf p.30",
+    "target_entity": "Refraction",
+    "type": "DEFINES",
+    "description": "A lens causes refraction of light.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.30"
+    ]
+  },
+  "hsslive_15_physics_eng_pdf_p_30___PART_OF___optic_centre": {
+    "id": "hsslive_15_physics_eng_pdf_p_30___PART_OF___optic_centre",
+    "source_entity": "Hsslive-15_Physics Eng.pdf p.30",
+    "target_entity": "Optic centre",
+    "type": "PART_OF",
+    "description": "The optic axis passes through the optic centre.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.30"
+    ]
+  },
+  "hsslive_15_physics_eng_pdf_p_30___PART_OF___centres_of_curvature": {
+    "id": "hsslive_15_physics_eng_pdf_p_30___PART_OF___centres_of_curvature",
+    "source_entity": "Hsslive-15_Physics Eng.pdf p.30",
+    "target_entity": "Centres of curvature",
+    "type": "PART_OF",
+    "description": "The optic axis passes through the centres of curvature.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.30"
+    ]
+  },
+  "hsslive_15_physics_eng_pdf_p_58___APPLIES_TO___white_light": {
+    "id": "hsslive_15_physics_eng_pdf_p_58___APPLIES_TO___white_light",
+    "source_entity": "Hsslive-15_Physics Eng.pdf p.58",
+    "target_entity": "White Light",
+    "type": "APPLIES_TO",
+    "description": "Filters are used to selectively transmit components of white light.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.58"
+    ]
+  },
+  "hsslive_15_physics_eng_pdf_p_58___DEFINES___secondary_colours": {
+    "id": "hsslive_15_physics_eng_pdf_p_58___DEFINES___secondary_colours",
+    "source_entity": "Hsslive-15_Physics Eng.pdf p.58",
+    "target_entity": "Secondary Colours",
+    "type": "DEFINES",
+    "description": "Secondary color filters transmit their own color and component primary colors.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.58"
+    ]
+  },
+  "hsslive_15_physics_eng_pdf_p_58___REQUIRES___light_reflection": {
+    "id": "hsslive_15_physics_eng_pdf_p_58___REQUIRES___light_reflection",
+    "source_entity": "Hsslive-15_Physics Eng.pdf p.58",
+    "target_entity": "Light Reflection",
+    "type": "REQUIRES",
+    "description": "The perceived color of an opaque object depends on the light reflected from it.",
+    "sources": [
+      "Hsslive-15_Physics Eng.pdf p.58"
+    ]
+  }
+}

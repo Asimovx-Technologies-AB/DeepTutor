@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     # Switch via .env: LLM_PROVIDER=gemini | ollama
     LLM_PROVIDER: str = "gemini"             # "gemini" | "ollama"
     GEMINI_API_KEY: str = ""
-    GEMINI_CHAT_MODEL: str = "gemini-3.1-flash-lite"
+    GEMINI_CHAT_MODEL: str = "gemini-3.5-flash-lite"
     GEMINI_TIMEOUT: int = 60
 
     # ── Ollama local settings ────────────────────────────────────────────────
@@ -107,9 +107,9 @@ class Settings(BaseSettings):
 
     # ── File Uploads & Tier Limits ───────────────────────────────────────────
     UPLOAD_DIR: str = "./uploads"
-    MAX_UPLOAD_SIZE_MB: int = 100
-    FREE_MAX_UPLOAD_SIZE_MB: int = 10
-    PREMIUM_MAX_UPLOAD_SIZE_MB: int = 100
+    MAX_UPLOAD_SIZE_MB: int = 5000
+    FREE_MAX_UPLOAD_SIZE_MB: int = 5000
+    PREMIUM_MAX_UPLOAD_SIZE_MB: int = 5000
 
     # ── AWS S3 Document Cloud Storage ─────────────────────────────────────────
     AWS_ACCESS_KEY_ID: str = ""
