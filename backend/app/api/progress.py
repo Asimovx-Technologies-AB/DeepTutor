@@ -230,7 +230,9 @@ async def get_topic_progress(user: dict = Depends(get_current_user)):
     topics_map: Dict[str, dict] = {}
     
     for s in sessions:
-        tid = s.get("topic_id") or "General Concepts"
+        tid = s.get("topic_id")
+        if not tid:
+            continue
         tname = tid.replace("_", " ").title()
         if tid not in topics_map:
             topics_map[tid] = {
@@ -245,7 +247,9 @@ async def get_topic_progress(user: dict = Depends(get_current_user)):
     for a in attempts:
         quiz_id = a.get("quiz_id")
         quiz = db.get_quiz(quiz_id) if quiz_id else None
-        tid = quiz["topic_id"] if quiz else "General Concepts"
+        tid = quiz["topic_id"] if quiz else None
+        if not tid:
+            continue
         tname = tid.replace("_", " ").title()
         if tid not in topics_map:
             topics_map[tid] = {
@@ -261,7 +265,7 @@ async def get_topic_progress(user: dict = Depends(get_current_user)):
     result = []
     for tid, data in topics_map.items():
         scores = data["scores"]
-        avg_s = round(sum(scores) / len(scores), 1) if scores else 0.0
+        avg_s = round(sum(scores) / len(scores), 1) if scores else (70.0 if data["sessions_count"] > 0 else 0.0)
         result.append({
             "subject": data["topic"],
             "topic": data["topic"],

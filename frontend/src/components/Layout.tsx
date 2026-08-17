@@ -36,7 +36,6 @@ const NAV_ITEMS = [
   { to: '/subjects', icon: Layers, label: 'My Subjects', badge: null },
   { to: '/study-plan', icon: CalendarCheck, label: 'Study Plan', badge: 'AI' },
   { to: '/progress', icon: TrendingUp, label: 'Progress', badge: null },
-  { to: '/leaderboard', icon: Trophy, label: 'Achievements', badge: 'TOP' },
 ]
 
 export default function Layout() {
@@ -250,61 +249,6 @@ export default function Layout() {
               })}
             </nav>
           </div>
-
-          {/* Deepy AI Tutor Status Card */}
-          <div className="bg-[#FFF9F2] border border-[#F28A45]/30 rounded-2xl p-4 shadow-2xs space-y-3 relative overflow-hidden">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white border border-[#F28A45]/30 flex items-center justify-center p-1 shadow-2xs flex-shrink-0">
-                <img src="/assets/illustrations/ai_tutor_waving.png" alt="Deepy AI" className="w-full h-full object-contain" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <h4 className="text-xs font-black text-[#20201D]">Deepy</h4>
-                  <span className="text-[9px] font-black bg-[#F28A45] text-white px-1.5 py-0.2 rounded-md uppercase">AI</span>
-                </div>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#4F8A68]' : 'bg-[#C85C52]'}`} />
-                  <span className="text-[11px] text-[#6F6B63] font-semibold">
-                    {isOnline ? 'Online now' : 'Connecting...'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Compact Upgrade to Pro Card */}
-          {user?.is_premium ? (
-            <div className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border border-amber-500/30 rounded-2xl p-4 space-y-2 shadow-2xs">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow-2xs">
-                  <Crown size={13} />
-                </div>
-                <h4 className="text-xs font-black text-amber-900">Premium Active</h4>
-              </div>
-              <p className="text-[11px] text-amber-800/90 font-medium leading-relaxed">
-                100MB PDF uploads & priority GraphRAG AI enabled.
-              </p>
-            </div>
-          ) : (
-            <div className="bg-gradient-to-br from-[#FFF5EB] to-[#FFF9F2] border border-[#F28A45]/40 rounded-2xl p-4 space-y-2.5 shadow-2xs relative overflow-hidden">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-[#F28A45] text-white flex items-center justify-center shadow-2xs">
-                  <Crown size={13} />
-                </div>
-                <h4 className="text-xs font-black text-[#20201D]">Upgrade to Pro</h4>
-              </div>
-              <p className="text-[11px] text-[#6F6B63] font-medium leading-relaxed">
-                Unlock 100MB PDF uploads, priority GraphRAG & AI features.
-              </p>
-              <button
-                onClick={() => setIsUpgradeOpen(true)}
-                className="w-full bg-[#20201D] hover:bg-[#353531] text-white text-xs font-extrabold py-2 px-3 rounded-xl transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <span>Upgrade Now</span>
-                <ChevronRight size={13} />
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Sidebar Footer User Profile */}

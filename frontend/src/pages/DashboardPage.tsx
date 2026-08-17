@@ -15,7 +15,6 @@ import { progressApi, chatApi } from '../services/api'
 
 import NotificationPopup from '../components/NotificationPopup'
 import ProfileModal from '../components/ProfileModal'
-import WeakAreaAlertBanner from '../components/WeakAreaAlertBanner'
 
 export default function DashboardPage() {
 
@@ -39,6 +38,24 @@ export default function DashboardPage() {
   const [quickPrompt, setQuickPrompt] = useState('')
   const [activeModal, setActiveModal] = useState<'sessions' | 'score' | 'topics' | 'streak' | null>(null)
 
+  // Interactive Weekly Study Goal State (Persisted)
+  const [targetGoalDays, setTargetGoalDays] = useState<number>(() => {
+    try {
+      return parseInt(localStorage.getItem('deeptutor_study_goal_days') || '5', 10)
+    } catch {
+      return 5
+    }
+  })
+  const [isEditingGoal, setIsEditingGoal] = useState(false)
+
+  const handleSetGoalDays = (days: number) => {
+    setTargetGoalDays(days)
+    try {
+      localStorage.setItem('deeptutor_study_goal_days', days.toString())
+    } catch {}
+    setIsEditingGoal(false)
+  }
+
   // Interactive Daily Goals State
   const [goals, setGoals] = useState([
     { id: 1, text: 'Ask AI Tutor a concept question', completed: true },
@@ -53,6 +70,12 @@ export default function DashboardPage() {
   const { data: progress } = useQuery({
     queryKey: ['progress-summary'],
     queryFn: () => progressApi.summary().then((r) => r.data),
+    staleTime: 60000,
+  })
+
+  const { data: weeklyData = [] } = useQuery({
+    queryKey: ['progress-weekly'],
+    queryFn: () => progressApi.weekly().then((r) => r.data),
     staleTime: 60000,
   })
 
@@ -75,8 +98,11 @@ export default function DashboardPage() {
     navigate('/chat', { state: { initialPrompt: textToSend } })
   }, [quickPrompt, navigate])
 
-  const completedGoalsCount = goals.filter(g => g.completed).length
-  const goalPct = Math.round((completedGoalsCount / goals.length) * 100)
+  // Calculate real active days this week from weeklyData
+  const activeDaysThisWeek = weeklyData.filter((d: any) => (d.sessions > 0 || d.score > 0)).length
+  const currentStreak = progress?.streak_days ?? 0
+  const effectiveActiveDays = Math.max(activeDaysThisWeek, currentStreak > 0 ? Math.min(currentStreak, 7) : (progress?.total_sessions ? 1 : 0))
+  const goalProgressPct = Math.min(100, Math.round((effectiveActiveDays / targetGoalDays) * 100))
 
   return (
     <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-8 bg-[#FAF8F3] text-[#20201D] font-sans">
@@ -123,9 +149,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-
-      {/* Automated Student Weak Area Alert Banner */}
-      <WeakAreaAlertBanner />
 
       {/* ─── 2. MAIN 2-COLUMN DASHBOARD GRID (CENTRAL LEARNING + RIGHT INSIGHTS PANEL) ─── */}
 
@@ -379,52 +402,89 @@ export default function DashboardPage() {
         {/* ─── RIGHT INSIGHTS PANEL (Lg: col-span-4, ~300-330px) ─── */}
         <div className="lg:col-span-4 space-y-6">
           
-          {/* 1. YOUR STUDY GOAL CARD */}
+          {/* 1. YOUR STUDY GOAL CARD (DYNAMIC & EDITABLE) */}
           <div className="bg-white border border-[#E7E1D8] rounded-3xl p-6 shadow-2xs space-y-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <img src="/assets/illustrations/target_arrow.png" alt="Target Goal" className="w-5 h-5 object-contain" />
                 <h3 className="font-extrabold text-[#20201D] text-xs">Your study goal</h3>
               </div>
-              <button onClick={() => navigate('/study-plan')} className="text-xs font-bold text-[#4F8A68] hover:underline cursor-pointer">
-                Change
+              <button
+                onClick={() => setIsEditingGoal(!isEditingGoal)}
+                className="text-xs font-bold text-[#4F8A68] hover:underline cursor-pointer"
+              >
+                {isEditingGoal ? 'Cancel' : 'Change'}
               </button>
             </div>
 
-            <div className="space-y-2">
-              <p className="text-xs font-black text-[#20201D]">Study 5 days this week</p>
-              
-              {/* 7 Day Indicators M T W T F S S */}
-              <div className="flex items-center justify-between pt-1">
-                {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, idx) => (
-                  <div key={idx} className="flex flex-col items-center gap-1">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${
-                      idx < 5 ? 'bg-[#4F8A68] text-white' : 'border border-[#E7E1D8] text-[#969188]'
-                    }`}>
-                      {idx < 5 ? '✓' : ''}
-                    </div>
-                    <span className="text-[10px] font-extrabold text-[#969188]">{day}</span>
-                  </div>
-                ))}
+            {/* Inline Goal Selector when clicking Change */}
+            {isEditingGoal ? (
+              <div className="p-3 bg-[#FFF9F2] rounded-2xl border border-[#F28A45]/30 space-y-2">
+                <p className="text-[11px] font-bold text-[#6F6B63]">Set weekly study target:</p>
+                <div className="flex items-center gap-2">
+                  {[3, 5, 7].map((days) => (
+                    <button
+                      key={days}
+                      onClick={() => handleSetGoalDays(days)}
+                      className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                        targetGoalDays === days
+                          ? 'bg-[#4F8A68] text-white shadow-2xs'
+                          : 'bg-white border border-[#E7E1D8] text-[#20201D] hover:bg-[#FAF8F3]'
+                      }`}
+                    >
+                      {days} Days
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-black text-[#20201D]">Study {targetGoalDays} days this week</p>
+                  <span className="text-[11px] font-extrabold text-[#4F8A68]">
+                    {effectiveActiveDays} / {targetGoalDays} days
+                  </span>
+                </div>
+                
+                {/* 7 Day Indicators M T W T F S S */}
+                <div className="flex items-center justify-between pt-1">
+                  {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, idx) => {
+                    const isDayDone = idx < effectiveActiveDays
+                    return (
+                      <div key={idx} className="flex flex-col items-center gap-1">
+                        <div
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-colors ${
+                            isDayDone ? 'bg-[#4F8A68] text-white shadow-2xs' : 'border border-[#E7E1D8] text-[#969188]'
+                          }`}
+                        >
+                          {isDayDone ? '✓' : ''}
+                        </div>
+                        <span className={`text-[10px] font-extrabold ${isDayDone ? 'text-[#4F8A68]' : 'text-[#969188]'}`}>
+                          {day}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Weekly Goal Progress bar */}
             <div className="space-y-1.5 pt-2">
               <div className="flex items-center justify-between text-xs font-bold">
                 <span className="text-[#6F6B63]">Progress</span>
-                <span className="text-[#20201D] font-black">80%</span>
+                <span className="text-[#20201D] font-black">{goalProgressPct}%</span>
               </div>
               <div className="w-full bg-[#F4EFE7] rounded-full h-2 overflow-hidden">
                 <div
-                  className="bg-[#4F8A68] h-full rounded-full transition-all duration-300"
-                  style={{ width: '80%' }}
+                  className="bg-[#4F8A68] h-full rounded-full transition-all duration-500"
+                  style={{ width: `${goalProgressPct}%` }}
                 />
               </div>
             </div>
           </div>
 
-          {/* 2. TUTOR SUGGESTS CARD (MATCHING REFERENCE IMAGE 3) */}
+          {/* 2. TUTOR SUGGESTS CARD */}
           <div className="bg-[#FFF9F2] border border-[#F28A45]/30 rounded-3xl p-6 shadow-2xs space-y-4 relative overflow-hidden">
             <div className="flex items-center gap-2">
               <img src="/assets/illustrations/lightbulb.png" alt="Lightbulb" className="w-5 h-5 object-contain" />
@@ -451,11 +511,21 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          {/* 3. YOUR LEARNING AT A GLANCE CARD (WITH DONUT CHART GRAPHIC) */}
-          <div className="bg-white border border-[#E7E1D8] rounded-3xl p-6 shadow-2xs space-y-4">
-            <div className="flex items-center gap-2 border-b border-[#E7E1D8] pb-3">
-              <LineChart size={16} className="text-[#F28A45]" />
-              <h3 className="font-extrabold text-[#20201D] text-xs">Your learning at a glance</h3>
+          {/* 3. YOUR LEARNING AT A GLANCE CARD (DYNAMIC & CLICKABLE) */}
+          <div
+            onClick={() => navigate('/progress')}
+            className="bg-white border border-[#E7E1D8] hover:border-[#F28A45]/40 rounded-3xl p-6 shadow-2xs space-y-4 cursor-pointer transition-all group"
+          >
+            <div className="flex items-center justify-between border-b border-[#E7E1D8] pb-3">
+              <div className="flex items-center gap-2">
+                <LineChart size={16} className="text-[#F28A45]" />
+                <h3 className="font-extrabold text-[#20201D] text-xs group-hover:text-[#F28A45] transition-colors">
+                  Your learning at a glance
+                </h3>
+              </div>
+              <span className="text-[11px] font-bold text-[#F28A45] flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                View Details &rarr;
+              </span>
             </div>
 
             <div className="flex items-center justify-between gap-4">
@@ -471,18 +541,20 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className="text-[#6F6B63]">Topics mastered</span>
+                  <span className="text-[#6F6B63]">Topics studied</span>
                   <span className="text-[#20201D] font-black">{progress?.topics_studied ?? 0}</span>
                 </div>
 
                 <div className="flex items-center justify-between">
                   <span className="text-[#6F6B63]">Current streak</span>
-                  <span className="text-[#F28A45] font-black">{progress?.streak_days ?? 0} {progress?.streak_days === 1 ? 'day' : 'days'}</span>
+                  <span className="text-[#F28A45] font-black">
+                    {progress?.streak_days ?? 0} {progress?.streak_days === 1 ? 'day' : 'days'}
+                  </span>
                 </div>
               </div>
 
               {/* Analytics Donut Graphic */}
-              <div className="w-20 h-20 flex-shrink-0 select-none pointer-events-none">
+              <div className="w-20 h-20 flex-shrink-0 select-none pointer-events-none group-hover:scale-105 transition-transform">
                 <img src="/assets/illustrations/donut_80_percent.png" alt="Donut Chart" className="w-full h-full object-contain filter drop-shadow-xs" />
               </div>
             </div>
