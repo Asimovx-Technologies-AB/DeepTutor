@@ -27,6 +27,8 @@ import { useChatStore } from '../stores/chatStore'
 import { healthApi, chatApi } from '../services/api'
 import ProfileModal from './ProfileModal'
 import UpgradeModal from './UpgradeModal'
+import ConfirmModal from './ConfirmModal'
+
 
 const NAV_ITEMS = [
   { to: '/dashboard', icon: Home, label: 'Home', badge: null },
@@ -45,6 +47,7 @@ export default function Layout() {
   const [isOnline, setIsOnline] = useState<boolean>(true)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false)
+  const [confirmDeleteSid, setConfirmDeleteSid] = useState<string | null>(null)
 
   const sessions = useChatStore((s) => s.sessions)
   const activeSession = useChatStore((s) => s.activeSession)
@@ -73,9 +76,15 @@ export default function Layout() {
     navigate('/login')
   }, [logout, navigate])
 
-  const handleDeleteSession = useCallback(async (e: React.MouseEvent, sid: string) => {
+  const handleDeleteSession = useCallback((e: React.MouseEvent, sid: string) => {
     e.stopPropagation()
-    if (!confirm('Are you sure you want to delete this chat session? All messages, documents, and data will be permanently removed from the database.')) return
+    setConfirmDeleteSid(sid)
+  }, [])
+
+  const executeDeleteSession = useCallback(async () => {
+    const sid = confirmDeleteSid
+    if (!sid) return
+    setConfirmDeleteSid(null)
     try {
       await chatApi.deleteSession(sid)
       removeSession(sid)
@@ -85,9 +94,8 @@ export default function Layout() {
       }
     } catch (err) {
       console.error('Failed to delete session:', err)
-      alert('Failed to delete chat session from database. Please try again.')
     }
-  }, [activeSession?.id, removeSession, setActiveSession, navigate])
+  }, [confirmDeleteSid, activeSession?.id, removeSession, setActiveSession, navigate])
 
   return (
     <div className="flex h-screen bg-[#FAF8F3] overflow-hidden text-[#20201D] font-sans antialiased">
@@ -95,6 +103,18 @@ export default function Layout() {
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
       {/* Upgrade Modal */}
       <UpgradeModal isOpen={isUpgradeOpen} onClose={() => setIsUpgradeOpen(false)} />
+      {/* Confirm Delete Modal */}
+      <ConfirmModal
+        isOpen={Boolean(confirmDeleteSid)}
+        title="Delete Chat Session?"
+        message="Are you sure you want to delete this chat session? All messages, documents, and data will be permanently removed from the database."
+        confirmText="Delete Session"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={executeDeleteSession}
+        onCancel={() => setConfirmDeleteSid(null)}
+      />
+
 
       {/* ─── LEFT SIDEBAR NAVIGATION ─── */}
       <aside

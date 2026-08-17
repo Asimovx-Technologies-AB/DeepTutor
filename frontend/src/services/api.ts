@@ -241,7 +241,9 @@ export const progressApi = {
   calendar: () => api.get('/progress/calendar'),
   topics: () => api.get('/progress/topics'),
   streaks: () => api.get('/progress/streaks'),
+  analysis: () => api.get('/progress/analysis'),
 }
+
 
 // ─── Documents ────────────────────────────────────────────────
 export const documentsApi = {

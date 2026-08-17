@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bell, X, ChevronRight } from 'lucide-react'
+import { Bell, X, ChevronRight, Settings, Check, Volume2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { studyPlanApi, progressApi } from '../services/api'
@@ -19,9 +19,11 @@ interface NotificationItem {
 export default function NotificationPopup() {
   const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
-  const [showToast, setShowToast] = useState(true)
+  const [showSettings, setShowSettings] = useState(false)
+  const [remindersEnabled, setRemindersEnabled] = useState(true)
+  const [streakAlertsEnabled, setStreakAlertsEnabled] = useState(true)
 
-  // Fetch real progress & study plan summaries with 2-minute stale caching
+  // Fetch real progress & study plan summaries
   const { data: progress } = useQuery({
     queryKey: ['progress-summary'],
     queryFn: () => progressApi.summary().then((r) => r.data),
@@ -38,7 +40,7 @@ export default function NotificationPopup() {
   const currentStreak = progress?.streak_days ?? 1
   const totalXp = progress?.total_xp ?? 150
 
-  const notifications: NotificationItem[] = [
+  const rawNotifications: NotificationItem[] = [
     {
       id: 'streak-1',
       type: 'streak',
@@ -73,13 +75,13 @@ export default function NotificationPopup() {
     },
   ]
 
-  const unreadCount = notifications.filter((n) => n.unread).length
+  const notifications = rawNotifications.filter((n) => {
+    if (n.type === 'streak' && !streakAlertsEnabled) return false
+    if (n.type === 'plan' && !remindersEnabled) return false
+    return true
+  })
 
-  // Auto-dismiss floating toast after 9s
-  useEffect(() => {
-    const timer = setTimeout(() => setShowToast(false), 9000)
-    return () => clearTimeout(timer)
-  }, [])
+  const unreadCount = notifications.filter((n) => n.unread).length
 
   return (
     <div className="relative inline-block text-left">
@@ -94,57 +96,6 @@ export default function NotificationPopup() {
           <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-[#F28A45] ring-2 ring-white animate-pulse" />
         )}
       </button>
-
-      {/* Floating Toast Reminder Banner (Auto-dismisses) */}
-      <AnimatePresence>
-        {showToast && !isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            className="fixed top-20 right-6 z-50 max-w-sm bg-[#FFF9F2] border border-[#F28A45]/40 rounded-3xl p-4 shadow-xl flex items-start gap-3.5"
-          >
-            <div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] border border-[#F28A45]/30 flex items-center justify-center flex-shrink-0 text-[#F28A45] shadow-2xs">
-              <img src="/assets/illustrations/flame_streak.png" alt="Streak" className="w-6 h-6 object-contain" />
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-[#20201D]">🔥 {currentStreak}-Day Streak Active!</span>
-                <button
-                  onClick={() => setShowToast(false)}
-                  className="text-[#969188] hover:text-[#20201D] p-0.5 cursor-pointer"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-              <p className="text-[12px] text-[#6F6B63] font-normal leading-relaxed mt-0.5">
-                Complete today's Study Plan target to keep your streak alive!
-              </p>
-              <div className="flex items-center gap-3 mt-2">
-                <button
-                  onClick={() => {
-                    setShowToast(false)
-                    navigate('/study-plan')
-                  }}
-                  className="text-[11px] font-semibold text-[#F28A45] hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  <span>Study Plan</span> <ChevronRight size={12} />
-                </button>
-                <button
-                  onClick={() => {
-                    setShowToast(false)
-                    navigate('/chat')
-                  }}
-                  className="text-[11px] font-semibold text-[#4F8A68] hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  <span>Start Lesson</span> <ChevronRight size={12} />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Full Notifications Dropdown Popover */}
       <AnimatePresence>
@@ -171,67 +122,118 @@ export default function NotificationPopup() {
                     </span>
                   )}
                 </div>
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="text-[#969188] hover:text-[#20201D] p-1 rounded-lg transition-colors cursor-pointer"
-                >
-                  <X size={16} />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setShowSettings(!showSettings)}
+                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                      showSettings ? 'bg-[#F28A45]/20 text-[#F28A45]' : 'text-[#969188] hover:text-[#20201D]'
+                    }`}
+                    title="Notification Settings"
+                  >
+                    <Settings size={15} />
+                  </button>
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    className="text-[#969188] hover:text-[#20201D] p-1 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
+
+              {/* Notification Settings Toggle Panel */}
+              {showSettings && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="bg-[#FAF8F3] border-b border-[#E7E1D8] p-4 space-y-3"
+                >
+                  <h4 className="text-xs font-black text-[#20201D] uppercase tracking-wider">
+                    Notification Preferences
+                  </h4>
+                  <div className="space-y-2 text-xs">
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <span className="font-semibold text-[#6F6B63]">Daily Study Plan Reminders</span>
+                      <input
+                        type="checkbox"
+                        checked={remindersEnabled}
+                        onChange={(e) => setRemindersEnabled(e.target.checked)}
+                        className="rounded text-[#F28A45] focus:ring-0 cursor-pointer"
+                      />
+                    </label>
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <span className="font-semibold text-[#6F6B63]">Learning Streak Alerts</span>
+                      <input
+                        type="checkbox"
+                        checked={streakAlertsEnabled}
+                        onChange={(e) => setStreakAlertsEnabled(e.target.checked)}
+                        className="rounded text-[#F28A45] focus:ring-0 cursor-pointer"
+                      />
+                    </label>
+                  </div>
+                </motion.div>
+              )}
 
               {/* Notifications List */}
               <div className="max-h-96 overflow-y-auto divide-y divide-[#E7E1D8]/60 p-2 space-y-1">
-                {notifications.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`p-3.5 rounded-2xl transition-colors ${
-                      item.unread ? 'bg-[#FFF0E4]/40 border border-[#F28A45]/20' : 'hover:bg-[#FAF8F3]'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 p-1.5 shadow-2xs border ${
-                          item.type === 'streak'
-                            ? 'bg-[#FFF0E4] border-[#F28A45]/30'
-                            : item.type === 'plan'
-                            ? 'bg-[#E3F0E5] border-[#4F8A68]/30'
-                            : 'bg-[#FFF3D8] border-[#D99A32]/30'
-                        }`}
-                      >
-                        {item.type === 'streak' && (
-                          <img src="/assets/illustrations/flame_streak.png" alt="Streak" className="w-full h-full object-contain" />
-                        )}
-                        {item.type === 'plan' && (
-                          <img src="/assets/illustrations/target_arrow.png" alt="Plan" className="w-full h-full object-contain" />
-                        )}
-                        {item.type === 'tip' && (
-                          <img src="/assets/illustrations/lightbulb.png" alt="Tip" className="w-full h-full object-contain" />
-                        )}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-xs font-bold text-[#20201D] truncate">{item.title}</h4>
-                          <span className="text-[10px] text-[#969188] font-normal">{item.timeAgo}</span>
+                {notifications.length === 0 ? (
+                  <div className="p-6 text-center text-xs font-bold text-[#969188]">
+                    No active study notifications.
+                  </div>
+                ) : (
+                  notifications.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`p-3.5 rounded-2xl transition-colors ${
+                        item.unread ? 'bg-[#FFF0E4]/40 border border-[#F28A45]/20' : 'hover:bg-[#FAF8F3]'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 p-1.5 shadow-2xs border ${
+                            item.type === 'streak'
+                              ? 'bg-[#FFF0E4] border-[#F28A45]/30'
+                              : item.type === 'plan'
+                              ? 'bg-[#E3F0E5] border-[#4F8A68]/30'
+                              : 'bg-[#FFF3D8] border-[#D99A32]/30'
+                          }`}
+                        >
+                          {item.type === 'streak' && (
+                            <img src="/assets/illustrations/flame_streak.png" alt="Streak" className="w-full h-full object-contain" />
+                          )}
+                          {item.type === 'plan' && (
+                            <img src="/assets/illustrations/target_arrow.png" alt="Plan" className="w-full h-full object-contain" />
+                          )}
+                          {item.type === 'tip' && (
+                            <img src="/assets/illustrations/lightbulb.png" alt="Tip" className="w-full h-full object-contain" />
+                          )}
                         </div>
-                        <p className="text-xs text-[#6F6B63] font-normal leading-relaxed mt-1">{item.message}</p>
 
-                        {item.actionText && item.actionPath && (
-                          <button
-                            onClick={() => {
-                              setIsOpen(false)
-                              navigate(item.actionPath!)
-                            }}
-                            className="mt-2 text-xs font-semibold text-[#F28A45] hover:underline flex items-center gap-1 cursor-pointer"
-                          >
-                            <span>{item.actionText}</span>
-                            <ChevronRight size={13} />
-                          </button>
-                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-bold text-[#20201D] truncate">{item.title}</h4>
+                            <span className="text-[10px] text-[#969188] font-normal">{item.timeAgo}</span>
+                          </div>
+                          <p className="text-xs text-[#6F6B63] font-normal leading-relaxed mt-1">{item.message}</p>
+
+                          {item.actionText && item.actionPath && (
+                            <button
+                              onClick={() => {
+                                setIsOpen(false)
+                                navigate(item.actionPath!)
+                              }}
+                              className="mt-2 text-xs font-semibold text-[#F28A45] hover:underline flex items-center gap-1 cursor-pointer"
+                            >
+                              <span>{item.actionText}</span>
+                              <ChevronRight size={13} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
 
               {/* Dropdown Footer */}
