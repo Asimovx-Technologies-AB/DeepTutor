@@ -168,6 +168,15 @@ export default function App() {
             <Route path="/progress" element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route index element={<ProgressPage />} />
             </Route>
+            <Route path="/quiz/:topicId" element={<PrivateRoute><Layout /></PrivateRoute>}>
+              <Route index element={<QuizPage />} />
+            </Route>
+            <Route path="/quiz/:topicId/result" element={<PrivateRoute><Layout /></PrivateRoute>}>
+              <Route index element={<QuizResultPage />} />
+            </Route>
+            <Route path="/flashcards/:topicId" element={<PrivateRoute><Layout /></PrivateRoute>}>
+              <Route index element={<FlashcardsPage />} />
+            </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

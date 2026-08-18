@@ -77,7 +77,6 @@ export default function ProgressPage() {
     staleTime: 30_000,
   })
 
-
   const { data: weeklyData = [] } = useQuery({
     queryKey: ['progress-weekly'],
     queryFn: () => progressApi.weekly().then((r) => r.data),
@@ -113,6 +112,10 @@ export default function ProgressPage() {
           { subject: 'General Concepts', score: summary?.avg_score || 0 },
         ]
 
+  const xpForNext = summary?.xp_for_next ?? 250
+  const xpInLevel = summary?.xp_in_level ?? 0
+  const levelPct = Math.min(100, Math.round((xpInLevel / xpForNext) * 100))
+
   const handleExportReport = () => {
     const reportText = `================================================
   DEEPTUTOR AI - LEARNING PROGRESS REPORT
@@ -122,7 +125,7 @@ Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}
 [STUDY XP & LEVEL]
 - Level: Level ${summary?.level ?? 1} (${summary?.level_title ?? 'Novice Scholar'})
 - Total XP: ${summary?.total_xp ?? 0} XP
-- XP in Current Level: ${summary?.xp_in_level ?? 0} / 250 XP
+- XP in Current Level: ${xpInLevel} / ${xpForNext} XP
 
 [PERFORMANCE SUMMARY]
 - Day Streak: ${summary?.streak_days ?? 0} Days
@@ -145,8 +148,6 @@ ${recentQuizzes.map((q: any) => `- ${q.full_name || q.name}: ${q.score}% (${q.da
     link.click()
     URL.revokeObjectURL(url)
   }
-
-  const levelPct = Math.min(100, Math.round(((summary?.xp_in_level ?? 0) / 250) * 100))
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 sm:space-y-8 bg-[#FAF8F3]">
@@ -179,7 +180,7 @@ ${recentQuizzes.map((q: any) => `- ${q.full_name || q.name}: ${q.score}% (${q.da
       >
         <div className="flex items-center gap-4 text-left w-full md:w-auto">
           <div className="w-16 h-16 rounded-2xl bg-[#FFF0E4] flex items-center justify-center flex-shrink-0 shadow-xs border border-[#F28A45]/30 p-2">
-            <img src="/assets/illustrations/gold_medal.png" alt="Level Medal" className="w-full h-full object-contain" />
+            <Award size={32} className="text-[#F28A45]" />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -198,7 +199,7 @@ ${recentQuizzes.map((q: any) => `- ${q.full_name || q.name}: ${q.score}% (${q.da
         <div className="w-full md:w-80 space-y-2">
           <div className="flex justify-between text-xs font-extrabold text-[#E7E1D8]">
             <span>Progress to Level {(summary?.level ?? 1) + 1}</span>
-            <span>{summary?.xp_in_level ?? 0} / 250 XP</span>
+            <span>{xpInLevel} / {xpForNext} XP</span>
           </div>
           <div className="w-full bg-[#353531] rounded-full h-3 p-0.5 border border-[#E7E1D8]/30 overflow-hidden">
             <motion.div
@@ -210,6 +211,44 @@ ${recentQuizzes.map((q: any) => `- ${q.full_name || q.name}: ${q.score}% (${q.da
           </div>
         </div>
       </motion.div>
+
+      {/* Automated AI Performance & Weak Area Analysis Banner */}
+      {analysis?.alert && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`p-5 rounded-3xl border shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${
+            analysis.alert.level === 'warning'
+              ? 'bg-[#FFF3D8] border-[#D99A32]/40 text-[#5C3E00]'
+              : analysis.alert.level === 'info'
+              ? 'bg-[#EBF3FB] border-[#5A9BD5]/40 text-[#1B4B75]'
+              : 'bg-[#E3F0E5] border-[#4F8A68]/40 text-[#1C472E]'
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-white/60 shadow-2xs mt-0.5">
+              {analysis.alert.level === 'warning' ? (
+                <ShieldAlert size={20} className="text-[#D99A32]" />
+              ) : (
+                <CheckCircle2 size={20} className="text-[#4F8A68]" />
+              )}
+            </div>
+            <div>
+              <h3 className="font-extrabold text-sm mb-0.5">{analysis.alert.title}</h3>
+              <p className="text-xs font-medium opacity-90">{analysis.alert.message}</p>
+            </div>
+          </div>
+
+          {analysis.has_weakness && analysis.primary_weakness && (
+            <button
+              onClick={() => navigate(`/quiz/${analysis.primary_weakness.topic_id}`)}
+              className="btn-primary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 whitespace-nowrap cursor-pointer shadow-2xs self-end md:self-auto"
+            >
+              Practice {analysis.primary_weakness.subject} <ArrowRight size={14} />
+            </button>
+          )}
+        </motion.div>
+      )}
 
       {/* Real-time Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -352,10 +391,20 @@ ${recentQuizzes.map((q: any) => `- ${q.full_name || q.name}: ${q.score}% (${q.da
           </div>
 
           {recentQuizzes.length === 0 ? (
-            <div className="text-center py-12 border border-dashed border-[#E7E1D8] rounded-2xl">
-              <HelpCircle size={28} className="text-[#969188] mx-auto mb-2" />
-              <p className="text-xs font-extrabold text-[#6F6B63]">No quiz attempts recorded yet</p>
-              <p className="text-[11px] text-[#969188] mt-0.5 font-medium">Take a quiz in AI Tutor to see your scores here!</p>
+            <div className="text-center py-10 px-4 border border-dashed border-[#E7E1D8] rounded-2xl bg-[#FFF9F2]/50 flex flex-col items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl bg-[#FFF0E4] border border-[#F28A45]/30 flex items-center justify-center mb-3 text-[#F28A45] shadow-2xs">
+                <Trophy size={22} />
+              </div>
+              <p className="text-sm font-black text-[#20201D]">No quiz attempts recorded yet</p>
+              <p className="text-xs text-[#6F6B63] mt-1 mb-4 max-w-xs font-medium">
+                Test your knowledge by taking an AI-generated quiz from your study materials!
+              </p>
+              <button
+                onClick={() => navigate('/topics')}
+                className="btn-primary py-2 px-4 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              >
+                <Sparkles size={14} /> Start AI Quiz
+              </button>
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={190}>
@@ -432,14 +481,21 @@ ${recentQuizzes.map((q: any) => `- ${q.full_name || q.name}: ${q.score}% (${q.da
         transition={{ delay: 0.3 }}
         className="glass-card p-6 border border-[#E7E1D8] shadow-2xs"
       >
-        <div className="flex items-center gap-2 mb-5">
-          <Target size={18} className="text-[#F28A45]" />
-          <h2 className="font-black text-[#20201D] text-base">Topic Progress Breakdown</h2>
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <Target size={18} className="text-[#F28A45]" />
+            <h2 className="font-black text-[#20201D] text-base">Topic Progress Breakdown</h2>
+          </div>
+          {topicProgress.length > 0 && (
+            <span className="text-xs font-bold text-[#6F6B63]">
+              {topicProgress.length} Indexed Topics
+            </span>
+          )}
         </div>
 
         {topicProgress.length === 0 ? (
-          <div className="p-6 text-center text-xs font-bold text-[#969188] border border-dashed border-[#E7E1D8] rounded-2xl">
-            No topic data yet. Start chat sessions or upload document PDFs to track mastery!
+          <div className="p-8 text-center text-xs font-bold text-[#969188] border border-dashed border-[#E7E1D8] rounded-2xl">
+            No topic data recorded yet. Upload a PDF document or start an AI chat session to track topic mastery!
           </div>
         ) : (
           <div className="space-y-4">
@@ -451,14 +507,20 @@ ${recentQuizzes.map((q: any) => `- ${q.full_name || q.name}: ${q.score}% (${q.da
                 mastery >= 80 ? 'badge-easy' : mastery >= 60 ? 'badge-medium' : 'badge-hard'
 
               return (
-                <div key={i} className="flex items-center gap-4">
-                  <div className="w-36 flex-shrink-0">
+                <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-[#F4EFE7]/50 border border-[#E7E1D8]/60 hover:border-[#F28A45]/30 transition-all">
+                  <div className="w-full sm:w-48 flex-shrink-0">
                     <p className="text-xs font-black text-[#20201D] truncate">{item.subject || item.topic}</p>
-                    <span className={`badge ${badge_class} mt-0.5 inline-block text-[9px]`}>
-                      {mastery_label}
-                    </span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`badge ${badge_class} inline-block text-[9px]`}>
+                        {mastery_label}
+                      </span>
+                      <span className="text-[10px] text-[#6F6B63] font-bold">
+                        {item.quizzes_taken} quizzes • {item.sessions_count} sessions
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex-1">
+
+                  <div className="flex-1 w-full">
                     <div className="progress-bar">
                       <motion.div
                         className="progress-fill"
@@ -468,7 +530,16 @@ ${recentQuizzes.map((q: any) => `- ${q.full_name || q.name}: ${q.score}% (${q.da
                       />
                     </div>
                   </div>
-                  <span className="text-xs font-black text-[#20201D] w-12 text-right">{mastery}%</span>
+
+                  <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                    <span className="text-xs font-black text-[#20201D]">{mastery}%</span>
+                    <button
+                      onClick={() => navigate(`/quiz/${item.topic_id}`)}
+                      className="py-1 px-3 rounded-lg text-[11px] font-extrabold bg-white border border-[#E7E1D8] text-[#20201D] hover:bg-[#FFF0E4] hover:border-[#F28A45]/40 hover:text-[#F28A45] transition-all cursor-pointer shadow-2xs"
+                    >
+                      Quiz
+                    </button>
+                  </div>
                 </div>
               )
             })}
@@ -478,4 +549,3 @@ ${recentQuizzes.map((q: any) => `- ${q.full_name || q.name}: ${q.score}% (${q.da
     </div>
   )
 }
-

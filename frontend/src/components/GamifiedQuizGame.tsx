@@ -35,11 +35,19 @@ interface Props {
   sessionId?: string
   isOpen: boolean
   onClose: () => void
+  initialTopic?: string
+  onQuizComplete?: (result: { score: number; total: number; percentage: number }) => void
 }
 
 const OPTION_LABELS = ['A', 'B', 'C', 'D']
 
-export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) {
+export default function GamifiedQuizGame({
+  sessionId,
+  isOpen,
+  onClose,
+  initialTopic,
+  onQuizComplete,
+}: Props) {
   const activeSession = useChatStore((s) => s.activeSession)
 
   const [quiz, setQuiz] = useState<Quiz | null>(null)
@@ -48,10 +56,10 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
 
   // Setup layer state
   const [setupStep, setSetupStep] = useState(true)
-  const [scopeMode, setScopeMode] = useState<'all' | 'specific'>('all')
+  const [scopeMode, setScopeMode] = useState<'all' | 'specific'>(initialTopic ? 'specific' : 'all')
   const [availableTopics, setAvailableTopics] = useState<string[]>([])
   const [selectedTopic, setSelectedTopic] = useState<string>('')
-  const [customTopic, setCustomTopic] = useState<string>('')
+  const [customTopic, setCustomTopic] = useState<string>(initialTopic || '')
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium')
   const [numQuestions, setNumQuestions] = useState<number>(5)
 
@@ -63,8 +71,67 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
   const [selectedOpt, setSelectedOpt] = useState<string | null>(null)
   const [isAnswered, setIsAnswered] = useState(false)
   const [gameWon, setGameWon] = useState(false)
+  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({})
 
-  const [showAutocomplete, setShowAutocomplete] = useState(false)
+  const resetGame = () => {
+    setCurrentQIndex(0)
+    setScore(0)
+    setCorrectCount(0)
+    setStreak(0)
+    setSelectedOpt(null)
+    setIsAnswered(false)
+    setGameWon(false)
+    setUserAnswers({})
+  }
+
+  const triggerGenerate = async (overrideTopic?: string) => {
+    setGenerating(true)
+    const effectiveTopic = overrideTopic || (
+      scopeMode === 'all'
+        ? 'All Topics (Entire PDF)'
+        : customTopic.trim() || selectedTopic || 'General Study Concepts'
+    )
+
+    try {
+      const res = await quizApi.generate({
+        session_id: sessionId || activeSession?.id,
+        topic_id: activeSession?.topic_id || 'general',
+        custom_topic: effectiveTopic,
+        difficulty: difficulty,
+        num_questions: numQuestions,
+      })
+      setQuiz(res.data)
+      resetGame()
+      setSetupStep(false)
+    } catch (err: any) {
+      console.error(err)
+      alert(err.response?.data?.detail || 'Failed to generate quiz. Make sure you have uploaded a PDF document and Ollama is running.')
+      if (overrideTopic) {
+        onClose()
+      } else {
+        setSetupStep(true)
+      }
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  // Auto-generate quiz when opened with initialTopic from Study Plan
+  useEffect(() => {
+    if (!isOpen) {
+      setQuiz(null)
+      setSetupStep(true)
+      setGenerating(false)
+      return
+    }
+    if (initialTopic) {
+      setCustomTopic(initialTopic)
+      setScopeMode('specific')
+      setSetupStep(false)
+      setGenerating(true)
+      triggerGenerate(initialTopic)
+    }
+  }, [isOpen, initialTopic])
 
   // Fetch extracted key topics from uploaded PDF documents
   useEffect(() => {
@@ -97,43 +164,6 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
     customTopic.trim() ? t.toLowerCase().includes(customTopic.toLowerCase().trim()) : true
   )
 
-  const resetGame = () => {
-    setCurrentQIndex(0)
-    setScore(0)
-    setCorrectCount(0)
-    setStreak(0)
-    setSelectedOpt(null)
-    setIsAnswered(false)
-    setGameWon(false)
-  }
-
-  const triggerGenerate = async () => {
-    setGenerating(true)
-    const effectiveTopic =
-      scopeMode === 'all'
-        ? 'All Topics (Entire PDF)'
-        : customTopic.trim() || selectedTopic || 'General Study Concepts'
-
-    try {
-      const res = await quizApi.generate({
-        session_id: sessionId || activeSession?.id,
-        topic_id: activeSession?.topic_id || 'general',
-        custom_topic: effectiveTopic,
-        difficulty: difficulty,
-        num_questions: numQuestions,
-      })
-      setQuiz(res.data)
-      resetGame()
-      setSetupStep(false)
-    } catch (err: any) {
-      console.error(err)
-      alert(err.response?.data?.detail || 'Failed to generate quiz. Make sure you have uploaded a PDF document and Ollama is running.')
-      setSetupStep(true)
-    } finally {
-      setGenerating(false)
-    }
-  }
-
   const handleOptionSelect = (optLabel: string) => {
     if (isAnswered) return
     setSelectedOpt(optLabel)
@@ -142,6 +172,8 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
   const handleChooseAnswer = () => {
     if (!selectedOpt || !currentQuestion || isAnswered) return
     setIsAnswered(true)
+    setUserAnswers((prev) => ({ ...prev, [currentQuestion.id]: selectedOpt }))
+    
     const isCorrect = selectedOpt === currentQuestion.correct_answer
 
     if (isCorrect) {
@@ -162,6 +194,29 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
       setIsAnswered(false)
     } else {
       setGameWon(true)
+      const finalCorrect = selectedOpt === currentQuestion?.correct_answer ? correctCount + 1 : correctCount
+      const finalTotal = quiz.questions.length
+      const finalPct = finalTotal > 0 ? Math.round((finalCorrect / finalTotal) * 100) : 0
+
+      onQuizComplete?.({ score: finalCorrect, total: finalTotal, percentage: finalPct })
+
+      const answersPayload = { ...userAnswers }
+      if (currentQuestion && selectedOpt) {
+        answersPayload[currentQuestion.id] = selectedOpt
+      }
+      if (quiz?.id) {
+        quizApi
+          .submit(quiz.id, answersPayload)
+          .then(() => {
+            queryClient.invalidateQueries({ queryKey: ['progress-recent-quizzes'] })
+            queryClient.invalidateQueries({ queryKey: ['progress-summary'] })
+            queryClient.invalidateQueries({ queryKey: ['progress-analysis'] })
+            queryClient.invalidateQueries({ queryKey: ['progress-weekly'] })
+            queryClient.invalidateQueries({ queryKey: ['progress-topics'] })
+            queryClient.invalidateQueries({ queryKey: ['progress-calendar'] })
+          })
+          .catch((err) => console.error('Error submitting quiz attempt:', err))
+      }
     }
   }
 
@@ -352,13 +407,57 @@ export default function GamifiedQuizGame({ sessionId, isOpen, onClose }: Props) 
                 You scored <span className="text-[#F28A45] font-black">{correctCount}</span> out of <span className="font-black text-[#20201D]">{totalQuestions}</span> questions correctly ({Math.round((correctCount / totalQuestions) * 100)}%)
               </p>
             </div>
-            <div className="flex gap-4 max-w-sm mx-auto pt-4">
-              <button
-                onClick={() => setSetupStep(true)}
-                className="btn-primary w-full py-3 px-6 text-xs font-black shadow-2xs cursor-pointer"
-              >
-                Take Another Quiz
-              </button>
+            <div className="flex gap-3 max-w-sm mx-auto pt-4">
+              {initialTopic ? (
+                <>
+                  <button
+                    onClick={() => {
+                      resetGame()
+                      setGenerating(true)
+                      triggerGenerate(initialTopic)
+                    }}
+                    className="btn-primary flex-1 py-3 px-6 text-xs font-black shadow-2xs cursor-pointer"
+                  >
+                    Retry Quiz
+                  </button>
+                  <button
+                    onClick={onClose}
+                    className="flex-1 py-3 px-6 text-xs font-black rounded-xl border border-[#E7E1D8] bg-[#FAF8F3] text-[#20201D] hover:bg-[#F4EFE7] cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setSetupStep(true)}
+                  className="btn-primary w-full py-3 px-6 text-xs font-black shadow-2xs cursor-pointer"
+                >
+                  Take Another Quiz
+                </button>
+              )}
+            </div>
+          </div>
+        ) : generating || !quiz ? (
+          /* ─── GENERATING QUIZ LOADING SCREEN ─── */
+          <div className="py-16 text-center space-y-5">
+            <div className="w-16 h-16 bg-[#FFF0E4] border border-[#F28A45]/30 text-[#F28A45] rounded-full flex items-center justify-center mx-auto shadow-xs">
+              <RefreshCw size={28} className="animate-spin" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-[#20201D]">Generating AI Quiz...</h2>
+              <p className="text-sm font-medium text-[#6F6B63] mt-1">
+                Creating personalized questions from your study materials
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-1.5 mt-4">
+              {[0, 1, 2].map((i) => (
+                <motion.div
+                  key={i}
+                  className="w-2.5 h-2.5 rounded-full bg-[#F28A45]"
+                  animate={{ opacity: [0.3, 1, 0.3] }}
+                  transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.3 }}
+                />
+              ))}
             </div>
           </div>
         ) : (

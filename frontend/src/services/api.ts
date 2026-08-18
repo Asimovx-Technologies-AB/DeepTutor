@@ -285,6 +285,8 @@ export const studyPlanApi = {
     api.post('/study-plan/generate', data),
   toggleDay: (planId: string, dayNumber: number) =>
     api.post(`/study-plan/${planId}/toggle-day`, { day_number: dayNumber }),
+  verifyQuiz: (planId: string, dayNumber: number, scorePercentage: number) =>
+    api.post(`/study-plan/${planId}/verify-quiz`, { day_number: dayNumber, score_percentage: scorePercentage }),
   delete: (planId: string) => api.delete(`/study-plan/${planId}`),
 }
 

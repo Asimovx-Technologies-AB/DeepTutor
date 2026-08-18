@@ -9,24 +9,31 @@ from app.rag.vector_store import vector_store
 from app.rag.document_processor import process_document
 from app.core import database as db
 
-STUDY_PLAN_PROMPT_TEMPLATE = """You are an expert academic tutor and study planner.
-Your goal is to generate a comprehensive, day-by-day study plan based on the provided document context.
+STUDY_PLAN_PROMPT_TEMPLATE = """You are an expert academic tutor and master curriculum designer.
+Your goal is to build a logically structured, pedagogically sound day-by-day study roadmap based strictly on the provided document context.
 
 Target Exam / Completion Date: {target_date}
 Available Days to Study: {total_days} days
 Daily Study Time: {hours_per_day} hours/day
 
+REQUIRED PEDAGOGICAL PROGRESSION FLOW:
+1. PHASE 1: Foundations & Core Terminology (Days 1 to ~25% of timeline) — Focus on definitions, prerequisites, intuition, and basic concepts.
+2. PHASE 2: Core Mechanics & Deep Dive (Days ~26% to ~65% of timeline) — Focus on step-by-step algorithms, mechanisms, formulas, and working methods.
+3. PHASE 3: Applied Scenarios & Synthesis (Days ~66% to ~85% of timeline) — Focus on complex problem solving, comparative trade-offs, and practical integration.
+4. PHASE 4: High-Yield Exam Review & Mastery (Final ~15% of timeline) — Focus on active recall self-testing, formula cheat sheets, common exam traps, and mock practice.
+
 Return ONLY valid JSON in this exact structure:
 {{
-  "title": "A short, motivating title for the study plan",
+  "title": "Short, motivating title for the study plan",
   "summary": "Brief 1-2 sentence overview of what will be mastered by {target_date}",
   "schedule": [
     {{
       "day": 1,
+      "phase": "Phase 1: Foundations & Core Terminology",
       "topic": "Main Topic / Module Name for Day 1",
       "focus": "Specific concepts or sections to read & understand",
       "estimated_hours": {hours_per_day},
-      "recommended_action": "Read Chapter 1, review AI Study Notes",
+      "recommended_action": "Read chapter notes, review key definitions, complete basic exercises",
       "key_concepts": ["Concept 1", "Concept 2"]
     }}
   ]
@@ -34,9 +41,8 @@ Return ONLY valid JSON in this exact structure:
 
 Rules:
 - Generate a schedule spanning exactly {total_days} days (Day 1 up to Day {total_days}).
-- Spread the document topics logically over the {total_days} days.
-- Reserve the final day (Day {total_days}) for full review, final quiz, and practice.
-- The schedule MUST be strictly based on the document context below.
+- Order the topics strictly following the 4-phase pedagogical progression flow above.
+- Reserve the final day (Day {total_days}) in Phase 4 for full review, practice quiz, and self-check.
 - Response MUST contain ONLY valid JSON. No conversational commentary.
 
 DOCUMENT CONTEXT:
@@ -45,8 +51,8 @@ DOCUMENT CONTEXT:
 JSON:"""
 
 
-DAY_NOTES_PROMPT_TEMPLATE = """You are an expert AI academic tutor. Generate a comprehensive, crystal-clear, intuitive, and structured study brief for a student studying the topic below from their uploaded material.
-Explain the concepts in simple, accessible language while maintaining absolute academic rigor and accuracy.
+DAY_NOTES_PROMPT_TEMPLATE = """You are an expert AI academic tutor. Generate a comprehensive, crystal-clear, highly structured study brief for a student studying the topic below from their uploaded material.
+Explain the concepts in accessible language while maintaining absolute academic rigor, logical flow, and precision.
 
 DAY TOPIC: {day_topic}
 KEY CONCEPTS: {key_concepts}
@@ -54,32 +60,50 @@ KEY CONCEPTS: {key_concepts}
 DOCUMENT CONTEXT:
 {context}
 
-Format your response strictly using clean, beautiful Markdown with the following structure:
+Format your response strictly using clean, beautiful Markdown following this logical 6-section structure:
 
-# 📌 {day_topic} — Study Notes
+# 📌 {day_topic} — Structured Study Notes
 
-## 💡 Big-Picture Overview (In Simple Words)
-[Clear, intuitive 2-3 sentence overview explaining what this concept is and why it matters in plain, simple terms]
+> **Daily Learning Goal**: [Clear, 1-sentence statement of what the student will master today]
 
-## 🔑 Core Definitions & Key Terms
-- **[Key Term 1]**: [Clear, intuitive definition and explanation grounded in material]
-- **[Key Term 2]**: [Clear, intuitive definition and explanation grounded in material]
-- **[Key Term 3]**: [Clear, intuitive definition and explanation grounded in material]
+---
 
-## ⚙️ How It Works (Step-by-Step)
-1. **[Step 1 / Core Mechanism]**: [Clear explanation of how the process or concept works]
-2. **[Step 2 / Core Mechanism]**: [Clear explanation of how the process or concept works]
-3. **[Step 3 / Core Mechanism]**: [Clear explanation of how the process or concept works]
+## 💡 1. Conceptual Blueprint (ELI5 Intuition)
+[Intuitive 2-3 sentence overview explaining what this concept is and why it matters in simple, accessible terms]
 
-## 📝 High-Yield Exam Takeaways
-- **Key Advantage / Strength**: [Why this method or concept is used]
-- **Key Challenge / Limitation**: [Important trade-offs, constraints, or common exam traps]
+---
 
-## 🎯 Quick Self-Check Review
-1. **Q**: [High-yield practice review question on this topic]
-   **A**: [Concise, accurate answer]
-2. **Q**: [High-yield practice review question on this topic]
-   **A**: [Concise, accurate answer]
+## 🔑 2. Core Definitions & Essential Terminology
+- **[Key Term 1]**: [Clear definition and precise explanation grounded in the text]
+- **[Key Term 2]**: [Clear definition and precise explanation grounded in the text]
+- **[Key Term 3]**: [Clear definition and precise explanation grounded in the text]
+
+---
+
+## ⚙️ 3. Step-by-Step Mechanics & Workflow
+1. **[Step 1 / Primary Phase]**: [Detailed explanation of how this mechanism operates]
+2. **[Step 2 / Secondary Phase]**: [Detailed explanation of how this mechanism operates]
+3. **[Step 3 / Output & Resolution]**: [Detailed explanation of how this mechanism operates]
+
+---
+
+## 📊 4. Practical Applications & Trade-Offs
+- **Primary Advantages**: [Key strengths or why this method is used]
+- **Limitations & Constraints**: [Trade-offs, edge cases, or complexity considerations]
+
+---
+
+## ⚠️ 5. Common Pitfalls & Exam Traps
+> [!WARNING]
+> **Exam Trap**: [Specific misunderstanding or trick question students frequently make on tests regarding {day_topic}]
+
+---
+
+## 🎯 6. Active Recall & Self-Check Review
+1. **Q**: [High-yield practice review question testing key concepts]
+   * **Answer**: [Concise, accurate answer grounded in the text]
+2. **Q**: [High-yield practice review question testing key concepts]
+   * **Answer**: [Concise, accurate answer grounded in the text]
 """
 
 
@@ -88,25 +112,20 @@ def _clean_and_parse_json(text: str) -> Optional[dict]:
     if not text:
         return None
 
-    # 1. Remove markdown fences e.g. ```json ... ```
     cleaned = re.sub(r'```(?:json)?\s*', '', text, flags=re.IGNORECASE)
     cleaned = re.sub(r'```', '', cleaned).strip()
 
-    # 2. Extract substring between outermost { and }
     match = re.search(r'\{.*\}', cleaned, re.DOTALL)
     if match:
         cleaned = match.group()
 
-    # 3. Strip trailing commas before closing brackets/braces
     cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
 
-    # 4. Direct parse attempt
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
         pass
 
-    # 5. Fix common newline or control character escapes
     try:
         sanitized = re.sub(r'[\x00-\x1F\x7F]', ' ', cleaned)
         return json.loads(sanitized)
@@ -114,6 +133,18 @@ def _clean_and_parse_json(text: str) -> Optional[dict]:
         pass
 
     return None
+
+
+def _get_day_phase(day: int, total_days: int) -> str:
+    pct = day / max(1, total_days)
+    if pct <= 0.25:
+        return "Phase 1: Foundations & Core Terminology"
+    elif pct <= 0.65:
+        return "Phase 2: Core Mechanics & Deep Dive"
+    elif pct <= 0.85:
+        return "Phase 3: Applied Scenarios & Synthesis"
+    else:
+        return "Phase 4: High-Yield Exam Review & Mastery"
 
 
 async def generate_study_plan(
@@ -142,7 +173,6 @@ async def generate_study_plan(
     context_docs: List[str] = []
     display_topic = "Study Curriculum"
 
-    # 1. Resolve human-readable topic name
     if topic_id and topic_id != "general":
         session = db.get_session(topic_id)
         if session and session.get("session_title"):
@@ -150,7 +180,6 @@ async def generate_study_plan(
         else:
             display_topic = topic_id.replace("_", " ").title()
 
-    # 2. Retrieve document context from section or user's library
     if topic_id and topic_id != "general":
         try:
             context_docs = await get_section_context(
@@ -161,7 +190,6 @@ async def generate_study_plan(
         except Exception:
             context_docs = []
 
-    # 3. Fallback: Search across user's uploaded documents if topic_id had no direct vectors
     if not context_docs:
         try:
             user_docs = db.get_documents_for_user(user_id)
@@ -177,7 +205,6 @@ async def generate_study_plan(
         except Exception:
             pass
 
-    # 4. Fallback: Extract key topics from document metadata in DB
     if not context_docs:
         docs = db.get_documents_for_user_and_topic(user_id, topic_id) or db.get_documents_for_user(user_id)
         for doc in docs:
@@ -216,6 +243,7 @@ async def generate_study_plan(
             "schedule": [
                 {
                     "day": i + 1,
+                    "phase": _get_day_phase(i + 1, total_days),
                     "topic": f"Day {i + 1}: {display_topic} - Module {i + 1}",
                     "focus": "Core principles, definitions, and practice exercises",
                     "estimated_hours": hours_per_day,
@@ -234,6 +262,7 @@ async def generate_study_plan(
         schedule = [
             {
                 "day": i + 1,
+                "phase": _get_day_phase(i + 1, total_days),
                 "topic": f"Day {i + 1}: {display_topic} Study",
                 "focus": "Key concept review & practice questions",
                 "estimated_hours": hours_per_day,
@@ -244,8 +273,9 @@ async def generate_study_plan(
             for i in range(total_days)
         ]
 
-    # Initialize study_notes as empty so full structured briefs are generated on-demand
     for item in schedule:
+        if "phase" not in item or not item["phase"]:
+            item["phase"] = _get_day_phase(item.get("day", 1), len(schedule))
         item["study_notes"] = ""
 
     plan = db.create_study_plan(

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Trophy, Clock, ArrowLeft, ChevronRight, Sparkles, RefreshCw, AlertCircle, CheckCircle2, BookOpen } from 'lucide-react'
 import { quizApi } from '../services/api'
@@ -24,10 +25,10 @@ export default function QuizPage() {
   // Find topic metadata from subject store
   const subjects = useSubjectStore((s) => s.subjects)
   const subjectTopics = useSubjectStore((s) => s.topics)
-  
+
   let currentTopicMeta: any = null
   let currentSubjectMeta: any = null
-  
+
   for (const [sId, topics] of Object.entries(subjectTopics)) {
     const found = topics.find((t) => t.id === topicId)
     if (found) {
@@ -97,10 +98,12 @@ export default function QuizPage() {
     setAnswers((prev) => ({ ...prev, [currentQuestion.id]: option }))
   }
 
+  const queryClient = useQueryClient()
+
   const handleSubmit = async () => {
     if (timerRef.current) clearInterval(timerRef.current)
     setSubmitted(true)
-    
+
     // Calculate score
     const score = questions.filter((q: any) => answers[q.id] === q.correct_answer).length
     const pct = totalQ > 0 ? Math.round((score / totalQ) * 100) : 0
@@ -272,15 +275,13 @@ export default function QuizPage() {
                 <button
                   key={label}
                   onClick={() => selectAnswer(label)}
-                  className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-3.5 cursor-pointer ${
-                    selected
+                  className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-3.5 cursor-pointer ${selected
                       ? 'bg-[#FFF0E4] border-[#F28A45] text-[#20201D] font-bold shadow-2xs'
                       : 'bg-white border-[#E7E1D8] text-[#20201D] hover:border-[#F28A45]/50 hover:bg-[#FFF9F2]'
-                  }`}
+                    }`}
                 >
-                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black flex-shrink-0 transition-all ${
-                    selected ? 'bg-[#F28A45] text-white shadow-2xs' : 'bg-[#F4EFE7] text-[#6F6B63]'
-                  }`}>
+                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black flex-shrink-0 transition-all ${selected ? 'bg-[#F28A45] text-white shadow-2xs' : 'bg-[#F4EFE7] text-[#6F6B63]'
+                    }`}>
                     {label}
                   </span>
                   <span className="text-sm font-semibold flex-1 leading-relaxed">{option}</span>
@@ -307,13 +308,12 @@ export default function QuizPage() {
             <button
               key={i}
               onClick={() => setCurrentQ(i)}
-              className={`rounded-full transition-all cursor-pointer ${
-                i === currentQ
+              className={`rounded-full transition-all cursor-pointer ${i === currentQ
                   ? 'bg-[#F28A45] w-6 h-2.5'
                   : answers[questions[i].id]
-                  ? 'bg-[#4F8A68] w-2.5 h-2.5'
-                  : 'bg-[#E7E1D8] w-2.5 h-2.5 hover:bg-[#969188]'
-              }`}
+                    ? 'bg-[#4F8A68] w-2.5 h-2.5'
+                    : 'bg-[#E7E1D8] w-2.5 h-2.5 hover:bg-[#969188]'
+                }`}
               title={`Go to Question ${i + 1}`}
             />
           ))}

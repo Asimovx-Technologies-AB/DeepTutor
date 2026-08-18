@@ -44,6 +44,10 @@ def user_owns_section(user_id: str, section_id: str) -> bool:
     if docs:
         return True
 
+    all_user_docs = db.get_documents_for_user(user_id)
+    if all_user_docs:
+        return True
+
     sessions = db.get_sessions_for_user(user_id)
     return any(s.get("topic_id") == section_id or s.get("id") == section_id for s in sessions)
 
@@ -82,32 +86,55 @@ async def get_section_context(
             pass
 
     if count == 0:
-        print(f"[section_scope] Collection {collection_id} exists but is empty.")
-        return []
+        print(f"[section_scope] Collection {collection_id} is empty. Searching user's other collections...")
+        candidate_topics = []
+        user_docs = db.get_documents_for_user(user_id)
+        for d in user_docs:
+            tid = d.get("topic_id")
+            if tid and tid not in candidate_topics:
+                candidate_topics.append(tid)
+        if "general" not in candidate_topics:
+            candidate_topics.append("general")
+
+        found_collection = None
+        for candidate_tid in candidate_topics:
+            cand_coll = get_section_collection_id(user_id, candidate_tid)
+            try:
+                if active_vector_store.count(cand_coll) > 0:
+                    found_collection = cand_coll
+                    break
+            except Exception:
+                continue
+
+        if found_collection:
+            print(f"[section_scope] Using populated collection {found_collection} for user {user_id}")
+            target_collection_id = found_collection
+        else:
+            print(f"[section_scope] No populated collections found for user {user_id}.")
+            return []
 
     if query and query.strip():
         try:
             emb = await embedding_pipeline.embed(query)
             if emb:
-                results = active_vector_store.search_hybrid(collection_id, emb, query, top_k=top_k)
+                results = active_vector_store.search_hybrid(target_collection_id, emb, query, top_k=top_k)
                 chunks = [r["text"] for r in results if r.get("text")]
                 if chunks:
                     return chunks
         except Exception as e:
-            print(f"[section_scope] Embedding/search failed for {collection_id}: {e}")
+            print(f"[section_scope] Embedding/search failed for {target_collection_id}: {e}")
 
-    # No query, or query search came back empty — fall back to a sample
-    # of this SAME section's own documents (never another section's).
+    # No query, or query search came back empty — fall back to sample from target_collection_id
     try:
         if hasattr(active_vector_store, "get_all_chunks"):
-            chunks = active_vector_store.get_all_chunks(collection_id)
+            chunks = active_vector_store.get_all_chunks(target_collection_id)
             if chunks:
                 return [c["text"] if isinstance(c, dict) else str(c) for c in chunks[:top_k]]
         if hasattr(active_vector_store, "_topic"):
-            topic = active_vector_store._topic(collection_id)
+            topic = active_vector_store._topic(target_collection_id)
             return topic._docs[:top_k]
-        res = active_vector_store.search(collection_id, [0.0] * 3072, top_k=top_k, min_score=0.0)
+        res = active_vector_store.search(target_collection_id, [0.0] * 3072, top_k=top_k, min_score=0.0)
         return [r["text"] for r in res if r.get("text")]
     except Exception as e:
-        print(f"[section_scope] Failed to read collection {collection_id}: {e}")
+        print(f"[section_scope] Failed to read collection {target_collection_id}: {e}")
         return []

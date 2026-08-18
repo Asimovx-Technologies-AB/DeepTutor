@@ -100,6 +100,9 @@ async def get_topic_suggestions(
     return {"suggestions": clean_list[:15]}
 
 
+from app.rag.ollama_client import ollama
+
+
 @router.post("/generate")
 async def generate_quiz(
     body: GenerateQuizRequest,
@@ -126,9 +129,23 @@ async def generate_quiz(
         topic_id=section_id,
     )
     if not quiz:
+        user_docs = db.get_documents_for_user(user["id"])
+        if not user_docs:
+            raise HTTPException(
+                status_code=400,
+                detail="No uploaded documents found. Please upload a PDF document before generating a quiz."
+            )
+
+        llm_online = await ollama.is_available()
+        if not llm_online:
+            raise HTTPException(
+                status_code=503,
+                detail="AI service is offline or unconfigured. Please configure GEMINI_API_KEY in backend/.env or ensure Ollama is running."
+            )
+
         raise HTTPException(
             status_code=500,
-            detail="Failed to generate quiz. Make sure documents are uploaded and Ollama is online."
+            detail="Failed to generate quiz from document text. Please try again with a different focus topic."
         )
     return quiz
 
@@ -196,9 +213,20 @@ async def submit_quiz(
     total = len(questions)
     for q in questions:
         q_id = q["id"]
-        user_ans = body.answers.get(q_id, "").strip().upper()
-        if user_ans == q["correct_answer"].strip().upper():
+        user_ans = str(body.answers.get(q_id, "")).strip().upper()
+        correct_ans = str(q.get("correct_answer", "A")).strip().upper()
+        options = q.get("options") or []
+
+        if user_ans == correct_ans:
             score += 1
+        elif user_ans:
+            match = re.search(r'[A-D]', correct_ans)
+            if match:
+                opt_idx = ord(match.group()) - ord('A')
+                if 0 <= opt_idx < len(options):
+                    opt_text = str(options[opt_idx]).strip().upper()
+                    if user_ans == opt_text or user_ans in opt_text:
+                        score += 1
 
     percentage = round((score / total) * 100, 2) if total > 0 else 0.0
 
