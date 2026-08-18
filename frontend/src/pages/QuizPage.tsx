@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Trophy, Clock, ArrowLeft, ChevronRight, Sparkles, RefreshCw, AlertCircle, CheckCircle2, BookOpen } from 'lucide-react'
 import { quizApi } from '../services/api'
@@ -98,8 +97,6 @@ export default function QuizPage() {
     setAnswers((prev) => ({ ...prev, [currentQuestion.id]: option }))
   }
 
-  const queryClient = useQueryClient()
-
   const handleSubmit = async () => {
     if (timerRef.current) clearInterval(timerRef.current)
     setSubmitted(true)
@@ -117,10 +114,27 @@ export default function QuizPage() {
     if (activeQuiz?.id) {
       try {
         await quizApi.submit(activeQuiz.id, answers)
-      } catch { /* noop */ }
+        queryClient.invalidateQueries({ queryKey: ['progress-summary'] })
+        queryClient.invalidateQueries({ queryKey: ['progress-recent-quizzes'] })
+        queryClient.invalidateQueries({ queryKey: ['progress-weekly'] })
+        queryClient.invalidateQueries({ queryKey: ['progress-topics'] })
+        queryClient.invalidateQueries({ queryKey: ['progress-analysis'] })
+      } catch (err) {
+        console.error('Failed to submit quiz to database:', err)
+      }
     }
 
-    navigate(`/quiz/${topicId}/result`, { state: { score, total: totalQ, pct, answers, quiz: activeQuiz } })
+    navigate(`/quiz/${topicId}/result`, {
+      state: {
+        score,
+        total: totalQ,
+        pct,
+        answers,
+        quiz: activeQuiz,
+        topicId,
+        subjectId: currentSubjectMeta?.id,
+      },
+    })
   }
 
   const generateQuiz = async () => {

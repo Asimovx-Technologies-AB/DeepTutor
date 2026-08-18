@@ -226,14 +226,39 @@ import re
 UUID_REGEX = re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
 
 
+CHAPTER_TITLES = {
+    "math-10-1": "Arithmetic Sequences",
+    "math-10-2": "Circles and Angles",
+    "math-10-3": "Arithmetic Sequences & Algebra",
+    "math-10-4": "Mathematics of Chance",
+    "math-10-5": "Second Degree Equations",
+    "math-10-6": "Trigonometry",
+    "math-10-7": "Coordinates",
+    "sslc-math": "Class 10 Mathematics",
+    "phys-10-1": "Wave Motion & Oscillations",
+    "phys-10-2": "Refraction of Light & Lenses",
+    "phys-10-3": "Dispersion of Light & Colour",
+    "phys-10-4": "Magnetic Effect of Electric Current",
+    "sslc-physics": "Class 10 Physics",
+    "chem-10-1": "Nomenclature of Organic Compounds & Isomerism",
+    "chem-10-2": "Chemical Reactions of Organic Compounds",
+    "chem-10-3": "Periodic Table & Electron Configuration",
+    "chem-10-4": "Gas Laws and Mole Concept",
+    "sslc-chemistry": "Class 10 Chemistry",
+}
+
+
 def _resolve_human_topic_name(tid: str, sessions: list, user_docs: list) -> str:
     if not tid:
         return "General Study Concepts"
 
+    if tid in CHAPTER_TITLES:
+        return CHAPTER_TITLES[tid]
+
     is_uuid = bool(UUID_REGEX.match(tid.strip()))
 
     if not is_uuid:
-        clean = tid.replace("_", " ").strip()
+        clean = tid.replace("_", " ").replace("-", " ").strip()
         if clean and clean.lower() != "general":
             return clean.title()
 

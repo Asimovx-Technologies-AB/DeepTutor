@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Trophy,
@@ -48,6 +49,7 @@ export default function GamifiedQuizGame({
   initialTopic,
   onQuizComplete,
 }: Props) {
+  const queryClient = useQueryClient()
   const activeSession = useChatStore((s) => s.activeSession)
 
   const [quiz, setQuiz] = useState<Quiz | null>(null)
@@ -378,7 +380,7 @@ export default function GamifiedQuizGame({
 
             {/* Generate Button */}
             <button
-              onClick={triggerGenerate}
+              onClick={() => triggerGenerate()}
               disabled={generating}
               className="btn-primary w-full py-3.5 px-6 font-black text-sm shadow-2xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >

@@ -69,6 +69,7 @@ async def get_section_context(
     from app.rag.pipeline.embedder import embedding_pipeline
 
     collection_id = get_section_collection_id(user_id, section_id)
+    target_collection_id = collection_id
 
     try:
         count = active_vector_store.count(collection_id)
@@ -81,6 +82,7 @@ async def get_section_context(
             raw_count = active_vector_store.count(section_id)
             if raw_count > 0:
                 collection_id = section_id
+                target_collection_id = section_id
                 count = raw_count
         except Exception:
             pass
