@@ -4,6 +4,7 @@ Supports: chat, streaming chat, embeddings (cached).
 Ollama must be running: `ollama serve`
 """
 import json
+import asyncio
 import httpx
 from typing import AsyncGenerator, List, Dict, Optional
 from app.core.config import get_settings
@@ -297,7 +298,10 @@ class UnifiedLLMClient:
         if self.provider == "gemini":
             from app.rag.gemini_client import gemini
             if await gemini.is_available():
-                return await gemini.chat(messages, model, temperature, options)
+                try:
+                    return await gemini.chat(messages, model, temperature, options)
+                except Exception as e:
+                    print(f"[UnifiedLLMClient] Gemini chat call failed: {e}. Attempting Ollama fallback...")
         return await self.ollama_client.chat(messages, model, temperature, options)
 
     async def stream(

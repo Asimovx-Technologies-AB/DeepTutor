@@ -42,7 +42,7 @@ class Settings(BaseSettings):
 
     # ── Stage 3: Vector Store Backend ───────────────────────────────────────
     # Switch via .env: VECTOR_STORE_BACKEND=pinecone | faiss | chroma
-    VECTOR_STORE_BACKEND: str = "pinecone"
+    VECTOR_STORE_BACKEND: str = "faiss"
     PINECONE_API_KEY: str = ""
     PINECONE_INDEX_NAME: str = "deeptutor"
     PINECONE_ENVIRONMENT: str = "us-east-1"

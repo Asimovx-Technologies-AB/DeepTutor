@@ -116,6 +116,11 @@ async def get_plan(plan_id: str, user: dict = Depends(get_current_user)):
     return plan
 
 
+class VerifyQuizRequest(BaseModel):
+    day_number: int
+    score_percentage: float
+
+
 @router.post("/{plan_id}/toggle-day")
 async def toggle_day(
     plan_id: str,
@@ -126,6 +131,37 @@ async def toggle_day(
     if not plan:
         raise HTTPException(status_code=404, detail="Study plan not found")
     return plan
+
+
+@router.post("/{plan_id}/verify-quiz")
+async def verify_day_quiz(
+    plan_id: str,
+    body: VerifyQuizRequest,
+    user: dict = Depends(get_current_user),
+):
+    plan = db.get_study_plan(plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Study plan not found")
+
+    passed = body.score_percentage >= 70.0
+    completed_days = plan.get("completed_days", [])
+    already_completed = body.day_number in completed_days
+
+    if passed and not already_completed:
+        plan = db.toggle_study_plan_day(plan_id, body.day_number)
+
+    return {
+        "passed": passed,
+        "score_percentage": round(body.score_percentage, 1),
+        "day_number": body.day_number,
+        "day_completed": body.day_number in (plan.get("completed_days", []) if plan else []),
+        "threshold": 70.0,
+        "message": (
+            f"🎉 Congratulations! You scored {round(body.score_percentage, 1)}% (≥ 70%) and completed Day {body.day_number}!"
+            if passed
+            else f"Scored {round(body.score_percentage, 1)}%. Minimum 70% required to complete Day {body.day_number}. Review notes & retry!"
+        ),
+    }
 
 
 @router.delete("/{plan_id}")

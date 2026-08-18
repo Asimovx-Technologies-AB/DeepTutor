@@ -173,15 +173,15 @@ async def get_recent_quizzes(user: dict = Depends(get_current_user)):
     for a in attempts_sorted:
         quiz_id = a.get("quiz_id")
         quiz = db.get_quiz(quiz_id) if quiz_id else None
-        title = quiz["title"] if quiz else "AI Quiz Attempt"
-        # Shorten title if long
-        short_title = title if len(title) <= 18 else title[:16] + "…"
+        raw_title = quiz["title"] if quiz else "AI Quiz Attempt"
+        clean_title = raw_title.replace("Quiz:", "").strip()
+        short_title = clean_title if len(clean_title) <= 16 else clean_title[:14] + "…"
         res.append({
             "name": short_title,
-            "full_name": title,
-            "score": a["percentage"],
+            "full_name": raw_title,
+            "score": round(a.get("percentage", 0), 1),
             "total": a.get("total_questions", 5),
-            "date": a.get("attempted_at", "").split("T")[0],
+            "date": a.get("attempted_at", "").split("T")[0] if a.get("attempted_at") else "Today",
         })
 
     return res
@@ -221,25 +221,81 @@ async def get_activity_calendar(user: dict = Depends(get_current_user)):
     return calendar_days
 
 
+import re
+
+UUID_REGEX = re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
+
+
+def _resolve_human_topic_name(tid: str, sessions: list, user_docs: list) -> str:
+    if not tid:
+        return "General Study Concepts"
+
+    is_uuid = bool(UUID_REGEX.match(tid.strip()))
+
+    if not is_uuid:
+        clean = tid.replace("_", " ").strip()
+        if clean and clean.lower() != "general":
+            return clean.title()
+
+    # Try resolving session title
+    for s in sessions:
+        if (s.get("id") == tid or s.get("topic_id") == tid) and s.get("title"):
+            stitle = s["title"].strip()
+            if stitle and not UUID_REGEX.match(stitle):
+                return stitle.title()
+
+    # Try resolving document title or key topic
+    for d in user_docs:
+        if d.get("topic_id") == tid or d.get("id") == tid:
+            if d.get("key_topics") and isinstance(d["key_topics"], list) and len(d["key_topics"]) > 0:
+                first_kt = d["key_topics"][0]
+                if first_kt and not UUID_REGEX.match(first_kt):
+                    return first_kt.title()
+            if d.get("file_name"):
+                fname = d["file_name"].rsplit(".", 1)[0].replace("_", " ").replace("-", " ")
+                if fname and not UUID_REGEX.match(fname):
+                    return fname.title()
+
+    return "General Study Concepts"
+
+
 @router.get("/topics")
 async def get_topic_progress(user: dict = Depends(get_current_user)):
     user_id = user["id"]
     sessions = db.get_sessions_for_user(user_id)
     attempts = db.get_attempts_for_user(user_id)
+    user_docs = db.get_documents_for_user(user_id)
     
     topics_map: Dict[str, dict] = {}
-    
-    for s in sessions:
-        tid = s.get("topic_id")
+
+    for d in user_docs:
+        tid = d.get("topic_id")
         if not tid:
             continue
-        tname = tid.replace("_", " ").title()
+        tname = _resolve_human_topic_name(tid, sessions, user_docs)
         if tid not in topics_map:
             topics_map[tid] = {
                 "topic": tname,
                 "topic_id": tid,
                 "sessions_count": 0,
                 "quizzes_taken": 0,
+                "doc_count": 0,
+                "scores": [],
+            }
+        topics_map[tid]["doc_count"] += 1
+    
+    for s in sessions:
+        tid = s.get("topic_id") or s.get("id")
+        if not tid:
+            continue
+        tname = _resolve_human_topic_name(tid, sessions, user_docs)
+        if tid not in topics_map:
+            topics_map[tid] = {
+                "topic": tname,
+                "topic_id": tid,
+                "sessions_count": 0,
+                "quizzes_taken": 0,
+                "doc_count": 0,
                 "scores": [],
             }
         topics_map[tid]["sessions_count"] += 1
@@ -250,13 +306,14 @@ async def get_topic_progress(user: dict = Depends(get_current_user)):
         tid = quiz["topic_id"] if quiz else None
         if not tid:
             continue
-        tname = tid.replace("_", " ").title()
+        tname = _resolve_human_topic_name(tid, sessions, user_docs)
         if tid not in topics_map:
             topics_map[tid] = {
                 "topic": tname,
                 "topic_id": tid,
                 "sessions_count": 0,
                 "quizzes_taken": 0,
+                "doc_count": 0,
                 "scores": [],
             }
         topics_map[tid]["quizzes_taken"] += 1
@@ -265,7 +322,15 @@ async def get_topic_progress(user: dict = Depends(get_current_user)):
     result = []
     for tid, data in topics_map.items():
         scores = data["scores"]
-        avg_s = round(sum(scores) / len(scores), 1) if scores else (70.0 if data["sessions_count"] > 0 else 0.0)
+        if scores:
+            avg_s = round(sum(scores) / len(scores), 1)
+        elif data["sessions_count"] > 0:
+            avg_s = 65.0
+        elif data.get("doc_count", 0) > 0:
+            avg_s = 50.0
+        else:
+            avg_s = 0.0
+
         result.append({
             "subject": data["topic"],
             "topic": data["topic"],
@@ -274,6 +339,7 @@ async def get_topic_progress(user: dict = Depends(get_current_user)):
             "mastery": avg_s,
             "quizzes_taken": data["quizzes_taken"],
             "sessions_count": data["sessions_count"],
+            "doc_count": data.get("doc_count", 0),
         })
         
     return result

@@ -28,9 +28,11 @@ import { studyPlanApi, documentsApi, default as api } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
 import { UpgradeModal } from '../components/UpgradeModal'
+import GamifiedQuizGame from '../components/GamifiedQuizGame'
 
 interface ScheduleDay {
   day: number
+  phase?: string
   topic: string
   focus: string
   estimated_hours: number
@@ -80,6 +82,14 @@ export default function StudyPlanPage() {
   const [copied, setCopied] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
 
+  // Day Mastery Quiz State
+  const [dayQuizModal, setDayQuizModal] = useState<{ dayNum: number; topic: string } | null>(null)
+  const [quizVerificationMessage, setQuizVerificationMessage] = useState<{
+    passed: boolean
+    message: string
+    dayNum: number
+  } | null>(null)
+
   // Loading / generating state
   const [generating, setGenerating] = useState(false)
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
@@ -96,6 +106,26 @@ export default function StudyPlanPage() {
 
   // Selected plan to view
   const currentPlan = plans.find((p) => p.id === activePlanId) || plans[0] || null
+
+  const handleDayQuizComplete = async (result: { score: number; total: number; percentage: number }) => {
+    if (!currentPlan?.id || !dayQuizModal) return
+    const dayNum = dayQuizModal.dayNum
+    try {
+      const res = await studyPlanApi.verifyQuiz(currentPlan.id, dayNum, result.percentage)
+      if (res.data) {
+        setQuizVerificationMessage({
+          passed: res.data.passed,
+          message: res.data.message,
+          dayNum: dayNum,
+        })
+        queryClient.invalidateQueries({ queryKey: ['study-plans'] })
+        queryClient.invalidateQueries({ queryKey: ['progress-summary'] })
+        queryClient.invalidateQueries({ queryKey: ['progress-calendar'] })
+      }
+    } catch (err: any) {
+      console.error('[StudyPlan] Failed to verify day quiz:', err)
+    }
+  }
 
   // Toggle day completed mutation
   const toggleDayMutation = useMutation({
@@ -362,6 +392,30 @@ export default function StudyPlanPage() {
           {/* Right: Detailed Plan Timeline */}
           {currentPlan && (
             <div className="lg:col-span-3 space-y-6">
+              {/* Quiz Verification Result Banner */}
+              {quizVerificationMessage && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`p-4 rounded-2xl border flex items-center justify-between text-xs font-extrabold shadow-2xs ${
+                    quizVerificationMessage.passed
+                      ? 'bg-[#E3F0E5] text-[#35654B] border-[#4F8A68]/40'
+                      : 'bg-[#FFF0E4] text-[#C85C52] border-[#F28A45]/40'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Sparkles size={16} className={quizVerificationMessage.passed ? 'text-[#4F8A68]' : 'text-[#F28A45]'} />
+                    <span>{quizVerificationMessage.message}</span>
+                  </div>
+                  <button
+                    onClick={() => setQuizVerificationMessage(null)}
+                    className="p-1 text-[#969188] hover:text-[#20201D] cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </motion.div>
+              )}
+
               {/* Plan Overview Card */}
               <div className="glass-card p-6 border border-[#E7E1D8] bg-gradient-to-r from-[#FFF9F2] via-white to-[#FFF0E4] space-y-4 shadow-xs">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -421,94 +475,125 @@ export default function StudyPlanPage() {
                 </h3>
 
                 <div className="space-y-3">
-                  {currentPlan.schedule?.map((dayItem) => {
+                  {currentPlan.schedule?.map((dayItem, idx) => {
                     const isDone = currentPlan.completed_days?.includes(dayItem.day)
+                    const prevPhase = idx > 0 ? currentPlan.schedule[idx - 1].phase : null
+                    const isNewPhase = dayItem.phase && dayItem.phase !== prevPhase
 
                     return (
-                      <motion.div
-                        key={dayItem.day}
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`p-5 rounded-2xl border transition-all ${
-                          isDone
-                            ? 'bg-[#E3F0E5]/50 border-[#4F8A68]/30 shadow-2xs'
-                            : 'bg-white border-[#E7E1D8] shadow-2xs hover:border-[#F28A45]/40'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex items-start gap-3.5">
-                            {/* Checkbox Button */}
-                            <button
-                              onClick={() =>
-                                toggleDayMutation.mutate({
-                                  planId: currentPlan.id,
-                                  dayNumber: dayItem.day,
-                                })
-                              }
-                              className={`w-7 h-7 rounded-xl border flex items-center justify-center transition-all cursor-pointer mt-0.5 flex-shrink-0 ${
-                                isDone
-                                  ? 'bg-[#4F8A68] border-[#4F8A68] text-white shadow-2xs'
-                                  : 'bg-[#FAF8F3] border-[#E7E1D8] text-transparent hover:border-[#F28A45]'
-                              }`}
-                              title={isDone ? 'Mark as Incomplete' : 'Mark as Completed'}
-                            >
-                              <CheckCircle2 size={18} />
-                            </button>
+                      <div key={dayItem.day} className="space-y-3">
+                        {isNewPhase && (
+                          <div className="pt-3 pb-1">
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-xs font-black text-[#F28A45] bg-[#FFF0E4] border border-[#F28A45]/30 px-3 py-1 rounded-xl uppercase tracking-wider shadow-2xs">
+                                {dayItem.phase}
+                              </span>
+                              <div className="flex-1 h-[1px] bg-[#E7E1D8]" />
+                            </div>
+                          </div>
+                        )}
 
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-black text-[#F28A45] bg-[#FFF0E4] px-2 py-0.5 rounded-md border border-[#F28A45]/20">
-                                  Day {dayItem.day}
-                                </span>
-                                <span className="text-[11px] font-semibold text-[#969188] flex items-center gap-1">
-                                  <Clock size={11} /> {dayItem.estimated_hours} hrs
-                                </span>
+                        <motion.div
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={`p-5 rounded-2xl border transition-all ${
+                            isDone
+                              ? 'bg-[#E3F0E5]/50 border-[#4F8A68]/30 shadow-2xs'
+                              : 'bg-white border-[#E7E1D8] shadow-2xs hover:border-[#F28A45]/40'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-3.5">
+                              {/* Status Indicator (completed via quiz only) */}
+                              <div
+                                className={`w-7 h-7 rounded-xl border flex items-center justify-center mt-0.5 flex-shrink-0 ${
+                                  isDone
+                                    ? 'bg-[#4F8A68] border-[#4F8A68] text-white shadow-2xs'
+                                    : 'bg-[#FAF8F3] border-[#E7E1D8] text-transparent'
+                                }`}
+                                title={isDone ? '✅ Passed Day Quiz (≥70%)' : 'Pass the Day Quiz to complete'}
+                              >
+                                <CheckCircle2 size={18} />
                               </div>
 
-                              <h4 className={`text-sm font-extrabold mt-1.5 ${isDone ? 'line-through text-[#969188]' : 'text-[#20201D]'}`}>
-                                {dayItem.topic}
-                              </h4>
-
-                              <p className="text-xs text-[#6F6B63] mt-1 leading-relaxed font-medium">
-                                {dayItem.focus}
-                              </p>
-
-                              {/* Recommended Action */}
-                              {dayItem.recommended_action && (
-                                <div className="mt-3 p-2.5 bg-[#FFF9F2] border border-[#E7E1D8] rounded-xl text-xs text-[#20201D] flex items-center gap-2">
-                                  <Brain size={13} className="text-[#F28A45] flex-shrink-0" />
-                                  <span><strong className="text-[#F28A45]">Action:</strong> {dayItem.recommended_action}</span>
-                                </div>
-                              )}
-
-                              {/* Key Concepts Pills */}
-                              {dayItem.key_concepts && dayItem.key_concepts.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 mt-3">
-                                  {dayItem.key_concepts.map((concept, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="text-[10px] font-bold bg-[#E3F0E5] text-[#35654B] border border-[#4F8A68]/20 px-2 py-0.5 rounded-lg"
-                                    >
-                                      {concept}
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-xs font-black text-[#F28A45] bg-[#FFF0E4] px-2 py-0.5 rounded-md border border-[#F28A45]/20">
+                                    Day {dayItem.day}
+                                  </span>
+                                  {dayItem.phase && (
+                                    <span className="text-[10px] font-bold text-[#4F8A68] bg-[#E3F0E5] px-2 py-0.5 rounded-md border border-[#4F8A68]/20">
+                                      {dayItem.phase.split(':')[0]}
                                     </span>
-                                  ))}
+                                  )}
+                                  <span className="text-[11px] font-semibold text-[#969188] flex items-center gap-1">
+                                    <Clock size={11} /> {dayItem.estimated_hours} hrs
+                                  </span>
                                 </div>
-                              )}
 
-                              {/* View AI Study Notes Button */}
-                              <div className="pt-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenStudyNotes(dayItem)}
-                                  className="btn-primary py-2 px-4 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-2xs active:scale-95"
-                                >
-                                  <BookOpen size={14} /> View AI Study Notes
-                                </button>
+                                <h4 className={`text-sm font-extrabold mt-1.5 ${isDone ? 'line-through text-[#969188]' : 'text-[#20201D]'}`}>
+                                  {dayItem.topic}
+                                </h4>
+
+                                <p className="text-xs text-[#6F6B63] mt-1 leading-relaxed font-medium">
+                                  {dayItem.focus}
+                                </p>
+
+                                {/* Recommended Action */}
+                                {dayItem.recommended_action && (
+                                  <div className="mt-3 p-2.5 bg-[#FFF9F2] border border-[#E7E1D8] rounded-xl text-xs text-[#20201D] flex items-center gap-2">
+                                    <Brain size={13} className="text-[#F28A45] flex-shrink-0" />
+                                    <span><strong className="text-[#F28A45]">Action:</strong> {dayItem.recommended_action}</span>
+                                  </div>
+                                )}
+
+                                {/* Key Concepts Pills */}
+                                {dayItem.key_concepts && dayItem.key_concepts.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5 mt-3">
+                                    {dayItem.key_concepts.map((concept, idx) => (
+                                      <span
+                                        key={idx}
+                                        className="text-[10px] font-bold bg-[#E3F0E5] text-[#35654B] border border-[#4F8A68]/20 px-2 py-0.5 rounded-lg"
+                                      >
+                                        {concept}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Action Buttons: Notes & Day Mastery Quiz */}
+                                <div className="pt-3 flex flex-wrap items-center gap-2.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenStudyNotes(dayItem)}
+                                    className="btn-primary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
+                                  >
+                                    <BookOpen size={14} /> View AI Study Notes
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const conceptsStr = dayItem.key_concepts?.length
+                                        ? ` (Key Concepts: ${dayItem.key_concepts.join(', ')})`
+                                        : ''
+                                      setDayQuizModal({ dayNum: dayItem.day, topic: dayItem.topic + conceptsStr })
+                                    }}
+                                    className={`py-2 px-3.5 text-xs font-extrabold rounded-xl border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95 ${
+                                      isDone
+                                        ? 'bg-[#E3F0E5] text-[#35654B] border-[#4F8A68]/30 hover:bg-[#d5e8d8]'
+                                        : 'bg-[#FFF0E4] text-[#F28A45] border-[#F28A45]/40 hover:bg-[#ffe3ce]'
+                                    }`}
+                                  >
+                                    <Target size={14} />
+                                    {isDone ? '✓ Retake Day Quiz (Passed)' : '🎯 Take Day Quiz (Pass ≥ 70%)'}
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      </motion.div>
+                        </motion.div>
+                      </div>
                     )
                   })}
                 </div>
@@ -756,17 +841,35 @@ export default function StudyPlanPage() {
                   onClick={() => {
                     if (isSpeaking) window.speechSynthesis.cancel()
                     setIsSpeaking(false)
-                    setActiveNotesModal(null)
+                    if (activeNotesModal) {
+                      const dayNum = activeNotesModal.dayNum
+                      const dayItem = currentPlan?.schedule.find((s) => s.day === dayNum)
+                      const conceptsStr = dayItem?.key_concepts?.length
+                        ? ` (Key Concepts: ${dayItem.key_concepts.join(', ')})`
+                        : ''
+                      const topic = activeNotesModal.topic + conceptsStr
+                      setActiveNotesModal(null)
+                      setDayQuizModal({ dayNum, topic })
+                    }
                   }}
-                  className="bg-[#111111] text-white hover:bg-[#27272a] px-6 py-2.5 rounded-full text-xs font-bold"
+                  className="btn-primary flex items-center gap-2 px-6 py-2.5 text-xs shadow-xs cursor-pointer"
                 >
-                  Done Reading
+                  Done Reading — Take Day Quiz <Target size={14} />
                 </button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+
+      {dayQuizModal && (
+        <GamifiedQuizGame
+          isOpen={!!dayQuizModal}
+          onClose={() => setDayQuizModal(null)}
+          initialTopic={dayQuizModal.topic}
+          onQuizComplete={handleDayQuizComplete}
+        />
+      )}
 
       <UpgradeModal
         isOpen={upgradeModalInfo.open}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Trophy, Clock, ArrowLeft, ChevronRight, Brain, AlertCircle, Sparkles, RefreshCw } from 'lucide-react'
 import { quizApi } from '../services/api'
@@ -106,27 +106,44 @@ export default function QuizPage() {
     setAnswers((prev) => ({ ...prev, [currentQuestion.id]: option }))
   }
 
+  const queryClient = useQueryClient()
+
   const handleSubmit = async () => {
     if (timerRef.current) clearInterval(timerRef.current)
     setSubmitted(true)
-    // Calculate score locally for demo
     const score = questions.filter((q: any) => answers[q.id] === q.correct_answer).length
     const pct = Math.round((score / totalQ) * 100)
     try {
-      await quizApi.submit(displayQuiz.id, answers)
-    } catch { /* noop */ }
+      if (displayQuiz?.id && displayQuiz.id !== 'q1') {
+        await quizApi.submit(displayQuiz.id, answers)
+        queryClient.invalidateQueries({ queryKey: ['progress-recent-quizzes'] })
+        queryClient.invalidateQueries({ queryKey: ['progress-summary'] })
+        queryClient.invalidateQueries({ queryKey: ['progress-analysis'] })
+        queryClient.invalidateQueries({ queryKey: ['progress-weekly'] })
+        queryClient.invalidateQueries({ queryKey: ['progress-topics'] })
+        queryClient.invalidateQueries({ queryKey: ['progress-calendar'] })
+      }
+    } catch (e) {
+      console.error('Error submitting quiz attempt:', e)
+    }
     navigate(`/quiz/${topicId}/result`, { state: { score, total: totalQ, pct, answers, quiz: displayQuiz } })
   }
 
   const generateQuiz = async () => {
     setGenerating(true)
     try {
-      await quizApi.generate({
+      const res = await quizApi.generate({
         topic_id: activeSession?.topic_id || topicId!,
         session_id: activeSession?.id,
         difficulty: 'medium',
       })
-    } catch { /* noop */ }
+      if (res.data) {
+        queryClient.setQueryData(['quiz', topicId], res.data)
+        queryClient.invalidateQueries({ queryKey: ['quiz', topicId] })
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to generate quiz')
+    }
     setGenerating(false)
   }
 
