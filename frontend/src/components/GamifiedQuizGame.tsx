@@ -106,7 +106,11 @@ export default function GamifiedQuizGame({
     } catch (err: any) {
       console.error(err)
       alert(err.response?.data?.detail || 'Failed to generate quiz. Make sure you have uploaded a PDF document and Ollama is running.')
-      setSetupStep(true)
+      if (overrideTopic) {
+        onClose()
+      } else {
+        setSetupStep(true)
+      }
     } finally {
       setGenerating(false)
     }
@@ -403,13 +407,34 @@ export default function GamifiedQuizGame({
                 You scored <span className="text-[#F28A45] font-black">{correctCount}</span> out of <span className="font-black text-[#20201D]">{totalQuestions}</span> questions correctly ({Math.round((correctCount / totalQuestions) * 100)}%)
               </p>
             </div>
-            <div className="flex gap-4 max-w-sm mx-auto pt-4">
-              <button
-                onClick={() => setSetupStep(true)}
-                className="btn-primary w-full py-3 px-6 text-xs font-black shadow-2xs cursor-pointer"
-              >
-                Take Another Quiz
-              </button>
+            <div className="flex gap-3 max-w-sm mx-auto pt-4">
+              {initialTopic ? (
+                <>
+                  <button
+                    onClick={() => {
+                      resetGame()
+                      setGenerating(true)
+                      triggerGenerate(initialTopic)
+                    }}
+                    className="btn-primary flex-1 py-3 px-6 text-xs font-black shadow-2xs cursor-pointer"
+                  >
+                    Retry Quiz
+                  </button>
+                  <button
+                    onClick={onClose}
+                    className="flex-1 py-3 px-6 text-xs font-black rounded-xl border border-[#E7E1D8] bg-[#FAF8F3] text-[#20201D] hover:bg-[#F4EFE7] cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setSetupStep(true)}
+                  className="btn-primary w-full py-3 px-6 text-xs font-black shadow-2xs cursor-pointer"
+                >
+                  Take Another Quiz
+                </button>
+              )}
             </div>
           </div>
         ) : generating || !quiz ? (
