@@ -14,7 +14,7 @@ from app.core.config import get_settings
 settings = get_settings()
 
 # ── Active Vector Store ───────────────────────────────────────────────────────
-if settings.VECTOR_STORE_BACKEND == "pinecone":
+if settings.VECTOR_STORE_BACKEND == "pinecone" or bool(settings.PINECONE_API_KEY):
     from .pinecone_store import PineconeVectorStore as _VS
     active_vector_store = _VS()
 elif settings.VECTOR_STORE_BACKEND == "faiss":

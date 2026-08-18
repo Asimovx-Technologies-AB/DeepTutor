@@ -701,9 +701,9 @@ class GraphRAGPipeline:
         yield f"data: {json.dumps({'type': 'confidence', 'data': {'score': confidence_score, 'label': confidence_label}})}\n\n"
 
         # ── Step 4: Out-of-scope handling ──────────────────────────────────────
-        if effective_topic_id and oos_handler.is_out_of_scope(confidence_score, confidence_label):
-            is_tb = effective_topic_id.startswith(("sslc-", "math-", "phys-", "chem-", "textbook"))
-            oos_response = oos_handler.format_response(question, is_textbook=is_tb)
+        is_textbook = bool(effective_topic_id and effective_topic_id.startswith(("sslc-", "math-", "phys-", "chem-", "textbook")))
+        if effective_topic_id and not is_textbook and oos_handler.is_out_of_scope(confidence_score, confidence_label):
+            oos_response = oos_handler.format_response(question, is_textbook=False)
             for token in oos_response.split(" "):
                 yield f"data: {json.dumps({'type': 'token', 'data': token + ' '})}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
