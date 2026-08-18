@@ -343,84 +343,120 @@ export default function SubjectChatPage() {
       {/* ─── Main Chat Area ─── */}
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 max-w-4xl w-full mx-auto">
         {loadingSession ? (
-          <div className="h-full flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-3 border-[#F28A45] border-t-transparent rounded-full animate-spin" />
+          <div className="h-full flex flex-col items-center justify-center py-20 space-y-4">
+            <div className="w-10 h-10 border-3 border-[#F28A45] border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs font-bold text-[#969188] animate-pulse">Loading AI Textbook Tutor...</p>
           </div>
         ) : messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center py-10 space-y-6">
-            <div className="w-16 h-16 rounded-3xl bg-white border border-[#E7E1D8] flex items-center justify-center text-3xl shadow-xs">
-              {config.icon}
-            </div>
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+            className="h-full flex flex-col items-center justify-center text-center py-10 space-y-6"
+          >
+            {/* Animated Floating Emblem */}
+            <motion.div
+              animate={{ y: [0, -8, 0] }}
+              transition={{ repeat: Infinity, duration: 3.5, ease: 'easeInOut' }}
+              className="relative"
+            >
+              <div
+                className="w-20 h-20 rounded-3xl flex items-center justify-center text-4xl shadow-md border"
+                style={{ backgroundColor: config.accentBg, borderColor: config.borderColor }}
+              >
+                {config.icon}
+              </div>
+              <div
+                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-white border flex items-center justify-center shadow-xs text-xs font-bold"
+                style={{ borderColor: config.borderColor, color: config.color }}
+              >
+                10th
+              </div>
+            </motion.div>
 
             <div className="max-w-md space-y-2">
-              <h2 className="text-xl font-bold text-[#20201D]">
-                {selectedTopic ? selectedTopic.title : `Welcome to ${subject.name}`}
+              <h2 className="text-2xl font-black text-[#20201D] tracking-tight">
+                {selectedTopic ? selectedTopic.title : `${subject.name} AI Tutor`}
               </h2>
-              <p className="text-sm text-[#6F6B63]">
+              <p className="text-sm text-[#6F6B63] leading-relaxed">
                 {selectedTopic
                   ? selectedTopic.description
-                  : 'Ask any question about formulas, definitions, diagram explanations, and solved textbook examples.'}
+                  : 'Ask any question from official textbook chapters. I will explain concepts, provide step-by-step examples, solved calculations, and exam model answers.'}
               </p>
             </div>
 
             {/* Prompt Starters */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl text-left">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-xl text-left pt-2">
               {config.starters.map((starter, idx) => (
-                <button
+                <motion.button
                   key={idx}
+                  whileHover={{ scale: 1.02, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => sendMessage(starter)}
-                  className="p-3.5 rounded-2xl bg-white border border-[#E7E1D8] hover:border-[#F28A45] text-xs font-semibold text-[#20201D] hover:shadow-xs transition-all cursor-pointer flex items-start gap-2.5 group"
+                  className="p-4 rounded-2xl bg-white border border-[#E7E1D8] hover:border-[#F28A45] hover:shadow-xs transition-all cursor-pointer flex items-start gap-3 group text-left"
                 >
-                  <Sparkles size={15} className="text-[#F28A45] flex-shrink-0 mt-0.5" />
-                  <span className="group-hover:text-[#F28A45] transition-colors">{starter}</span>
-                </button>
+                  <div className="w-7 h-7 rounded-xl bg-[#FFF0E4] flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform">
+                    <Sparkles size={14} className="text-[#F28A45]" />
+                  </div>
+                  <span className="text-xs font-bold text-[#20201D] group-hover:text-[#F28A45] transition-colors leading-relaxed">
+                    {starter}
+                  </span>
+                </motion.button>
               ))}
             </div>
-          </div>
+          </motion.div>
         ) : (
           <div className="space-y-4 pb-4">
-            {messages.map((m) => (
-              <ChatMessage
-                key={m.id}
-                role={m.role}
-                content={m.content}
-                sources={m.sources}
-                isStreaming={isStreaming && m.id === messages[messages.length - 1]?.id}
-              />
-            ))}
+            <AnimatePresence initial={false}>
+              {messages.map((m) => (
+                <motion.div
+                  key={m.id}
+                  initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                >
+                  <ChatMessage
+                    role={m.role}
+                    content={m.content}
+                    sources={m.sources}
+                    isStreaming={isStreaming && m.id === messages[messages.length - 1]?.id}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
             <div ref={messagesEndRef} />
           </div>
         )}
       </main>
 
-      {/* ─── Bottom Chat Input (No PDF upload required) ─── */}
-      <footer className="bg-white border-t border-[#E7E1D8] p-4 max-w-4xl w-full mx-auto rounded-t-3xl shadow-xs">
+      {/* ─── Bottom Chat Input (Clean & Aesthetic Floating Capsule) ─── */}
+      <footer className="p-4 max-w-4xl w-full mx-auto">
         <form
           onSubmit={(e) => {
             e.preventDefault()
             sendMessage()
           }}
-          className="flex items-center gap-3"
+          className="relative bg-white border border-[#E7E1D8] focus-within:border-[#F28A45] focus-within:ring-3 focus-within:ring-[#F28A45]/15 rounded-3xl p-2 pl-5 shadow-xs transition-all flex items-center gap-3"
         >
-          <div className="relative flex-1">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={`Ask anything from ${selectedTopic ? selectedTopic.title : subject.name}...`}
-              className="w-full bg-[#FAF8F3] border border-[#E7E1D8] rounded-2xl px-4 py-3 text-sm text-[#20201D] placeholder-[#9E9B95] focus:outline-none focus:border-[#F28A45] transition-colors pr-10"
-              disabled={isStreaming || loadingSession}
-            />
-          </div>
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={`Ask a question or topic from ${selectedTopic ? selectedTopic.title : subject.name}...`}
+            className="flex-1 bg-transparent text-sm sm:text-base text-[#20201D] font-medium placeholder-[#9E9B95] focus:outline-none"
+            disabled={isStreaming || loadingSession}
+          />
 
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             type="submit"
             disabled={!input.trim() || isStreaming || loadingSession}
-            className="p-3 bg-[#F28A45] hover:bg-[#D97706] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl transition-all cursor-pointer flex-shrink-0 shadow-xs"
+            className="p-3.5 bg-[#F28A45] hover:bg-[#D97706] disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-2xl transition-all cursor-pointer flex-shrink-0 shadow-xs flex items-center justify-center"
             title="Send Message"
           >
-            <Send size={18} />
-          </button>
+            <Send size={16} />
+          </motion.button>
         </form>
       </footer>
     </div>

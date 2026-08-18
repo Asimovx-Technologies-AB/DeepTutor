@@ -285,6 +285,369 @@ def extract_requested_pages(text: str) -> List[int]:
     return sorted(list(pages))
 
 
+# ── Specialized Student Question Response Intent Classifier ────────────────────
+def classify_learning_response_instruction(
+    question: str,
+    is_textbook: bool = False,
+    requested_pages: Optional[List[int]] = None,
+    has_page_chunks: bool = True,
+) -> str:
+    """
+    Analyzes student question intent and generates specialized, high-yield pedagogical
+    prompts tailored for different question archetypes:
+      1. Specific Page Summaries
+      2. Board Exam Marks Formats (1-2 Marks, 4 Marks, 8 Marks, 16 Marks)
+      3. Comparison / Differences (Side-by-Side Tables)
+      4. Flowcharts / Step-by-Step Mechanisms & Processes
+      5. Mathematical / Scientific Derivations & Proofs
+      6. Definitions, Laws & Principles
+      7. Classifications, Types & Categorized Lists
+      8. Bullet Points / Quick Revision
+      9. Important Exam Points & Key Formulas
+      10. Intuitive Analogies & Mental Models
+      11. Standard 10th Standard SCERT Textbook Template
+      12. Standard General Document Learn Template
+    """
+    q_raw = question or ""
+    q_lower = q_raw.lower().strip()
+
+    # 1. Page Specific Explanation
+    if requested_pages and has_page_chunks:
+        pages_str = ", ".join(str(p) for p in requested_pages)
+        return (
+            f"The student specifically asked for an explanation of Page {pages_str}.\n"
+            f"Explain and summarize ALL concepts, definitions, formulas, workflows, and details presented on Page {pages_str} thoroughly, clearly, and faithfully based on the Document Context.\n"
+            f"Structure your response starting with:\n"
+            f"# 📄 Page {pages_str} Explanation & Summary\n\n"
+            f"Follow with clear conceptual explanations, structured breakdown tables/steps, and key takeaways from that page."
+        )
+
+    # 2. Board Exam Marks Allocation: 16 Marks (Comprehensive Essay / Master Question)
+    if (
+        re.search(r'\b(15|16|20)\s*(?:marks?|mark|pts?)\b', q_lower)
+        or any(w in q_lower for w in ["16 mark", "16-mark", "16mark", "15 mark", "essay answer", "master essay", "detailed essay", "16 marks question"])
+    ):
+        return (
+            "The student specifically requested a 16-MARK comprehensive board-exam master answer.\n"
+            "Provide an exhaustive, textbook-grounded response formatted strictly with these clear sections:\n"
+            "# 🎓 [16 Marks Master Essay Answer]: [Topic Title]\n\n"
+            "### 1️⃣ Executive Overview & Fundamental Definition (2 Marks)\n"
+            "[High-level conceptual introduction, historical context, and formal definition in bold]\n\n"
+            "### 2️⃣ Underlying Laws, Scientific Principles & Theoretical Framework (3 Marks)\n"
+            "[Exhaustive explanation of governing laws, assumptions, and physical/mathematical foundation]\n\n"
+            "### 3️⃣ Comprehensive Step-by-Step Working & Complete Derivations (5 Marks)\n"
+            "[In-depth walkthrough with numbered steps, algebraic/chemical workings, and LaTeX formulas]\n\n"
+            "### 4️⃣ Structured Comparison / Classification / Data Table (2 Marks)\n"
+            "| Parameter / Feature | Detail / Value / Property | Exam Significance |\n"
+            "| :--- | :--- | :--- |\n"
+            "| ... | ... | ... |\n\n"
+            "### 5️⃣ Practical Applications & Worked Problem (3 Marks)\n"
+            "- **Worked Numerical/Practical Example:** [Complete calculation with Given, Formula, Substitution, and Final Answer with units]\n"
+            "- **Industrial / Daily-Life Applications:** [3-4 concrete applications]\n\n"
+            "### 6️⃣ Critical Precautions, Limitations & Exam Conclusion (1 Mark)\n"
+            "[Essential boundary conditions, common pitfalls, and 2-sentence summary conclusion]"
+        )
+
+    # 3. Board Exam Marks Allocation: 8 Marks (Long Answer / Analytical Question)
+    if (
+        re.search(r'\b(7|8|10)\s*(?:marks?|mark|pts?)\b', q_lower)
+        or any(w in q_lower for w in ["8 mark", "8-mark", "8mark", "eight mark", "long answer", "8 marks answer", "8 marks question"])
+    ):
+        return (
+            "The student specifically requested an 8-MARK board-exam long answer.\n"
+            "Provide a structured, high-scoring long answer formatted strictly with these sections:\n"
+            "# 📋 [8 Marks Long-Answer Model Guide]: [Topic Title]\n\n"
+            "### 1️⃣ Introduction & Statement of Principle / Law (1.5 Marks)\n"
+            "[Clear formal definition, textbook statement in bold, and underlying scientific/mathematical principle]\n\n"
+            "### 2️⃣ Core Theory & Working Mechanism (3 Marks)\n"
+            "Break down into 4 to 6 distinct numbered points explaining the core mechanism:\n"
+            "1. **[Step 1]:** [Detailed explanation with bold terms]\n"
+            "2. **[Step 2]:** [Detailed explanation]\n"
+            "3. **[Step 3]:** [Detailed explanation]\n"
+            "4. **[Step 4]:** [Detailed explanation]\n\n"
+            "### 3️⃣ Mathematical Derivation / Equations & Working (2 Marks)\n"
+            "[Complete step-by-step calculations/derivation with all variables defined in LaTeX]\n\n"
+            "### 4️⃣ Real-World Applications & Practical Examples (1 Mark)\n"
+            "- **Application 1:** [Clear example]\n"
+            "- **Application 2:** [Clear example]\n\n"
+            "### 5️⃣ Examiner Checklist & Crucial Exam Cautions (0.5 Mark)\n"
+            "- ✅ [Crucial label/SI unit to remember]\n"
+            "- ⚠️ [Common blunder to avoid that loses marks]"
+        )
+
+    # 4. Board Exam Marks Allocation: 4 Marks (Medium-Answer Question)
+    if (
+        re.search(r'\b(3|4|5|6)\s*(?:marks?|mark|pts?)\b', q_lower)
+        or any(w in q_lower for w in ["4 mark", "4-mark", "4mark", "four mark", "3 mark", "5 mark", "4 marks answer", "4 marks question"])
+    ):
+        return (
+            "The student specifically requested a 4-MARK board-exam answer.\n"
+            "Provide a crisp, 4-part scoring answer tailored for full 4/4 marks:\n"
+            "# 📝 [4 Marks Exam Model Answer]: [Topic Title]\n\n"
+            "### 1️⃣ Core Statement & Definition (1 Mark)\n"
+            "[Crisp textbook definition or statement of law in bold]\n\n"
+            "### 2️⃣ Key Mechanism / Working Points (2 Marks)\n"
+            "Provide exactly 4 high-yield, bulleted points with bold keywords:\n"
+            "- **Point 1:** [Key concept / mechanism]\n"
+            "- **Point 2:** [Key concept / condition]\n"
+            "- **Point 3:** [Key property / relationship]\n"
+            "- **Point 4:** [Key consequence / rule]\n\n"
+            "### 3️⃣ Formula / Solved Example / Reaction (1 Mark)\n"
+            "- **Formula / Equation:** $[Formula\ or\ Reaction]$\n"
+            "- **Quick Solved Example:** [1 short numerical or application with answer]\n\n"
+            "---\n"
+            "💡 **Score Booster Tip:** [The exact keywords examiners look for to award full 4 marks]"
+        )
+
+    # 5. Board Exam Marks Allocation: 1-2 Marks (Short Answer Question)
+    if (
+        re.search(r'\b(1|2)\s*(?:marks?|mark|pts?)\b', q_lower)
+        or any(w in q_lower for w in ["1 mark", "1-mark", "1mark", "2 mark", "2-mark", "2mark", "two mark", "short answer 1 mark", "2 marks answer"])
+    ):
+        return (
+            "The student specifically requested a 1 or 2-MARK concise board-exam answer.\n"
+            "Provide a direct, high-yield answer for full marks:\n"
+            "# 🎯 [1-2 Marks Exam Model Answer]: [Topic Title]\n\n"
+            "### ✍️ Model Answer (Full Marks Guarantee)\n"
+            "- **Direct Definition / Law:** [State the exact crisp definition in bold]\n"
+            "- **Formula & SI Unit:** $[Formula]$ | **SI Unit:** $[SI\ Unit]$\n"
+            "- **1 Key Fact / Condition:** [1 textbook example or condition]\n\n"
+            "---\n"
+            "💡 **Examiner Keyword:** [The must-have technical term that earns the 2/2 score]"
+        )
+
+    # 6. Comparison & Differences (Side-by-Side Tables)
+    if (
+        any(w in q_lower for w in [
+            "difference between", "differences between", "compare", "comparison",
+            "distinguish between", "distinguish", "differentiate", "contrast",
+            "tabular column", "comparison table"
+        ])
+        or re.search(r'\b\w+\s+vs\.?\s+\w+\b', q_lower)
+        or re.search(r'\bversus\b', q_lower)
+    ):
+        return (
+            "The student specifically asked for a COMPARISON / DIFFERENCE between concepts.\n"
+            "Provide a high-yield, structured side-by-side comparison following this format:\n"
+            "# ⚖️ Comparison: [Concept A] vs. [Concept B]\n\n"
+            "### 💡 Quick Overview\n"
+            "[1-2 sentences summarizing the fundamental distinction between the two concepts]\n\n"
+            "---\n\n"
+            "### 📊 Side-by-Side Comparison Table\n"
+            "| Parameter / Basis of Comparison | [Concept A] | [Concept B] |\n"
+            "| :--- | :--- | :--- |\n"
+            "| **Basic Definition** | [Definition of A] | [Definition of B] |\n"
+            "| **Formula / Equation** (if applicable) | $[Formula\ A]$ | $[Formula\ B]$ |\n"
+            "| **SI Unit / Nature** (if applicable) | [Scalar / Vector / Unit of A] | [Scalar / Vector / Unit of B] |\n"
+            "| **Key Characteristic** | [Core Property A] | [Core Property B] |\n"
+            "| **Textbook / Real-World Example** | [Example A] | [Example B] |\n"
+            "| **Common Exam Mistake** | [Mistake A] | [Mistake B] |\n\n"
+            "---\n\n"
+            "### 💡 Memory Trick / Golden Rule\n"
+            "> 🧠 **How to Remember in Exam:** [A memorable 1-line mnemonic or rule so the student never confuses them]\n\n"
+            "---\n\n"
+            "### 🎯 Quick Self-Check Question\n"
+            "**Question:** [A 1-sentence scenario where the student must identify whether Concept A or Concept B applies]  \n"
+            "💡 **Hint:** [1-line hint to solve it]"
+        )
+
+    # 7. Flowchart, Step-by-Step Procedure, Reaction Mechanism, Lifecycle
+    if any(w in q_lower for w in [
+        "flowchart", "flow chart", "flow-chart", "process flow", "steps involved",
+        "step by step procedure", "stages of", "mechanism of", "lifecycle of",
+        "life cycle of", "reaction pathway", "sequence of steps", "working cycle"
+    ]):
+        return (
+            "The student specifically asked for a FLOWCHART / STEP-BY-STEP PROCESS or MECHANISM.\n"
+            "Provide a visual flowchart sequence and detailed mechanism following this format:\n"
+            "# 🔄 Flowchart & Process: [Process / Mechanism Name]\n\n"
+            "### 💡 What Happens (Simple Overview)\n"
+            "[1-2 sentences explaining what this process accomplishes from initial input to final output]\n\n"
+            "---\n\n"
+            "### 🧭 Visual Flowchart\n"
+            "```\n"
+            "┌─────────────────────────────────────────────────────────┐\n"
+            "│ 1️⃣ [START / INITIAL TRIGGER / INPUT]                     │\n"
+            "└────────────────────────────┬────────────────────────────┘\n"
+            "                             │\n"
+            "                             ▼\n"
+            "┌─────────────────────────────────────────────────────────┐\n"
+            "│ 2️⃣ [MAIN ACTION / REACTION / CONVERSION]                 │\n"
+            "└────────────────────────────┬────────────────────────────┘\n"
+            "                             │\n"
+            "                             ▼\n"
+            "┌─────────────────────────────────────────────────────────┐\n"
+            "│ 3️⃣ [INTERMEDIATE STAGE / SEPARATION]                     │\n"
+            "└────────────────────────────┬────────────────────────────┘\n"
+            "                             │\n"
+            "                             ▼\n"
+            "┌─────────────────────────────────────────────────────────┐\n"
+            "│ 4️⃣ [FINAL RESULT / OUTPUT / PRODUCT]                    │\n"
+            "└─────────────────────────────────────────────────────────┘\n"
+            "```\n\n"
+            "---\n\n"
+            "### 📝 Detailed Stage Breakdown\n"
+            "1. **Stage 1: [Stage Name]**  \n"
+            "   - **Action:** [What happens scientifically/mathematically]  \n"
+            "   - **Key Formula / Condition:** [Equation, temperature, catalyst, or rule]\n"
+            "2. **Stage 2: [Stage Name]**  \n"
+            "   - **Action:** [What happens]  \n"
+            "   - **Key Formula / Condition:** [Equation]\n"
+            "3. **Stage 3: [Stage Name]**  \n"
+            "   - **Action:** [What happens]  \n"
+            "   - **Key Formula / Condition:** [Equation]\n\n"
+            "---\n\n"
+            "### 🔑 Critical Factors & Exam Points\n"
+            "- **Essential Conditions / Reagents:** [List temperature, pressure, medium, or constants]\n"
+            "- **Frequently Asked Exam Question:** [1 typical board exam question based on this flowchart]"
+        )
+
+    # 8. Mathematical & Scientific Derivations / Proofs
+    if (
+        any(w in q_lower for w in ["derive ", "derivation", "prove that", "proof of", "mathematical proof", "show that ", "derive the formula"])
+        or q_lower.startswith("derive")
+        or q_lower.startswith("prove")
+    ):
+        return (
+            "The student specifically asked for a MATHEMATICAL / SCIENTIFIC DERIVATION or PROOF.\n"
+            "Provide a rigorous, easy-to-follow step-by-step derivation:\n"
+            "# 📐 Step-by-Step Derivation: [Theorem / Formula Name]\n\n"
+            "### 🎯 Objective\n"
+            "**To Prove / Derive:** $[Target\ Formula]$\n\n"
+            "### 📌 Initial Assumptions & Symbols\n"
+            "- Let $[symbol_1]$ = [meaning]\n"
+            "- Let $[symbol_2]$ = [meaning]\n\n"
+            "---\n\n"
+            "### 📝 Step-by-Step Derivation Working\n"
+            "1. **Step 1: [Starting Principle / Basic Equation]**\n"
+            "   $$[Equation 1]$$\n"
+            "   *(Reason: From fundamental definition)*\n\n"
+            "2. **Step 2: [Algebraic Substitution / Operation]**\n"
+            "   $$[Equation 2]$$\n\n"
+            "3. **Step 3: [Simplification & Factoring]**\n"
+            "   $$[Equation 3]$$\n\n"
+            "4. **Step 4: [Final Formulation]**\n"
+            "   $$[Target\ Formula]$$\n\n"
+            "---\n\n"
+            "### 🏁 Final Formula Box\n"
+            "$$\\boxed{[Target\\ Formula]}$$\n\n"
+            "💡 **Key Transition Step:** [The exact algebraic move that students must remember in the exam room]"
+        )
+
+    # 9. Definitions, Laws & Principles
+    if (
+        any(w in q_lower for w in ["define ", "definition of", "what is meant by", "state the law", "state the principle", "state newton", "state ohm", "state boyle", "state charles", "state snell", "state law of"])
+        or q_lower.startswith("define")
+        or q_lower.startswith("state")
+    ):
+        return (
+            "The student specifically asked for a DEFINITION or STATEMENT OF LAW.\n"
+            "Provide a clean, authoritative, textbook-grade definition:\n"
+            "# 📖 Definition: [Topic / Law Name]\n\n"
+            "### 💡 Formal Textbook Definition\n"
+            "> **\"[Exact formal definition or statement of the law from the syllabus]\"**\n\n"
+            "### 🗣️ In Simple Words (Plain English)\n"
+            "[1-2 simple sentences explaining the intuition behind the definition so a 10th grader grasps it immediately]\n\n"
+            "---\n\n"
+            "### 📐 Mathematical Expression & SI Units\n"
+            "- **Formula:** $[Formula]$\n"
+            "- **Where:** [Define each variable]\n"
+            "- **SI Unit:** $[SI\ Unit]$\n"
+            "- **Type:** [Scalar / Vector Quantity]\n\n"
+            "---\n\n"
+            "### 🌟 Everyday Real-Life Example\n"
+            "[1 relatable real-world example illustrating the concept]\n\n"
+            "⚠️ **Exam Trap:** [The common omitted word or mistake that causes examiners to deduct marks]"
+        )
+
+    # 10. Classifications, Types & Lists
+    if any(w in q_lower for w in [
+        "types of", "list the", "list down", "classify", "classification of",
+        "categories of", "enumerate", "kinds of", "name the types", "different types"
+    ]):
+        return (
+            "The student specifically asked for TYPES, CLASSIFICATION, or a STRUCTURED LIST.\n"
+            "Provide a structured classification guide:\n"
+            "# 📑 Types & Classification: [Topic Title]\n\n"
+            "### 💡 Classification Criteria\n"
+            "[1-2 sentences on how and why this concept is categorized]\n\n"
+            "---\n\n"
+            "### 📋 Classification Summary Table\n"
+            "| Category / Type | Core Definition | Key Property / Formula | Standard Example |\n"
+            "| :--- | :--- | :--- | :--- |\n"
+            "| **[Type 1]** | [Definition] | [Property/Formula] | [Example 1] |\n"
+            "| **[Type 2]** | [Definition] | [Property/Formula] | [Example 2] |\n"
+            "| **[Type 3]** | [Definition] | [Property/Formula] | [Example 3] |\n\n"
+            "---\n\n"
+            "### 🔍 How to Differentiate in Exam Problems\n"
+            "- If the question states **[Condition 1]** ➔ It is **[Type 1]**.\n"
+            "- If the question states **[Condition 2]** ➔ It is **[Type 2]**.\n\n"
+            "---\n\n"
+            "### 🎯 Quick Practice Question\n"
+            "**Question:** [Short 1-sentence classification question]  \n"
+            "💡 **Hint:** [1-line hint]"
+        )
+
+    # 11. Bullet Points / Quick Revision
+    if any(w in q_lower for w in [
+        "bullet point", "bullet points", "bullets", "5-7 clear", "quick revision",
+        "summarize into", "summary notes", "in short", "bulleted list", "key bullets"
+    ]):
+        return (
+            "The student specifically asked for BULLET POINTS.\n"
+            "Provide ONLY a crisp, high-yield revision summary formatted as 5 to 7 structured bullet points with bold key terms and equations.\n"
+            "Do NOT include unrelated filler or full articles."
+        )
+
+    # 12. Important Exam-Critical Points & Formulas
+    if any(w in q_lower for w in [
+        "important point", "important points", "exam-critical", "exam points",
+        "core formulas", "must know for exam", "key points", "high yield points"
+    ]):
+        return (
+            "The student specifically asked for IMPORTANT EXAM-CRITICAL POINTS.\n"
+            "Provide a focused high-yield breakdown:\n"
+            "# 🔑 Exam-Critical Must-Know Points: [Topic Title]\n\n"
+            "### 1️⃣ Core Definitions & Must-Know Formulas\n"
+            "| Formula / Law | When to Apply | Crucial Units |\n"
+            "| :--- | :--- | :--- |\n"
+            "| ... | ... | ... |\n\n"
+            "### 2️⃣ High-Probability Board Exam Questions & Key Answer Phrases\n"
+            "- **Question Type 1:** [What examiners ask & the key phrase required]\n"
+            "- **Question Type 2:** [What examiners ask & the key phrase required]\n\n"
+            "### 3️⃣ Common Misconceptions & Pitfalls to Avoid\n"
+            "- ⚠️ [Common blunder 1]\n"
+            "- ⚠️ [Common blunder 2]"
+        )
+
+    # 13. Intuitive Analogy / Mental Model
+    if any(w in q_lower for w in [
+        "analogy", "intuitive analogy", "simple analogy", "mental model",
+        "real life analogy", "explain like i am", "simple story", "visual model"
+    ]):
+        return (
+            "The student specifically asked for a SIMPLE ANALOGY.\n"
+            "Explain the topic using an intuitive, memorable real-world analogy and visual mental model in a blockquote, "
+            "followed by a clear 2-paragraph bridge connecting the analogy directly to the technical concept."
+        )
+
+    # 14. Fallback Default (Textbook or Document)
+    if is_textbook:
+        return (
+            "Please explain this topic in an easy, friendly, and structured way for a 10th class student following the 10th Grade Output Template: "
+            "(1) # 📘 [Topic Title], (2) 💡 Simple Definition (In Easy Words), "
+            "(3) 🌟 Real-Life Example / Analogy in a blockquote, (4) 📝 Step-by-Step Explanation & Solved Example (with clear calculations), "
+            "(5) 🔑 Important Exam Points & Key Formulas (table), and (6) 🎯 Quick Practice Question with a Hint."
+        )
+    else:
+        return (
+            "Please explain this topic clearly and educationally for a student following the Output Formatting Template: "
+            "(1) # 📚 [Topic Title], (2) 💡 Big-Picture Concept + Blockquote Intuitive Analogy, "
+            "(3) 🔑 Key Concepts Breakdown Table, (4) ⚙️ How It Works Step-by-Step with numbered steps, "
+            "(5) ⚖️ Strengths vs. Limitations (with ✅ and ⚠️ subheadings), and (6) 📌 Summary Takeaway."
+        )
+
+
 # ── Chunk deduplication ─────────────────────────────────────────────────────────
 def _deduplicate_chunks(chunks_lists: List[List[Dict]]) -> List[Dict]:
     """
@@ -717,51 +1080,15 @@ class GraphRAGPipeline:
             history_text += f"{role_label}: {msg['content'][:500]}\n"
 
         requested_pages_list = extract_requested_pages(question) if question else []
-        q_lower = question.lower() if question else ""
-
-        if (requested_pages_list and vector_chunks and
-                not any("Missing" in str(c.get("metadata", {}).get("page", "")) for c in vector_chunks)):
-            pages_str = ", ".join(str(p) for p in requested_pages_list)
-            prompt_instruction = (
-                f"The student specifically asked for an explanation of Page {pages_str}.\n"
-                f"Explain and summarize ALL concepts, definitions, formulas, workflows, and details presented on Page {pages_str} thoroughly, clearly, and faithfully based on the Document Context.\n"
-                f"Structure your response starting with:\n"
-                f"# 📄 Page {pages_str} Explanation & Summary\n\n"
-                f"Follow with clear conceptual explanations, structured breakdown tables/steps, and key takeaways from that page."
-            )
-        elif any(w in q_lower for w in ["bullet point", "bullet points", "5-7 clear", "quick revision", "summarize into"]):
-            prompt_instruction = (
-                "The student specifically asked for bullet points. "
-                "Provide ONLY a crisp, high-yield summary formatted as 5 to 7 structured bullet points with bold key terms. "
-                "Do NOT include unrelated filler, extra analogies, or full article sections."
-            )
-        elif any(w in q_lower for w in ["important point", "important points", "exam-critical", "exam points", "core formulas"]):
-            prompt_instruction = (
-                "The student specifically asked for important exam-critical points. "
-                "Provide a focused high-yield breakdown: (1) Core Definitions & Must-Know Formulas, "
-                "(2) Crucial Exam Points, and (3) Common Misconceptions / Pitfalls to avoid."
-            )
-        elif any(w in q_lower for w in ["analogy", "intuitive analogy", "simple analogy", "mental model"]):
-            prompt_instruction = (
-                "The student specifically asked for a simple analogy. "
-                "Explain the topic using an intuitive, memorable real-world analogy and visual mental model, "
-                "followed by a brief 2-sentence connection to the technical concept."
-            )
-        else:
-            if is_textbook:
-                prompt_instruction = (
-                    "Please explain this topic in an easy, friendly, and structured way for a 10th class student following the 10th Grade Output Template: "
-                    "(1) # 📘 [Topic Title], (2) 💡 Simple Definition (In Easy Words), "
-                    "(3) 🌟 Real-Life Example / Analogy in a blockquote, (4) 📝 Step-by-Step Explanation & Solved Example (with clear calculations), "
-                    "(5) 🔑 Important Exam Points & Key Formulas (table), and (6) 🎯 Quick Practice Question with a Hint."
-                )
-            else:
-                prompt_instruction = (
-                    "Please explain this topic clearly and educationally for a student following the Output Formatting Template: "
-                    "(1) # 📚 [Topic Title], (2) 💡 Big-Picture Concept + Blockquote Intuitive Analogy, "
-                    "(3) 🔑 Key Concepts Breakdown Table, (4) ⚙️ How It Works Step-by-Step with numbered steps, "
-                    "(5) ⚖️ Strengths vs. Limitations (with ✅ and ⚠️ subheadings), and (6) 📌 Summary Takeaway."
-                )
+        has_valid_page_chunks = bool(
+            vector_chunks and not any("Missing" in str(c.get("metadata", {}).get("page", "")) for c in vector_chunks)
+        )
+        prompt_instruction = classify_learning_response_instruction(
+            question=question,
+            is_textbook=is_textbook,
+            requested_pages=requested_pages_list if has_valid_page_chunks else None,
+            has_page_chunks=has_valid_page_chunks,
+        )
 
         if graph_context_text or vector_context_text:
             user_content = (

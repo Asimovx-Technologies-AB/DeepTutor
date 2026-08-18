@@ -1126,53 +1126,7 @@ export default function ChatPage() {
         {/* Input Bar (Sticky at bottom when chat messages exist) */}
         {allMessages.length > 0 && (
           <div className="p-3 sm:p-4 border-t border-[#E7E1D8] bg-white">
-            <div className="max-w-4xl mx-auto bg-[#FAF8F3] border border-[#E7E1D8] rounded-2xl p-3 sm:p-3.5 focus-within:border-[#F28A45] focus-within:ring-2 focus-within:ring-[#F28A45]/20 transition-all">
-              
-              {/* Quick Study Tool Pill Buttons */}
-              <div className="flex flex-wrap items-center gap-1.5 mb-2.5 pb-2 border-b border-[#E7E1D8]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const topic = input.trim() || 'the previous topic'
-                    handleSend(`Summarize ${topic} into 5-7 clear, high-yield bullet points for quick revision.`)
-                  }}
-                  disabled={isStreaming}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white hover:bg-[#FFF0E4] border border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] hover:text-[#F28A45] text-[11px] font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
-                  title="Generate bullet points"
-                >
-                  <ListChecks size={12} className="text-[#F28A45]" />
-                  <span>Bullet Points</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const topic = input.trim() || 'this topic'
-                    handleSend(`What are the most important exam-critical points, core formulas, and common misconceptions for ${topic}?`)
-                  }}
-                  disabled={isStreaming}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white hover:bg-[#FFF3D8] border border-[#E7E1D8] hover:border-[#D99A32]/40 text-[#20201D] hover:text-[#D99A32] text-[11px] font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
-                  title="Important exam points"
-                >
-                  <Star size={12} className="text-[#D99A32]" />
-                  <span>Important Points</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const topic = input.trim() || 'this concept'
-                    handleSend(`Explain ${topic} with a simple real-world analogy and visual mental model.`)
-                  }}
-                  disabled={isStreaming}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white hover:bg-[#E3F0E5] border border-[#E7E1D8] hover:border-[#4F8A68]/40 text-[#20201D] hover:text-[#4F8A68] text-[11px] font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
-                  title="Simple analogy"
-                >
-                  <Lightbulb size={12} className="text-[#4F8A68]" />
-                  <span>Simple Analogy</span>
-                </button>
-              </div>
-
+            <div className="max-w-4xl mx-auto bg-[#FAF8F3] border border-[#E7E1D8] rounded-2xl p-3 sm:p-3.5 focus-within:border-[#F28A45] focus-within:ring-2 focus-within:ring-[#F28A45]/20 transition-all shadow-2xs">
               <textarea
                 ref={textareaRef}
                 value={input}
