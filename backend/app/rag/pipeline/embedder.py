@@ -112,6 +112,9 @@ class EmbeddingPipeline:
         self._dim: Optional[int] = None
         print(f"[EMBED] Provider: {self.provider.upper()}")
 
+    def _get_default_dim(self) -> int:
+        return 3072 if self.provider == "gemini" else (1536 if self.provider == "openai" else 768)
+
     async def embed(self, text: str) -> List[float]:
         """Embed a single text. Falls back to pseudo-embedding on error."""
         try:
@@ -126,7 +129,8 @@ class EmbeddingPipeline:
             return vec
         except Exception as e:
             print(f"[EMBED WARN] {self.provider} embed error: {e}. Using pseudo-embedding.")
-            return _pseudo_embed(text, self._dim or 768)
+            dim = self._dim or self._get_default_dim()
+            return _pseudo_embed(text, dim)
 
     async def embed_batch(self, texts: List[str]) -> List[List[float]]:
         """
@@ -147,7 +151,7 @@ class EmbeddingPipeline:
             return vecs
         except Exception as e:
             print(f"[EMBED WARN] {self.provider} batch embed error: {e}. Using pseudo-embeddings.")
-            dim = self._dim or (3072 if self.provider == "gemini" else 768)
+            dim = self._dim or self._get_default_dim()
             return [_pseudo_embed(t, dim) for t in texts]
 
     async def embed_chunks(self, chunks: List[dict]) -> List[List[float]]:
@@ -158,7 +162,7 @@ class EmbeddingPipeline:
     @property
     def embedding_dim(self) -> int:
         """Return known embedding dimension (auto-detected on first call)."""
-        return self._dim or (3072 if self.provider == "gemini" else 768)
+        return self._dim or self._get_default_dim()
 
 
 # Singleton

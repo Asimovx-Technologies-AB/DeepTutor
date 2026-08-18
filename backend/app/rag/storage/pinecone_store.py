@@ -95,30 +95,42 @@ def _rrf(
 class PineconeVectorStore:
     """
     Production cloud vector store backed by Pinecone Serverless.
-    Drop-in replacement for FAISSVectorStore and VectorStore.
+    Supports dual-index routing:
+      - 'textbook' index: Class 10 Math, Physics & Chemistry curriculum
+      - 'deeptutor' index: User personal chat sessions & document uploads
     """
 
     def __init__(self):
         self._client = None
-        self._index = None
+        self._indexes: Dict[str, Any] = {}
         self._bm25_caches: Dict[str, _BM25Index] = {}
         self._doc_caches: Dict[str, List[Dict]] = {}
 
-    def _get_index(self):
-        """Lazy initialization of Pinecone client and index."""
-        if self._index is not None:
-            return self._index
+    def _get_client(self):
+        if self._client is None:
+            from pinecone import Pinecone
+            api_key = get_settings().PINECONE_API_KEY or os.getenv("PINECONE_API_KEY", "")
+            if not api_key:
+                raise ValueError("PINECONE_API_KEY is not set in backend/.env")
+            self._client = Pinecone(api_key=api_key)
+        return self._client
 
-        from pinecone import Pinecone
-        api_key = settings.PINECONE_API_KEY
-        if not api_key:
-            raise ValueError("PINECONE_API_KEY is not set in backend/.env")
+    def _get_index(self, topic_id: Optional[str] = None):
+        """Lazy initialization of Pinecone client and index based on topic routing."""
+        client = self._get_client()
+        textbook_index = getattr(settings, "PINECONE_TEXTBOOK_INDEX", "textbook") or "textbook"
+        chat_index = getattr(settings, "PINECONE_CHAT_INDEX", "deeptutor") or "deeptutor"
 
-        self._client = Pinecone(api_key=api_key)
-        index_name = getattr(settings, "PINECONE_INDEX_NAME", "deeptutor")
-        self._index = self._client.Index(index_name)
-        print(f"[PINECONE] Connected to cloud index '{index_name}' successfully.")
-        return self._index
+        # Determine target index
+        if topic_id and topic_id.startswith(("sec_", "session_", "chat_", "user_")):
+            target_name = chat_index
+        else:
+            target_name = textbook_index
+
+        if target_name not in self._indexes:
+            self._indexes[target_name] = client.Index(target_name)
+            print(f"[PINECONE] Connected to cloud index '{target_name}' successfully.")
+        return self._indexes[target_name]
 
     def _sanitize_namespace(self, topic_id: str) -> str:
         """Pinecone namespace names must be valid ASCII strings."""
@@ -136,7 +148,7 @@ class PineconeVectorStore:
         if not chunks or not embeddings:
             return
 
-        index = self._get_index()
+        index = self._get_index(topic_id)
         namespace = self._sanitize_namespace(topic_id)
 
         records = []
@@ -199,7 +211,7 @@ class PineconeVectorStore:
         min_score: Optional[float] = None,
     ) -> List[Dict]:
         """Dense cosine similarity search via Pinecone cloud endpoint."""
-        index = self._get_index()
+        index = self._get_index(topic_id)
         namespace = self._sanitize_namespace(topic_id)
         top_k = top_k or settings.TOP_K_RETRIEVAL
         min_score = min_score if min_score is not None else settings.MIN_CHUNK_SCORE
@@ -241,6 +253,58 @@ class PineconeVectorStore:
                     "metadata": meta,
                     "score": round(score, 4),
                 })
+
+            # If 0 results, retry with dashed/underscored namespace variations
+            if not results and "_" in namespace:
+                try:
+                    alt_kwargs = dict(query_kwargs)
+                    alt_kwargs["namespace"] = namespace.replace("_", "-")
+                    alt_res = index.query(**alt_kwargs)
+                    for m in alt_res.get("matches", []):
+                        score = float(m.get("score", 0.0))
+                        if score >= min_score:
+                            meta = m.get("metadata", {})
+                            results.append({
+                                "id": m.get("id"),
+                                "text": meta.get("text", ""),
+                                "metadata": meta,
+                                "score": round(score, 4),
+                            })
+                except Exception:
+                    pass
+
+            # If user chat section returned 0 results, query the textbook index for this topic
+            if not results and topic_id.startswith("sec_"):
+                parts = topic_id.split("_", 2)
+                if len(parts) >= 3:
+                    raw_topic = parts[2]
+                    tb_idx = self._get_index(raw_topic)
+                    for ns_cand in [raw_topic, raw_topic.replace("_", "-"), raw_topic.replace("-", "_")]:
+                        try:
+                            tb_kwargs = {
+                                "vector": fixed_q,
+                                "top_k": min(top_k, 50),
+                                "include_metadata": True,
+                                "namespace": ns_cand,
+                            }
+                            if where:
+                                tb_kwargs["filter"] = where
+                            tb_res = tb_idx.query(**tb_kwargs)
+                            for m in tb_res.get("matches", []):
+                                score = float(m.get("score", 0.0))
+                                if score >= min_score:
+                                    meta = m.get("metadata", {})
+                                    results.append({
+                                        "id": m.get("id"),
+                                        "text": meta.get("text", ""),
+                                        "metadata": meta,
+                                        "score": round(score, 4),
+                                    })
+                            if results:
+                                break
+                        except Exception:
+                            pass
+
             return results
         except Exception as e:
             print(f"[PINECONE ERROR] Dense search failed: {e}")
@@ -415,15 +479,32 @@ class PineconeVectorStore:
         return all_matches
 
     def count(self, topic_id: str) -> int:
-        """Get vector count in topic namespace."""
+        """Get vector count in topic namespace across textbook and chat indexes."""
         try:
-            index = self._get_index()
+            index = self._get_index(topic_id)
             namespace = self._sanitize_namespace(topic_id)
             stats = index.describe_index_stats()
             ns_dict = getattr(stats, "namespaces", {}) or {}
-            if isinstance(ns_dict, dict) and namespace in ns_dict:
-                ns_stat = ns_dict[namespace]
-                return getattr(ns_stat, "vector_count", 0) or (ns_stat.get("vector_count", 0) if isinstance(ns_stat, dict) else 0)
+            
+            # Check exact, dashed, and underscored variations
+            for candidate in [namespace, namespace.replace("_", "-"), namespace.replace("-", "_")]:
+                if isinstance(ns_dict, dict) and candidate in ns_dict:
+                    ns_stat = ns_dict[candidate]
+                    return getattr(ns_stat, "vector_count", 0) or (ns_stat.get("vector_count", 0) if isinstance(ns_stat, dict) else 0)
+
+            # If sec_ was not in chat index, check textbook index
+            if topic_id.startswith("sec_"):
+                parts = topic_id.split("_", 2)
+                if len(parts) >= 3:
+                    raw_topic = parts[2]
+                    tb_idx = self._get_index(raw_topic)
+                    tb_stats = tb_idx.describe_index_stats()
+                    tb_dict = getattr(tb_stats, "namespaces", {}) or {}
+                    for candidate in [raw_topic, raw_topic.replace("_", "-"), raw_topic.replace("-", "_")]:
+                        if isinstance(tb_dict, dict) and candidate in tb_dict:
+                            tb_stat = tb_dict[candidate]
+                            return getattr(tb_stat, "vector_count", 0) or (tb_stat.get("vector_count", 0) if isinstance(tb_stat, dict) else 0)
+
             return len(self._doc_caches.get(namespace, []))
         except Exception:
             return len(self._doc_caches.get(self._sanitize_namespace(topic_id), []))
@@ -433,7 +514,8 @@ class PineconeVectorStore:
         namespace = self._sanitize_namespace(topic_id)
         if namespace in self._doc_caches and self._doc_caches[namespace]:
             return self._doc_caches[namespace]
-        return self.search(topic_id, [0.0] * 3072, top_k=50, min_score=0.0)
+        dummy_vec = [1.0 / (3072 ** 0.5)] * 3072
+        return self.search(topic_id, dummy_vec, top_k=50, min_score=-1.0)
 
     def delete_topic(self, topic_id: str) -> None:
         """Delete all vectors under the namespace from Pinecone."""

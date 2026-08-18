@@ -15,6 +15,7 @@ import { progressApi, chatApi } from '../services/api'
 
 import NotificationPopup from '../components/NotificationPopup'
 import ProfileModal from '../components/ProfileModal'
+import WeakAreaAlertBanner from '../components/WeakAreaAlertBanner'
 
 export default function DashboardPage() {
 
@@ -178,7 +179,10 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         {/* ─── CENTRAL COLUMN (Lg: col-span-8) ─── */}
-        <div className="lg:col-span-8 space-y-8">
+        <div className="lg:col-span-8 space-y-6">
+
+          {/* AUTOMATED WEAK AREA DIAGNOSTIC ALERT BANNER */}
+          <WeakAreaAlertBanner />
           
           {/* ASK YOUR TUTOR HERO LEARNING CARD (EDITORIAL BORDERLESS COMPOSITION) */}
           <div className="bg-[#FFF9F2] border border-[#E7E1D8] rounded-3xl p-6 sm:p-8 shadow-2xs relative overflow-hidden space-y-6">
@@ -205,7 +209,7 @@ export default function DashboardPage() {
               </h2>
 
               <p className="text-sm leading-[22px] font-normal text-[#6F6B63] max-w-sm">
-                Ask anything. I'll explain it in the way you learn best.
+                Ask anything on Class 10 Math, Physics & Chemistry. I'll explain it step-by-step.
               </p>
             </div>
 
@@ -218,7 +222,7 @@ export default function DashboardPage() {
                     type="text"
                     value={quickPrompt}
                     onChange={(e) => setQuickPrompt(e.target.value)}
-                    placeholder="Ask your tutor anything..."
+                    placeholder="Ask any question on Math, Physics, or Chemistry..."
                     className="w-full bg-transparent outline-none text-[#20201D] font-normal text-[15px] leading-[24px] placeholder-[#969188]"
                   />
                 </div>
@@ -233,38 +237,38 @@ export default function DashboardPage() {
               </div>
             </form>
 
-            {/* Quick Actions Chips */}
+            {/* Quick Actions Chips (SSLC 10th Grade STEM) */}
             <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
               <button
-                onClick={() => handleQuickAsk(undefined, "Explain the core concept of Machine Learning")}
+                onClick={() => handleQuickAsk(undefined, "Explain Ohm's Law and factors affecting electrical resistance")}
                 className="flex items-center gap-1.5 bg-white hover:bg-[#FFF0E4] hover:-translate-y-0.5 border border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-transform duration-150 shadow-2xs cursor-pointer active:scale-[0.98]"
               >
-                <img src="/assets/illustrations/lightbulb.png" alt="Lightbulb" className="w-4 h-4 object-contain" />
-                <span>Explain a concept</span>
+                <img src="/assets/illustrations/physics_atom.png" alt="Physics" className="w-4 h-4 object-contain" />
+                <span>Explain Ohm's Law</span>
               </button>
 
               <button
-                onClick={() => handleQuickAsk(undefined, "Can you give me a real-world example of Linear Regression")}
+                onClick={() => handleQuickAsk(undefined, "How to solve quadratic equations using the quadratic formula x = (-b ± √(b² - 4ac)) / (2a)?")}
                 className="flex items-center gap-1.5 bg-white hover:bg-[#E3F0E5] hover:-translate-y-0.5 border border-[#E7E1D8] hover:border-[#4F8A68]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-transform duration-150 shadow-2xs cursor-pointer active:scale-[0.98]"
               >
-                <img src="/assets/illustrations/cs_code.png" alt="Code" className="w-4 h-4 object-contain" />
-                <span>Give me an example</span>
+                <img src="/assets/illustrations/math_fx.png" alt="Math" className="w-4 h-4 object-contain" />
+                <span>Quadratic Formula</span>
               </button>
 
               <button
-                onClick={() => handleQuickAsk(undefined, "Quiz me with 3 questions on Neural Networks")}
+                onClick={() => handleQuickAsk(undefined, "Quiz me with 5 board exam questions on Chemical Reactions and Equations")}
                 className="flex items-center gap-1.5 bg-white hover:bg-[#F0ECF7] hover:-translate-y-0.5 border border-[#E7E1D8] hover:border-[#A99BCB]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-transform duration-150 shadow-2xs cursor-pointer active:scale-[0.98]"
               >
                 <img src="/assets/illustrations/checklist_clipboard.png" alt="Quiz" className="w-4 h-4 object-contain" />
-                <span>Quiz me</span>
+                <span>Chemistry Quiz</span>
               </button>
 
               <button
-                onClick={() => handleQuickAsk(undefined, "Help me study and summarize my uploaded document")}
+                onClick={() => handleQuickAsk(undefined, "Explain Light Reflection & Refraction ray diagrams for spherical lenses and mirrors")}
                 className="flex items-center gap-1.5 bg-white hover:bg-[#FFF0E4] hover:-translate-y-0.5 border border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-transform duration-150 shadow-2xs cursor-pointer active:scale-[0.98]"
               >
-                <img src="/assets/illustrations/open_book.png" alt="Study" className="w-4 h-4 object-contain" />
-                <span>Help me study</span>
+                <img src="/assets/illustrations/open_book.png" alt="Ray Optics" className="w-4 h-4 object-contain" />
+                <span>Ray Diagrams</span>
               </button>
             </div>
           </div>
@@ -274,10 +278,10 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-[20px] leading-[28px] tracking-[-0.2px] font-bold text-[#20201D]">Continue learning</h2>
               <button
-                onClick={() => navigate('/chat')}
+                onClick={() => navigate('/subjects')}
                 className="text-xs font-bold text-[#F28A45] hover:text-[#DF7635] flex items-center gap-1 transition-colors cursor-pointer"
               >
-                <span>View all</span> <ArrowRight size={13} />
+                <span>View all subjects</span> <ArrowRight size={13} />
               </button>
             </div>
 
@@ -287,35 +291,35 @@ export default function DashboardPage() {
               <div className="w-full md:w-36 h-28 rounded-2xl bg-[#4F8A68] border border-[#35654B]/30 flex items-center justify-center text-white flex-shrink-0 relative overflow-hidden p-3 shadow-2xs">
                 <div className="absolute inset-0 bg-gradient-to-br from-[#4F8A68] to-[#35654B] opacity-90" />
                 <div className="relative z-10 flex flex-col items-center justify-center text-center">
-                  <Brain size={32} className="text-[#E3F0E5] mb-1" />
-                  <span className="text-[10px] font-black uppercase tracking-wider text-[#E3F0E5]">ML Concept</span>
+                  <Atom size={32} className="text-[#E3F0E5] mb-1" />
+                  <span className="text-[10px] font-black uppercase tracking-wider text-[#E3F0E5]">Physics (10th)</span>
                 </div>
                 <span className="absolute bottom-2 right-2 bg-black/40 backdrop-blur-xs text-white text-[10px] font-extrabold px-2 py-0.5 rounded-md">
-                  68%
+                  85%
                 </span>
               </div>
 
               {/* Middle Course Information */}
               <div className="space-y-2 flex-1 min-w-0 z-10">
-                <p className="text-[11px] font-bold text-[#6F6B63]">Introduction to Machine Learning</p>
-                <h3 className="text-xl font-black text-[#20201D] truncate">Supervised Learning</h3>
-                <p className="text-xs text-[#969188] font-bold">Linear Regression</p>
+                <p className="text-[11px] font-bold text-[#6F6B63]">Class 10 Physics • Chapter 1</p>
+                <h3 className="text-xl font-black text-[#20201D] truncate">Light – Reflection & Refraction</h3>
+                <p className="text-xs text-[#969188] font-bold">Spherical Mirrors & Ray Diagrams</p>
                 
                 {/* Progress Bar & Percentage */}
                 <div className="flex items-center gap-3 pt-1">
                   <div className="flex-1 bg-[#F4EFE7] rounded-full h-1.5 overflow-hidden">
-                    <div className="bg-[#F28A45] h-full rounded-full w-[68%]" />
+                    <div className="bg-[#F28A45] h-full rounded-full w-[85%]" />
                   </div>
-                  <span className="text-xs font-black text-[#20201D]">68%</span>
+                  <span className="text-xs font-black text-[#20201D]">85%</span>
                 </div>
 
                 <p className="text-xs text-[#6F6B63] font-semibold leading-relaxed line-clamp-1 pt-1">
-                  You were learning how a model learns the relationship between inputs and outputs.
+                  Master mirror formulas, refractive index ratios, and concave vs. convex lens ray diagrams.
                 </p>
 
                 <div className="pt-2">
                   <button
-                    onClick={() => navigate(lastSession ? `/chat/${lastSession.id}` : '/chat', { state: lastSession ? {} : { initialPrompt: 'Continue Supervised Learning lesson on Linear Regression' } })}
+                    onClick={() => navigate(lastSession ? `/chat/${lastSession.id}` : '/chat', { state: lastSession ? {} : { initialPrompt: 'Continue Class 10 Physics: Light Reflection and Refraction ray diagrams' } })}
                     className="btn-primary text-xs font-black py-2.5 px-5 rounded-2xl flex items-center gap-2 shadow-2xs cursor-pointer whitespace-nowrap"
                   >
                     <span>Continue learning</span>

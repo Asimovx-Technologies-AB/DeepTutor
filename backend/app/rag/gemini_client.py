@@ -16,7 +16,7 @@ class GeminiClient:
     def __init__(self):
         self.api_key = settings.GEMINI_API_KEY
         self.chat_model = settings.GEMINI_CHAT_MODEL or "gemini-1.5-flash"
-        self.embed_model = settings.GEMINI_EMBED_MODEL or "models/text-embedding-004"
+        self.embed_model = settings.GEMINI_EMBED_MODEL or "models/gemini-embedding-2"
         self.timeout = settings.GEMINI_TIMEOUT or 60
         self.base_url = "https://generativelanguage.googleapis.com/v1beta"
         self._cache = None
@@ -313,7 +313,7 @@ class GeminiClient:
                         continue
                     print(f"[GEMINI BATCH EMBED ERROR] {e}")
 
-            dim = 3072 if "gemini-embedding" in target_model else 768
+            dim = 3072
             if not embeddings or len(embeddings) != len(chunk_texts):
                 embeddings = []
                 for t in chunk_texts:

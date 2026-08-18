@@ -127,5 +127,30 @@ async def generate_flashcards_for_section(
         return saved_cards
 
     except Exception as e:
-        print(f"[flashcard_generator] Error generating flashcards for section {section_id}: {e}")
+        print(f"[flashcard_generator] LLM call failed, generating from textbook context: {e}")
+        cards = []
+        for i, doc in enumerate(sample_docs[:8]):
+            lines = [l.strip() for l in doc.split("\n") if len(l.strip()) > 25 and not l.startswith("[DIAGRAM")]
+            if len(lines) >= 2:
+                cards.append({
+                    "front": lines[0][:85] if len(lines[0]) <= 85 else lines[0][:80] + "...",
+                    "back": lines[1][:260] + ("..." if len(lines[1]) > 260 else "")
+                })
+            elif lines:
+                cards.append({
+                    "front": f"Key Term #{i+1}: {lines[0][:60]}",
+                    "back": f"From textbook section: {lines[0][:200]}"
+                })
+
+        if cards:
+            db.delete_flashcards_for_topic(section_id)
+            saved_cards = []
+            for c in cards:
+                card = db.add_flashcard(
+                    topic_id=section_id,
+                    front=c["front"],
+                    back=c["back"],
+                )
+                saved_cards.append(card)
+            return saved_cards
         return []

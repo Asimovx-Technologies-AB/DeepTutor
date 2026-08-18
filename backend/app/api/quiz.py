@@ -148,7 +148,22 @@ async def list_quizzes(
     topic_id: str,
     user: dict = Depends(get_current_user),
 ):
-    return db.get_quizzes_by_topic(topic_id)
+    quizzes = db.get_quizzes_by_topic(topic_id)
+    if not quizzes and topic_id.startswith(("sslc-", "math-10-", "phys-10-", "chem-10-", "math-", "phys-", "chem-", "textbook")):
+        # Auto-generate a fresh quiz on-demand from the textbook index
+        try:
+            quiz = await generate_quiz_for_section(
+                section_id=topic_id,
+                user_id=user["id"],
+                topic_id=topic_id,
+                difficulty="medium",
+                num_questions=5,
+            )
+            if quiz:
+                return [quiz]
+        except Exception as e:
+            print(f"[quiz] Auto-generate failed for {topic_id}: {e}")
+    return quizzes
 
 
 @router.get("/{quiz_id}")

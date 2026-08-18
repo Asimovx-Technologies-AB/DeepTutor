@@ -369,15 +369,26 @@ class GracefulOutOfScopeHandler:
         "- **Rephrase:** Try using key terms or headings found in your study material."
     )
 
+    TEXTBOOK_OUT_OF_SCOPE_RESPONSE = (
+        "### 📚 Topic Not Found in Official Kerala SCERT Textbook\n\n"
+        "I don't know about **\"{topic}\"** because it is not covered in the official Kerala SCERT Class 10 Textbook for this chapter.\n\n"
+        "---\n\n"
+        "**💡 Suggestions:**\n"
+        "- **Check your topic:** Make sure your question relates to concepts in this chapter.\n"
+        "- **Switch Chapter:** Select **📖 All Chapters** or click a specific chapter pill at the top.\n"
+        "- **Rephrase:** Try using standard mathematical, scientific, or syllabus terms."
+    )
+
     def is_out_of_scope(self, confidence: float, label: str) -> bool:
         return label == "out_of_scope"
 
-    def format_response(self, query: str) -> str:
+    def format_response(self, query: str, is_textbook: bool = False) -> str:
         # Extract the key topic from the query
         topic = query.strip().rstrip("?").rstrip(".")
         if len(topic) > 60:
             topic = topic[:60] + "..."
-        return self.OUT_OF_SCOPE_RESPONSE.format(topic=topic)
+        template = self.TEXTBOOK_OUT_OF_SCOPE_RESPONSE if is_textbook else self.OUT_OF_SCOPE_RESPONSE
+        return template.format(topic=topic)
 
 
 # ── Singletons ─────────────────────────────────────────────────────────────────

@@ -137,7 +137,60 @@ STRICT GROUNDING & ACCURACY RULES (MANDATORY)
    ---
 
    ### 📌 Summary Takeaway
-   [1-2 high-yield sentences summarizing the core concept].
+   [2-3 sentence key takeaway summarizing the concept's core value]
+"""
+
+
+# ── 10th Standard (SSLC) Student Friendly System Prompt ───────────────────────
+SSLC_STUDENT_SYSTEM_PROMPT = """You are DeepTutor, a friendly, encouraging, and expert Class 10 (SSLC) AI Tutor.
+Your goal is to make learning simple, exciting, and easy to understand for 10th standard students studying Mathematics, Physics, and Chemistry from their official Kerala SCERT textbook.
+
+==================================================
+10TH GRADE TEACHING & FORMATTING GUIDELINES (MANDATORY)
+==================================================
+1. KEEP IT SIMPLE & ENGAGING:
+   - Use clear, straightforward language that a 15-year-old high school student can understand immediately.
+   - Avoid overly dense or abstract academic jargon; explain technical terms using simple words.
+   - Use friendly, warm formatting with helpful emoji accents.
+
+2. CLEAN STEP-BY-STEP WORKED EXAMPLES:
+   - For Mathematics and Science calculations, always format steps cleanly as numbered items:
+     1. **Step 1: [Action]:** [Explanation]
+     2. **Step 2: [Action]:** [Explanation]
+   - Use clean LaTeX formatting enclosed in single `$` for inline math (e.g. $a_n = a + (n-1)d$, $1/f = 1/v - 1/u$, $\text{CO}_2$) or `$$` for standalone equations.
+
+3. STRICT GROUNDING IN TEXTBOOK:
+   - Base definitions, formulas, and principles strictly on the provided Textbook Context.
+   - Never hallucinate fake formulas or ungrounded facts.
+   - Do NOT include bracketed file citation tags like `[file.pdf p.4]` in your text. The UI displays sources separately.
+
+4. MANDATORY OUTPUT TEMPLATE (Follow this EXACT clean structure with headers and horizontal lines):
+   # 📘 [Topic / Concept Name]
+
+   ### 💡 Simple Definition (In Easy Words)
+   [Clear, simple 2-sentence explanation of what this means in plain English]
+
+   > 🌟 **Real-Life Example / Analogy:**  
+   > *(Example for intuition — not from source material)*: [A relatable real-world analogy that makes the concept click instantly]
+
+   ---
+
+   ### 📝 Step-by-Step Explanation & Solved Example
+   [Break down how it works in clear, easy steps or give a solved textbook numerical/example with full working]
+
+   ---
+
+   ### 🔑 Important Exam Points & Key Formulas
+   | Key Term / Formula | What You Must Remember for the Exam |
+   | :--- | :--- |
+   | **[Formula / Term 1]** | [Clear explanation / must-know points] |
+   | **[Formula / Term 2]** | [Clear explanation / must-know points] |
+
+   ---
+
+   ### 🎯 Quick Practice Question
+   **Question:** [A simple, fun 1-sentence question to test the student's understanding]  
+   💡 **Hint:** [1-line hint to help them solve it]
 """
 
 
@@ -649,13 +702,15 @@ class GraphRAGPipeline:
 
         # ── Step 4: Out-of-scope handling ──────────────────────────────────────
         if effective_topic_id and oos_handler.is_out_of_scope(confidence_score, confidence_label):
-            oos_response = oos_handler.format_response(question)
+            is_tb = effective_topic_id.startswith(("sslc-", "math-", "phys-", "chem-", "textbook"))
+            oos_response = oos_handler.format_response(question, is_textbook=is_tb)
             for token in oos_response.split(" "):
                 yield f"data: {json.dumps({'type': 'token', 'data': token + ' '})}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
             return
 
         # ── Step 5: Build LLM messages ─────────────────────────────────────────
+        is_textbook = bool(effective_topic_id and effective_topic_id.startswith(("sslc-", "math-", "phys-", "chem-", "textbook")))
         history_text = ""
         for msg in session_messages[-6:]:
             role_label = "Student" if msg["role"] == "user" else "Tutor"
@@ -693,12 +748,20 @@ class GraphRAGPipeline:
                 "followed by a brief 2-sentence connection to the technical concept."
             )
         else:
-            prompt_instruction = (
-                "Please explain this topic clearly and educationally for a student following the Output Formatting Template: "
-                "(1) # 📚 [Topic Title], (2) 💡 Big-Picture Concept + Blockquote Intuitive Analogy, "
-                "(3) 🔑 Key Concepts Breakdown Table, (4) ⚙️ How It Works Step-by-Step with numbered steps, "
-                "(5) ⚖️ Strengths vs. Limitations (with ✅ and ⚠️ subheadings), and (6) 📌 Summary Takeaway."
-            )
+            if is_textbook:
+                prompt_instruction = (
+                    "Please explain this topic in an easy, friendly, and structured way for a 10th class student following the 10th Grade Output Template: "
+                    "(1) # 📘 [Topic Title], (2) 💡 Simple Definition (In Easy Words), "
+                    "(3) 🌟 Real-Life Example / Analogy in a blockquote, (4) 📝 Step-by-Step Explanation & Solved Example (with clear calculations), "
+                    "(5) 🔑 Important Exam Points & Key Formulas (table), and (6) 🎯 Quick Practice Question with a Hint."
+                )
+            else:
+                prompt_instruction = (
+                    "Please explain this topic clearly and educationally for a student following the Output Formatting Template: "
+                    "(1) # 📚 [Topic Title], (2) 💡 Big-Picture Concept + Blockquote Intuitive Analogy, "
+                    "(3) 🔑 Key Concepts Breakdown Table, (4) ⚙️ How It Works Step-by-Step with numbered steps, "
+                    "(5) ⚖️ Strengths vs. Limitations (with ✅ and ⚠️ subheadings), and (6) 📌 Summary Takeaway."
+                )
 
         if graph_context_text or vector_context_text:
             user_content = (
@@ -729,8 +792,10 @@ class GraphRAGPipeline:
                 f"3. {prompt_instruction}"
             )
 
+        system_prompt_to_use = SSLC_STUDENT_SYSTEM_PROMPT if is_textbook else SYSTEM_PROMPT
+
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt_to_use},
             {"role": "user", "content": user_content},
         ]
 

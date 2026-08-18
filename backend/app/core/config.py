@@ -1,9 +1,16 @@
+import os
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
+_backend_env = Path(__file__).resolve().parent.parent.parent / ".env"
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(_backend_env, ".env", "backend/.env"),
+        extra="ignore"
+    )
 
     # App
     APP_NAME: str = "Deep Tutor API"
@@ -44,7 +51,9 @@ class Settings(BaseSettings):
     # Switch via .env: VECTOR_STORE_BACKEND=pinecone | faiss | chroma
     VECTOR_STORE_BACKEND: str = "pinecone"
     PINECONE_API_KEY: str = ""
-    PINECONE_INDEX_NAME: str = "deeptutor"
+    PINECONE_INDEX_NAME: str = "textbook"
+    PINECONE_TEXTBOOK_INDEX: str = "textbook"
+    PINECONE_CHAT_INDEX: str = "deeptutor"
     PINECONE_ENVIRONMENT: str = "us-east-1"
     FAISS_DATA_DIR: str = "./faiss_data"
     FAISS_INDEX_TYPE: str = "hnsw"           # "hnsw" | "flat"

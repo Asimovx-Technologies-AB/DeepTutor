@@ -156,6 +156,14 @@ export default function Layout() {
               {NAV_ITEMS.map(({ to, icon: Icon, label, badge }) => {
                 const isActive = location.pathname.startsWith(to)
                 const isChat = to === '/chat'
+                const isSubject = to === '/subjects'
+                const learnSessions = sessions.filter(
+                  (s) => !s.topic_id?.startsWith('sslc-') &&
+                         !s.topic_id?.startsWith('math-') &&
+                         !s.topic_id?.startsWith('phys-') &&
+                         !s.topic_id?.startsWith('chem-')
+                )
+
                 return (
                   <div key={to} className="space-y-1.5">
                     <NavLink
@@ -190,7 +198,7 @@ export default function Layout() {
                       ) : null}
                     </NavLink>
 
-                    {/* Learn History Sub-panel when Learn tab is active */}
+                    {/* Learn History Sub-panel (Only for custom uploaded documents) */}
                     {isChat && isActive && (
                       <div className="ml-3 pl-3 border-l-2 border-[#F28A45]/30 space-y-3 pt-2 pb-1">
                         {/* New Chat Button */}
@@ -203,44 +211,103 @@ export default function Layout() {
                           className="w-full btn-primary font-bold text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 shadow-2xs transition-all active:scale-[0.98] cursor-pointer"
                         >
                           <Plus size={15} />
-                          <span>New Chat</span>
+                          <span>New Document Chat</span>
                         </button>
 
                         {/* History Header & List */}
                         <div className="space-y-1">
                           <p className="px-2 text-[10px] font-black text-[#969188] uppercase tracking-wider">
-                            Learn History
+                            Document Chat History
                           </p>
 
-                          {sessions.slice(0, 5).map((s) => {
-                            const isSelected = activeSession?.id === s.id
-                            return (
-                              <div
-                                key={s.id}
-                                onClick={() => {
-                                  navigate(`/chat/${s.id}`)
-                                  setMobileOpen(false)
-                                }}
-                                className={`group flex items-center justify-between px-2.5 py-2 rounded-xl text-xs cursor-pointer transition-all ${
-                                  isSelected
-                                    ? 'bg-white text-[#F28A45] font-black border border-[#F28A45]/30 shadow-2xs'
-                                    : 'text-[#6F6B63] hover:text-[#20201D] hover:bg-[#F4EFE7] font-semibold'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2 min-w-0 pr-1">
-                                  <FileText size={13} className={isSelected ? 'text-[#F28A45]' : 'text-[#969188]'} />
-                                  <span className="truncate">{s.session_title || 'Untitled Session'}</span>
-                                </div>
-                                <button
-                                  onClick={(e) => handleDeleteSession(e, s.id)}
-                                  className="opacity-0 group-hover:opacity-100 text-[#969188] hover:text-[#C85C52] p-1 rounded transition-opacity"
-                                  title="Delete chat"
+                          {learnSessions.length === 0 ? (
+                            <p className="px-2 py-1 text-xs text-[#969188] italic">No document chats yet</p>
+                          ) : (
+                            learnSessions.slice(0, 6).map((s) => {
+                              const isSelected = activeSession?.id === s.id
+                              return (
+                                <div
+                                  key={s.id}
+                                  onClick={() => {
+                                    navigate(`/chat/${s.id}`)
+                                    setMobileOpen(false)
+                                  }}
+                                  className={`group flex items-center justify-between px-2.5 py-2 rounded-xl text-xs cursor-pointer transition-all ${
+                                    isSelected
+                                      ? 'bg-white text-[#F28A45] font-black border border-[#F28A45]/30 shadow-2xs'
+                                      : 'text-[#6F6B63] hover:text-[#20201D] hover:bg-[#F4EFE7] font-semibold'
+                                  }`}
                                 >
-                                  <Trash2 size={12} />
-                                </button>
-                              </div>
-                            )
-                          })}
+                                  <div className="flex items-center gap-2 min-w-0 pr-1">
+                                    <FileText size={13} className={isSelected ? 'text-[#F28A45]' : 'text-[#969188]'} />
+                                    <span className="truncate">{s.session_title || 'Untitled Session'}</span>
+                                  </div>
+                                  <button
+                                    onClick={(e) => handleDeleteSession(e, s.id)}
+                                    className="opacity-0 group-hover:opacity-100 text-[#969188] hover:text-[#C85C52] p-1 rounded transition-opacity"
+                                    title="Delete chat"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              )
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* My Subjects Sub-panel (Direct AI Tutor shortcuts) */}
+                    {isSubject && isActive && (
+                      <div className="ml-3 pl-3 border-l-2 border-[#D97706]/30 space-y-2 pt-2 pb-1">
+                        <p className="px-2 text-[10px] font-black text-[#969188] uppercase tracking-wider">
+                          Class 10 AI Tutors
+                        </p>
+                        <div className="space-y-1">
+                          <button
+                            onClick={() => {
+                              navigate('/subjects/sslc-math/chat')
+                              setMobileOpen(false)
+                            }}
+                            className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                              location.pathname.includes('/sslc-math')
+                                ? 'bg-white text-[#D97706] border border-[#D97706]/30 shadow-2xs'
+                                : 'text-[#6F6B63] hover:text-[#20201D] hover:bg-[#F4EFE7]'
+                            }`}
+                          >
+                            <span>📐</span>
+                            <span className="truncate">Mathematics Tutor</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              navigate('/subjects/sslc-physics/chat')
+                              setMobileOpen(false)
+                            }}
+                            className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                              location.pathname.includes('/sslc-physics')
+                                ? 'bg-white text-[#0284C7] border border-[#0284C7]/30 shadow-2xs'
+                                : 'text-[#6F6B63] hover:text-[#20201D] hover:bg-[#F4EFE7]'
+                            }`}
+                          >
+                            <span>⚡</span>
+                            <span className="truncate">Physics Tutor</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              navigate('/subjects/sslc-chemistry/chat')
+                              setMobileOpen(false)
+                            }}
+                            className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                              location.pathname.includes('/sslc-chemistry')
+                                ? 'bg-white text-[#059669] border border-[#059669]/30 shadow-2xs'
+                                : 'text-[#6F6B63] hover:text-[#20201D] hover:bg-[#F4EFE7]'
+                            }`}
+                          >
+                            <span>🧪</span>
+                            <span className="truncate">Chemistry Tutor</span>
+                          </button>
                         </div>
                       </div>
                     )}

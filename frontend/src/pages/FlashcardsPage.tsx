@@ -18,6 +18,7 @@ import {
   ChevronRight
 } from 'lucide-react'
 import { flashcardsApi } from '../services/api'
+import { useSubjectStore } from '../stores/subjectStore'
 
 interface Flashcard {
   id: string
@@ -104,6 +105,21 @@ export default function FlashcardsPage() {
     const idToReview = cardId || currentCard?.id
     if (!idToReview) return
     reviewMutation.mutate({ cardId: idToReview, mastered })
+
+    // Update real subject and topic progress
+    if (topicId) {
+      const subjectState = useSubjectStore.getState()
+      for (const [sId, sTopics] of Object.entries(subjectState.topics)) {
+        if (sTopics.some((t) => t.id === topicId)) {
+          const masteredCount = cards.filter((c) => (c.id === idToReview ? mastered : c.mastered)).length
+          const totalCards = Math.max(cards.length, 1)
+          const newPct = Math.round((masteredCount / totalCards) * 100)
+          subjectState.updateTopicProgress(sId, topicId, newPct)
+          break
+        }
+      }
+    }
+
     if (viewMode === 'single') {
       handleNext()
     }

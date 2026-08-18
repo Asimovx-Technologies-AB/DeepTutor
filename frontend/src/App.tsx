@@ -24,6 +24,7 @@ const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'))
 const SubjectsPage = lazy(() => import('./pages/SubjectsPage'))
 const TopicsPage = lazy(() => import('./pages/TopicsPage'))
 const SubjectWorkspacePage = lazy(() => import('./pages/SubjectWorkspacePage'))
+const SubjectChatPage = lazy(() => import('./pages/SubjectChatPage'))
 
 function PageFallback() {
   return (
@@ -117,6 +118,7 @@ export default function App() {
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="subjects" element={<SubjectsPage />} />
               <Route path="subjects/:subjectId" element={<SubjectWorkspacePage />} />
+              <Route path="subjects/:subjectId/chat/:topicId?" element={<SubjectChatPage />} />
               <Route path="subjects/:subjectId/topics" element={<TopicsPage />} />
               <Route path="topics" element={<TopicsPage />} />
               <Route path="study-plan" element={<StudyPlanPage />} />
@@ -138,6 +140,9 @@ export default function App() {
             <Route path="/subjects/:subjectId" element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route index element={<SubjectWorkspacePage />} />
             </Route>
+            <Route path="/subjects/:subjectId/chat/:topicId?" element={<PrivateRoute><Layout /></PrivateRoute>}>
+              <Route index element={<SubjectChatPage />} />
+            </Route>
             <Route path="/subjects/:subjectId/topics" element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route index element={<TopicsPage />} />
             </Route>
@@ -149,6 +154,15 @@ export default function App() {
             </Route>
             <Route path="/chat/:sessionId?" element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route index element={<ChatPage />} />
+            </Route>
+            <Route path="/quiz/:topicId" element={<PrivateRoute><Layout /></PrivateRoute>}>
+              <Route index element={<QuizPage />} />
+            </Route>
+            <Route path="/quiz/:topicId/result" element={<PrivateRoute><Layout /></PrivateRoute>}>
+              <Route index element={<QuizResultPage />} />
+            </Route>
+            <Route path="/flashcards/:topicId" element={<PrivateRoute><Layout /></PrivateRoute>}>
+              <Route index element={<FlashcardsPage />} />
             </Route>
             <Route path="/leaderboard" element={<Navigate to="/progress" replace />} />
             <Route path="/progress" element={<PrivateRoute><Layout /></PrivateRoute>}>

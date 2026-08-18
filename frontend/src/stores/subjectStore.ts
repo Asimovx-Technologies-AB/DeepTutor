@@ -28,122 +28,62 @@ export interface Subject {
   lastStudiedAt: string | null
 }
 
-// Default Catalog of Subjects
+// SSLC (Class 10) Core Subjects Catalog
 export const INITIAL_SUBJECTS: Subject[] = [
   {
-    id: '6',
-    name: 'Machine Learning',
-    description: 'Supervised learning, regression, classification, neural networks & AI algorithms',
-    illustration: '/assets/illustrations/cs_code.png',
-    category: 'Computer Science',
-    totalTopics: 6,
-    isEnrolled: true,
-    lastStudiedAt: new Date(Date.now() - 3600 * 1000 * 2).toISOString(), // 2 hours ago
-  },
-  {
-    id: '3',
-    name: 'Mathematics',
-    description: 'Algebra, calculus, linear algebra, statistics & discrete math',
+    id: 'sslc-math',
+    name: 'Class 10 Mathematics',
+    description: 'Arithmetic sequences, circles, algebra of sequences, mathematics of chance, second degree equations, trigonometry & coordinates',
     illustration: '/assets/illustrations/math_fx.png',
-    category: 'STEM',
-    totalTopics: 6,
+    category: 'SSLC / 10th STEM',
+    totalTopics: 7,
     isEnrolled: true,
-    lastStudiedAt: new Date(Date.now() - 3600 * 1000 * 24).toISOString(), // 1 day ago
+    lastStudiedAt: new Date(Date.now() - 3600 * 1000 * 3).toISOString(),
   },
   {
-    id: '1',
-    name: 'Physics',
-    description: 'Mechanics, thermodynamics, electromagnetism & quantum physics',
+    id: 'sslc-physics',
+    name: 'Class 10 Physics',
+    description: 'Wave motion & oscillations, refraction of light & lenses, dispersion of light & colours, magnetic effect of electric current',
     illustration: '/assets/illustrations/physics_atom.png',
-    category: 'STEM',
-    totalTopics: 6,
+    category: 'SSLC / 10th Science',
+    totalTopics: 4,
     isEnrolled: true,
-    lastStudiedAt: new Date(Date.now() - 3600 * 1000 * 48).toISOString(), // 2 days ago
+    lastStudiedAt: new Date(Date.now() - 3600 * 1000 * 12).toISOString(),
   },
   {
-    id: '2',
-    name: 'Biology',
-    description: 'Cell biology, genetics, ecology, physiology & evolutionary biology',
-    illustration: '/assets/illustrations/biology_dna.png',
-    category: 'Science',
-    totalTopics: 5,
-    isEnrolled: true,
-    lastStudiedAt: null,
-  },
-  {
-    id: '4',
-    name: 'Geography',
-    description: 'Physical geography, climate science, maps & world geopolitical regions',
-    illustration: '/assets/illustrations/geography_globe.png',
-    category: 'Social Studies',
-    totalTopics: 5,
-    isEnrolled: false,
-    lastStudiedAt: null,
-  },
-  {
-    id: '5',
-    name: 'History',
-    description: 'Ancient civilizations, world revolutions, modern conflicts & historiography',
-    illustration: '/assets/illustrations/stack_of_books.png',
-    category: 'Humanities',
-    totalTopics: 5,
-    isEnrolled: false,
-    lastStudiedAt: null,
-  },
-  {
-    id: '7',
-    name: 'Chemistry',
-    description: 'Organic chemistry, molecular structures, chemical reactions & lab safety',
+    id: 'sslc-chemistry',
+    name: 'Class 10 Chemistry',
+    description: 'Nomenclature of organic compounds & isomerism, reactions of organic compounds, periodic table & electron configuration, gas laws & mole concept',
     illustration: '/assets/illustrations/chemistry_flask.png',
-    category: 'Science',
-    totalTopics: 5,
-    isEnrolled: false,
-    lastStudiedAt: null,
-  },
-  {
-    id: '8',
-    name: 'Literature',
-    description: 'Classic literature analysis, poetry, storytelling & critical reading',
-    illustration: '/assets/illustrations/open_book.png',
-    category: 'Humanities',
-    totalTopics: 5,
-    isEnrolled: false,
+    category: 'SSLC / 10th Science',
+    totalTopics: 4,
+    isEnrolled: true,
     lastStudiedAt: null,
   },
 ]
 
-// Default Topics by Subject ID
+// SSLC Class 10 Official Topics by Subject ID (Kerala SCERT English Medium)
 export const INITIAL_TOPICS: Record<string, Topic[]> = {
-  '6': [
-    { id: 'ml-1', subjectId: '6', title: 'Introduction to Machine Learning', description: 'Core principles of ML, training sets, features, and model evaluation', order: 1, difficulty: 'easy', progress: 100, status: 'COMPLETED', lastStudiedAt: new Date(Date.now() - 86400000 * 3).toISOString(), estimatedDuration: '30 mins' },
-    { id: 'ml-2', subjectId: '6', title: 'Linear Regression', description: 'Fitting lines to data, cost functions, and Mean Squared Error minimization', order: 2, difficulty: 'medium', progress: 100, status: 'COMPLETED', lastStudiedAt: new Date(Date.now() - 86400000 * 2).toISOString(), estimatedDuration: '45 mins' },
-    { id: 'ml-3', subjectId: '6', title: 'Logistic Regression & Classification', description: 'Binary classification, sigmoid function, decision boundaries, and log loss', order: 3, difficulty: 'medium', progress: 80, status: 'IN_PROGRESS', lastStudiedAt: new Date(Date.now() - 3600000 * 2).toISOString(), estimatedDuration: '50 mins' },
-    { id: 'ml-4', subjectId: '6', title: 'Decision Trees & Random Forests', description: 'Tree splitting metrics (Gini impurity, Entropy), pruning, and ensemble learning', order: 4, difficulty: 'medium', progress: 60, status: 'IN_PROGRESS', lastStudiedAt: new Date(Date.now() - 86400000 * 5).toISOString(), estimatedDuration: '60 mins' },
-    { id: 'ml-5', subjectId: '6', title: 'Gradient Descent Optimization', description: 'Learning rates, momentum, stochastic gradient descent (SGD), and Adam optimizer', order: 5, difficulty: 'hard', progress: 40, status: 'REVIEW', lastStudiedAt: new Date(Date.now() - 86400000 * 1).toISOString(), estimatedDuration: '55 mins' },
-    { id: 'ml-6', subjectId: '6', title: 'Neural Networks & Deep Learning', description: 'Perceptrons, activation functions, backpropagation, and multi-layer networks', order: 6, difficulty: 'hard', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '75 mins' },
+  'sslc-math': [
+    { id: 'math-10-1', subjectId: 'sslc-math', title: '1. Arithmetic Sequences', description: 'Number patterns, common difference, terms and positions, sequence calculations', order: 1, difficulty: 'easy', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '40 mins' },
+    { id: 'math-10-2', subjectId: 'sslc-math', title: '2. Circles and Angles', description: 'Chord properties, central angles, angle subtended by arcs, cyclic quadrilaterals', order: 2, difficulty: 'medium', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '45 mins' },
+    { id: 'math-10-3', subjectId: 'sslc-math', title: '3. Arithmetic Sequences & Algebra', description: 'Algebraic form of sequences, nth term formula xn = an + b, sum of first n terms', order: 3, difficulty: 'medium', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '50 mins' },
+    { id: 'math-10-4', subjectId: 'sslc-math', title: '4. Mathematics of Chance', description: 'Probability as numbers, geometric probability, pairs and combinations', order: 4, difficulty: 'easy', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '35 mins' },
+    { id: 'math-10-5', subjectId: 'sslc-math', title: '5. Second Degree Equations', description: 'Square completion method, quadratic equation solving, word problems', order: 5, difficulty: 'hard', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '55 mins' },
+    { id: 'math-10-6', subjectId: 'sslc-math', title: '6. Trigonometry', description: 'Ratios of right triangles (sin, cos, tan), standard angle values, heights and distances', order: 6, difficulty: 'hard', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '60 mins' },
+    { id: 'math-10-7', subjectId: 'sslc-math', title: '7. Coordinates', description: 'Coordinate axes, distance between points, rectangle/circle geometry on coordinate plane', order: 7, difficulty: 'medium', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '45 mins' },
   ],
-  '3': [
-    { id: 'math-1', subjectId: '3', title: 'Calculus: Derivatives & Rates of Change', description: 'Limits, derivative rules, velocity, and tangent line slopes', order: 1, difficulty: 'easy', progress: 100, status: 'COMPLETED', lastStudiedAt: new Date(Date.now() - 86400000 * 4).toISOString(), estimatedDuration: '40 mins' },
-    { id: 'math-2', subjectId: '3', title: 'Integrals & Fundamental Theorem', description: 'Definite/indefinite integrals, area under curves, and substitution method', order: 2, difficulty: 'medium', progress: 100, status: 'COMPLETED', lastStudiedAt: new Date(Date.now() - 86400000 * 3).toISOString(), estimatedDuration: '50 mins' },
-    { id: 'math-3', subjectId: '3', title: 'Linear Algebra: Matrices & Vectors', description: 'Vector spaces, matrix multiplication, determinants, and linear transformations', order: 3, difficulty: 'medium', progress: 75, status: 'IN_PROGRESS', lastStudiedAt: new Date(Date.now() - 86400000 * 1).toISOString(), estimatedDuration: '55 mins' },
-    { id: 'math-4', subjectId: '3', title: 'Eigenvalues & Eigenvectors', description: 'Characteristic equations, diagonalization, and principal components concept', order: 4, difficulty: 'hard', progress: 40, status: 'IN_PROGRESS', lastStudiedAt: new Date(Date.now() - 86400000 * 6).toISOString(), estimatedDuration: '65 mins' },
-    { id: 'math-5', subjectId: '3', title: 'Probability Distributions & Bayes Theorem', description: 'Random variables, Gaussian distribution, conditional probability, and prior/posterior', order: 5, difficulty: 'medium', progress: 30, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '45 mins' },
-    { id: 'math-6', subjectId: '3', title: 'Differential Equations', description: 'First-order separable equations, linear DEs, and modeling real-world growth', order: 6, difficulty: 'hard', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '70 mins' },
+  'sslc-physics': [
+    { id: 'phys-10-1', subjectId: 'sslc-physics', title: '1. Wave Motion & Oscillations', description: 'Types of motion, oscillatory motion, transverse and longitudinal waves, wavelength and frequency', order: 1, difficulty: 'medium', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '45 mins' },
+    { id: 'phys-10-2', subjectId: 'sslc-physics', title: '2. Refraction of Light & Lenses', description: 'Refraction laws, convex & concave lenses, ray diagrams, lens formula, power of lenses', order: 2, difficulty: 'hard', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '55 mins' },
+    { id: 'phys-10-3', subjectId: 'sslc-physics', title: '3. Dispersion of Light & Colour', description: 'Refraction through prism, spectrum formation, recombination, rainbow formation, scattering of light', order: 3, difficulty: 'medium', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '50 mins' },
+    { id: 'phys-10-4', subjectId: 'sslc-physics', title: '4. Magnetic Effect of Electric Current', description: 'Magnetic field around current-carrying conductors, solenoid, Right-Hand Thumb Rule, motor principle', order: 4, difficulty: 'hard', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '55 mins' },
   ],
-  '1': [
-    { id: 'phys-1', subjectId: '1', title: 'Newton\'s Laws of Motion', description: 'Forces, acceleration, momentum, and friction in classical mechanics', order: 1, difficulty: 'easy', progress: 100, status: 'COMPLETED', lastStudiedAt: new Date(Date.now() - 86400000 * 5).toISOString(), estimatedDuration: '35 mins' },
-    { id: 'phys-2', subjectId: '1', title: 'Work, Energy & Power', description: 'Kinetic energy, potential energy fields, conservation of mechanical energy', order: 2, difficulty: 'medium', progress: 90, status: 'COMPLETED', lastStudiedAt: new Date(Date.now() - 86400000 * 2).toISOString(), estimatedDuration: '40 mins' },
-    { id: 'phys-3', subjectId: '1', title: 'Thermodynamics & Heat Transfer', description: 'Laws of thermodynamics, entropy, heat engines, and thermal equilibrium', order: 3, difficulty: 'medium', progress: 60, status: 'IN_PROGRESS', lastStudiedAt: new Date(Date.now() - 3600000 * 6).toISOString(), estimatedDuration: '50 mins' },
-    { id: 'phys-4', subjectId: '1', title: 'Electromagnetism & Maxwell\'s Equations', description: 'Electric fields, magnetic induction, Lorentz force, and electromagnetic waves', order: 4, difficulty: 'hard', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '65 mins' },
-    { id: 'phys-5', subjectId: '1', title: 'Wave Optics & Interference', description: 'Superposition, diffraction patterns, Young\'s double-slit experiment, and Doppler effect', order: 5, difficulty: 'medium', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '45 mins' },
-    { id: 'phys-6', subjectId: '1', title: 'Special Relativity & Quantum Physics', description: 'Time dilation, E=mc², wave-particle duality, and the Uncertainty Principle', order: 6, difficulty: 'hard', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '70 mins' },
-  ],
-  '2': [
-    { id: 'bio-1', subjectId: '2', title: 'Cellular Structure & Organelles', description: 'Plasma membrane, mitochondria, nucleus, and cellular transport mechanisms', order: 1, difficulty: 'easy', progress: 20, status: 'IN_PROGRESS', lastStudiedAt: new Date(Date.now() - 86400000 * 7).toISOString(), estimatedDuration: '35 mins' },
-    { id: 'bio-2', subjectId: '2', title: 'DNA Replication & Protein Synthesis', description: 'Double helix structure, transcription, translation, and codon decoding', order: 2, difficulty: 'medium', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '50 mins' },
-    { id: 'bio-3', subjectId: '2', title: 'Genetics & Mendelian Inheritance', description: 'Alleles, Punnett squares, dominant/recessive traits, and genetic mutations', order: 3, difficulty: 'medium', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '45 mins' },
-    { id: 'bio-4', subjectId: '2', title: 'Photosynthesis & Cellular Respiration', description: 'Calvin cycle, ATP generation, Krebs cycle, and electron transport chain', order: 4, difficulty: 'medium', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '55 mins' },
-    { id: 'bio-5', subjectId: '2', title: 'Ecology & Ecosystem Dynamics', description: 'Trophic levels, energy pyramids, biodiversity, and biogeochemical cycles', order: 5, difficulty: 'easy', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '40 mins' },
+  'sslc-chemistry': [
+    { id: 'chem-10-1', subjectId: 'sslc-chemistry', title: '1. Nomenclature of Organic Compounds & Isomerism', description: 'Hydrocarbons (alkanes, alkenes, alkynes), IUPAC naming rules, chain/position/functional isomerism', order: 1, difficulty: 'hard', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '60 mins' },
+    { id: 'chem-10-2', subjectId: 'sslc-chemistry', title: '2. Chemical Reactions of Organic Compounds', description: 'Substitution, addition, polymerization, combustion, and thermal cracking reactions', order: 2, difficulty: 'medium', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '50 mins' },
+    { id: 'chem-10-3', subjectId: 'sslc-chemistry', title: '3. Periodic Table & Electron Configuration', description: 'Shells & subshells (s, p, d, f), Aufbau principle, block classification, periodic trends', order: 3, difficulty: 'hard', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '55 mins' },
+    { id: 'chem-10-4', subjectId: 'sslc-chemistry', title: '4. Gas Laws and Mole Concept', description: 'Boyle’s law, Charles’s law, Avogadro’s law, mole calculations, molar volume (22.4 L at STP)', order: 4, difficulty: 'medium', progress: 0, status: 'NOT_STARTED', lastStudiedAt: null, estimatedDuration: '50 mins' },
   ],
 }
 
@@ -309,6 +249,6 @@ export const useSubjectStore = create<SubjectState>()(
         return null
       },
     }),
-    { name: 'deep-tutor-subjects' }
+    { name: 'deep-tutor-sslc-fresh-v3' }
   )
 )

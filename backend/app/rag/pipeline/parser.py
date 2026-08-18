@@ -46,7 +46,9 @@ _FORMULA_PATTERNS = [
     re.compile(r'\$.+?\$'),                       # inline math $...$
     re.compile(r'\\[a-zA-Z]+\{[^}]*\}'),         # LaTeX commands \cmd{...}
     re.compile(r'\\frac\{', re.IGNORECASE),
-    re.compile(r'\\[a-zA-Z]{2,}'),               # \alpha, \beta, etc.
+    re.compile(r'\\[a-zA-Z]{2,}'),               # \alpha, \beta, \theta, etc.
+    re.compile(r'(?:[A-Za-z_]+\s*=\s*[-+]?[0-9a-zA-Z_\s\+\-\*/\(\)\^\\\{\}\.]+)', re.MULTILINE), # Algebraic equations
+    re.compile(r'(?:[0-9]*[A-Z][a-z]?[0-9]*(?:\([a-z]+\))?\s*\+\s*)+[0-9]*[A-Z][a-z]?[0-9]*(?:\([a-z]+\))?\s*(?:->|→|⇌|=)\s*.+', re.MULTILINE), # Chemical reactions
 ]
 
 

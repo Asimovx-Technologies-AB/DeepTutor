@@ -51,30 +51,17 @@ export default function SubjectWorkspacePage() {
 
   const completedTopicsCount = topics.filter((t) => t.status === 'COMPLETED').length
 
-  const handleStartTopicChat = async (topic: any) => {
+  const handleStartTopicChat = (topic: any) => {
     recordActivity(subject.id, topic.id)
-    try {
-      const res = await chatApi.createSession(topic.id, `${subject.name}: ${topic.title}`)
-      navigate(`/chat/${res.data.id}`, {
-        state: {
-          initialPrompt: `Hi Deepy! I'd like to study ${topic.title} in ${subject.name}. Can you give me an overview and key concepts?`,
-          subjectId: subject.id,
-          subjectName: subject.name,
-          topicId: topic.id,
-          topicName: topic.title,
-        },
-      })
-    } catch {
-      navigate('/chat', {
-        state: {
-          initialPrompt: `Hi Deepy! I'd like to study ${topic.title} in ${subject.name}. Can you give me an overview and key concepts?`,
-          subjectId: subject.id,
-          subjectName: subject.name,
-          topicId: topic.id,
-          topicName: topic.title,
-        },
-      })
-    }
+    navigate(`/subjects/${subject.id}/chat/${topic.id}`, {
+      state: {
+        initialPrompt: `Hi Deepy! I'd like to study ${topic.title} in ${subject.name}. Can you give me an overview and key concepts?`,
+        subjectId: subject.id,
+        subjectName: subject.name,
+        topicId: topic.id,
+        topicName: topic.title,
+      },
+    })
   }
 
   return (

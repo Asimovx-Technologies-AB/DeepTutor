@@ -619,11 +619,16 @@ export default function ChatPage() {
     }
   }, [location.state, handleSend, location.pathname, navigate])
 
-  // Group sessions by date
+  // Group sessions by date (Only show custom document learning sessions)
   const groupedSessions = useMemo(() => {
-    const filtered = sessions.filter((s) =>
-      s.session_title.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    const filtered = sessions.filter((s) => {
+      const isSubjectSession = s.topic_id?.startsWith('sslc-') ||
+                               s.topic_id?.startsWith('math-') ||
+                               s.topic_id?.startsWith('phys-') ||
+                               s.topic_id?.startsWith('chem-')
+      if (isSubjectSession) return false
+      return s.session_title.toLowerCase().includes(searchQuery.toLowerCase())
+    })
 
     const now = new Date()
     const today: any[] = []

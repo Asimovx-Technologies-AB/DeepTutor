@@ -32,7 +32,9 @@ class MessageRequest(BaseModel):
 
 
 def _user_section_collection_id(user_id: str, topic_id: str, session_id: str = "") -> str:
-    """Build a per-user section collection id — isolates data by user and session section."""
+    """Build a collection id: curriculum topics query the textbook index directly; user uploads use namespaced ID."""
+    if topic_id and topic_id.startswith(("sslc-", "math-10-", "phys-10-", "chem-10-", "math-", "phys-", "chem-", "textbook")):
+        return topic_id
     section_id = topic_id or session_id or "general"
     return get_section_collection_id(user_id, section_id)
 

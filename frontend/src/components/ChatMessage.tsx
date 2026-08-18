@@ -1,6 +1,9 @@
 import React, { useState, memo, useDeferredValue } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 import { Bot, User, Copy, Check } from 'lucide-react'
 import { motion } from 'framer-motion'
 import SourceCard, { type Source } from './SourceCard'
@@ -67,7 +70,10 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding }
                   <span>{grounding.formatted_badge}</span>
                 </div>
               )}
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+              >
                 {displayContent}
               </ReactMarkdown>
               {isStreaming && (
