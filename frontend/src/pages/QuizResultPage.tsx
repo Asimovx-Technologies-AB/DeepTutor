@@ -65,7 +65,7 @@ export default function QuizResultPage() {
   const subjectTopics = useSubjectStore((s) => s.topics)
 
   let detectedSubjectId = passedSubjectId || ''
-  let topicName = quiz?.title ? quiz.title.replace('Quiz:', '').strip() : ''
+  let topicName = quiz?.title ? (quiz.title.replace('Quiz:', '') as string).trim() : ''
 
   if (!detectedSubjectId && topicId) {
     for (const [sId, topicsList] of Object.entries(subjectTopics)) {
@@ -127,21 +127,21 @@ export default function QuizResultPage() {
         {isSubjectQuiz && detectedSubjectId && (
           <button
             onClick={() => navigate(`/subjects/${detectedSubjectId}`)}
-            className="text-xs font-bold text-[#6F6B63] hover:text-[#F28A45] transition-colors"
+            className="text-xs font-extrabold text-[#F28A45] hover:text-[#D97706] bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-xl flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
           >
-            {activeSubject?.name || 'Subject'} Overview →
+            <span>{activeSubject?.name || 'Subject'} Page</span> →
           </button>
         )}
       </div>
 
-      {/* Score card */}
+      {/* Score Card */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4 }}
-        className="glass-card p-8 text-center mb-6 relative overflow-hidden border border-[#E7E1D8] shadow-2xs bg-white rounded-3xl"
+        transition={{ duration: 0.3 }}
+        className="glass-card p-8 mb-6 border border-[#E7E1D8] shadow-sm text-center bg-white rounded-3xl"
       >
-        <div className="relative">
+        <div className="max-w-md mx-auto">
           <div className="text-5xl mb-2">{grade.emoji}</div>
           <h1 className={`text-2xl font-black mb-1 ${grade.color}`}>{grade.label}</h1>
           <p className="text-[#6F6B63] text-sm font-medium mb-6">
@@ -170,28 +170,31 @@ export default function QuizResultPage() {
       </motion.div>
 
       {/* Action buttons */}
-      <div className="flex gap-3 mb-8">
-        <button
-          onClick={() => {
-            if (isSubjectQuiz && detectedSubjectId && topicId) {
-              navigate(`/subjects/${detectedSubjectId}/chat/${topicId}`)
-            } else {
-              navigate(-1)
-            }
-          }}
-          className="btn-ghost flex-1 flex items-center justify-center gap-2 cursor-pointer font-bold border-[#E7E1D8] bg-white text-[#20201D] hover:bg-[#FFF9F2] shadow-2xs py-3 px-4 rounded-2xl"
-        >
-          <ArrowLeft size={15} /> Back to Chat
-        </button>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
+        {isSubjectQuiz && detectedSubjectId ? (
+          <button
+            onClick={() => navigate(`/subjects/${detectedSubjectId}`)}
+            className="btn-ghost flex items-center justify-center gap-2 cursor-pointer font-extrabold border-[#E7E1D8] bg-white text-[#20201D] hover:bg-orange-50/50 shadow-2xs py-3 px-4 rounded-2xl text-xs"
+          >
+            🏛️ Subject Overview
+          </button>
+        ) : (
+          <button
+            onClick={() => navigate(-1)}
+            className="btn-ghost flex items-center justify-center gap-2 cursor-pointer font-bold border-[#E7E1D8] bg-white text-[#20201D] hover:bg-[#FFF9F2] shadow-2xs py-3 px-4 rounded-2xl text-xs"
+          >
+            <ArrowLeft size={15} /> Back
+          </button>
+        )}
         <button
           onClick={() => navigate(`/quiz/${topicId}`)}
-          className="btn-ghost flex-1 flex items-center justify-center gap-2 cursor-pointer font-bold border-[#E7E1D8] bg-white text-[#20201D] hover:bg-[#FFF9F2] shadow-2xs py-3 px-4 rounded-2xl"
+          className="btn-ghost flex items-center justify-center gap-2 cursor-pointer font-bold border-[#E7E1D8] bg-white text-[#20201D] hover:bg-[#FFF9F2] shadow-2xs py-3 px-4 rounded-2xl text-xs"
         >
           <RotateCcw size={15} /> Retry Quiz
         </button>
         <button
           onClick={() => handleAskAITutor()}
-          className="btn-primary flex-1 flex items-center justify-center gap-2 cursor-pointer font-black shadow-2xs py-3 px-4 rounded-2xl"
+          className="btn-primary flex items-center justify-center gap-2 cursor-pointer font-black shadow-2xs py-3 px-4 rounded-2xl text-xs"
         >
           <MessageSquare size={15} /> Ask Tutor
         </button>

@@ -6,7 +6,7 @@ are high-yield academic concepts and free of table artifacts, citations, and boi
 import re
 from typing import List, Optional, Set
 
-# Structural academic paper boilerplate sections (not concepts to study)
+# Structural academic paper boilerplate sections & meta-info (not concepts to study)
 BOILERPLATE_HEADINGS: Set[str] = {
     "abstract", "introduction", "conclusion", "conclusions", "references", "reference",
     "bibliography", "acknowledgment", "acknowledgments", "acknowledgements",
@@ -22,7 +22,22 @@ BOILERPLATE_HEADINGS: Set[str] = {
     "proceedings", "conference", "symposium", "department", "university", "faculty",
     "edition", "published", "copyright", "rights reserved", "editorial", "preface",
     "table 1", "table 2", "table 3", "figure 1", "figure 2", "figure 3", "fig 1", "fig 2",
-    "main ideas", "key themes", "core concepts", "summary overview"
+    "main ideas", "key themes", "core concepts", "summary overview",
+    "research paper", "paper", "author biography", "biography", "about the authors",
+    "bibliometric analysis", "citation history", "citation histories",
+    "citation histories of the most frequently cited articles",
+    "web of science categories and journals", "categories and journals",
+    "open research challenges and opportunities relative to global south regions",
+    "open research challenges", "research challenges", "global south regions",
+    "limitations and prospects", "classical machine learning limitations and prospects",
+    "funding statement", "financial support", "disclaimer", "declaration", "peer review"
+}
+
+# Substrings that disqualify candidate topic strings immediately
+META_SUBSTRINGS: Set[str] = {
+    "bibliometric", "citation histor", "author bio", "biography", "web of science",
+    "scopus", "publication output", "conflict of interest", "acknowledg", "research paper",
+    "limitations and prospect", "global south", "peer review", "copyright"
 }
 
 # Noisy stop words / country / generic tokens
@@ -30,7 +45,7 @@ STOP_WORDS: Set[str] = {
     "tc", "tp", "cpp", "lr", "roc", "usa", "uk", "china", "india", "japan", "germany",
     "south africa", "north america", "europe", "asia", "global", "international",
     "author", "authors", "editor", "volume", "issue", "pages", "journal", "p", "pp", "vol",
-    "no", "num", "et al", "etc", "e g", "i e", "via", "using", "based", "approach"
+    "no", "num", "et al", "etc", "e g", "i e", "via", "using", "based", "approach", "paper"
 }
 
 
@@ -54,13 +69,16 @@ def is_valid_academic_topic(text: str) -> bool:
 
     t_lower = t.lower()
 
-    # 1. Exact or stripped match against boilerplate
+    # 1. Exact or stripped match against boilerplate or meta substrings
     if t_lower in BOILERPLATE_HEADINGS:
+        return False
+
+    if any(sub in t_lower for sub in META_SUBSTRINGS):
         return False
 
     # Strip section numbering prefix like '1.2 ', 'IV. ', 'Section 3: '
     stripped_prefix = re.sub(r'^(?:(?:section|chapter|part)\s+)?(?:(?:\d+(?:\.\d+)*)|[ivxlcdm]+)[.\)\s:-]+\s*', '', t_lower).strip()
-    if stripped_prefix in BOILERPLATE_HEADINGS or len(stripped_prefix) < 3:
+    if stripped_prefix in BOILERPLATE_HEADINGS or any(sub in stripped_prefix for sub in META_SUBSTRINGS) or len(stripped_prefix) < 3:
         return False
 
     # 2. Check for URLs, DOIs, file extensions, ISBNs

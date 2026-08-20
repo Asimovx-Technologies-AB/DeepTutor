@@ -236,9 +236,21 @@ export default function SubjectWorkspacePage() {
                           Completed
                         </span>
                       )}
-                      {isInProgress && (
+                      {isInProgress && !isCompleted && (
                         <span className="text-[10px] font-black bg-[#FFF0E4] text-[#F28A45] px-2 py-0.5 rounded-full">
                           {topic.status === 'REVIEW' ? 'Review Needed' : 'In Progress'}
+                        </span>
+                      )}
+
+                      {/* Last Quiz Score Badge */}
+                      {topic.lastQuizPct !== undefined && (
+                        <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${
+                          topic.lastQuizPct >= 70
+                            ? 'bg-[#E3F0E5] border-[#4F8A68]/30 text-[#35654B]'
+                            : 'bg-[#FFF3D8] border-[#D99A32]/30 text-[#B45309]'
+                        }`}>
+                          <Trophy size={11} className={topic.lastQuizPct >= 70 ? 'text-[#4F8A68]' : 'text-[#D99A32]'} />
+                          <span>Quiz: {topic.lastQuizPct}% ({topic.lastQuizScore}/{topic.lastQuizTotal})</span>
                         </span>
                       )}
                     </div>

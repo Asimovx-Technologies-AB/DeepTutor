@@ -1,0 +1,121 @@
+{
+  "classical_machine_learning_algorithms_overview": {
+    "id": "classical_machine_learning_algorithms_overview",
+    "name": "Classical Machine Learning Algorithms Overview",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_ec8a4738-af37-44b1-aa80-59cfa566ee00",
+    "sources": [],
+    "mentions": 1
+  },
+  "decision_trees": {
+    "id": "decision_trees",
+    "name": "Decision Trees",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_ec8a4738-af37-44b1-aa80-59cfa566ee00",
+    "sources": [
+      "ml algorithams.pdf p.1"
+    ],
+    "mentions": 2
+  },
+  "na_ve_bayes": {
+    "id": "na_ve_bayes",
+    "name": "Naïve Bayes",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_ec8a4738-af37-44b1-aa80-59cfa566ee00",
+    "sources": [],
+    "mentions": 1
+  },
+  "support_vector_machines": {
+    "id": "support_vector_machines",
+    "name": "Support Vector Machines",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_ec8a4738-af37-44b1-aa80-59cfa566ee00",
+    "sources": [
+      "ml algorithams.pdf p.1"
+    ],
+    "mentions": 2
+  },
+  "logistic_regression": {
+    "id": "logistic_regression",
+    "name": "Logistic Regression",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_ec8a4738-af37-44b1-aa80-59cfa566ee00",
+    "sources": [],
+    "mentions": 1
+  },
+  "linear_regression": {
+    "id": "linear_regression",
+    "name": "Linear Regression",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_ec8a4738-af37-44b1-aa80-59cfa566ee00",
+    "sources": [],
+    "mentions": 1
+  },
+  "prospects": {
+    "id": "prospects",
+    "name": "Prospects",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_ec8a4738-af37-44b1-aa80-59cfa566ee00",
+    "sources": [],
+    "mentions": 1
+  },
+  "countries_and_institutions": {
+    "id": "countries_and_institutions",
+    "name": "Countries and institutions",
+    "type": "concept",
+    "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_ec8a4738-af37-44b1-aa80-59cfa566ee00",
+    "sources": [],
+    "mentions": 1
+  },
+  "machine_learning": {
+    "id": "machine_learning",
+    "name": "Machine Learning",
+    "type": "concept",
+    "description": "Field of study focused on algorithms that learn from data.",
+    "sources": [
+      "ml algorithams.pdf p.1",
+      "ml algorithams.pdf p.15"
+    ],
+    "mentions": 2
+  },
+  "random_forests": {
+    "id": "random_forests",
+    "name": "Random Forests",
+    "type": "algorithm",
+    "description": "Ensemble learning method for classification and regression operating by constructing multiple decision trees.",
+    "sources": [
+      "ml algorithams.pdf p.1"
+    ],
+    "mentions": 1
+  },
+  "roc_curves": {
+    "id": "roc_curves",
+    "name": "ROC Curves",
+    "type": "concept",
+    "description": "Graphical plots that illustrate the diagnostic ability of a binary classifier system",
+    "sources": [
+      "ml algorithams.pdf p.28"
+    ],
+    "mentions": 1
+  },
+  "roc_analysis": {
+    "id": "roc_analysis",
+    "name": "ROC Analysis",
+    "type": "method",
+    "description": "Technique for visualizing and evaluating classifier performance independent of class imbalance",
+    "sources": [
+      "ml algorithams.pdf p.28"
+    ],
+    "mentions": 1
+  },
+  "roc_convex_hull": {
+    "id": "roc_convex_hull",
+    "name": "ROC Convex Hull",
+    "type": "method",
+    "description": "Method used to identify optimal classifiers from ROC space",
+    "sources": [
+      "ml algorithams.pdf p.28"
+    ],
+    "mentions": 1
+  }
+}

@@ -23,6 +23,8 @@ from dataclasses import dataclass, asdict
 from typing import List, Dict, Tuple, Optional
 from app.rag.ollama_client import ollama
 
+from app.rag.topic_sanitizer import is_valid_academic_topic, clean_and_format_topic
+
 # ── GraphTriplet Dataclass ────────────────────────────────────────────────────
 
 @dataclass
@@ -45,7 +47,7 @@ class GraphTriplet:
 # ── Extraction Prompts ────────────────────────────────────────────────────────
 
 TRIPLET_EXTRACTION_PROMPT = """You are a precise knowledge graph extraction expert.
-Extract technical concepts, their relationships, and graph triplets from the given text.
+Extract only the most IMPORTANT core technical concepts, laws, algorithms, formulas, and relationships from the given text.
 
 Return ONLY valid JSON in this exact format:
 {{
@@ -62,12 +64,12 @@ Return ONLY valid JSON in this exact format:
 }}
 
 Strict Rules:
-- Extract 3–8 important TECHNICAL concepts per chunk
-- DO NOT extract author names, countries, cities, or page metadata headers
-- Entity names: concise (1–4 words), fix obvious typos
-- Relations: uppercase verbs (USES, IMPROVES, REQUIRES, DEFINES, EXTENDS, APPLIES_TO, PART_OF, COMPARED_TO)
-- Confidence: float 0.0–1.0 based on how clearly the relationship is stated
-- If no clear technical entities exist, return {{"entities": [], "relations": [], "triplets": []}}
+- Extract ONLY 2–5 highly IMPORTANT, high-yield academic concepts (e.g. "Decision Trees", "Entropy", "Support Vector Machines", "Ohm's Law").
+- STRICTLY IGNORE paper metadata, author biographies, citation metrics, journal names, bibliometrics, tables, and boilerplate.
+- Entity names: concise (1–4 words), proper nouns or technical terms.
+- Relations: uppercase verbs (USES, IMPROVES, REQUIRES, DEFINES, EXTENDS, APPLIES_TO, PART_OF, COMPARED_TO).
+- Confidence: float 0.0–1.0.
+- If no core technical concepts exist, return {{"entities": [], "relations": [], "triplets": []}}
 
 TEXT:
 {text}
@@ -147,21 +149,37 @@ async def extract_graph_triplets(
         relations = data.get("relations", [])
         raw_triplets = data.get("triplets", [])
 
-        # Annotate source metadata
+        # Clean and filter entities to strictly important academic concepts
+        filtered_entities = []
         for e in entities:
-            e["source"] = source_doc
-        for r in relations:
-            r["source"] = source_doc
+            name = str(e.get("name", "")).strip()
+            clean_name = clean_and_format_topic(name)
+            if clean_name and is_valid_academic_topic(clean_name):
+                e["name"] = clean_name
+                e["source"] = source_doc
+                filtered_entities.append(e)
 
-        # Build typed GraphTriplet objects, filtering by confidence
+        # Clean and filter relations
+        filtered_relations = []
+        for r in relations:
+            src = clean_and_format_topic(str(r.get("source", "")).strip())
+            tgt = clean_and_format_topic(str(r.get("target", "")).strip())
+            if src and tgt and is_valid_academic_topic(src) and is_valid_academic_topic(tgt):
+                r["source"] = src
+                r["target"] = tgt
+                filtered_relations.append(r)
+
+        # Build typed GraphTriplet objects, filtering by confidence and validity
         triplets: List[GraphTriplet] = []
         for t in raw_triplets:
-            head = str(t.get("head", "")).strip()
+            head = clean_and_format_topic(str(t.get("head", "")).strip())
             relation = str(t.get("relation", "")).strip().upper()
-            tail = str(t.get("tail", "")).strip()
+            tail = clean_and_format_topic(str(t.get("tail", "")).strip())
             confidence = float(t.get("confidence", 0.7))
 
             if not head or not relation or not tail:
+                continue
+            if not is_valid_academic_topic(head) or not is_valid_academic_topic(tail):
                 continue
             if confidence < confidence_threshold:
                 continue
@@ -175,7 +193,7 @@ async def extract_graph_triplets(
                 source_doc=source_doc,
             ))
 
-        return entities, relations, triplets
+        return filtered_entities, filtered_relations, triplets
 
     except Exception as e:
         print(f"[TRIPLET EXTRACT] Error: {e}")

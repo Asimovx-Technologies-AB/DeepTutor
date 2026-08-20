@@ -1,0 +1,26 @@
+[
+  {
+    "head": "Random Forests",
+    "relation": "EXTENDS",
+    "tail": "Decision Trees",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_ec8a4738-af37-44b1-aa80-59cfa566ee00_89287992",
+    "source_doc": "ml algorithams.pdf p.1"
+  },
+  {
+    "head": "ROC Analysis",
+    "relation": "USES",
+    "tail": "ROC Curves",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_ec8a4738-af37-44b1-aa80-59cfa566ee00_38018156",
+    "source_doc": "ml algorithams.pdf p.28"
+  },
+  {
+    "head": "ROC Convex Hull",
+    "relation": "APPLIES_TO",
+    "tail": "ROC Curves",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_ec8a4738-af37-44b1-aa80-59cfa566ee00_38018156",
+    "source_doc": "ml algorithams.pdf p.28"
+  }
+]

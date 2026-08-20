@@ -15,6 +15,10 @@ export interface Topic {
   status: TopicStatus
   lastStudiedAt: string | null
   estimatedDuration: string
+  lastQuizScore?: number
+  lastQuizTotal?: number
+  lastQuizPct?: number
+  lastQuizDate?: string
 }
 
 export interface Subject {
@@ -95,6 +99,7 @@ interface SubjectState {
   enrollSubject: (subjectId: string) => void
   unenrollSubject: (subjectId: string) => void
   updateTopicProgress: (subjectId: string, topicId: string, progress: number) => void
+  recordQuizResult: (subjectId: string, topicId: string, score: number, total: number, pct: number) => void
   recordActivity: (subjectId: string, topicId: string) => void
   
   // Getters & Calculations
@@ -124,6 +129,40 @@ export const useSubjectStore = create<SubjectState>()(
         set((state) => ({
           subjects: state.subjects.map((s) => (s.id === subjectId ? { ...s, isEnrolled: false } : s)),
         }))
+      },
+
+      recordQuizResult: (subjectId, topicId, score, total, pct) => {
+        const now = new Date().toISOString()
+        set((state) => {
+          const subjectTopics = state.topics[subjectId] || []
+          const updatedTopics = subjectTopics.map((t) => {
+            if (t.id === topicId) {
+              const newProgress = Math.max(t.progress, pct)
+              const newStatus: TopicStatus =
+                newProgress >= 70 ? 'COMPLETED' : newProgress > 0 ? 'IN_PROGRESS' : 'NOT_STARTED'
+              return {
+                ...t,
+                progress: newProgress,
+                status: newStatus,
+                lastQuizScore: score,
+                lastQuizTotal: total,
+                lastQuizPct: pct,
+                lastQuizDate: now,
+                lastStudiedAt: now,
+              }
+            }
+            return t
+          })
+
+          const updatedSubjects = state.subjects.map((s) =>
+            s.id === subjectId ? { ...s, lastStudiedAt: now } : s
+          )
+
+          return {
+            topics: { ...state.topics, [subjectId]: updatedTopics },
+            subjects: updatedSubjects,
+          }
+        })
       },
 
       updateTopicProgress: (subjectId, topicId, progressVal) => {

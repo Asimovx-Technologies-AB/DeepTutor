@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Network, X, ZoomIn, ZoomOut, RefreshCw, Maximize2, Minimize2,
   MousePointer, Search, Sparkles, ChevronRight, Layers, Sun, Moon,
-  Info, Filter, Eye
+  Info, Filter, Eye, MessageSquare, Lightbulb, BookOpen, Target,
+  CheckCircle2, HelpCircle
 } from 'lucide-react'
+import { documentsApi } from '../services/api'
 
 interface GraphNode {
   id: string
@@ -25,6 +27,7 @@ interface Props {
   relationships: GraphEdge[]
   isOpen: boolean
   onClose: () => void
+  onAskTutor?: (conceptName: string) => void
 }
 
 /* ─── Rich Vibrant Color Palette for Node Types ─────────────────── */
@@ -66,7 +69,7 @@ interface SimEdge {
   description: string
 }
 
-function GraphContextPanel({ entities, relationships, isOpen, onClose }: Props) {
+function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTutor }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const animRef = useRef<number>(0)
@@ -84,6 +87,43 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose }: Props) 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string | null>(null)
   const [darkMode, setDarkMode] = useState(false) // Default to warm light theme matching DeepTutor design system
+
+  // Dynamic AI Concept Explanation State
+  const [conceptDetails, setConceptDetails] = useState<{
+    definition?: string
+    key_takeaway?: string
+    application?: string
+    exam_tip?: string
+  } | null>(null)
+  const [loadingDetails, setLoadingDetails] = useState(false)
+  const detailsCacheRef = useRef<Map<string, any>>(new Map())
+
+  useEffect(() => {
+    if (!selectedNode?.name || selectedNode.type === 'document') {
+      setConceptDetails(null)
+      return
+    }
+
+    const name = selectedNode.name
+    if (detailsCacheRef.current.has(name)) {
+      setConceptDetails(detailsCacheRef.current.get(name))
+      return
+    }
+
+    setLoadingDetails(true)
+    documentsApi
+      .explainConcept(name)
+      .then((res) => {
+        if (res.data) {
+          detailsCacheRef.current.set(name, res.data)
+          setConceptDetails(res.data)
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        setLoadingDetails(false)
+      })
+  }, [selectedNode])
 
   const dragRef = useRef<{
     node: SimNode | null
@@ -869,18 +909,64 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose }: Props) 
                       <h4 className="text-xl font-black leading-snug tracking-tight">
                         {selectedNode.name}
                       </h4>
-                      {selectedNode.description ? (
-                        <p className={`text-xs mt-3 leading-relaxed font-medium p-4 rounded-2xl border ${
-                          darkMode 
-                            ? 'bg-slate-800/60 border-slate-700/60 text-slate-300' 
-                            : 'bg-slate-50 border-slate-200/80 text-slate-700'
+
+                      {/* Main Educational Definition */}
+                      {loadingDetails ? (
+                        <div className={`mt-3 p-4 rounded-2xl border text-xs space-y-2.5 animate-pulse ${
+                          darkMode ? 'bg-slate-800/60 border-slate-700/60 text-slate-400' : 'bg-slate-50 border-slate-200/80 text-slate-500'
                         }`}>
-                          {selectedNode.description}
-                        </p>
+                          <div className="flex items-center gap-2 text-indigo-500 font-bold">
+                            <Sparkles size={14} className="animate-spin" />
+                            <span>DeepTutor is analyzing textbook context...</span>
+                          </div>
+                          <div className="h-2 bg-slate-300 dark:bg-slate-700 rounded-full w-full" />
+                          <div className="h-2 bg-slate-300 dark:bg-slate-700 rounded-full w-4/5" />
+                        </div>
                       ) : (
-                        <p className={`text-xs mt-2 italic ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                          No detailed description available for this entity.
-                        </p>
+                        <div className="space-y-2.5 mt-3">
+                          {/* Core Meaning Card */}
+                          <div className={`text-xs leading-relaxed font-medium p-3.5 rounded-2xl border ${
+                            darkMode 
+                              ? 'bg-slate-800/80 border-slate-700 text-slate-200' 
+                              : 'bg-emerald-50/70 border-emerald-200/80 text-emerald-950'
+                          }`}>
+                            <div className="flex items-center gap-1.5 font-black text-[11px] text-emerald-700 dark:text-emerald-400 uppercase tracking-wide mb-1">
+                              <BookOpen size={13} />
+                              <span>Core Meaning</span>
+                            </div>
+                            <p>{conceptDetails?.definition || selectedNode.description || 'Core concept extracted from study material.'}</p>
+                          </div>
+
+                          {/* Key Takeaway / Formula */}
+                          {conceptDetails?.key_takeaway && (
+                            <div className={`text-xs leading-relaxed font-medium p-3 rounded-2xl border ${
+                              darkMode 
+                                ? 'bg-amber-950/30 border-amber-800/50 text-amber-200' 
+                                : 'bg-amber-50/70 border-amber-200/80 text-amber-950'
+                            }`}>
+                              <div className="flex items-center gap-1.5 font-black text-[11px] text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-0.5">
+                                <Lightbulb size={13} />
+                                <span>Key Rule / Formula</span>
+                              </div>
+                              <p>{conceptDetails.key_takeaway}</p>
+                            </div>
+                          )}
+
+                          {/* Exam Tip */}
+                          {conceptDetails?.exam_tip && (
+                            <div className={`text-xs leading-relaxed font-medium p-3 rounded-2xl border ${
+                              darkMode 
+                                ? 'bg-orange-950/30 border-orange-800/50 text-orange-200' 
+                                : 'bg-orange-50/70 border-orange-200/80 text-orange-950'
+                            }`}>
+                              <div className="flex items-center gap-1.5 font-black text-[11px] text-orange-700 dark:text-orange-400 uppercase tracking-wide mb-0.5">
+                                <Target size={13} />
+                                <span>Exam Focus</span>
+                              </div>
+                              <p>{conceptDetails.exam_tip}</p>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
 
@@ -897,7 +983,7 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose }: Props) 
                         </span>
                       </div>
 
-                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                         {selectedNodeConnections.length === 0 ? (
                           <p className={`text-xs italic py-2 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
                             No direct connections found.
@@ -907,7 +993,7 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose }: Props) 
                             <div
                               key={idx}
                               onClick={() => conn.targetNode && setSelectedNode(conn.targetNode)}
-                              className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group ${
+                              className={`p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group ${
                                 darkMode 
                                   ? 'bg-slate-800/50 border-slate-700/80 hover:bg-indigo-950/40 hover:border-indigo-500/50' 
                                   : 'bg-slate-50 border-slate-200/80 hover:bg-indigo-50 hover:border-indigo-200'
@@ -919,7 +1005,7 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose }: Props) 
                                   style={{ backgroundColor: getNodeColor(conn.targetNode?.type).bg }}
                                 />
                                 <div>
-                                  <p className="text-xs font-bold group-hover:text-indigo-400 transition-colors">
+                                  <p className="text-xs font-bold group-hover:text-indigo-400 transition-colors truncate max-w-[200px]">
                                     {conn.targetNode?.name}
                                   </p>
                                   {conn.edgeType && (
@@ -941,16 +1027,33 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose }: Props) 
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => setSelectedNode(null)}
-                    className={`w-full py-3 rounded-2xl font-bold text-xs transition-all shadow-lg mt-5 ${
-                      darkMode 
-                        ? 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-indigo-600/25' 
-                        : 'bg-slate-900 text-white hover:bg-slate-800'
-                    }`}
-                  >
-                    Close Inspection
-                  </button>
+                  <div className="space-y-2 mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800">
+                    {onAskTutor && selectedNode.type !== 'document' && (
+                      <button
+                        onClick={() => {
+                          const name = selectedNode.name
+                          setSelectedNode(null)
+                          onClose()
+                          onAskTutor(name)
+                        }}
+                        className="w-full py-2.5 px-4 rounded-2xl font-black text-xs transition-all shadow-sm flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white cursor-pointer"
+                      >
+                        <MessageSquare size={14} />
+                        <span>Ask DeepTutor About "{selectedNode.name}"</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => setSelectedNode(null)}
+                      className={`w-full py-2.5 rounded-2xl font-bold text-xs transition-all border cursor-pointer ${
+                        darkMode 
+                          ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' 
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      Close Inspection
+                    </button>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

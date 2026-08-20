@@ -46,6 +46,7 @@ export interface ActiveUpload {
 }
 
 // ─── Aesthetic Document Indexing Status Card ─────────────────────────────────────
+// ─── Aesthetic Document Indexing Status Card with Continuous 1-100% Animation ────
 function UploadStatusCard({
   upload,
   onDone,
@@ -57,9 +58,70 @@ function UploadStatusCard({
   onError: (docId: string, error: string) => void
   onDismiss: (docId: string) => void
 }) {
-  const [status, setStatus] = useState<any>({ status: 'indexing', progress: 10, stage: 'parsing' })
+  const [status, setStatus] = useState<any>({ status: 'indexing', progress: 5, stage: 'parsing' })
+  const [smoothProgress, setSmoothProgress] = useState(1)
+  const statusRef = useRef(status)
+  statusRef.current = status
+  const smoothRef = useRef(1)
   const hasTriggeredDoneRef = useRef(false)
 
+  // ─── Natural, Realistically Paced 1-100% Smooth Animation Loop ───
+  useEffect(() => {
+    let animFrame: number
+    const tick = () => {
+      const current = smoothRef.current
+      const isDone = statusRef.current.status === 'done'
+      const isError = statusRef.current.status === 'error'
+
+      if (isError) {
+        return // Freeze on error
+      }
+
+      if (isDone) {
+        if (current < 100) {
+          // Calm, satisfying glide to 100%
+          const diff = 100 - current
+          const step = Math.max(0.25, diff * 0.06)
+          const next = Math.min(100, current + step)
+          smoothRef.current = next
+          setSmoothProgress(Math.round(next))
+          animFrame = requestAnimationFrame(tick)
+        } else {
+          setSmoothProgress(100)
+        }
+        return
+      }
+
+      // In-progress: Target from backend status
+      const backendTarget = typeof statusRef.current.progress === 'number' ? statusRef.current.progress : 10
+      
+      let next: number
+      if (current < backendTarget) {
+        // Smoothly catch up to backend stage with gentle damping
+        const diff = backendTarget - current
+        const step = Math.max(0.04, diff * 0.025)
+        next = Math.min(backendTarget, current + step)
+      } else {
+        // Natural micro-creep while backend computes (approx 0.4% to 0.8% per second at 60fps)
+        const ceiling = Math.min(94, backendTarget + 8)
+        if (current < ceiling) {
+          next = current + 0.008
+        } else {
+          next = current
+        }
+      }
+
+      smoothRef.current = next
+      setSmoothProgress(Math.round(next))
+
+      animFrame = requestAnimationFrame(tick)
+    }
+
+    animFrame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(animFrame)
+  }, [])
+
+  // ─── Polling Backend Indexing Status ────────────────────────
   useEffect(() => {
     let doneTimer: any = null
     const interval = setInterval(async () => {
@@ -83,7 +145,7 @@ function UploadStatusCard({
       } catch {
         // network polling retry
       }
-    }, 1500)
+    }, 1200)
 
     return () => {
       clearInterval(interval)
@@ -91,10 +153,8 @@ function UploadStatusCard({
     }
   }, [upload.docId, onDone, onError, onDismiss])
 
-  const isDone = status.status === 'done'
+  const isDone = status.status === 'done' || smoothProgress >= 100
   const isError = status.status === 'error'
-  const rawProgress = typeof status.progress === 'number' ? status.progress : 0
-  const displayProgress = isDone ? 100 : Math.max(10, rawProgress)
 
   const stageInfo = useMemo(() => {
     if (isDone) {
@@ -102,7 +162,7 @@ function UploadStatusCard({
         label: 'Knowledge Base Ready',
         step: 'Complete',
         badgeColor: 'bg-[#E3F0E5] text-[#4F8A68] border-[#4F8A68]/30',
-        description: 'All chunks, vector embeddings & GraphRAG nodes indexed successfully',
+        description: 'All chunks, vector embeddings & Knowledge Graph indexed successfully',
       }
     }
     if (isError) {
@@ -113,23 +173,23 @@ function UploadStatusCard({
         description: status.error || 'Could not parse document. Please verify the file.',
       }
     }
-    if (displayProgress < 30) {
+    if (smoothProgress < 25) {
       return {
         label: 'Parsing Document Structure',
         step: 'Stage 1/4',
         badgeColor: 'bg-[#FFF0E4] text-[#F28A45] border-[#F28A45]/30',
-        description: 'Extracting text, formulas & table layouts via Docling / PyMuPDF cascade...',
+        description: 'Extracting clean text, formulas & table layouts via PyMuPDF...',
       }
     }
-    if (displayProgress < 60) {
+    if (smoothProgress < 55) {
       return {
         label: 'Semantic Chunking',
         step: 'Stage 2/4',
         badgeColor: 'bg-[#FFF3D8] text-[#D99A32] border-[#D99A32]/30',
-        description: 'Building section tree & context-preserving semantic study chunks...',
+        description: 'Building section tree & context-preserving study chunks...',
       }
     }
-    if (displayProgress < 85) {
+    if (smoothProgress < 80) {
       return {
         label: 'Generating Vector Embeddings',
         step: 'Stage 3/4',
@@ -137,13 +197,21 @@ function UploadStatusCard({
         description: 'Indexing high-dimensional semantic embeddings into vector store...',
       }
     }
-    return {
-      label: 'Constructing GraphRAG',
-      step: 'Stage 4/4',
-      badgeColor: 'bg-[#E3F0E5] text-[#4F8A68] border-[#4F8A68]/30',
-      description: 'Extracting key concepts & entity relationship triplets for deep reasoning...',
+    if (smoothProgress < 96) {
+      return {
+        label: 'Constructing Knowledge Graph',
+        step: 'Stage 4/4',
+        badgeColor: 'bg-[#E3F0E5] text-[#4F8A68] border-[#4F8A68]/30',
+        description: 'Extracting key academic concepts & relationship triplets...',
+      }
     }
-  }, [isDone, isError, displayProgress, status.error])
+    return {
+      label: 'Finalizing Index',
+      step: 'Finalizing',
+      badgeColor: 'bg-[#E3F0E5] text-[#4F8A68] border-[#4F8A68]/30',
+      description: 'Verifying vector namespace & caching graph nodes...',
+    }
+  }, [isDone, isError, smoothProgress, status.error])
 
   return (
     <motion.div
@@ -187,7 +255,7 @@ function UploadStatusCard({
               ) : (
                 <motion.div
                   animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, duration: 4, ease: 'linear' }}
+                  transition={{ repeat: Infinity, duration: 3.5, ease: 'linear' }}
                 >
                   <Sparkles size={22} className="text-[#F28A45]" />
                 </motion.div>
@@ -226,7 +294,7 @@ function UploadStatusCard({
         <div className="flex items-center gap-3 flex-shrink-0">
           <div className="text-right">
             <span className={`text-xl sm:text-2xl font-black tracking-tight ${isDone ? 'text-[#4F8A68]' : isError ? 'text-[#C85C52]' : 'text-[#F28A45]'}`}>
-              {displayProgress}%
+              {smoothProgress}%
             </span>
           </div>
 
@@ -243,7 +311,7 @@ function UploadStatusCard({
 
       {/* Animated Gradient Progress Bar with Shimmer */}
       <div className="mt-3.5 w-full bg-[#F4EFE7] h-2.5 rounded-full overflow-hidden p-0.5 border border-[#E7E1D8] relative">
-        <motion.div
+        <div
           className={`h-full rounded-full transition-all relative ${
             isDone
               ? 'bg-[#4F8A68]'
@@ -251,19 +319,17 @@ function UploadStatusCard({
               ? 'bg-[#C85C52]'
               : 'bg-gradient-to-r from-[#F28A45] via-[#FFB070] to-[#F28A45]'
           }`}
-          initial={{ width: '8%' }}
-          animate={{ width: `${displayProgress}%` }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
+          style={{ width: `${smoothProgress}%`, transition: 'width 75ms ease-out' }}
         >
           {/* Shimmer sweep */}
           {!isDone && !isError && (
             <motion.div
               className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent rounded-full"
               animate={{ x: ['-100%', '100%'] }}
-              transition={{ repeat: Infinity, duration: 1.6, ease: 'easeInOut' }}
+              transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
             />
           )}
-        </motion.div>
+        </div>
       </div>
 
       {/* Done Stats Pill */}
@@ -1273,6 +1339,12 @@ export default function ChatPage() {
         relationships={liveGraphContext.relationships}
         isOpen={showGraphPanel}
         onClose={() => setShowGraphPanel(false)}
+        onAskTutor={(concept) => {
+          setInput(`Explain the core concept "${concept}" in detail with key formulas, intuitive examples, and exam applications.`)
+          if (textareaRef.current) {
+            textareaRef.current.focus()
+          }
+        }}
       />
 
       <GamifiedQuizGame

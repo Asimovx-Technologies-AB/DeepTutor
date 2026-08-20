@@ -39,6 +39,103 @@ interface Flashcard {
   mastered: boolean
 }
 
+/**
+ * Strips raw markdown bold artifacts like `**Bold: **` or unclosed asterisks `*`
+ * while preserving valid LaTeX math `$formula$`.
+ */
+function cleanMarkdownText(text: string): string {
+  if (!text) return ''
+  return text
+    // Replace broken bold labels like `**Core Meaning: **` with clean text
+    .replace(/\*\*\s*([^*]+?)\s*:\s*\*\*/g, '$1:')
+    .replace(/\*\*\s*([^*]+?)\s*\*\*/g, '$1')
+    // Remove standalone stray asterisks
+    .replace(/(^|\s)\*+(\s|$)/g, '$1$2')
+    .trim()
+}
+
+/**
+ * Parses and renders the 3-part structured card back with dedicated aesthetic boxes.
+ */
+function CardBackView({ rawContent }: { rawContent: string }) {
+  if (!rawContent) return null
+
+  // Normalize markers
+  let text = rawContent
+    .replace(/([^\n])\s*(🎯|💡|🔑)/g, '$1\n\n$2')
+    .replace(/\*\*\s*Core Meaning:\s*\*\*/gi, '🎯 Core Meaning:')
+    .replace(/\*\*\s*Analogy:\s*\*\*/gi, '💡 Analogy:')
+    .replace(/\*\*\s*Exam Tip[^:]*:\s*\*\*/gi, '🔑 Exam Tip / Formula:')
+
+  // Match 3 parts
+  const coreMatch = text.match(/🎯\s*(?:Core Meaning|Meaning|Definition)?\s*:?\s*([\s\S]*?)(?=(?:💡|🔑|$))/i)
+  const analogyMatch = text.match(/💡\s*(?:Analogy|Mental Model|Example)?\s*:?\s*([\s\S]*?)(?=(?:🔑|$))/i)
+  const tipMatch = text.match(/🔑\s*(?:Exam Tip|Exam Rule|Formula|Key Rule)?\s*:?\s*([\s\S]*?)$/i)
+
+  const core = coreMatch ? cleanMarkdownText(coreMatch[1]) : ''
+  const analogy = analogyMatch ? cleanMarkdownText(analogyMatch[1]) : ''
+  const tip = tipMatch ? cleanMarkdownText(tipMatch[1]) : ''
+
+  const isStructured = Boolean(core || analogy || tip)
+
+  if (isStructured) {
+    return (
+      <div className="space-y-3 text-left w-full">
+        {/* Core Meaning Card */}
+        {core && (
+          <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-3.5 space-y-1 shadow-2xs">
+            <div className="flex items-center gap-1.5 text-xs font-black text-emerald-800 uppercase tracking-wide">
+              <span>🎯 Core Meaning</span>
+            </div>
+            <div className="text-xs sm:text-sm text-gray-800 leading-relaxed font-medium markdown-content">
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                {core}
+              </ReactMarkdown>
+            </div>
+          </div>
+        )}
+
+        {/* Real-Life Analogy Card */}
+        {analogy && (
+          <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3.5 space-y-1 shadow-2xs">
+            <div className="flex items-center gap-1.5 text-xs font-black text-amber-800 uppercase tracking-wide">
+              <span>💡 Real-Life Analogy</span>
+            </div>
+            <div className="text-xs sm:text-sm text-gray-800 leading-relaxed font-medium markdown-content">
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                {analogy}
+              </ReactMarkdown>
+            </div>
+          </div>
+        )}
+
+        {/* Exam Tip & Formula Card */}
+        {tip && (
+          <div className="bg-orange-50/70 border border-orange-200/80 rounded-2xl p-3.5 space-y-1 shadow-2xs">
+            <div className="flex items-center gap-1.5 text-xs font-black text-orange-800 uppercase tracking-wide">
+              <span>🔑 Exam Tip & Formula</span>
+            </div>
+            <div className="text-xs sm:text-sm text-gray-800 leading-relaxed font-semibold markdown-content">
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                {tip}
+              </ReactMarkdown>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Fallback for unstructured single text
+  return (
+    <div className="text-left py-2 text-xs sm:text-sm text-gray-800 leading-relaxed font-medium markdown-content">
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+        {cleanMarkdownText(rawContent)}
+      </ReactMarkdown>
+    </div>
+  )
+}
+
 export default function FlashcardsPage() {
   const { topicId } = useParams<{ topicId: string }>()
   const navigate = useNavigate()
@@ -379,16 +476,28 @@ export default function FlashcardsPage() {
 
           {/* 3D Interactive Flip Container */}
           <div
-            className="perspective-1000 min-h-[380px] w-full cursor-pointer relative select-none"
+            className="perspective-1000 min-h-[420px] w-full cursor-pointer relative select-none"
             onClick={() => setIsFlipped(!isFlipped)}
+            style={{ perspective: 1000, WebkitPerspective: 1000 }}
           >
             <motion.div
-              className="relative w-full h-full duration-500 transform-style-3d min-h-[380px]"
+              className="relative w-full h-full min-h-[420px]"
               animate={{ rotateY: isFlipped ? 180 : 0 }}
-              transition={{ duration: 0.5, ease: 'easeOut' }}
+              transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
+              style={{
+                transformStyle: 'preserve-3d',
+                WebkitTransformStyle: 'preserve-3d',
+              }}
             >
               {/* ─── Front Side ─── */}
-              <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-b from-white to-[#FFFDF9] border-2 border-orange-200/80 rounded-3xl p-8 flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow">
+              <div
+                className="absolute inset-0 w-full h-full bg-gradient-to-b from-white to-[#FFFDF9] border-2 border-orange-200/80 rounded-3xl p-8 flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow"
+                style={{
+                  backfaceVisibility: 'hidden',
+                  WebkitBackfaceVisibility: 'hidden',
+                  transform: 'rotateY(0deg)',
+                }}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-orange-600 bg-orange-50 px-3 py-1 rounded-full border border-orange-200">
                     <HelpCircle size={14} />
@@ -414,7 +523,7 @@ export default function FlashcardsPage() {
 
                 <div className="my-auto text-center py-6">
                   <h2 className="text-xl sm:text-2xl font-black text-[#20201D] leading-snug px-4">
-                    {currentCard?.front}
+                    {cleanMarkdownText(currentCard?.front || '')}
                   </h2>
                 </div>
 
@@ -428,10 +537,14 @@ export default function FlashcardsPage() {
 
               {/* ─── Back Side (Structured 3-Part Answer) ─── */}
               <div
-                className="absolute inset-0 w-full h-full backface-hidden bg-white border-2 border-emerald-300 rounded-3xl p-8 flex flex-col justify-between shadow-md"
-                style={{ transform: 'rotateY(180deg)' }}
+                className="absolute inset-0 w-full h-full bg-white border-2 border-emerald-300 rounded-3xl p-6 sm:p-7 flex flex-col justify-between shadow-md overflow-hidden"
+                style={{
+                  backfaceVisibility: 'hidden',
+                  WebkitBackfaceVisibility: 'hidden',
+                  transform: 'rotateY(180deg)',
+                }}
               >
-                <div className="flex items-center justify-between pb-3 border-b border-[#E7E1D8]/70">
+                <div className="flex items-center justify-between pb-2.5 border-b border-[#E7E1D8]/70">
                   <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
                     <CheckCircle2 size={14} />
                     <span>Detailed Breakdown</span>
@@ -460,14 +573,12 @@ export default function FlashcardsPage() {
                   </div>
                 </div>
 
-                {/* Structured Markdown / LaTeX Content */}
-                <div className="my-auto py-4 overflow-y-auto max-h-[260px] text-sm text-[#20201D] leading-relaxed markdown-content">
-                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-                    {currentCard?.back || ''}
-                  </ReactMarkdown>
+                {/* Structured Clean Content */}
+                <div className="my-auto py-2 overflow-y-auto max-h-[300px] pr-1">
+                  <CardBackView rawContent={currentCard?.back || ''} />
                 </div>
 
-                <div className="flex items-center justify-between pt-3 border-t border-[#E7E1D8]/70 text-xs text-gray-500 font-bold">
+                <div className="flex items-center justify-between pt-2.5 border-t border-[#E7E1D8]/70 text-xs text-gray-500 font-bold">
                   <span>How well did you know this?</span>
                   <span className="text-gray-400">Click to Flip Back 🔄</span>
                 </div>
@@ -558,11 +669,9 @@ export default function FlashcardsPage() {
                       </span>
                     )}
                   </div>
-                  <h3 className="text-sm font-black text-[#20201D] mb-2">{card.front}</h3>
-                  <div className="text-xs text-gray-600 leading-relaxed markdown-content bg-[#FAF8F3] p-3 rounded-xl border border-gray-100">
-                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {card.back}
-                    </ReactMarkdown>
+                  <h3 className="text-sm font-black text-[#20201D] mb-3">{cleanMarkdownText(card.front)}</h3>
+                  <div className="bg-[#FAF8F3] p-3.5 rounded-2xl border border-gray-100">
+                    <CardBackView rawContent={card.back} />
                   </div>
                 </div>
 

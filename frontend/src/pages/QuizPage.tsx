@@ -105,10 +105,10 @@ export default function QuizPage() {
     const score = questions.filter((q: any) => answers[q.id] === q.correct_answer).length
     const pct = totalQ > 0 ? Math.round((score / totalQ) * 100) : 0
 
-    // Update real subject and topic progress
+    // Update real subject and topic progress & quiz score
     if (topicId && currentSubjectMeta) {
       const subjectState = useSubjectStore.getState()
-      subjectState.updateTopicProgress(currentSubjectMeta.id, topicId, pct)
+      subjectState.recordQuizResult(currentSubjectMeta.id, topicId, score, totalQ, pct)
     }
 
     if (activeQuiz?.id) {

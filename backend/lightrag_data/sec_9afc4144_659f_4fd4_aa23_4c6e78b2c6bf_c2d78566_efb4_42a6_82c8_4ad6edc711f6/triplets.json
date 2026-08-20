@@ -1,0 +1,34 @@
+[
+  {
+    "head": "Large Language Models",
+    "relation": "APPLIES_TO",
+    "tail": "Natural Language Processing",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_c2d78566-efb4-42a6-82c8-4ad6edc711f6_91119714",
+    "source_doc": "llm.pdf p.1"
+  },
+  {
+    "head": "T5 Bias",
+    "relation": "EXTENDS",
+    "tail": "Relative Positional Embedding",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_c2d78566-efb4-42a6-82c8-4ad6edc711f6_34042717",
+    "source_doc": "llm.pdf p.91"
+  },
+  {
+    "head": "Reinforcement Learning",
+    "relation": "USES",
+    "tail": "Policy",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_c2d78566-efb4-42a6-82c8-4ad6edc711f6_31269665",
+    "source_doc": "llm.pdf p.181"
+  },
+  {
+    "head": "Reinforcement Learning",
+    "relation": "USES",
+    "tail": "Value Function",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_c2d78566-efb4-42a6-82c8-4ad6edc711f6_31269665",
+    "source_doc": "llm.pdf p.181"
+  }
+]

@@ -145,49 +145,124 @@ async def indexing_status(doc_id: str, user: dict = Depends(get_current_user)):
     return status
 
 
+from pydantic import BaseModel
+from app.rag.topic_sanitizer import is_valid_academic_topic, clean_and_format_topic
+from app.rag.ollama_client import ollama
+from app.rag.entity_extractor import _extract_json
+
+
+class ConceptExplainRequest(BaseModel):
+    concept: str
+    topic_id: Optional[str] = "general"
+
+
+@router.post("/concept-explain")
+async def explain_concept(req: ConceptExplainRequest, user: dict = Depends(get_current_user)):
+    """Return a concise, high-yield academic explanation of a Knowledge Graph concept."""
+    concept = req.concept.strip()
+    if not concept:
+        raise HTTPException(status_code=400, detail="Concept name required.")
+
+    # 1. Search vector store for grounded context from user's document
+    grounding_text = ""
+    try:
+        coll_id = _user_section_collection_id(user["id"], req.topic_id or "general")
+        results = await vector_store.search(query=concept, collection_id=coll_id, top_k=2)
+        if results:
+            grounding_text = "\n".join([r.get("text", "")[:400] for r in results if r.get("text")])
+    except Exception:
+        pass
+
+    prompt = f"""You are DeepTutor, an elite academic AI tutor.
+Provide a concise, crystal-clear conceptual breakdown for the academic concept: "{concept}".
+
+Textbook Reference (if relevant):
+{grounding_text}
+
+Return ONLY valid JSON in this exact structure:
+{{
+  "definition": "A precise, easy-to-understand 2-sentence explanation of {concept}.",
+  "key_takeaway": "The core formula, governing law, or key takeaway.",
+  "application": "Where or how this concept is applied in practice or problem-solving.",
+  "exam_tip": "High-yield exam tip or common mistake to avoid."
+}}
+
+JSON:"""
+
+    try:
+        messages = [
+            {"role": "system", "content": "You are a precise academic assistant. Respond with valid JSON only."},
+            {"role": "user", "content": prompt}
+        ]
+        resp = await ollama.chat(messages, temperature=0.1)
+        data = _extract_json(resp)
+        if data and data.get("definition"):
+            return {
+                "concept": concept,
+                "definition": data.get("definition", ""),
+                "key_takeaway": data.get("key_takeaway", ""),
+                "application": data.get("application", ""),
+                "exam_tip": data.get("exam_tip", ""),
+            }
+    except Exception as e:
+        print(f"[EXPLAIN CONCEPT ERROR] {e}")
+
+    return {
+        "concept": concept,
+        "definition": f"{concept} is a fundamental concept in this chapter, essential for theoretical understanding and problem-solving.",
+        "key_takeaway": f"Review key definitions and core formulas relating to {concept}.",
+        "application": "Used extensively across standard exercises and real-world systems.",
+        "exam_tip": "Focus on step-by-step derivations and standard problem patterns."
+    }
+
+
 @router.get("/topic/{topic_id}/graph")
 async def get_knowledge_graph(topic_id: str, user: dict = Depends(get_current_user)):
     """Return full knowledge graph for visualization — scoped to the current user section."""
     namespaced_topic = _user_section_collection_id(user["id"], topic_id)
-    graph = graph_store.get_full_graph(namespaced_topic)
+    raw_graph = graph_store.get_full_graph(namespaced_topic)
     stats = graph_store.get_graph_stats(namespaced_topic)
 
     # Fallback 1: check un-namespaced topic_id if present
-    if not graph.get("nodes"):
+    if not raw_graph.get("nodes"):
         fallback_graph = graph_store.get_full_graph(topic_id)
         if fallback_graph.get("nodes"):
-            graph = fallback_graph
+            raw_graph = fallback_graph
             stats = graph_store.get_graph_stats(topic_id)
 
     # Fallback 2: construct concept graph from document key_topics if graph store has no nodes
-    if not graph.get("nodes"):
-        docs = db.get_documents_for_user_and_topic(user["id"], topic_id)
-        if not docs:
-            # Also check any user documents if section is general
-            docs = db.get_documents_for_user(user["id"]) if topic_id == "general" else []
+    docs = db.get_documents_for_user_and_topic(user["id"], topic_id)
+    if not docs:
+        docs = db.get_documents_for_user(user["id"]) if topic_id == "general" else []
 
+    primary_doc_name = docs[0].get("file_name", "") if docs else ""
+
+    if not raw_graph.get("nodes"):
         nodes = []
         edges = []
         seen_nodes = set()
         for doc in docs:
             key_topics = doc.get("key_topics", [])
             for kt in key_topics:
-                node_id = str(kt).lower().strip()
-                if node_id and node_id not in seen_nodes:
-                    seen_nodes.add(node_id)
-                    nodes.append({
-                        "id": node_id,
-                        "name": str(kt),
-                        "type": "concept",
-                        "description": f"Concept extracted from {doc.get('file_name', 'uploaded document')}"
-                    })
+                clean_kt = clean_and_format_topic(str(kt))
+                if clean_kt and is_valid_academic_topic(clean_kt):
+                    node_id = clean_kt.lower().strip()
+                    if node_id and node_id not in seen_nodes:
+                        seen_nodes.add(node_id)
+                        nodes.append({
+                            "id": node_id,
+                            "name": clean_kt,
+                            "type": "concept",
+                            "description": f"Core academic concept from {doc.get('file_name', 'uploaded material')}"
+                        })
         if nodes:
             doc_node_id = f"doc_{topic_id}"
+            root_label = f"Knowledge Base ({primary_doc_name})" if primary_doc_name else "Document Knowledge Base"
             nodes.insert(0, {
                 "id": doc_node_id,
-                "name": f"Section Knowledge Base ({topic_id})",
+                "name": root_label,
                 "type": "document",
-                "description": f"Knowledge base for {len(docs)} uploaded document(s)"
+                "description": f"Knowledge base synthesized from {len(docs)} uploaded document(s)"
             })
             for n in nodes[1:]:
                 edges.append({
@@ -196,8 +271,38 @@ async def get_knowledge_graph(topic_id: str, user: dict = Depends(get_current_us
                     "type": "contains_concept",
                     "description": "Topic concept extracted from document"
                 })
-            graph = {"nodes": nodes, "edges": edges}
-            stats = {"node_count": len(nodes), "edge_count": len(edges)}
+            raw_graph = {"nodes": nodes, "edges": edges}
+
+    # Strict filtering: keep only valid, high-yield academic concepts (omit boilerplate / metadata)
+    clean_nodes = []
+    valid_node_ids = set()
+    for node in raw_graph.get("nodes", []):
+        n_name = node.get("name", node.get("id", ""))
+        n_type = node.get("type", "concept")
+        
+        # Clean root document node name so it never shows raw UUIDs
+        if n_type == "document":
+            if any(char.isdigit() for char in n_name) and len(n_name) > 20:
+                node["name"] = f"Knowledge Base ({primary_doc_name})" if primary_doc_name else "Document Knowledge Base"
+            clean_nodes.append(node)
+            valid_node_ids.add(node.get("id", ""))
+            continue
+
+        if is_valid_academic_topic(n_name) and clean_and_format_topic(n_name):
+            clean_name = clean_and_format_topic(n_name) or n_name
+            node["name"] = clean_name
+            clean_nodes.append(node)
+            valid_node_ids.add(node.get("id", clean_name.lower().strip()))
+
+    clean_edges = []
+    for edge in raw_graph.get("edges", []):
+        src = edge.get("source", "")
+        tgt = edge.get("target", "")
+        if src in valid_node_ids and tgt in valid_node_ids:
+            clean_edges.append(edge)
+
+    graph = {"nodes": clean_nodes, "edges": clean_edges}
+    stats = {"node_count": len(clean_nodes), "edge_count": len(clean_edges)}
 
     return {"topic_id": topic_id, "stats": stats, "graph": graph}
 
