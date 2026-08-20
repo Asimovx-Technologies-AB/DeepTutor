@@ -213,29 +213,25 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* Question Input Field (Visually Dominant & High Contrast) */}
-            <form onSubmit={(e) => handleQuickAsk(e)} className="relative w-full max-w-2xl mx-auto pt-1 z-10">
-              <div className="bg-white border border-[#E7E1D8] rounded-full p-2 flex items-center justify-between gap-3 shadow-2xs focus-within:border-[#F28A45] focus-within:ring-2 focus-within:ring-[#F28A45]/20 transition-all">
-                <div className="flex items-center gap-2 flex-1 pl-4">
-                  <Sparkles size={16} className="text-[#F28A45] flex-shrink-0" />
-                  <input
-                    type="text"
-                    value={quickPrompt}
-                    onChange={(e) => setQuickPrompt(e.target.value)}
-                    placeholder="Ask any question on Math, Physics, or Chemistry..."
-                    className="w-full bg-transparent outline-none text-[#20201D] font-normal text-[15px] leading-[24px] placeholder-[#969188]"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={!quickPrompt.trim()}
-                  className="w-10 h-10 rounded-full bg-[#F28A45] hover:bg-[#DF7635] text-white flex items-center justify-center shadow-2xs disabled:opacity-40 transition-all cursor-pointer flex-shrink-0"
-                  title="Submit prompt"
-                >
-                  <ArrowRight size={18} className="text-white" />
-                </button>
-              </div>
-            </form>
+            {/* Action Buttons to Go to Learn Page */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 z-10 relative">
+              <button
+                onClick={() => navigate('/chat')}
+                className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-[#F28A45] hover:bg-[#DF7635] text-white font-extrabold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2.5 cursor-pointer active:scale-[0.98]"
+              >
+                <BookOpen size={18} />
+                <span>Go to Learn Page</span>
+                <ArrowRight size={16} />
+              </button>
+
+              <button
+                onClick={() => navigate('/subjects')}
+                className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-white hover:bg-[#FFF0E4] border border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] font-bold text-sm shadow-2xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
+              >
+                <Layers size={16} className="text-[#6F6B63]" />
+                <span>Browse Subjects</span>
+              </button>
+            </div>
 
             {/* Quick Actions Chips (SSLC 10th Grade STEM) */}
             <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
