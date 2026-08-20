@@ -108,20 +108,31 @@ export default function QuizResultPage() {
   return (
     <div className="p-6 max-w-3xl mx-auto bg-[#FAF8F3]">
       {/* Header */}
-      <motion.button
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        onClick={() => {
-          if (isSubjectQuiz && detectedSubjectId) {
-            navigate(`/subjects/${detectedSubjectId}`)
-          } else {
-            navigate(-1)
-          }
-        }}
-        className="flex items-center gap-2 text-[#6F6B63] hover:text-[#F28A45] transition-colors mb-6 text-sm font-bold cursor-pointer"
-      >
-        <ArrowLeft size={16} /> Back to {isSubjectQuiz ? (activeSubject?.name || 'Subject') : 'Topic'}
-      </motion.button>
+      <div className="flex items-center justify-between mb-6">
+        <motion.button
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          onClick={() => {
+            if (isSubjectQuiz && detectedSubjectId && topicId) {
+              navigate(`/subjects/${detectedSubjectId}/chat/${topicId}`)
+            } else {
+              navigate(-1)
+            }
+          }}
+          className="flex items-center gap-2 text-[#6F6B63] hover:text-[#F28A45] transition-colors text-sm font-bold cursor-pointer"
+        >
+          <ArrowLeft size={16} /> Back to Chat
+        </motion.button>
+
+        {isSubjectQuiz && detectedSubjectId && (
+          <button
+            onClick={() => navigate(`/subjects/${detectedSubjectId}`)}
+            className="text-xs font-bold text-[#6F6B63] hover:text-[#F28A45] transition-colors"
+          >
+            {activeSubject?.name || 'Subject'} Overview →
+          </button>
+        )}
+      </div>
 
       {/* Score card */}
       <motion.div
@@ -161,6 +172,18 @@ export default function QuizResultPage() {
       {/* Action buttons */}
       <div className="flex gap-3 mb-8">
         <button
+          onClick={() => {
+            if (isSubjectQuiz && detectedSubjectId && topicId) {
+              navigate(`/subjects/${detectedSubjectId}/chat/${topicId}`)
+            } else {
+              navigate(-1)
+            }
+          }}
+          className="btn-ghost flex-1 flex items-center justify-center gap-2 cursor-pointer font-bold border-[#E7E1D8] bg-white text-[#20201D] hover:bg-[#FFF9F2] shadow-2xs py-3 px-4 rounded-2xl"
+        >
+          <ArrowLeft size={15} /> Back to Chat
+        </button>
+        <button
           onClick={() => navigate(`/quiz/${topicId}`)}
           className="btn-ghost flex-1 flex items-center justify-center gap-2 cursor-pointer font-bold border-[#E7E1D8] bg-white text-[#20201D] hover:bg-[#FFF9F2] shadow-2xs py-3 px-4 rounded-2xl"
         >
@@ -170,7 +193,7 @@ export default function QuizResultPage() {
           onClick={() => handleAskAITutor()}
           className="btn-primary flex-1 flex items-center justify-center gap-2 cursor-pointer font-black shadow-2xs py-3 px-4 rounded-2xl"
         >
-          <MessageSquare size={15} /> Ask {isSubjectQuiz ? `${activeSubject?.name || 'Subject'} Tutor` : 'AI Tutor'}
+          <MessageSquare size={15} /> Ask Tutor
         </button>
       </div>
 

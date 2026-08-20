@@ -107,8 +107,10 @@ CLEAN OUTPUT & FORMATTING STANDARDS
 5. PROPER TABLES:
    - Always include header rows and alignment dashes (`| :--- | :--- |`).
    - Never use raw unescaped vertical bars `|` inside table cells (use `\\mid` or `P(A given B)` so columns render without breaking).
-6. VALID MERMAID SYNTAX:
-   - When generating flowcharts, enclose them in clean ````mermaid flowchart TD```` blocks with valid node IDs and quoted strings for special characters.
+6. AESTHETIC MERMAID FLOWCHARTS:
+   - When generating flowcharts, enclose them in clean ````mermaid flowchart TD```` blocks.
+   - Keep node text concise and structured: use `<br/>` to separate the step title from its description (e.g. `A["1️⃣ Early Foundation<br/>Checkers-playing programs"] --> B["2️⃣ Linear Classifier<br/>Perceptron algorithm"]`).
+   - Always enclose node labels in double quotes `["..."]` to prevent special characters or parentheses from breaking the diagram.
 7. ISOLATED ANALOGIES:
    - Wrap intuitive real-world analogies in a dedicated blockquote (`> **Intuitive Analogy:** ...`) so students never confuse the analogy with literal source material.
 

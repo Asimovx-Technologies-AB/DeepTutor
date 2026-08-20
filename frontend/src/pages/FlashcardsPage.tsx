@@ -1,7 +1,12 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 import {
   ArrowLeft,
   Sparkles,
@@ -11,14 +16,20 @@ import {
   AlertCircle,
   HelpCircle,
   Volume2,
-  Lightbulb,
   Grid,
   Layers,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Trophy,
+  RotateCcw,
+  MessageSquare,
+  Check,
+  Flame,
+  Zap,
 } from 'lucide-react'
 import { flashcardsApi } from '../services/api'
 import { useSubjectStore } from '../stores/subjectStore'
+import { useChatStore } from '../stores/chatStore'
 
 interface Flashcard {
   id: string
@@ -32,14 +43,44 @@ export default function FlashcardsPage() {
   const { topicId } = useParams<{ topicId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const activeSession = useChatStore((s) => s.activeSession)
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
-  const [showHint, setShowHint] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [viewMode, setViewMode] = useState<'single' | 'grid'>('single')
   const [gridFilter, setGridFilter] = useState<'all' | 'unmastered' | 'mastered'>('all')
   const [generating, setGenerating] = useState(false)
+  const [showCompletionModal, setShowCompletionModal] = useState(false)
+
+  // Subject metadata detection
+  const subjects = useSubjectStore((s) => s.subjects)
+  const subjectTopics = useSubjectStore((s) => s.topics)
+
+  let currentTopicMeta: any = null
+  let currentSubjectMeta: any = null
+
+  for (const [sId, topics] of Object.entries(subjectTopics)) {
+    const found = topics.find((t) => t.id === topicId)
+    if (found) {
+      currentTopicMeta = found
+      currentSubjectMeta = subjects.find((s) => s.id === sId)
+      break
+    }
+  }
+
+  const topicTitle = currentTopicMeta?.name || (topicId ? topicId.replace(/[-_]/g, ' ').toUpperCase() : 'Study Deck')
+
+  // Theme color accents based on subject
+  const getThemeAccent = () => {
+    if (!currentSubjectMeta) return { primary: '#F97316', bg: '#FFF7ED', border: 'border-orange-200', text: 'text-orange-600' }
+    const cat = currentSubjectMeta.id?.toLowerCase() || ''
+    if (cat.includes('phys')) return { primary: '#F59E0B', bg: '#FFFBEB', border: 'border-amber-200', text: 'text-amber-600' }
+    if (cat.includes('chem')) return { primary: '#10B981', bg: '#ECFDF5', border: 'border-emerald-200', text: 'text-emerald-600' }
+    if (cat.includes('math')) return { primary: '#6366F1', bg: '#EEF2FF', border: 'border-indigo-200', text: 'text-indigo-600' }
+    return { primary: '#F97316', bg: '#FFF7ED', border: 'border-orange-200', text: 'text-orange-600' }
+  }
+  const theme = getThemeAccent()
 
   // Fetch flashcards
   const { data: cards = [], isLoading } = useQuery<Flashcard[]>({
@@ -50,6 +91,13 @@ export default function FlashcardsPage() {
     },
   })
 
+  // Auto generate deck if empty
+  useEffect(() => {
+    if (!isLoading && cards.length === 0 && !generating && topicId) {
+      generateMutation.mutate()
+    }
+  }, [isLoading, cards.length, topicId])
+
   // Generate mutation
   const generateMutation = useMutation({
     mutationFn: async () => {
@@ -59,12 +107,10 @@ export default function FlashcardsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['flashcards', topicId] })
-      queryClient.invalidateQueries({ queryKey: ['progress-summary'] })
-      queryClient.invalidateQueries({ queryKey: ['progress-calendar'] })
       setGenerating(false)
       setCurrentIndex(0)
       setIsFlipped(false)
-      setShowHint(false)
+      setShowCompletionModal(false)
     },
     onError: () => {
       setGenerating(false)
@@ -78,24 +124,26 @@ export default function FlashcardsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['flashcards', topicId] })
-      queryClient.invalidateQueries({ queryKey: ['progress-summary'] })
-      queryClient.invalidateQueries({ queryKey: ['progress-calendar'] })
     },
   })
 
   const currentCard = cards[currentIndex]
+  const masteredCount = cards.filter((c) => c.mastered).length
+  const completionPercentage = cards.length > 0 ? Math.round((masteredCount / cards.length) * 100) : 0
 
   const handleNext = () => {
     setIsFlipped(false)
-    setShowHint(false)
     setTimeout(() => {
-      setCurrentIndex((prev) => (prev + 1) % cards.length)
+      if (currentIndex === cards.length - 1) {
+        setShowCompletionModal(true)
+      } else {
+        setCurrentIndex((prev) => (prev + 1) % cards.length)
+      }
     }, 150)
   }
 
   const handlePrev = () => {
     setIsFlipped(false)
-    setShowHint(false)
     setTimeout(() => {
       setCurrentIndex((prev) => (prev - 1 + cards.length) % cards.length)
     }, 150)
@@ -106,14 +154,13 @@ export default function FlashcardsPage() {
     if (!idToReview) return
     reviewMutation.mutate({ cardId: idToReview, mastered })
 
-    // Update real subject and topic progress
     if (topicId) {
       const subjectState = useSubjectStore.getState()
       for (const [sId, sTopics] of Object.entries(subjectState.topics)) {
         if (sTopics.some((t) => t.id === topicId)) {
-          const masteredCount = cards.filter((c) => (c.id === idToReview ? mastered : c.mastered)).length
+          const newMasteredCount = cards.filter((c) => (c.id === idToReview ? mastered : c.mastered)).length
           const totalCards = Math.max(cards.length, 1)
-          const newPct = Math.round((masteredCount / totalCards) * 100)
+          const newPct = Math.round((newMasteredCount / totalCards) * 100)
           subjectState.updateTopicProgress(sId, topicId, newPct)
           break
         }
@@ -122,6 +169,31 @@ export default function FlashcardsPage() {
 
     if (viewMode === 'single') {
       handleNext()
+    }
+  }
+
+  const handleBackToChat = () => {
+    if (currentSubjectMeta && topicId) {
+      navigate(`/subjects/${currentSubjectMeta.id}/chat/${topicId}`)
+    } else if (activeSession?.id) {
+      navigate(`/chat/${activeSession.id}`)
+    } else {
+      navigate(-1)
+    }
+  }
+
+  const handleAskTutorAboutCard = (card: Flashcard) => {
+    const prompt = `Can you explain the flashcard concept: "${card.front}" in depth with examples?`
+    if (currentSubjectMeta && topicId) {
+      navigate(`/subjects/${currentSubjectMeta.id}/chat/${topicId}`, {
+        state: { initialPrompt: prompt },
+      })
+    } else if (activeSession?.id) {
+      navigate(`/chat/${activeSession.id}`, {
+        state: { initialPrompt: prompt },
+      })
+    } else {
+      navigate('/chat', { state: { initialPrompt: prompt } })
     }
   }
 
@@ -134,7 +206,8 @@ export default function FlashcardsPage() {
       setIsSpeaking(false)
       return
     }
-    const utterance = new SpeechSynthesisUtterance(text)
+    const cleanText = text.replace(/[*_#`$]/g, '').replace(/🎯|💡|🔑/g, '')
+    const utterance = new SpeechSynthesisUtterance(cleanText)
     utterance.rate = 0.95
     utterance.onend = () => setIsSpeaking(false)
     utterance.onerror = () => setIsSpeaking(false)
@@ -145,8 +218,8 @@ export default function FlashcardsPage() {
   // Keyboard navigation
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (viewMode !== 'single' || cards.length === 0) return
-      if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      if (viewMode !== 'single' || cards.length === 0 || showCompletionModal) return
+      if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault()
         setIsFlipped((prev) => !prev)
       } else if (e.key === 'ArrowRight') {
@@ -155,9 +228,12 @@ export default function FlashcardsPage() {
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault()
         handleReview(false)
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        setIsFlipped((prev) => !prev)
       }
     },
-    [viewMode, cards, currentIndex]
+    [viewMode, cards.length, showCompletionModal, currentCard]
   )
 
   useEffect(() => {
@@ -165,52 +241,56 @@ export default function FlashcardsPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleKeyDown])
 
-  if (isLoading) {
+  if (isLoading || (generating && cards.length === 0)) {
     return (
-      <div className="p-6 max-w-2xl mx-auto space-y-4">
-        <div className="skeleton h-8 w-48 mb-6" />
-        <div className="skeleton h-80 w-full rounded-2xl" />
+      <div className="min-h-[75vh] flex flex-col items-center justify-center p-6 max-w-xl mx-auto text-center">
+        <div className="w-16 h-16 rounded-3xl bg-orange-100 border border-orange-200 flex items-center justify-center mb-5 animate-pulse shadow-sm">
+          <Sparkles className="w-8 h-8 text-orange-600 animate-spin" />
+        </div>
+        <h2 className="text-xl font-black text-[#20201D] mb-2">Creating Visual Study Flashcards...</h2>
+        <p className="text-sm text-[#6F6B63] max-w-md mb-6">
+          Generating curriculum-grounded concept cards with intuitive analogies and exam rules for <span className="font-bold text-[#20201D]">{topicTitle}</span>.
+        </p>
+        <button
+          onClick={handleBackToChat}
+          className="flex items-center gap-2 text-xs font-bold text-[#6F6B63] hover:text-[#F28A45] transition-colors py-2 px-4 rounded-xl bg-white border border-[#E7E1D8] shadow-2xs cursor-pointer"
+        >
+          <ArrowLeft size={14} /> Back to Chat
+        </button>
       </div>
     )
   }
 
   if (cards.length === 0) {
     return (
-      <div className="p-6 max-w-xl mx-auto text-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="glass-card p-12 text-center"
-        >
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 flex items-center justify-center mx-auto mb-4">
-            <BookOpen size={28} className="text-indigo-500" />
+      <div className="p-6 max-w-xl mx-auto text-center pt-16">
+        <div className="glass-card p-10 bg-white border border-[#E7E1D8] rounded-3xl shadow-sm space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-orange-100 flex items-center justify-center mx-auto text-orange-600">
+            <BookOpen size={28} />
           </div>
-          <h2 className="text-xl font-bold text-slate-800 mb-2">No flashcards yet</h2>
-          <p className="text-slate-500 text-sm mb-6 leading-relaxed">
-            Generate study flashcards automatically using local AI from your uploaded PDF text.
+          <h2 className="text-xl font-black text-[#20201D]">Ready to Master {topicTitle}?</h2>
+          <p className="text-[#6F6B63] text-sm">
+            Generate an AI-powered visual flashcard deck to review key formulas, definitions, and mental models.
           </p>
-          <button
-            onClick={() => generateMutation.mutate()}
-            disabled={generating}
-            className="btn-primary flex items-center gap-2 mx-auto"
-          >
-            {generating ? (
-              <>
-                <RefreshCw size={15} className="animate-spin" /> Generating Card Deck...
-              </>
-            ) : (
-              <>
-                <Sparkles size={15} /> Generate AI Flashcards
-              </>
-            )}
-          </button>
-        </motion.div>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button
+              onClick={handleBackToChat}
+              className="flex items-center gap-2 text-xs font-bold text-[#6F6B63] hover:text-[#F28A45] py-3 px-5 rounded-2xl bg-white border border-[#E7E1D8] shadow-2xs cursor-pointer"
+            >
+              <ArrowLeft size={14} /> Back to Chat
+            </button>
+            <button
+              onClick={() => generateMutation.mutate()}
+              disabled={generating}
+              className="btn-primary flex items-center gap-2 font-bold py-3 px-6 rounded-2xl cursor-pointer"
+            >
+              <Sparkles size={16} /> Generate AI Deck
+            </button>
+          </div>
+        </div>
       </div>
     )
   }
-
-  const masteredCount = cards.filter((c) => c.mastered).length
-  const completionPercentage = Math.round((masteredCount / cards.length) * 100)
 
   const filteredCards = cards.filter((c) => {
     if (gridFilter === 'mastered') return c.mastered
@@ -219,249 +299,356 @@ export default function FlashcardsPage() {
   })
 
   return (
-    <div className="p-6 max-w-2xl mx-auto space-y-6 bg-[#FAF8F3]">
-      {/* Header */}
+    <div className="p-6 max-w-3xl mx-auto space-y-6 bg-[#FAF8F3] min-h-[90vh] text-[#20201D] font-sans">
+      {/* ─── Top Header Navigation Bar ─── */}
       <div className="flex items-center justify-between">
         <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-[#6F6B63] hover:text-[#F28A45] transition-colors text-sm font-bold cursor-pointer"
+          onClick={handleBackToChat}
+          className="flex items-center gap-2 text-xs font-extrabold text-[#6F6B63] hover:text-[#F28A45] transition-colors py-2 px-3.5 rounded-xl bg-white border border-[#E7E1D8] shadow-2xs cursor-pointer"
         >
-          <ArrowLeft size={16} /> Back to Topic
+          <ArrowLeft size={14} />
+          <span>Back to Chat</span>
         </button>
 
         <div className="flex items-center gap-2">
-          {/* View toggle */}
+          {/* View Mode Toggle */}
           <button
             onClick={() => setViewMode(viewMode === 'single' ? 'grid' : 'single')}
-            className="text-xs px-3 py-1.5 rounded-xl border border-[#E7E1D8] bg-white text-[#20201D] hover:bg-[#FFF9F2] font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+            className="text-xs px-3 py-2 rounded-xl border border-[#E7E1D8] bg-white text-[#20201D] hover:bg-orange-50/50 font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
           >
             {viewMode === 'single' ? <Grid size={14} /> : <Layers size={14} />}
-            <span>{viewMode === 'single' ? 'Grid View' : 'Card View'}</span>
+            <span>{viewMode === 'single' ? 'Cheat Sheet View' : 'Focus Mode'}</span>
           </button>
 
           <button
             onClick={() => generateMutation.mutate()}
             disabled={generating}
-            className="text-xs text-[#F28A45] hover:text-[#DF7635] font-black flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="text-xs px-3 py-2 rounded-xl bg-white border border-[#E7E1D8] hover:border-orange-300 text-orange-600 font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+            title="Generate a fresh deck of cards"
           >
-            <RefreshCw size={12} className={generating ? 'animate-spin' : ''} /> Regenerate Deck
+            <RefreshCw size={13} className={generating ? 'animate-spin' : ''} />
+            <span>Regenerate</span>
           </button>
         </div>
       </div>
 
-      {/* Progress Bar */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs font-black text-[#6F6B63]">
-          <span>
-            {viewMode === 'single' ? `Card ${currentIndex + 1} of ${cards.length}` : `${cards.length} Total Cards`}
-          </span>
-          <span className="text-[#4F8A68]">
-            {completionPercentage}% Mastered ({masteredCount}/{cards.length})
-          </span>
+      {/* ─── Subject Banner & Mastery Tracker ─── */}
+      <div className="bg-white border border-[#E7E1D8] rounded-3xl p-5 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            {currentSubjectMeta && (
+              <span className={`text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${theme.bg} ${theme.text} ${theme.border}`}>
+                {currentSubjectMeta.name}
+              </span>
+            )}
+            <span className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">
+              {topicTitle}
+            </span>
+          </div>
+          <h1 className="text-lg font-black text-[#20201D]">Interactive Study Cards</h1>
         </div>
-        <div className="progress-bar">
-          <motion.div
-            className="progress-fill"
-            animate={{ width: `${completionPercentage}%` }}
-            transition={{ duration: 0.4 }}
-          />
+
+        <div className="w-full sm:w-auto flex items-center gap-4 bg-[#FAF8F3] px-4 py-2.5 rounded-2xl border border-[#E7E1D8]">
+          <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600">
+            <Flame size={20} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 text-xs font-black text-[#20201D]">
+              <span>{masteredCount} of {cards.length} Mastered</span>
+              <span className="text-emerald-600">({completionPercentage}%)</span>
+            </div>
+            <div className="w-36 h-2 bg-gray-200 rounded-full mt-1.5 overflow-hidden">
+              <motion.div
+                className="h-full bg-emerald-500 rounded-full"
+                animate={{ width: `${completionPercentage}%` }}
+                transition={{ duration: 0.4 }}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* SINGLE CARD VIEW */}
+      {/* ─── SINGLE FOCUS CARD VIEW (3D FLIP) ─── */}
       {viewMode === 'single' ? (
-        <div className="space-y-6">
+        <div className="space-y-5">
+          {/* Card Counter */}
+          <div className="flex items-center justify-between text-xs font-black text-gray-500 px-2">
+            <span>Card {currentIndex + 1} of {cards.length}</span>
+            <span className="text-gray-400">Press Space or Click to Flip 🔄</span>
+          </div>
+
+          {/* 3D Interactive Flip Container */}
           <div
-            className="perspective-1000 h-96 w-full cursor-pointer relative"
+            className="perspective-1000 min-h-[380px] w-full cursor-pointer relative select-none"
             onClick={() => setIsFlipped(!isFlipped)}
           >
             <motion.div
-              className="relative w-full h-full duration-500 transform-style-3d"
+              className="relative w-full h-full duration-500 transform-style-3d min-h-[380px]"
               animate={{ rotateY: isFlipped ? 180 : 0 }}
               transition={{ duration: 0.5, ease: 'easeOut' }}
             >
-              {/* Front Side */}
-              <div className="absolute inset-0 w-full h-full backface-hidden bg-white border border-[#E7E1D8] border-t-4 border-t-[#F28A45] rounded-3xl p-8 flex flex-col justify-between shadow-xs">
+              {/* ─── Front Side ─── */}
+              <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-b from-white to-[#FFFDF9] border-2 border-orange-200/80 rounded-3xl p-8 flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs text-[#F28A45] font-black uppercase tracking-wider">
-                    <HelpCircle size={14} /> Concept / Question
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-orange-600 bg-orange-50 px-3 py-1 rounded-full border border-orange-200">
+                    <HelpCircle size={14} />
+                    <span>Concept / Question</span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={(e) => speakText(currentCard?.front || '', e)}
-                    className="p-2 rounded-xl text-[#969188] hover:text-[#F28A45] hover:bg-[#FFF0E4] transition-colors cursor-pointer"
-                    title="Listen to card audio"
-                  >
-                    <Volume2 size={18} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={(e) => speakText(currentCard?.front || '', e)}
+                      className="p-2 rounded-xl text-gray-400 hover:text-orange-600 hover:bg-orange-50 transition-colors cursor-pointer"
+                      title="Listen to card audio"
+                    >
+                      <Volume2 size={18} />
+                    </button>
+                    {currentCard?.mastered && (
+                      <span className="text-[11px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1">
+                        <Check size={12} /> Mastered
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex-1 flex flex-col items-center justify-center text-center my-3">
-                  <h2 className="text-xl font-black text-[#20201D] leading-relaxed px-4">
+                <div className="my-auto text-center py-6">
+                  <h2 className="text-xl sm:text-2xl font-black text-[#20201D] leading-snug px-4">
                     {currentCard?.front}
                   </h2>
-
-                  {showHint && (
-                    <motion.p
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="mt-4 text-xs text-[#D99A32] bg-[#FFF3D8] border border-[#D99A32]/30 rounded-xl px-4 py-2 font-bold"
-                    >
-                      💡 Hint: {currentCard?.back.slice(0, 30)}...
-                    </motion.p>
-                  )}
                 </div>
 
-                <div className="flex items-center justify-between pt-3 border-t border-[#E7E1D8]/60">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setShowHint(!showHint)
-                    }}
-                    className="text-xs font-black text-[#D99A32] hover:text-[#B57C20] flex items-center gap-1 cursor-pointer"
-                  >
-                    <Lightbulb size={14} /> {showHint ? 'Hide Hint' : 'Reveal Hint'}
-                  </button>
-                  <p className="text-xs text-[#969188] font-semibold">Click Card to Flip 🔄</p>
+                <div className="flex items-center justify-between pt-4 border-t border-[#E7E1D8]/70 text-xs text-gray-500 font-bold">
+                  <span className="flex items-center gap-1 text-orange-600">
+                    <Zap size={14} /> Tap anywhere to flip
+                  </span>
+                  <span>Space / Enter</span>
                 </div>
               </div>
 
-              {/* Back Side */}
+              {/* ─── Back Side (Structured 3-Part Answer) ─── */}
               <div
-                className="absolute inset-0 w-full h-full backface-hidden bg-white border border-[#E7E1D8] border-t-4 border-t-[#4F8A68] rounded-3xl p-8 flex flex-col justify-between shadow-xs"
+                className="absolute inset-0 w-full h-full backface-hidden bg-white border-2 border-emerald-300 rounded-3xl p-8 flex flex-col justify-between shadow-md"
                 style={{ transform: 'rotateY(180deg)' }}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs text-[#4F8A68] font-black uppercase tracking-wider">
-                    <CheckCircle2 size={14} /> Answer / Explanation
+                <div className="flex items-center justify-between pb-3 border-b border-[#E7E1D8]/70">
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                    <CheckCircle2 size={14} />
+                    <span>Detailed Breakdown</span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={(e) => speakText(currentCard?.back || '', e)}
-                    className="p-2 rounded-xl text-[#969188] hover:text-[#4F8A68] hover:bg-[#E3F0E5] transition-colors cursor-pointer"
-                    title="Listen to answer audio"
-                  >
-                    <Volume2 size={18} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => speakText(currentCard?.back || '', e)}
+                      className="p-2 rounded-xl text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                      title="Listen to explanation"
+                    >
+                      <Volume2 size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (currentCard) handleAskTutorAboutCard(currentCard)
+                      }}
+                      className="text-xs font-black text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <MessageSquare size={13} />
+                      <span>Ask Tutor</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex-1 flex items-center justify-center text-center">
-                  <p className="text-base text-[#20201D] leading-relaxed px-4 font-bold">
-                    {currentCard?.back}
-                  </p>
+                {/* Structured Markdown / LaTeX Content */}
+                <div className="my-auto py-4 overflow-y-auto max-h-[260px] text-sm text-[#20201D] leading-relaxed markdown-content">
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                    {currentCard?.back || ''}
+                  </ReactMarkdown>
                 </div>
 
-                <div className="flex items-center justify-end pt-3 border-t border-[#E7E1D8]/60">
-                  <p className="text-xs text-[#969188] font-semibold">Click Card to Flip Back 🔄</p>
+                <div className="flex items-center justify-between pt-3 border-t border-[#E7E1D8]/70 text-xs text-gray-500 font-bold">
+                  <span>How well did you know this?</span>
+                  <span className="text-gray-400">Click to Flip Back 🔄</span>
                 </div>
               </div>
             </motion.div>
           </div>
 
-          {/* Review Actions */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* ─── Review Confidence Buttons (3-Tier Spaced Repetition) ─── */}
+          <div className="grid grid-cols-2 gap-3 pt-2">
             <button
               onClick={() => handleReview(false)}
-              className="btn-ghost flex items-center justify-center gap-2 py-3.5 border-[#C85C52]/40 text-[#C85C52] hover:bg-[#FBE7E4] font-black rounded-2xl cursor-pointer"
+              className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-white border-2 border-red-200 text-red-600 hover:bg-red-50 font-black text-sm shadow-2xs hover:shadow-xs transition-all cursor-pointer"
             >
-              <AlertCircle size={16} /> Needs Study (←)
+              <AlertCircle size={16} />
+              <span>Needs Practice (←)</span>
             </button>
             <button
               onClick={() => handleReview(true)}
-              className="btn-primary flex items-center justify-center gap-2 py-3.5 font-black rounded-2xl cursor-pointer shadow-2xs"
-              style={{ background: '#4F8A68' }}
+              className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-sm hover:shadow-md transition-all cursor-pointer"
             >
-              <CheckCircle2 size={16} /> Mastered (→)
+              <CheckCircle2 size={16} />
+              <span>Mastered! (→)</span>
             </button>
           </div>
 
-          {/* Navigation */}
-          <div className="flex items-center justify-between text-sm px-2 text-[#6F6B63]">
+          {/* Navigation Controls */}
+          <div className="flex items-center justify-between text-xs font-extrabold text-[#6F6B63] px-2 pt-1">
             <button
               onClick={handlePrev}
-              className="hover:text-[#F28A45] font-black transition-colors flex items-center gap-1 cursor-pointer"
+              className="hover:text-orange-600 transition-colors flex items-center gap-1 cursor-pointer"
             >
               <ChevronLeft size={16} /> Previous Card
             </button>
-            <span className="text-xs text-[#969188]">Shortcuts: Space / Arrow Keys</span>
+            <span className="text-gray-400">Keyboard: Space to Flip • Arrows to Review</span>
             <button
               onClick={handleNext}
-              className="hover:text-[#F28A45] font-black transition-colors flex items-center gap-1 cursor-pointer"
+              className="hover:text-orange-600 transition-colors flex items-center gap-1 cursor-pointer"
             >
               Next Card <ChevronRight size={16} />
             </button>
           </div>
         </div>
       ) : (
-        /* DECK GRID VIEW */
+        /* ─── INTERACTIVE CHEAT-SHEET GRID VIEW ─── */
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            {(['all', 'unmastered', 'mastered'] as const).map((filter) => (
-              <button
-                key={filter}
-                onClick={() => setGridFilter(filter)}
-                className={`text-xs px-3 py-1.5 rounded-xl capitalize font-black transition-all cursor-pointer ${
-                  gridFilter === filter
-                    ? 'bg-[#F28A45] text-white shadow-2xs'
-                    : 'bg-[#F4EFE7] text-[#6F6B63] hover:text-[#20201D]'
-                }`}
-              >
-                {filter}
-              </button>
-            ))}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {(['all', 'unmastered', 'mastered'] as const).map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setGridFilter(filter)}
+                  className={`text-xs px-3.5 py-1.5 rounded-xl capitalize font-extrabold transition-all cursor-pointer ${
+                    gridFilter === filter
+                      ? 'bg-orange-600 text-white shadow-2xs'
+                      : 'bg-white border border-[#E7E1D8] text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs font-bold text-gray-500">
+              Showing {filteredCards.length} cards
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-1">
-            {filteredCards.map((card) => (
-              <div
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[600px] overflow-y-auto pr-1">
+            {filteredCards.map((card, idx) => (
+              <motion.div
                 key={card.id}
-                onClick={() => {
-                  setCurrentIndex(cards.findIndex((c) => c.id === card.id))
-                  setViewMode('single')
-                  setIsFlipped(false)
-                }}
-                className={`p-4 rounded-2xl border transition-all text-left cursor-pointer flex flex-col justify-between space-y-3 ${
-                  card.mastered
-                    ? 'bg-[#E3F0E5]/50 border-[#4F8A68]/40 hover:border-[#4F8A68]'
-                    : 'bg-white border-[#E7E1D8] hover:border-[#F28A45]'
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.04 }}
+                className={`bg-white rounded-2xl border p-5 shadow-2xs flex flex-col justify-between space-y-3 transition-all ${
+                  card.mastered ? 'border-emerald-200 bg-emerald-50/20' : 'border-[#E7E1D8]'
                 }`}
               >
                 <div>
-                  <span className="text-[10px] font-black text-[#F28A45] uppercase tracking-wider block mb-1">
-                    Concept
-                  </span>
-                  <p className="text-xs font-extrabold text-[#20201D] leading-snug">{card.front}</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-black text-gray-400">Card #{idx + 1}</span>
+                    {card.mastered ? (
+                      <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md">
+                        Mastered
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-black bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md">
+                        Review Needed
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-sm font-black text-[#20201D] mb-2">{card.front}</h3>
+                  <div className="text-xs text-gray-600 leading-relaxed markdown-content bg-[#FAF8F3] p-3 rounded-xl border border-gray-100">
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {card.back}
+                    </ReactMarkdown>
+                  </div>
                 </div>
-                <div className="pt-2 border-t border-[#E7E1D8]/60 flex items-center justify-between">
-                  <span className="text-[11px] text-[#6F6B63] line-clamp-2 font-medium">{card.back}</span>
+
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleReview(!card.mastered, card.id)
-                    }}
-                    className={`p-1.5 rounded-xl border flex-shrink-0 cursor-pointer ml-2 ${
+                    onClick={() => handleAskTutorAboutCard(card)}
+                    className="text-[11px] font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 cursor-pointer"
+                  >
+                    <MessageSquare size={12} /> Ask Tutor
+                  </button>
+                  <button
+                    onClick={() => handleReview(!card.mastered, card.id)}
+                    className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
                       card.mastered
-                        ? 'bg-[#4F8A68] text-white border-[#4F8A68]'
-                        : 'bg-[#FAF8F3] text-[#969188] border-[#E7E1D8] hover:text-[#4F8A68]'
+                        ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                        : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                     }`}
                   >
-                    <CheckCircle2 size={16} />
+                    {card.mastered ? 'Mark for Review' : 'Mark as Mastered'}
                   </button>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
       )}
 
-      <style>{`
-        .perspective-1000 { perspective: 1000px; }
-        .transform-style-3d { transform-style: preserve-3d; }
-        .backface-hidden { backface-visibility: hidden; }
-      `}</style>
+      {/* ─── Celebration Completion Modal ─── */}
+      <AnimatePresence>
+        {showCompletionModal && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl p-8 max-w-md w-full text-center border border-[#E7E1D8] shadow-2xl space-y-5"
+            >
+              <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
+                <Trophy size={36} />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-[#20201D]">Deck Review Completed! 🎉</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  You reviewed all {cards.length} cards for <span className="font-bold text-gray-800">{topicTitle}</span>.
+                </p>
+              </div>
+
+              <div className="bg-[#FAF8F3] p-4 rounded-2xl border border-[#E7E1D8] flex items-center justify-around">
+                <div>
+                  <p className="text-2xl font-black text-emerald-600">{masteredCount}</p>
+                  <p className="text-xs font-bold text-gray-500">Mastered</p>
+                </div>
+                <div className="w-px h-8 bg-gray-200" />
+                <div>
+                  <p className="text-2xl font-black text-amber-600">{cards.length - masteredCount}</p>
+                  <p className="text-xs font-bold text-gray-500">Needs Study</p>
+                </div>
+                <div className="w-px h-8 bg-gray-200" />
+                <div>
+                  <p className="text-2xl font-black text-orange-600">+{cards.length * 5} XP</p>
+                  <p className="text-xs font-bold text-gray-500">Earned</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    setShowCompletionModal(false)
+                    setCurrentIndex(0)
+                    setIsFlipped(false)
+                  }}
+                  className="flex-1 py-3 px-4 rounded-2xl border border-[#E7E1D8] bg-white font-bold text-xs hover:bg-gray-50 flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                >
+                  <RotateCcw size={14} /> Review Again
+                </button>
+                <button
+                  onClick={handleBackToChat}
+                  className="flex-1 py-3 px-4 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-black text-xs flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                >
+                  <ArrowLeft size={14} /> Back to Chat
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

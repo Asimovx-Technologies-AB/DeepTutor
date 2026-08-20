@@ -49,13 +49,14 @@ class GeminiClient:
         return self._cache
 
     def _get_headers(self) -> Dict[str, str]:
-        # Always read latest GEMINI_API_KEY in case settings was reloaded
-        api_key = getattr(settings, "GEMINI_API_KEY", "") or self.api_key
+        # Always read latest GEMINI_API_KEY in case .env was modified at runtime
+        import os
+        api_key = os.environ.get("GEMINI_API_KEY") or getattr(settings, "GEMINI_API_KEY", "") or self.api_key
         headers = {
             "Content-Type": "application/json",
         }
         if api_key:
-            headers["x-goog-api-key"] = api_key
+            headers["x-goog-api-key"] = api_key.strip()
         return headers
 
     async def is_available(self) -> bool:

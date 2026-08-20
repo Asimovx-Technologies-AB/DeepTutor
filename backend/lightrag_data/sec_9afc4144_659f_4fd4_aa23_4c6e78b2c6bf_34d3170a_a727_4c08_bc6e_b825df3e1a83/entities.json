@@ -5,7 +5,7 @@
     "type": "concept",
     "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_34d3170a-a727-4c08-bc6e-b825df3e1a83",
     "sources": [],
-    "mentions": 1
+    "mentions": 2
   },
   "classical_machine_learning_algorithms_overview": {
     "id": "classical_machine_learning_algorithms_overview",
@@ -13,7 +13,7 @@
     "type": "concept",
     "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_34d3170a-a727-4c08-bc6e-b825df3e1a83",
     "sources": [],
-    "mentions": 1
+    "mentions": 2
   },
   "decision_trees": {
     "id": "decision_trees",
@@ -23,7 +23,7 @@
     "sources": [
       "ml algorithams.pdf p.1 §Research Paper"
     ],
-    "mentions": 2
+    "mentions": 3
   },
   "na_ve_bayes": {
     "id": "na_ve_bayes",
@@ -31,7 +31,7 @@
     "type": "concept",
     "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_34d3170a-a727-4c08-bc6e-b825df3e1a83",
     "sources": [],
-    "mentions": 1
+    "mentions": 2
   },
   "support_vector_machines": {
     "id": "support_vector_machines",
@@ -41,7 +41,7 @@
     "sources": [
       "ml algorithams.pdf p.1 §Research Paper"
     ],
-    "mentions": 2
+    "mentions": 3
   },
   "logistic_regression": {
     "id": "logistic_regression",
@@ -49,7 +49,7 @@
     "type": "concept",
     "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_34d3170a-a727-4c08-bc6e-b825df3e1a83",
     "sources": [],
-    "mentions": 1
+    "mentions": 2
   },
   "linear_regression": {
     "id": "linear_regression",
@@ -57,7 +57,7 @@
     "type": "concept",
     "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_34d3170a-a727-4c08-bc6e-b825df3e1a83",
     "sources": [],
-    "mentions": 1
+    "mentions": 2
   },
   "classical_machine_learning_limitations_and_prospects": {
     "id": "classical_machine_learning_limitations_and_prospects",
@@ -65,7 +65,7 @@
     "type": "concept",
     "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_34d3170a-a727-4c08-bc6e-b825df3e1a83",
     "sources": [],
-    "mentions": 1
+    "mentions": 2
   },
   "bibliometric_analysis": {
     "id": "bibliometric_analysis",
@@ -75,7 +75,7 @@
     "sources": [
       "ml algorithams.pdf p.1 §Research Paper"
     ],
-    "mentions": 2
+    "mentions": 3
   },
   "web_of_science_categories_and_journals": {
     "id": "web_of_science_categories_and_journals",
@@ -83,7 +83,7 @@
     "type": "concept",
     "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_34d3170a-a727-4c08-bc6e-b825df3e1a83",
     "sources": [],
-    "mentions": 1
+    "mentions": 2
   },
   "citation_histories_of_the_most_frequently_cited_articles": {
     "id": "citation_histories_of_the_most_frequently_cited_articles",
@@ -91,7 +91,7 @@
     "type": "concept",
     "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_34d3170a-a727-4c08-bc6e-b825df3e1a83",
     "sources": [],
-    "mentions": 1
+    "mentions": 2
   },
   "open_research_challenges_and_opportunities_relative_to_global_south_regions": {
     "id": "open_research_challenges_and_opportunities_relative_to_global_south_regions",
@@ -99,7 +99,7 @@
     "type": "concept",
     "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_34d3170a-a727-4c08-bc6e-b825df3e1a83",
     "sources": [],
-    "mentions": 1
+    "mentions": 2
   },
   "author_biography": {
     "id": "author_biography",
@@ -107,7 +107,7 @@
     "type": "concept",
     "description": "Key concept in sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_34d3170a-a727-4c08-bc6e-b825df3e1a83",
     "sources": [],
-    "mentions": 1
+    "mentions": 2
   },
   "machine_learning": {
     "id": "machine_learning",

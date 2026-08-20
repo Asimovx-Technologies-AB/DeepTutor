@@ -13,27 +13,33 @@ from app.rag.document_processor import process_document
 from app.rag.section_scope import get_section_context, user_owns_section
 from app.core import database as db
 
-FLASHCARD_PROMPT_TEMPLATE = """You are a precise academic study engine. Create a deck of exactly 8-10 high-quality study flashcards derived STRICTLY from the provided UPLOADED DOCUMENT CONTEXT.
+from app.rag.textbook_reader import is_curriculum_topic, extract_textbook_chunks, get_chapter_title
+
+FLASHCARD_PROMPT_TEMPLATE = """You are an elite academic study engine. Create a deck of 8-10 high-quality, visually structured study flashcards derived STRICTLY from the provided CONTEXT.
 
 {topic_instruction}
 
 STRICT MANDATORY RULES:
-1. Every flashcard front (question/concept) and back (answer/explanation) MUST be directly supported by the text in the document context.
-2. DO NOT include external facts, definitions, or unmentioned topics not explicitly written in the provided document text.
-3. If page numbers (e.g., "[Page 12]") appear in the context, include the page citation on the card back.
-4. Return ONLY valid JSON matching the exact schema below.
+1. Every flashcard front (concept/question) and back (explanation) MUST be grounded directly in the provided material.
+2. Structure the card back into 3 clean, bite-sized parts:
+   - 🎯 **Core Meaning:** 1-2 sentence crystal-clear explanation in plain language.
+   - 💡 **Mental Model / Analogy:** One relatable real-world analogy to make the idea click immediately.
+   - 🔑 **Key Exam Rule or Formula:** Crucial exam point, SI unit, or LaTeX formula ($...$).
+3. Format all math and chemical formulas using clean LaTeX enclosed in single `$...$` (e.g. $a_n = a + (n-1)d$, $1/f = 1/v - 1/u$, $\\text{CO}_2$).
+4. Do NOT include bracketed file names or page numbers like [file.pdf p.4] in the card text.
+5. Return ONLY valid JSON matching the exact schema below.
 
 RETURN SCHEMA:
 {{
   "flashcards": [
     {{
-      "front": "Key term, concept, or question from PDF (concise)",
-      "back": "Clear answer, definition, or explanation from PDF [Page X if available]"
+      "front": "✨ Concept Name or Core Question (Concise & Impactful)",
+      "back": "🎯 **Core Meaning:** ...\\n\\n💡 **Analogy:** ...\\n\\n🔑 **Exam Tip / Formula:** ..."
     }}
   ]
 }}
 
-UPLOADED PDF DOCUMENT CONTEXT:
+DOCUMENT CONTEXT:
 {context}
 
 JSON:"""
@@ -45,60 +51,61 @@ async def generate_flashcards_for_section(
     user_id: Optional[str] = None,
 ) -> List[dict]:
     """
-    Generate a deck of flashcards derived strictly from the uploaded PDF document text
-    stored in the user's specific section.
+    Generate a deck of flashcards derived strictly from textbook context or uploaded PDF document text.
     """
     context_docs: List[str] = []
 
-    if not user_id or not section_id:
+    if not section_id:
         return []
 
-    if not user_owns_section(user_id, section_id):
-        return []
-
-    query_text = focus_topic if (focus_topic and focus_topic.lower() != "all topics (entire pdf)") else None
-    context_docs = await get_section_context(
-        user_id=user_id,
-        section_id=section_id,
-        query=query_text,
-        top_k=12,
-    )
+    # 1. Handle curriculum topics via direct textbook extraction
+    if is_curriculum_topic(section_id):
+        query_text = focus_topic if (focus_topic and focus_topic.lower() != "all topics (entire pdf)") else None
+        context_docs = extract_textbook_chunks(section_id, query=query_text, max_chunks=14)
+    else:
+        if not user_id or not user_owns_section(user_id, section_id):
+            return []
+        query_text = focus_topic if (focus_topic and focus_topic.lower() != "all topics (entire pdf)") else None
+        context_docs = await get_section_context(
+            user_id=user_id,
+            section_id=section_id,
+            query=query_text,
+            top_k=12,
+        )
 
     if not context_docs:
         return []
 
-    # Select representative sample chunks from the section context
     sample_docs = context_docs
     if len(sample_docs) > 15:
         sample_docs = random.sample(sample_docs, 15)
 
-    # Combine document context (capped to avoid LLM context overflow)
     context = "\n\n".join(sample_docs)[:4500]
+    chapter_label = get_chapter_title(section_id)
 
     topic_instruction = (
-        f"FOCUS TOPIC: The flashcards MUST focus specifically on '{focus_topic}' and its core terms/concepts from the PDF."
+        f"FOCUS TOPIC: The flashcards MUST focus specifically on '{focus_topic}' from '{chapter_label}'."
         if (focus_topic and focus_topic.lower() != "all topics (entire pdf)")
-        else "Scope: Comprehensive flashcards covering key terms, definitions, and concepts across the uploaded PDF document section."
+        else f"Scope: Comprehensive flashcards covering key terms, definitions, formulas, and concepts for '{chapter_label}'."
     )
 
-    # 3. Call Ollama to generate flashcards strictly from PDF context
-    prompt = FLASHCARD_PROMPT_TEMPLATE.format(
-        topic_instruction=topic_instruction,
-        context=context
+    prompt = (
+        FLASHCARD_PROMPT_TEMPLATE
+        .replace("{topic_instruction}", topic_instruction)
+        .replace("{context}", context)
     )
 
     try:
         messages = [
             {
                 "role": "system",
-                "content": "You are a precise study engine that outputs ONLY structured JSON flashcards derived strictly from provided PDF documents."
+                "content": "You are a precise study engine that outputs ONLY structured JSON flashcards derived strictly from provided documents."
             },
             {"role": "user", "content": prompt},
         ]
 
         response = await ollama.chat(messages, temperature=0.3)
 
-        # Clean and extract JSON string
         json_str = response.strip()
         json_match = re.search(r'\{.*\}', json_str, re.DOTALL)
         if json_match:
@@ -107,7 +114,6 @@ async def generate_flashcards_for_section(
         card_data = json.loads(json_str)
         cards = card_data.get("flashcards", [])
 
-        # Delete existing cards for this section to ensure fresh section-derived deck
         db.delete_flashcards_for_topic(section_id)
         if section_id != "general":
             db.delete_flashcards_for_topic("general")
@@ -127,19 +133,19 @@ async def generate_flashcards_for_section(
         return saved_cards
 
     except Exception as e:
-        print(f"[flashcard_generator] LLM call failed, generating from textbook context: {e}")
+        print(f"[flashcard_generator] LLM call failed, generating from context: {e}")
         cards = []
         for i, doc in enumerate(sample_docs[:8]):
             lines = [l.strip() for l in doc.split("\n") if len(l.strip()) > 25 and not l.startswith("[DIAGRAM")]
             if len(lines) >= 2:
                 cards.append({
-                    "front": lines[0][:85] if len(lines[0]) <= 85 else lines[0][:80] + "...",
-                    "back": lines[1][:260] + ("..." if len(lines[1]) > 260 else "")
+                    "front": f"💡 {lines[0][:80]}",
+                    "back": f"🎯 **Core Meaning:** {lines[1][:180]}\n\n🔑 **Exam Tip:** Remember this key concept from {chapter_label}."
                 })
             elif lines:
                 cards.append({
-                    "front": f"Key Term #{i+1}: {lines[0][:60]}",
-                    "back": f"From textbook section: {lines[0][:200]}"
+                    "front": f"📌 Key Concept: {lines[0][:60]}",
+                    "back": f"🎯 **Core Meaning:** {lines[0][:200]}"
                 })
 
         if cards:

@@ -1,0 +1,42 @@
+[
+  {
+    "head": "Nationalism",
+    "relation": "APPLIES_TO",
+    "tail": "Europe",
+    "confidence": 0.8,
+    "source_chunk_id": "sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_a640bf8a-3295-475e-80c3-e13e280de5d7_66619379",
+    "source_doc": "NCERT-Class-10-History.pdf p.2"
+  },
+  {
+    "head": "Civil Disobedience Movement",
+    "relation": "APPLIES_TO",
+    "tail": "Swaraj",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_a640bf8a-3295-475e-80c3-e13e280de5d7_91897435",
+    "source_doc": "NCERT-Class-10-History.pdf p.67"
+  },
+  {
+    "head": "Congress",
+    "relation": "USES",
+    "tail": "Civil Disobedience Movement",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_a640bf8a-3295-475e-80c3-e13e280de5d7_91897435",
+    "source_doc": "NCERT-Class-10-History.pdf p.67"
+  },
+  {
+    "head": "Railway network",
+    "relation": "ENABLES",
+    "tail": "Urban dispersal",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_a640bf8a-3295-475e-80c3-e13e280de5d7_71942058",
+    "source_doc": "NCERT-Class-10-History.pdf p.132"
+  },
+  {
+    "head": "Underground railway",
+    "relation": "PART_OF",
+    "tail": "Transit system",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_9afc4144-659f-4fd4-aa23-4c6e78b2c6bf_a640bf8a-3295-475e-80c3-e13e280de5d7_71942058",
+    "source_doc": "NCERT-Class-10-History.pdf p.132"
+  }
+]

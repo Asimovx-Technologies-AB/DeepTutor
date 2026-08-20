@@ -159,6 +159,16 @@ export default function QuizPage() {
     }
   }
 
+  const handleBackToChat = () => {
+    if (currentSubjectMeta && topicId) {
+      navigate(`/subjects/${currentSubjectMeta.id}/chat/${topicId}`)
+    } else if (activeSession?.id) {
+      navigate(`/chat/${activeSession.id}`)
+    } else {
+      navigate(-1)
+    }
+  }
+
   if (isLoading || (generating && !questions.length)) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 max-w-xl mx-auto text-center">
@@ -166,9 +176,15 @@ export default function QuizPage() {
           <Sparkles className="w-8 h-8 text-amber-600 animate-spin" />
         </div>
         <h2 className="text-xl font-black text-[#20201D] mb-2">Generating 10th Standard Practice Quiz...</h2>
-        <p className="text-sm text-[#6F6B63] max-w-md">
+        <p className="text-sm text-[#6F6B63] max-w-md mb-6">
           DeepTutor is generating 5 curriculum-grounded multiple choice questions from your Kerala SCERT textbook for <span className="font-bold text-[#20201D]">{topicName}</span>.
         </p>
+        <button
+          onClick={handleBackToChat}
+          className="flex items-center gap-2 text-xs font-bold text-[#6F6B63] hover:text-[#F28A45] transition-colors py-2 px-4 rounded-xl bg-white border border-[#E7E1D8] shadow-2xs cursor-pointer"
+        >
+          <ArrowLeft size={14} /> Back to Chat
+        </button>
       </div>
     )
   }
@@ -184,22 +200,30 @@ export default function QuizPage() {
           <p className="text-[#6F6B63] text-sm mb-6">
             Generate an AI-powered practice quiz for <span className="font-bold text-[#20201D]">{topicName}</span>.
           </p>
-          <button
-            onClick={generateQuiz}
-            disabled={generating}
-            className="btn-primary flex items-center gap-2 mx-auto font-bold py-3 px-6 rounded-2xl cursor-pointer"
-          >
-            {generating ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Generating Questions...
-              </>
-            ) : (
-              <>
-                <Sparkles size={16} /> Generate Practice Quiz
-              </>
-            )}
-          </button>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={handleBackToChat}
+              className="flex items-center gap-2 text-xs font-bold text-[#6F6B63] hover:text-[#F28A45] transition-colors py-3 px-5 rounded-2xl bg-white border border-[#E7E1D8] shadow-2xs cursor-pointer"
+            >
+              <ArrowLeft size={14} /> Back to Chat
+            </button>
+            <button
+              onClick={generateQuiz}
+              disabled={generating}
+              className="btn-primary flex items-center gap-2 font-bold py-3 px-6 rounded-2xl cursor-pointer"
+            >
+              {generating ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Generating Questions...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} /> Generate Practice Quiz
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -212,11 +236,12 @@ export default function QuizPage() {
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-4 mb-6">
         <button
-          onClick={() => navigate(-1)}
-          className="w-10 h-10 rounded-xl bg-white border border-[#E7E1D8] flex items-center justify-center text-[#6F6B63] hover:text-[#F28A45] hover:border-[#F28A45]/40 transition-all cursor-pointer shadow-2xs"
-          title="Go Back"
+          onClick={handleBackToChat}
+          className="h-10 px-3.5 rounded-xl bg-white border border-[#E7E1D8] flex items-center gap-2 text-xs font-bold text-[#6F6B63] hover:text-[#F28A45] hover:border-[#F28A45]/40 transition-all cursor-pointer shadow-2xs"
+          title="Back to Chat"
         >
-          <ArrowLeft size={18} />
+          <ArrowLeft size={15} />
+          <span>Back to Chat</span>
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
