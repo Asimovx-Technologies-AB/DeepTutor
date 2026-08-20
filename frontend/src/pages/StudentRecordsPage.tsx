@@ -10,7 +10,7 @@ import {
   Award, TrendingUp, BookOpen, Clock, Flame, Zap, Target,
   CheckCircle2, AlertTriangle, HelpCircle, FileText, ChevronRight,
   Download, Printer, Sparkles, User, ShieldCheck, Search, Filter,
-  ArrowUpRight, X, ExternalLink, Brain, Layers, RefreshCw
+  ArrowUpRight, ArrowRight, X, ExternalLink, Brain, Layers, RefreshCw, MessageSquare
 } from 'lucide-react'
 import { progressApi } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
@@ -68,13 +68,85 @@ export default function StudentRecordsPage() {
     }))
   }, [quizAttempts, metrics?.avg_quiz_score])
 
+  // Unified activities list
+  const allActivities = useMemo(() => {
+    const list: any[] = []
+
+    // 1. Quizzes
+    quizAttempts.forEach((q: any) => {
+      list.push({
+        id: `quiz_${q.id}`,
+        rawId: q.id,
+        category: 'quiz',
+        title: q.quiz_title,
+        topic: q.topic_id,
+        date: q.attempted_at,
+        scoreText: `${q.percentage}%`,
+        subText: `${q.score}/${q.total_questions} correct`,
+        status: q.percentage >= 70 ? 'Mastered' : 'Needs Review',
+        isPassed: q.percentage >= 70,
+        rawObj: q,
+      })
+    })
+
+    // 2. Study Sessions
+    recentSessions.forEach((s: any) => {
+      list.push({
+        id: `session_${s.id}`,
+        rawId: s.id,
+        category: 'session',
+        title: s.title || 'AI Learning Session',
+        topic: s.topic_id || 'general',
+        date: s.started_at,
+        scoreText: `${s.messages_count || 0} msgs`,
+        subText: 'Interactive dialog',
+        status: 'AI Tutor Session',
+        isPassed: true,
+        rawObj: s,
+      })
+    })
+
+    // 3. Smart Notes
+    savedNotes.forEach((n: any) => {
+      list.push({
+        id: `note_${n.id}`,
+        rawId: n.id,
+        category: 'note',
+        title: n.title,
+        topic: n.subject || 'General',
+        date: n.created_at,
+        scoreText: `${n.high_yield_topics?.length || 0} Concepts`,
+        subText: `${n.pyq_doc_names?.length || 0} PYQ Papers`,
+        status: 'PYQ Synthesized',
+        isPassed: true,
+        rawObj: n,
+      })
+    })
+
+    // Sort chronologically (newest first)
+    return list.sort((a, b) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0
+      const dateB = b.date ? new Date(b.date).getTime() : 0
+      return dateB - dateA
+    })
+  }, [quizAttempts, recentSessions, savedNotes])
+
   // Filtered records for activity history table
-  const filteredQuizzes = useMemo(() => {
-    return quizAttempts.filter((q: any) =>
-      q.quiz_title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      q.topic_id.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  }, [quizAttempts, searchQuery])
+  const filteredActivities = useMemo(() => {
+    return allActivities.filter((item) => {
+      if (activeTab === 'quizzes' && item.category !== 'quiz') return false
+      if (activeTab === 'sessions' && item.category !== 'session') return false
+      if (activeTab === 'notes' && item.category !== 'note') return false
+
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase()
+        const matchTitle = (item.title || '').toLowerCase().includes(query)
+        const matchTopic = (item.topic || '').toLowerCase().includes(query)
+        return matchTitle || matchTopic
+      }
+      return true
+    })
+  }, [allActivities, activeTab, searchQuery])
 
   const readinessScore = metrics?.exam_readiness_score ?? 75
   const readinessLabel = metrics?.readiness_label ?? 'Good Standing'
@@ -491,16 +563,32 @@ export default function StudentRecordsPage() {
           </button>
         </div>
 
-        {/* Attempts Table */}
+        {/* Activities & Attempt Table */}
         <div className="overflow-x-auto">
-          {filteredQuizzes.length === 0 && activeTab === 'quizzes' ? (
+          {filteredActivities.length === 0 ? (
             <div className="text-center py-12 text-[#969188]">
-              <p className="text-sm font-semibold">No quiz attempts recorded yet.</p>
+              <p className="text-sm font-semibold">
+                {activeTab === 'quizzes'
+                  ? 'No quiz attempts recorded yet.'
+                  : activeTab === 'sessions'
+                  ? 'No study sessions recorded yet.'
+                  : activeTab === 'notes'
+                  ? 'No smart notes generated yet.'
+                  : 'No activity records found matching your filter.'}
+              </p>
               <button
-                onClick={() => navigate('/quiz/general')}
-                className="mt-3 text-xs text-[#F28A45] font-extrabold hover:underline"
+                onClick={() => {
+                  if (activeTab === 'notes') navigate('/notes')
+                  else if (activeTab === 'sessions') navigate('/chat')
+                  else navigate('/quiz/general')
+                }}
+                className="mt-3 text-xs text-[#F28A45] font-extrabold hover:underline cursor-pointer"
               >
-                Take a practice quiz now →
+                {activeTab === 'notes'
+                  ? 'Generate high-yield notes with PYQs →'
+                  : activeTab === 'sessions'
+                  ? 'Start a new AI learning session →'
+                  : 'Take a practice quiz now →'}
               </button>
             </div>
           ) : (
@@ -508,60 +596,95 @@ export default function StudentRecordsPage() {
               <thead>
                 <tr className="border-b border-[#E7E1D8] text-[#969188] uppercase font-black tracking-wider text-[10px]">
                   <th className="py-3 px-3">Date</th>
-                  <th className="py-3 px-3">Activity / Quiz Title</th>
+                  <th className="py-3 px-3">Activity / Record Title</th>
                   <th className="py-3 px-3">Type / Topic</th>
-                  <th className="py-3 px-3 text-center">Score</th>
-                  <th className="py-3 px-3 text-center">Result</th>
-                  <th className="py-3 px-3 text-right">Audit & Review</th>
+                  <th className="py-3 px-3 text-center">Score / Volume</th>
+                  <th className="py-3 px-3 text-center">Status</th>
+                  <th className="py-3 px-3 text-right">Audit & Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E7E1D8]/60">
-                {filteredQuizzes.map((attempt: any) => {
-                  const isPassed = attempt.percentage >= 70
+                {filteredActivities.map((act: any) => {
+                  const isQuiz = act.category === 'quiz'
+                  const isSession = act.category === 'session'
+                  const isNote = act.category === 'note'
+
                   return (
-                    <tr key={attempt.id} className="hover:bg-[#FAF8F3] transition-colors group">
+                    <tr key={act.id} className="hover:bg-[#FAF8F3] transition-colors group">
                       <td className="py-3 px-3 text-[#6F6B63] font-medium whitespace-nowrap">
-                        {attempt.attempted_at ? new Date(attempt.attempted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently'}
+                        {act.date ? new Date(act.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently'}
                       </td>
                       <td className="py-3 px-3 font-extrabold text-[#20201D]">
                         <div className="flex items-center gap-2">
-                          <span className="p-1 rounded-lg bg-[#FFF0E4] text-[#F28A45]">
-                            <Target size={13} />
+                          <span className={`p-1 rounded-lg ${
+                            isQuiz ? 'bg-[#FFF0E4] text-[#F28A45]' : isSession ? 'bg-[#E0F2FE] text-[#0284C7]' : 'bg-[#F0ECF7] text-[#A99BCB]'
+                          }`}>
+                            {isQuiz ? <Target size={13} /> : isSession ? <MessageSquare size={13} /> : <FileText size={13} />}
                           </span>
-                          <span className="truncate max-w-xs">{attempt.quiz_title}</span>
+                          <span className="truncate max-w-xs">{act.title}</span>
                         </div>
                       </td>
                       <td className="py-3 px-3 text-[#6F6B63] font-semibold">
                         <span className="px-2 py-0.5 rounded-md bg-[#F4EFE7] text-[#20201D] text-[11px]">
-                          {attempt.topic_id}
+                          {act.topic}
                         </span>
                       </td>
                       <td className="py-3 px-3 text-center font-black text-sm text-[#20201D]">
-                        {attempt.percentage}%
+                        {act.scoreText}
                         <span className="text-[10px] text-[#969188] font-normal block">
-                          {attempt.score}/{attempt.total_questions} correct
+                          {act.subText}
                         </span>
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black ${
-                            isPassed
-                              ? 'bg-[#E3F0E5] text-[#4F8A68] border border-[#4F8A68]/20'
-                              : 'bg-[#FBE7E4] text-[#C85C52] border border-[#C85C52]/20'
-                          }`}
-                        >
-                          {isPassed ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
-                          {isPassed ? 'Mastered' : 'Needs Review'}
-                        </span>
+                        {isQuiz ? (
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black ${
+                              act.isPassed
+                                ? 'bg-[#E3F0E5] text-[#4F8A68] border border-[#4F8A68]/20'
+                                : 'bg-[#FBE7E4] text-[#C85C52] border border-[#C85C52]/20'
+                            }`}
+                          >
+                            {act.isPassed ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
+                            {act.status}
+                          </span>
+                        ) : isSession ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-[#E0F2FE] text-[#0284C7] border border-[#0284C7]/20">
+                            <Sparkles size={11} />
+                            {act.status}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-[#FFF0E4] text-[#F28A45] border border-[#F28A45]/30">
+                            <Zap size={11} />
+                            {act.status}
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 px-3 text-right">
-                        <button
-                          onClick={() => setSelectedAttempt(attempt)}
-                          className="px-3 py-1 rounded-xl bg-white hover:bg-[#FAF8F3] border border-[#E7E1D8] text-[#20201D] font-bold text-xs shadow-2xs hover:border-[#F28A45] hover:text-[#F28A45] transition-all cursor-pointer inline-flex items-center gap-1"
-                        >
-                          <span>Review Questions</span>
-                          <ChevronRight size={13} />
-                        </button>
+                        {isQuiz ? (
+                          <button
+                            onClick={() => setSelectedAttempt(act.rawObj)}
+                            className="px-3 py-1 rounded-xl bg-white hover:bg-[#FAF8F3] border border-[#E7E1D8] text-[#20201D] font-bold text-xs shadow-2xs hover:border-[#F28A45] hover:text-[#F28A45] transition-all cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <span>Review Questions</span>
+                            <ChevronRight size={13} />
+                          </button>
+                        ) : isSession ? (
+                          <button
+                            onClick={() => navigate('/chat/' + act.rawId)}
+                            className="px-3 py-1 rounded-xl bg-white hover:bg-[#E0F2FE]/40 border border-[#E7E1D8] text-[#0284C7] font-bold text-xs shadow-2xs hover:border-[#0284C7] transition-all cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <span>Open Session</span>
+                            <ExternalLink size={12} />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => navigate('/notes')}
+                            className="px-3 py-1 rounded-xl bg-white hover:bg-[#FFF0E4]/50 border border-[#E7E1D8] text-[#F28A45] font-bold text-xs shadow-2xs hover:border-[#F28A45] transition-all cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <span>View Note</span>
+                            <ArrowRight size={12} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   )

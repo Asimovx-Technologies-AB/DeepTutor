@@ -201,20 +201,18 @@ export default function SubjectWorkspacePage() {
                 initial={{ opacity: 0, x: -12 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className={`bg-white border rounded-3xl p-5 shadow-2xs transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
-                  isInProgress ? 'border-[#F28A45]/40 shadow-xs' : 'border-[#E7E1D8] hover:border-[#F28A45]/30'
-                }`}
+                className={`bg-white border rounded-3xl p-5 shadow-2xs transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${isInProgress ? 'border-[#F28A45]/40 shadow-xs' : 'border-[#E7E1D8] hover:border-[#F28A45]/30'
+                  }`}
               >
                 <div className="flex items-start gap-4 min-w-0 flex-1">
                   {/* Topic Order Index Badge */}
                   <div
-                    className={`w-10 h-10 rounded-2xl border flex items-center justify-center text-xs font-black flex-shrink-0 shadow-2xs ${
-                      isCompleted
-                        ? 'bg-[#E3F0E5] border-[#4F8A68]/40 text-[#35654B]'
-                        : isInProgress
+                    className={`w-10 h-10 rounded-2xl border flex items-center justify-center text-xs font-black flex-shrink-0 shadow-2xs ${isCompleted
+                      ? 'bg-[#E3F0E5] border-[#4F8A68]/40 text-[#35654B]'
+                      : isInProgress
                         ? 'bg-[#FFF0E4] border-[#F28A45]/40 text-[#F28A45]'
                         : 'bg-[#FAF8F3] border-[#E7E1D8] text-[#969188]'
-                    }`}
+                      }`}
                   >
                     {isCompleted ? '✓' : topic.order}
                   </div>
@@ -222,11 +220,10 @@ export default function SubjectWorkspacePage() {
                   <div className="space-y-1.5 min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-extrabold text-[#20201D] text-sm">{topic.title}</h4>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                        topic.difficulty === 'easy' ? 'bg-[#E3F0E5] border-[#4F8A68]/30 text-[#35654B]' :
-                        topic.difficulty === 'medium' ? 'bg-[#FFF3D8] border-[#D99A32]/30 text-[#D99A32]' :
-                        'bg-[#FBE7E4] border-[#C85C52]/30 text-[#C85C52]'
-                      }`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${topic.difficulty === 'easy' ? 'bg-[#E3F0E5] border-[#4F8A68]/30 text-[#35654B]' :
+                          topic.difficulty === 'medium' ? 'bg-[#FFF3D8] border-[#D99A32]/30 text-[#D99A32]' :
+                            'bg-[#FBE7E4] border-[#C85C52]/30 text-[#C85C52]'
+                        }`}>
                         {DIFF_LABELS[topic.difficulty] ?? topic.difficulty}
                       </span>
 
@@ -244,11 +241,10 @@ export default function SubjectWorkspacePage() {
 
                       {/* Last Quiz Score Badge */}
                       {topic.lastQuizPct !== undefined && (
-                        <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${
-                          topic.lastQuizPct >= 70
+                        <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${topic.lastQuizPct >= 70
                             ? 'bg-[#E3F0E5] border-[#4F8A68]/30 text-[#35654B]'
                             : 'bg-[#FFF3D8] border-[#D99A32]/30 text-[#B45309]'
-                        }`}>
+                          }`}>
                           <Trophy size={11} className={topic.lastQuizPct >= 70 ? 'text-[#4F8A68]' : 'text-[#D99A32]'} />
                           <span>Quiz: {topic.lastQuizPct}% ({topic.lastQuizScore}/{topic.lastQuizTotal})</span>
                         </span>
@@ -261,9 +257,8 @@ export default function SubjectWorkspacePage() {
                     <div className="flex items-center gap-3 pt-1 max-w-md">
                       <div className="flex-1 bg-[#F4EFE7] rounded-full h-1.5 overflow-hidden">
                         <div
-                          className={`h-full rounded-full ${
-                            isCompleted ? 'bg-[#4F8A68]' : 'bg-[#F28A45]'
-                          }`}
+                          className={`h-full rounded-full ${isCompleted ? 'bg-[#4F8A68]' : 'bg-[#F28A45]'
+                            }`}
                           style={{ width: `${topic.progress}%` }}
                         />
                       </div>

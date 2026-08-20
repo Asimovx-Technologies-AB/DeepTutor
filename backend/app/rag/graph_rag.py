@@ -136,6 +136,23 @@ Detect the mode requested in the student's query. If unspecified, default to Mod
 15. DEEP DIVE — Exhaustive long-form master guide with deep technical breakdown.
 
 ═══════════════════════════════
+SIMPLIFIED STUDENT PEDAGOGY & PRACTICE QUESTION GENERATION
+═══════════════════════════════
+1. TEACH SIMPLY & CLEARLY:
+   - When explaining any topic, adopt an encouraging, accessible teaching tone.
+   - Break down complex terms into simple, clear words so any student can learn effortlessly without confusion.
+   - Use intuitive real-world analogies (`> **Intuitive Analogy:** ...`) to bridge everyday life to abstract formulas.
+   - When the student asks to "explain simply" or "teach me simply", give an ultra-clear, crystal-simple walkthrough with step-by-step numbers and a relatable example.
+2. PRACTICE QUESTION CREATION & QUIZ GENERATION:
+   - When a student asks for questions from their uploaded PDF or chapter (e.g., "give me 10 questions from this pdf", "generate 5 practice questions", "quiz me on this topic"), ALWAYS generate high-quality, syllabus-grounded practice questions directly from the provided Document Context.
+   - For each question, provide:
+     - Clear question statement
+     - Marks weightage (e.g. 1 Mark, 2 Marks, 4 Marks)
+     - Step-by-step complete solution / answer
+     - Key formula or concept required
+   - Never say "I don't know" or "Topic not found" when asked to generate practice questions or quiz from an uploaded PDF.
+
+═══════════════════════════════
 CLOSING CALL-TO-ACTION
 ═══════════════════════════════
 End every completed response with ONE clean, short line offering an alternate format:
@@ -158,9 +175,9 @@ Your goal is to make learning simple, exciting, and easy to understand for 10th 
 ==================================================
 10TH GRADE TEACHING & FORMATTING GUIDELINES (MANDATORY)
 ==================================================
-1. KEEP IT SIMPLE & ENGAGING:
+1. KEEP IT SUPER SIMPLE & ENGAGING:
    - Use clear, straightforward language that a 15-year-old high school student can understand immediately.
-   - Avoid overly dense or abstract academic jargon; explain technical terms using simple words.
+   - Avoid overly dense or abstract academic jargon; explain technical terms using simple words and intuitive real-life stories.
    - Use friendly, warm formatting with helpful emoji accents.
 
 2. CLEAN STEP-BY-STEP WORKED EXAMPLES:
@@ -174,7 +191,10 @@ Your goal is to make learning simple, exciting, and easy to understand for 10th 
    - Never hallucinate fake formulas or ungrounded facts.
    - Do NOT include bracketed file citation tags like `[file.pdf p.4]` in your text. The UI displays sources separately.
 
-4. MANDATORY OUTPUT TEMPLATE (Follow this EXACT clean structure with headers and horizontal lines):
+4. PRACTICE QUESTIONS & QUESTION BANK GENERATION:
+   - When the student asks for practice questions (e.g., "give me 10 questions from this pdf", "generate 5 questions", "quiz me on this chapter"), generate structured, syllabus-focused board-exam questions directly from the textbook chapters provided with full worked solutions.
+
+5. MANDATORY OUTPUT TEMPLATE (Follow this EXACT clean structure with headers and horizontal lines):
    # 📘 [Topic / Concept Name]
 
    ### 💡 Simple Definition (In Easy Words)
@@ -330,6 +350,61 @@ def classify_learning_response_instruction(
             f"Structure your response starting with:\n"
             f"# 📄 Page {pages_str} Explanation & Summary\n\n"
             f"Follow with clear conceptual explanations, structured breakdown tables/steps, and key takeaways from that page."
+        )
+
+    # 2. Practice Questions Generator from Document / PDF (e.g. "give me 10 questions from this pdf", "generate 5 questions", "quiz me")
+    num_match = re.search(r'\b(\d+)\s*(?:practice\s+)?(?:exam\s+)?(?:sample\s+)?questions?\b', q_lower)
+    has_question_request = bool(
+        num_match
+        or any(w in q_lower for w in [
+            "give me questions", "give questions", "ask me questions", "generate questions",
+            "make questions", "create questions", "practice questions", "sample questions",
+            "questions from this", "questions based on", "quiz me", "create a quiz", "question bank"
+        ])
+    )
+    if has_question_request:
+        count = int(num_match.group(1)) if num_match else 5
+        count = min(15, max(3, count))
+        return (
+            f"The student specifically asked for {count} PRACTICE QUESTIONS based on this study material.\n"
+            f"Generate exactly {count} high-yield, syllabus-aligned practice questions directly from the provided Document Context.\n"
+            f"Provide a balanced mix of 1-Mark fundamental concepts, 2-Mark short numericals/definitions, and 4-Mark step-by-step problems.\n"
+            f"Format strictly as follows:\n\n"
+            f"# 📝 {count} Practice Questions from Study Material\n\n"
+            f"For each question from 1 to {count}:\n"
+            f"### ❓ Question [N] ([Marks] Marks): [Core Topic/Concept]\n"
+            f"**Question:** [Clear, unambiguous question statement]\n\n"
+            f"**💡 Step-by-Step Answer / Solution:**\n"
+            f"- **Key Formula / Law:** $[Formula\ or\ Concept]$\n"
+            f"- **Working / Points:** [Full step-by-step calculation or concise answer points]\n"
+            f"- **Final Answer:** **[Exact boxed or bold result]**\n\n"
+            f"---\n"
+        )
+
+    # 3. Simple Learning / "Explain Simply" Mode
+    if any(w in q_lower for w in [
+        "explain simply", "learn simple", "make it simple", "in simple words", "in easy words",
+        "simple language", "for beginner", "easy to understand", "teach me simple", "explain easy", "simple way"
+    ]):
+        return (
+            "The student specifically asked to LEARN SIMPLY in easy, crystal-clear language.\n"
+            "Break down the topic so any student can grasp it immediately without getting overwhelmed:\n"
+            "# 🌟 [Topic Name] — Made Simple!\n\n"
+            "### 💡 What Is It? (In Plain English)\n"
+            "[2 simple sentences with zero complex jargon explaining the core idea]\n\n"
+            "> 🍕 **Everyday Real-Life Story / Analogy:**\n"
+            "> [A super relatable real-world comparison that makes the concept click instantly]\n\n"
+            "### 👣 How It Works (Step-by-Step)\n"
+            "1. **Step 1:** [First simple step]\n"
+            "2. **Step 2:** [Second simple step]\n"
+            "3. **Step 3:** [Third simple step]\n\n"
+            "### 🔑 The 3 Things You Must Remember\n"
+            "- ⭐ **Point 1:** [Core takeaway]\n"
+            "- ⭐ **Point 2:** [Core takeaway]\n"
+            "- ⭐ **Point 3:** [Core takeaway]\n\n"
+            "### 🎯 Quick Self-Check\n"
+            "**Question:** [1 simple, fun question]\n"
+            "💡 **Hint:** [1 easy hint]"
         )
 
     # 2. Board Exam Marks Allocation: 16 Marks (Comprehensive Essay / Master Question)
@@ -911,6 +986,15 @@ class GraphRAGPipeline:
         # 6. Merge + deduplicate across all query variants
         merged_chunks = _deduplicate_chunks(all_chunk_lists)
 
+        from app.rag.query_engine import is_document_level_meta_query
+        if is_document_level_meta_query(question) or len(merged_chunks) < 3:
+            try:
+                all_doc_chunks = _vs.get_all_chunks(topic_id, limit=8)
+                if all_doc_chunks:
+                    merged_chunks = _deduplicate_chunks([merged_chunks, all_doc_chunks])
+            except Exception:
+                pass
+
         if not merged_chunks:
             return []
 
@@ -1054,8 +1138,27 @@ class GraphRAGPipeline:
                     ])
 
         # ── Step 2: Confidence scoring + out-of-scope detection ───────────────
+        from app.rag.query_engine import is_document_level_meta_query
+        is_meta_query = is_document_level_meta_query(question)
+
+        # Fallback to document chunks if meta-query (questions/summary/notes) had zero vector search hits
+        if is_meta_query and not vector_chunks and effective_topic_id and _vs.count(effective_topic_id) > 0:
+            try:
+                vector_chunks = _vs.get_all_chunks(effective_topic_id, limit=8)
+                if vector_chunks:
+                    vector_context_text = "\n\n".join([
+                        f"[{c['metadata'].get('source', 'doc')} p.{c['metadata'].get('page', '')}]"
+                        + (f" §{c['metadata'].get('section_title', '')}" if c['metadata'].get('section_title') else "")
+                        + f"\n{c['text'][:2000]}"
+                        for c in vector_chunks[:6]
+                    ])
+            except Exception:
+                pass
+
         if requested_pages and vector_chunks and not any("system_notice" in str(c.get("id", "")) for c in vector_chunks):
             confidence_score, confidence_label = 1.0, "high"
+        elif is_meta_query and vector_chunks:
+            confidence_score, confidence_label = 0.95, "high"
         else:
             confidence_score, confidence_label = confidence_scorer.score(
                 chunks=vector_chunks,
@@ -1085,7 +1188,7 @@ class GraphRAGPipeline:
 
         # ── Step 4: Out-of-scope handling ──────────────────────────────────────
         is_textbook = bool(effective_topic_id and effective_topic_id.startswith(("sslc-", "math-", "phys-", "chem-", "textbook")))
-        if effective_topic_id and not is_textbook and oos_handler.is_out_of_scope(confidence_score, confidence_label):
+        if effective_topic_id and not is_textbook and not is_meta_query and oos_handler.is_out_of_scope(confidence_score, confidence_label):
             oos_response = oos_handler.format_response(question, is_textbook=False)
             for token in oos_response.split(" "):
                 yield f"data: {json.dumps({'type': 'token', 'data': token + ' '})}\n\n"

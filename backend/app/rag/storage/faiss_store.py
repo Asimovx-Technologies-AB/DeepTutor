@@ -455,6 +455,38 @@ class FAISSVectorStore:
                 })
         return results
 
+    def get_all_chunks(self, topic_id: str, limit: int = 15) -> List[Dict]:
+        """Return representative chunks across the topic/document for general synthesis & question generation."""
+        topic = self._topic(topic_id)
+        if topic.count() == 0 and topic_id.startswith("sec_"):
+            parts = topic_id.split("_", 2)
+            if len(parts) >= 3:
+                raw_topic = parts[2]
+                fallback_t = self._topic(raw_topic)
+                if fallback_t.count() > 0:
+                    topic = fallback_t
+        if topic.count() == 0:
+            return []
+
+        total = len(topic._ids)
+        if total <= limit:
+            indices = list(range(total))
+        else:
+            step = max(1, total // limit)
+            indices = list(range(0, total, step))[:limit]
+
+        results = []
+        for idx in indices:
+            meta = topic._metas[idx]
+            effective_text = meta.get("parent_text") or topic._docs[idx]
+            results.append({
+                "id": topic._ids[idx],
+                "text": effective_text,
+                "metadata": meta,
+                "score": 0.90,
+            })
+        return results
+
     # ── Utility ───────────────────────────────────────────────────────────────
     def count(self, topic_id: str) -> int:
         return self._topic(topic_id).count()

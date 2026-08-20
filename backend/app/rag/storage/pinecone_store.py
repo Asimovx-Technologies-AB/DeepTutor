@@ -520,13 +520,14 @@ class PineconeVectorStore:
         except Exception:
             return len(self._doc_caches.get(self._sanitize_namespace(topic_id), []))
 
-    def get_all_chunks(self, topic_id: str) -> List[Dict]:
+    def get_all_chunks(self, topic_id: str, limit: int = 15) -> List[Dict]:
         """Fetch cached or retrieved chunks for a topic namespace."""
         namespace = self._sanitize_namespace(topic_id)
         if namespace in self._doc_caches and self._doc_caches[namespace]:
-            return self._doc_caches[namespace]
+            return self._doc_caches[namespace][:limit]
         dummy_vec = [1.0 / (3072 ** 0.5)] * 3072
-        return self.search(topic_id, dummy_vec, top_k=50, min_score=-1.0)
+        chunks = self.search(topic_id, dummy_vec, top_k=limit or 50, min_score=-1.0)
+        return chunks[:limit]
 
     def delete_topic(self, topic_id: str) -> None:
         """Delete all vectors under the namespace from Pinecone."""

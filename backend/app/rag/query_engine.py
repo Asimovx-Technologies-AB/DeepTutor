@@ -63,6 +63,36 @@ def _tokenize_simple(text: str) -> List[str]:
     return [t.lower() for t in re.findall(r'\b[a-zA-Z0-9_-]+\b', text) if len(t) > 2 and t.lower() not in STOPWORDS]
 
 
+def is_document_level_meta_query(query: str) -> bool:
+    """
+    Detects if the student is requesting document-wide synthesis, practice questions,
+    summaries, formula sheets, or simplified pedagogical explanations rather than a
+    lookup of an isolated keyword.
+    Examples:
+      - "give me 10 questions from this pdf"
+      - "generate 5 practice questions"
+      - "create a quiz for me"
+      - "summarize this chapter"
+      - "what is in this document"
+      - "give me all important formulas"
+      - "explain this simply"
+    """
+    q = (query or "").lower().strip()
+    patterns = [
+        r'\b(?:give|make|create|generate|provide|write|ask)\s+(?:me\s+)?(?:\d+\s+)?(?:practice\s+)?(?:exam\s+)?(?:sample\s+)?(?:important\s+)?questions?\b',
+        r'\b(?:questions?\s+from\s+(?:this\s+)?(?:pdf|doc|document|material|chapter|textbook))\b',
+        r'\b(?:quiz|test|mcq|mcqs|question\s*bank)\b',
+        r'\b(?:from\s+this\s+(?:pdf|doc|document|material|chapter|textbook))\b',
+        r'\b(?:in\s+this\s+(?:pdf|doc|document|material|chapter|textbook))\b',
+        r'\b(?:summarize|summary|overview|key\s+points|all\s+formulas|formulas\s+in\s+this)\b',
+        r'\b(?:explain\s+(?:in\s+simple\s+words|simply|easy\s+way|to\s+a\s+student|clearly|for\s+beginner))\b',
+        r'\b(?:teach\s+me|learn\s+simple|make\s+it\s+simple|simple\s+notes?)\b',
+        r'\b(?:what\s+is\s+this\s+(?:pdf|document|chapter)\s+about)\b',
+    ]
+    return any(re.search(p, q) for p in patterns)
+
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # QueryExpander
 # ══════════════════════════════════════════════════════════════════════════════
@@ -189,6 +219,10 @@ Relevant sentences:"""
         if not settings.ENABLE_CONTEXTUAL_COMPRESSION:
             return chunks
 
+        # Bypass sentence pruning for document-wide / pedagogical synthesis requests
+        if is_document_level_meta_query(query):
+            return chunks
+
         if mode == "llm":
             return await self._compress_llm(query, chunks)
         else:
@@ -304,6 +338,10 @@ class ConfidenceScorer:
         has_page_chunks = any(c.get("metadata", {}).get("page") is not None for c in chunks)
         if has_page_query and has_page_chunks:
             return 1.0, "high"
+
+        # If the user is requesting document-wide synthesis, practice questions, or simple notes from the uploaded material
+        if is_document_level_meta_query(query) and len(chunks) > 0:
+            return 0.95, "high"
 
         # 1. Retrieval scores (cosine similarity)
         scores = [c.get("rerank_score", c.get("score", 0.0)) for c in chunks]

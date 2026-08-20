@@ -1070,7 +1070,7 @@ def get_detailed_student_record(user_id: str) -> dict:
         if not user:
             return {}
 
-        sessions = db.query(ChatSession).filter(ChatSession.user_id == user_id).all()
+        sessions = db.query(ChatSession).filter(ChatSession.user_id == user_id).order_by(ChatSession.started_at.desc()).all()
         attempts = db.query(QuizAttempt).filter(QuizAttempt.user_id == user_id).order_by(QuizAttempt.attempted_at.desc()).all()
         docs = db.query(Document).filter(Document.user_id == user_id).all()
         plans = db.query(StudyPlan).filter(StudyPlan.user_id == user_id).all()
@@ -1301,7 +1301,7 @@ def get_detailed_student_record(user_id: str) -> dict:
 
         # Detailed sessions summary
         sessions_summary = []
-        for s in sessions[:15]:
+        for s in sessions[:50]:
             msg_count = db.query(ChatMessage).filter(ChatMessage.session_id == s.id).count()
             sessions_summary.append({
                 "id": s.id,
