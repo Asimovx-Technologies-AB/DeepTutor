@@ -117,19 +117,30 @@ class PineconeVectorStore:
 
     def _get_index(self, topic_id: Optional[str] = None):
         """Lazy initialization of Pinecone client and index based on topic routing."""
-        client = self._get_client()
-        textbook_index = getattr(settings, "PINECONE_TEXTBOOK_INDEX", "textbook") or "textbook"
-        chat_index = getattr(settings, "PINECONE_CHAT_INDEX", "deeptutor") or "deeptutor"
+        from app.rag.textbook_reader import is_curriculum_topic
 
-        # Determine target index
-        if topic_id and topic_id.startswith(("sec_", "session_", "chat_", "user_")):
-            target_name = chat_index
-        else:
+        client = self._get_client()
+        textbook_index = getattr(settings, "PINECONE_TEXTBOOK_INDEX", "textbook") or getattr(settings, "PINECONE_INDEX_NAME", "textbook") or "textbook"
+        chat_index = getattr(settings, "PINECONE_CHAT_INDEX", "deeptutor") or getattr(settings, "PINECONE_INDEX_NAME", "deeptutor") or "deeptutor"
+
+        # Determine target index: curriculum topics route strictly to textbook index
+        if is_curriculum_topic(topic_id):
             target_name = textbook_index
+        else:
+            target_name = chat_index
 
         if target_name not in self._indexes:
-            self._indexes[target_name] = client.Index(target_name)
-            print(f"[PINECONE] Connected to cloud index '{target_name}' successfully.")
+            try:
+                self._indexes[target_name] = client.Index(target_name)
+                print(f"[PINECONE] Connected to cloud index '{target_name}' successfully for topic '{topic_id}'.")
+            except Exception as e:
+                # Fallback to general index if named index is unavailable
+                fallback_name = getattr(settings, "PINECONE_INDEX_NAME", "textbook") or "textbook"
+                if fallback_name != target_name:
+                    print(f"[PINECONE] Warning: Failed to connect to '{target_name}' ({e}). Falling back to '{fallback_name}'.")
+                    self._indexes[target_name] = client.Index(fallback_name)
+                else:
+                    raise e
         return self._indexes[target_name]
 
     def _sanitize_namespace(self, topic_id: str) -> str:
@@ -521,7 +532,7 @@ class PineconeVectorStore:
         """Delete all vectors under the namespace from Pinecone."""
         namespace = self._sanitize_namespace(topic_id)
         try:
-            index = self._get_index()
+            index = self._get_index(topic_id)
             index.delete(delete_all=True, namespace=namespace)
         except Exception as e:
             print(f"[PINECONE] Delete namespace error: {e}")
@@ -534,8 +545,8 @@ class PineconeVectorStore:
     def reset(self) -> None:
         """Clear all vectors in index."""
         try:
-            index = self._get_index()
-            index.delete(delete_all=True)
+            for idx in self._indexes.values():
+                idx.delete(delete_all=True)
         except Exception as e:
             print(f"[PINECONE] Reset error: {e}")
         self._doc_caches.clear()

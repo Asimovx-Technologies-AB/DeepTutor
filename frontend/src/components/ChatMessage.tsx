@@ -7,6 +7,7 @@ import 'katex/dist/katex.min.css'
 import { Bot, User, Copy, Check } from 'lucide-react'
 import { motion } from 'framer-motion'
 import SourceCard, { type Source } from './SourceCard'
+import MermaidDiagram from './MermaidDiagram'
 
 interface Props {
   role: 'user' | 'assistant'
@@ -73,6 +74,21 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding }
               <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkMath]}
                 rehypePlugins={[rehypeKatex]}
+                components={{
+                  code({ node, className, children, ...props }: any) {
+                    const match = /language-(\w+)/.exec(className || '')
+                    const language = match ? match[1] : ''
+                    const codeStr = String(children).replace(/\n$/, '')
+                    if (language === 'mermaid') {
+                      return <MermaidDiagram chart={codeStr} />
+                    }
+                    return (
+                      <code className={className} {...props}>
+                        {children}
+                      </code>
+                    )
+                  },
+                }}
               >
                 {displayContent}
               </ReactMarkdown>

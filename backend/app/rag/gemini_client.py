@@ -17,7 +17,7 @@ class GeminiClient:
         self.api_key = settings.GEMINI_API_KEY
         self.chat_model = settings.GEMINI_CHAT_MODEL or "gemini-1.5-flash"
         self.embed_model = settings.GEMINI_EMBED_MODEL or "models/gemini-embedding-2"
-        self.timeout = settings.GEMINI_TIMEOUT or 60
+        self.timeout = getattr(settings, "GEMINI_TIMEOUT", 15) or 15
         self.base_url = "https://generativelanguage.googleapis.com/v1beta"
         self._cache = None
         self._client: Optional[httpx.AsyncClient] = None
@@ -36,7 +36,8 @@ class GeminiClient:
         ):
             self._client_loop = current_loop
             limits = httpx.Limits(max_keepalive_connections=30, max_connections=60)
-            self._client = httpx.AsyncClient(timeout=self.timeout, limits=limits)
+            timeout = httpx.Timeout(self.timeout, connect=5.0)
+            self._client = httpx.AsyncClient(timeout=timeout, limits=limits)
         return self._client
 
     @property

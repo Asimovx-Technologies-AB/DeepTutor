@@ -95,9 +95,10 @@ export default function GamifiedQuizGame({
     )
 
     try {
+      const targetTopicId = initialTopic || activeSession?.topic_id || (sessionId ? undefined : 'general')
       const res = await quizApi.generate({
-        session_id: sessionId || activeSession?.id,
-        topic_id: activeSession?.topic_id || 'general',
+        session_id: sessionId,
+        topic_id: targetTopicId,
         custom_topic: effectiveTopic,
         difficulty: difficulty,
         num_questions: numQuestions,

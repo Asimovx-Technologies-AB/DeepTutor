@@ -203,7 +203,7 @@ export const quizApi = {
   list: (topicId: string) => api.get(`/quiz/topic/${topicId}`),
   get: (id: string) => api.get(`/quiz/${id}`),
   generate: (data: {
-    topic_id: string
+    topic_id?: string
     difficulty?: string
     session_id?: string
     focus_topic?: string

@@ -143,7 +143,6 @@ export default function QuizPage() {
     try {
       const res = await quizApi.generate({
         topic_id: topicId!,
-        session_id: activeSession?.id,
         difficulty: 'medium',
         num_questions: 5,
       })

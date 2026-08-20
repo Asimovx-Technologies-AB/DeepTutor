@@ -15,6 +15,7 @@ from typing import Optional
 from app.rag.vector_store import vector_store
 from app.rag.ollama_client import ollama
 from app.core import database as db
+from app.rag.textbook_reader import is_curriculum_topic, extract_textbook_chunks
 
 
 def get_section_collection_id(user_id: str, section_id: str) -> str:
@@ -22,7 +23,7 @@ def get_section_collection_id(user_id: str, section_id: str) -> str:
     Deterministic collection name for a given user's section or curriculum topic.
     Curriculum topics (e.g. math-10-1, sslc-physics) map directly to their textbook namespace.
     """
-    if section_id and section_id.startswith(("sslc-", "math-10-", "phys-10-", "chem-10-", "math-", "phys-", "chem-", "textbook")):
+    if is_curriculum_topic(section_id):
         return section_id
     safe_uid = re.sub(r"[^a-zA-Z0-9_\-]", "_", str(user_id))
     safe_sid = re.sub(r"[^a-zA-Z0-9_\-]", "_", str(section_id))
@@ -37,7 +38,7 @@ def user_owns_section(user_id: str, section_id: str) -> bool:
         return False
 
     # Curriculum topics are available to all students
-    if section_id.startswith(("sslc-", "math-10-", "phys-10-", "chem-10-", "general")):
+    if is_curriculum_topic(section_id) or section_id == "general":
         return True
 
     docs = db.get_documents_for_user_and_topic(user_id, section_id)
@@ -59,7 +60,9 @@ async def get_section_context(
     top_k: int = 8,
 ) -> list[str]:
     """
-    Fetch text chunks scoped to this user's section or pre-ingested curriculum textbook topic in ChromaDB.
+    Fetch text chunks scoped to this user's section or curriculum textbook topic.
+    Curriculum topics strictly query the textbook index / direct textbook PDF context,
+    guaranteeing zero cross-contamination with user-uploaded research papers.
     """
     if not user_owns_section(user_id, section_id):
         print(f"[section_scope] Denied: user {user_id} does not own section {section_id}")
@@ -68,6 +71,42 @@ async def get_section_context(
     from app.rag.storage import active_vector_store
     from app.rag.pipeline.embedder import embedding_pipeline
 
+    # ── CASE 1: Curriculum Topics (Class 10 Textbook Index) ────────────────────
+    if is_curriculum_topic(section_id):
+        target_collection_id = section_id
+        
+        # 1. Try vector store search on Pinecone textbook index
+        try:
+            if query and query.strip():
+                emb = await embedding_pipeline.embed(query)
+                if emb:
+                    results = active_vector_store.search_hybrid(target_collection_id, emb, query, top_k=top_k)
+                    chunks = [r["text"] for r in results if r.get("text")]
+                    if chunks:
+                        return chunks
+            
+            # Fallback to get_all_chunks or search on textbook index
+            if hasattr(active_vector_store, "get_all_chunks"):
+                chunks = active_vector_store.get_all_chunks(target_collection_id)
+                if chunks:
+                    return [c["text"] if isinstance(c, dict) else str(c) for c in chunks[:top_k]]
+            
+            res = active_vector_store.search(target_collection_id, [0.0] * 3072, top_k=top_k, min_score=-1.0)
+            valid_res = [r["text"] for r in res if r.get("text")]
+            if valid_res:
+                return valid_res
+        except Exception as e:
+            print(f"[section_scope] Vector store retrieval failed for curriculum topic {section_id}: {e}")
+
+        # 2. Direct Grounded Textbook PDF Fallback (PyMuPDF)
+        print(f"[section_scope] Extracting direct textbook PDF chunks for curriculum topic '{section_id}'")
+        tb_chunks = extract_textbook_chunks(section_id, query=query, max_chunks=top_k)
+        if tb_chunks:
+            return tb_chunks
+
+        return []
+
+    # ── CASE 2: User-Uploaded Documents / Personal Chat Sections ───────────────
     collection_id = get_section_collection_id(user_id, section_id)
     target_collection_id = collection_id
 
@@ -76,27 +115,14 @@ async def get_section_context(
     except Exception:
         count = 0
 
-    # Fallback to pre-ingested textbook topic collection if user has no custom upload
     if count == 0:
-        try:
-            raw_count = active_vector_store.count(section_id)
-            if raw_count > 0:
-                collection_id = section_id
-                target_collection_id = section_id
-                count = raw_count
-        except Exception:
-            pass
-
-    if count == 0:
-        print(f"[section_scope] Collection {collection_id} is empty. Searching user's other collections...")
+        print(f"[section_scope] User collection {collection_id} is empty. Searching user's other document collections...")
         candidate_topics = []
         user_docs = db.get_documents_for_user(user_id)
         for d in user_docs:
             tid = d.get("topic_id")
             if tid and tid not in candidate_topics:
                 candidate_topics.append(tid)
-        if "general" not in candidate_topics:
-            candidate_topics.append("general")
 
         found_collection = None
         for candidate_tid in candidate_topics:
@@ -109,10 +135,10 @@ async def get_section_context(
                 continue
 
         if found_collection:
-            print(f"[section_scope] Using populated collection {found_collection} for user {user_id}")
+            print(f"[section_scope] Using populated user collection {found_collection} for user {user_id}")
             target_collection_id = found_collection
         else:
-            print(f"[section_scope] No populated collections found for user {user_id}.")
+            print(f"[section_scope] No populated document collections found for user {user_id}.")
             return []
 
     if query and query.strip():
@@ -126,7 +152,6 @@ async def get_section_context(
         except Exception as e:
             print(f"[section_scope] Embedding/search failed for {target_collection_id}: {e}")
 
-    # No query, or query search came back empty — fall back to sample from target_collection_id
     try:
         if hasattr(active_vector_store, "get_all_chunks"):
             chunks = active_vector_store.get_all_chunks(target_collection_id)
@@ -135,7 +160,7 @@ async def get_section_context(
         if hasattr(active_vector_store, "_topic"):
             topic = active_vector_store._topic(target_collection_id)
             return topic._docs[:top_k]
-        res = active_vector_store.search(target_collection_id, [0.0] * 3072, top_k=top_k, min_score=0.0)
+        res = active_vector_store.search(target_collection_id, [0.0] * 3072, top_k=top_k, min_score=-1.0)
         return [r["text"] for r in res if r.get("text")]
     except Exception as e:
         print(f"[section_scope] Failed to read collection {target_collection_id}: {e}")

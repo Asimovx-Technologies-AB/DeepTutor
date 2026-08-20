@@ -101,29 +101,10 @@ async def generate_quiz_for_section(
         sample_chunks = random.sample(sample_chunks, max_chunks)
     context = "\n\n".join(sample_chunks)[:max_chars]
 
-    CHAPTER_TITLES = {
-        "math-10-1": "Arithmetic Sequences",
-        "math-10-2": "Circles and Angles",
-        "math-10-3": "Arithmetic Sequences & Algebra",
-        "math-10-4": "Mathematics of Chance",
-        "math-10-5": "Second Degree Equations",
-        "math-10-6": "Trigonometry",
-        "math-10-7": "Coordinates",
-        "sslc-math": "Class 10 Mathematics",
-        "phys-10-1": "Wave Motion & Oscillations",
-        "phys-10-2": "Refraction of Light & Lenses",
-        "phys-10-3": "Dispersion of Light & Colour",
-        "phys-10-4": "Magnetic Effect of Electric Current",
-        "sslc-physics": "Class 10 Physics",
-        "chem-10-1": "Nomenclature of Organic Compounds & Isomerism",
-        "chem-10-2": "Chemical Reactions of Organic Compounds",
-        "chem-10-3": "Periodic Table & Electron Configuration",
-        "chem-10-4": "Gas Laws and Mole Concept",
-        "sslc-chemistry": "Class 10 Chemistry",
-    }
+    from app.rag.textbook_reader import get_chapter_title, is_curriculum_topic
 
     gen_seed = str(uuid.uuid4())[:8]
-    topic_label = CHAPTER_TITLES.get(topic_id or section_id, (topic_id or "This Section").replace("_", " ").title())
+    topic_label = get_chapter_title(topic_id or section_id)
     topic_instruction = (
         f"FOCUS TOPIC: The quiz MUST focus specifically on '{focus_topic}'. Generate NEW and DIVERSE questions (Seed: {gen_seed})."
         if (focus_topic and focus_topic.lower() != "all topics (entire pdf)")

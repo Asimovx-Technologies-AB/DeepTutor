@@ -103,13 +103,17 @@ async def get_topic_suggestions(
 from app.rag.ollama_client import ollama
 
 
+from app.rag.textbook_reader import is_curriculum_topic
+
+
 @router.post("/generate")
 async def generate_quiz(
     body: GenerateQuizRequest,
     user: dict = Depends(get_current_user),
 ):
-    section_id = body.topic_id
-    if body.session_id:
+    # 1. Prioritize explicit topic_id when provided (e.g. phys-10-1, sslc-physics)
+    section_id = (body.topic_id or "").strip()
+    if not section_id and body.session_id:
         session = db.get_session(body.session_id)
         if session:
             section_id = session.get("topic_id") or session.get("id") or "general"
@@ -129,12 +133,13 @@ async def generate_quiz(
         topic_id=section_id,
     )
     if not quiz:
-        user_docs = db.get_documents_for_user(user["id"])
-        if not user_docs:
-            raise HTTPException(
-                status_code=400,
-                detail="No uploaded documents found. Please upload a PDF document before generating a quiz."
-            )
+        if not is_curriculum_topic(section_id):
+            user_docs = db.get_documents_for_user(user["id"])
+            if not user_docs:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No uploaded documents found. Please upload a PDF document before generating a quiz."
+                )
 
         llm_online = await ollama.is_available()
         if not llm_online:
@@ -145,7 +150,7 @@ async def generate_quiz(
 
         raise HTTPException(
             status_code=500,
-            detail="Failed to generate quiz from document text. Please try again with a different focus topic."
+            detail="Failed to generate quiz from textbook/document text. Please try again with a different focus topic."
         )
     return quiz
 
@@ -166,7 +171,7 @@ async def list_quizzes(
     user: dict = Depends(get_current_user),
 ):
     quizzes = db.get_quizzes_by_topic(topic_id)
-    if not quizzes and topic_id.startswith(("sslc-", "math-10-", "phys-10-", "chem-10-", "math-", "phys-", "chem-", "textbook")):
+    if is_curriculum_topic(topic_id) and not quizzes:
         # Auto-generate a fresh quiz on-demand from the textbook index
         try:
             quiz = await generate_quiz_for_section(
