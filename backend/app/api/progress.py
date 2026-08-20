@@ -430,3 +430,14 @@ async def get_automated_progress_analysis(user: dict = Depends(get_current_user)
         }
     }
 
+
+@router.get("/student-record")
+async def get_student_record(user: dict = Depends(get_current_user)):
+    """
+    Comprehensive student performance monitoring endpoint:
+    Returns full student profile, exam readiness rating, competency breakdowns,
+    attempt-level logs with questions/answers review, and AI diagnostic reports.
+    """
+    return db.get_detailed_student_record(user["id"])
+
+

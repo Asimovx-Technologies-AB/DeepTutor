@@ -25,6 +25,9 @@ const SubjectsPage = lazy(() => import('./pages/SubjectsPage'))
 const TopicsPage = lazy(() => import('./pages/TopicsPage'))
 const SubjectWorkspacePage = lazy(() => import('./pages/SubjectWorkspacePage'))
 const SubjectChatPage = lazy(() => import('./pages/SubjectChatPage'))
+const StudentRecordsPage = lazy(() => import('./pages/StudentRecordsPage'))
+const SmartNotesPage = lazy(() => import('./pages/SmartNotesPage'))
+
 
 function PageFallback() {
   return (
@@ -121,6 +124,9 @@ export default function App() {
               <Route path="subjects/:subjectId/chat/:topicId?" element={<SubjectChatPage />} />
               <Route path="subjects/:subjectId/topics" element={<TopicsPage />} />
               <Route path="topics" element={<TopicsPage />} />
+              <Route path="notes" element={<SmartNotesPage />} />
+              <Route path="records" element={<StudentRecordsPage />} />
+              <Route path="student-records" element={<StudentRecordsPage />} />
               <Route path="study-plan" element={<StudyPlanPage />} />
               <Route path="chat/:sessionId?" element={<ChatPage />} />
               <Route path="leaderboard" element={<Navigate to="/app/progress" replace />} />
@@ -133,6 +139,15 @@ export default function App() {
             {/* Root-level redirects for convenience */}
             <Route path="/dashboard" element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route index element={<DashboardPage />} />
+            </Route>
+            <Route path="/notes" element={<PrivateRoute><Layout /></PrivateRoute>}>
+              <Route index element={<SmartNotesPage />} />
+            </Route>
+            <Route path="/records" element={<PrivateRoute><Layout /></PrivateRoute>}>
+              <Route index element={<StudentRecordsPage />} />
+            </Route>
+            <Route path="/student-records" element={<PrivateRoute><Layout /></PrivateRoute>}>
+              <Route index element={<StudentRecordsPage />} />
             </Route>
             <Route path="/subjects" element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route index element={<SubjectsPage />} />

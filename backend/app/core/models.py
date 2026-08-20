@@ -239,3 +239,92 @@ class KnowledgeGraph(Base):
     def triplets(self, value):
         self._triplets = json.dumps(value or [])
 
+
+class StudyNote(Base):
+    __tablename__ = 'study_notes'
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey('users.id'), nullable=False)
+    title = Column(String, nullable=False)
+    topic_id = Column(String, nullable=False, default="general")
+    subject = Column(String, nullable=False, default="General")
+    note_type = Column(String, nullable=False, default="high_yield_master")  # 'high_yield_master', 'pyq_analysis', 'quick_cheat_sheet', 'solved_qa'
+    material_doc_name = Column(String, nullable=True)
+    _pyq_doc_names = Column("pyq_doc_names", Text, default="[]")
+    content_markdown = Column(Text, nullable=False)
+    _high_yield_topics = Column("high_yield_topics", Text, default="[]")
+    _pyq_patterns = Column("pyq_patterns", Text, default="[]")
+    _key_formulas = Column("key_formulas", Text, default="[]")
+    _exam_tips = Column("exam_tips", Text, default="[]")
+    _solved_questions = Column("solved_questions", Text, default="[]")
+    created_at = Column(String, default=lambda: datetime.utcnow().isoformat())
+
+    user = relationship("User")
+
+    @property
+    def pyq_doc_names(self):
+        try:
+            return json.loads(self._pyq_doc_names)
+        except Exception:
+            return []
+
+    @pyq_doc_names.setter
+    def pyq_doc_names(self, value):
+        self._pyq_doc_names = json.dumps(value or [])
+
+    @property
+    def high_yield_topics(self):
+        try:
+            return json.loads(self._high_yield_topics)
+        except Exception:
+            return []
+
+    @high_yield_topics.setter
+    def high_yield_topics(self, value):
+        self._high_yield_topics = json.dumps(value or [])
+
+    @property
+    def pyq_patterns(self):
+        try:
+            return json.loads(self._pyq_patterns)
+        except Exception:
+            return []
+
+    @pyq_patterns.setter
+    def pyq_patterns(self, value):
+        self._pyq_patterns = json.dumps(value or [])
+
+    @property
+    def key_formulas(self):
+        try:
+            return json.loads(self._key_formulas)
+        except Exception:
+            return []
+
+    @key_formulas.setter
+    def key_formulas(self, value):
+        self._key_formulas = json.dumps(value or [])
+
+    @property
+    def exam_tips(self):
+        try:
+            return json.loads(self._exam_tips)
+        except Exception:
+            return []
+
+    @exam_tips.setter
+    def exam_tips(self, value):
+        self._exam_tips = json.dumps(value or [])
+
+    @property
+    def solved_questions(self):
+        try:
+            return json.loads(self._solved_questions)
+        except Exception:
+            return []
+
+    @solved_questions.setter
+    def solved_questions(self, value):
+        self._solved_questions = json.dumps(value or [])
+
+

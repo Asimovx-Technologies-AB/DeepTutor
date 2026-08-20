@@ -242,6 +242,42 @@ export const progressApi = {
   topics: () => api.get('/progress/topics'),
   streaks: () => api.get('/progress/streaks'),
   analysis: () => api.get('/progress/analysis'),
+  studentRecord: () => api.get('/progress/student-record'),
+}
+
+// ─── Smart Notes & PYQ Generator ──────────────────────────────
+export const notesApi = {
+  list: () => api.get('/notes'),
+  get: (id: string) => api.get(`/notes/${id}`),
+  delete: (id: string) => api.delete(`/notes/${id}`),
+  generate: (data: {
+    materialFile?: File | null
+    pyqFiles?: File[]
+    topicId?: string
+    subject?: string
+    noteType?: string
+    customInstructions?: string
+    existingDocId?: string
+  }) => {
+    const form = new FormData()
+    if (data.materialFile) {
+      form.append('material_file', data.materialFile)
+    }
+    if (data.pyqFiles && data.pyqFiles.length > 0) {
+      data.pyqFiles.forEach((file) => {
+        form.append('pyq_files', file)
+      })
+    }
+    if (data.topicId) form.append('topic_id', data.topicId)
+    if (data.subject) form.append('subject', data.subject)
+    if (data.noteType) form.append('note_type', data.noteType)
+    if (data.customInstructions) form.append('custom_instructions', data.customInstructions)
+    if (data.existingDocId) form.append('existing_doc_id', data.existingDocId)
+
+    return api.post('/notes/generate', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
 }
 
 
@@ -298,4 +334,5 @@ export const leaderboardApi = {
 }
 
 export default api
+
 

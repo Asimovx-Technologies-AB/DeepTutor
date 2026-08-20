@@ -1,10 +1,10 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session
 from app.core.config import get_settings
-from app.core.models import Base, User, ChatSession, ChatMessage, Document, Quiz, QuizQuestion, QuizAttempt, Flashcard, StudyPlan, KnowledgeGraph
+from app.core.models import Base, User, ChatSession, ChatMessage, Document, Quiz, QuizQuestion, QuizAttempt, Flashcard, StudyPlan, KnowledgeGraph, StudyNote
 
 settings = get_settings()
 
@@ -63,8 +63,31 @@ with engine.connect() as conn:
         pass
 
 
+CHAPTER_TITLES = {
+    "math-10-1": "Arithmetic Sequences",
+    "math-10-2": "Circles and Angles",
+    "math-10-3": "Arithmetic Sequences & Algebra",
+    "math-10-4": "Mathematics of Chance",
+    "math-10-5": "Second Degree Equations",
+    "math-10-6": "Trigonometry",
+    "math-10-7": "Coordinates",
+    "sslc-math": "Class 10 Mathematics",
+    "phys-10-1": "Wave Motion & Oscillations",
+    "phys-10-2": "Refraction of Light & Lenses",
+    "phys-10-3": "Dispersion of Light & Colour",
+    "phys-10-4": "Magnetic Effect of Electric Current",
+    "sslc-physics": "Class 10 Physics",
+    "chem-10-1": "Nomenclature of Organic Compounds & Isomerism",
+    "chem-10-2": "Chemical Reactions of Organic Compounds",
+    "chem-10-3": "Periodic Table & Electron Configuration",
+    "chem-10-4": "Gas Laws and Mole Concept",
+    "sslc-chemistry": "Class 10 Chemistry",
+}
+
+
 def new_id() -> str:
     return str(uuid.uuid4())
+
 
 
 def now_iso() -> str:
@@ -943,5 +966,409 @@ def save_knowledge_graph(topic_id: str, entities: dict, relations: dict, triplet
 def delete_knowledge_graph(topic_id: str):
     with DBContext() as db:
         db.query(KnowledgeGraph).filter(KnowledgeGraph.topic_id == topic_id).delete()
+
+
+# ─── Study Notes & PYQ Helpers ────────────────────────────────────────────────
+def _note_dict(n: StudyNote) -> dict:
+    if not n:
+        return {}
+    return {
+        "id": n.id,
+        "user_id": n.user_id,
+        "title": n.title,
+        "topic_id": n.topic_id,
+        "subject": n.subject,
+        "note_type": n.note_type,
+        "material_doc_name": n.material_doc_name,
+        "pyq_doc_names": n.pyq_doc_names,
+        "content_markdown": n.content_markdown,
+        "high_yield_topics": n.high_yield_topics,
+        "pyq_patterns": n.pyq_patterns,
+        "key_formulas": n.key_formulas,
+        "exam_tips": n.exam_tips,
+        "solved_questions": n.solved_questions,
+        "created_at": n.created_at,
+    }
+
+
+def create_study_note(
+    user_id: str,
+    title: str,
+    topic_id: str,
+    subject: str,
+    note_type: str,
+    material_doc_name: str,
+    pyq_doc_names: list,
+    content_markdown: str,
+    high_yield_topics: list = None,
+    pyq_patterns: list = None,
+    key_formulas: list = None,
+    exam_tips: list = None,
+    solved_questions: list = None,
+) -> dict:
+    note_id = new_id()
+    created_at = now_iso()
+    with DBContext() as db:
+        note = StudyNote(
+            id=note_id,
+            user_id=user_id,
+            title=title,
+            topic_id=topic_id or "general",
+            subject=subject or "General",
+            note_type=note_type or "high_yield_master",
+            material_doc_name=material_doc_name,
+            content_markdown=content_markdown,
+            created_at=created_at,
+        )
+        note.pyq_doc_names = pyq_doc_names or []
+        note.high_yield_topics = high_yield_topics or []
+        note.pyq_patterns = pyq_patterns or []
+        note.key_formulas = key_formulas or []
+        note.exam_tips = exam_tips or []
+        note.solved_questions = solved_questions or []
+        db.add(note)
+        db.commit()
+    return get_study_note_by_id(note_id)
+
+
+def get_study_notes_for_user(user_id: str) -> List[dict]:
+    with DBContext() as db:
+        notes = (
+            db.query(StudyNote)
+            .filter(StudyNote.user_id == user_id)
+            .order_by(StudyNote.created_at.desc())
+            .all()
+        )
+        return [_note_dict(n) for n in notes]
+
+
+def get_study_note_by_id(note_id: str) -> Optional[dict]:
+    with DBContext() as db:
+        note = db.query(StudyNote).filter(StudyNote.id == note_id).first()
+        return _note_dict(note) if note else None
+
+
+def delete_study_note(note_id: str, user_id: str) -> bool:
+    with DBContext() as db:
+        note = db.query(StudyNote).filter(StudyNote.id == note_id, StudyNote.user_id == user_id).first()
+        if note:
+            db.delete(note)
+            db.commit()
+            return True
+    return False
+
+
+# ─── Comprehensive Student Performance Record Aggregator ──────────────────────
+def get_detailed_student_record(user_id: str) -> dict:
+    """
+    Builds an end-to-end 360-degree performance record for monitoring student progress,
+    including full attempts log with question reviews, subject competency radar,
+    activity timeline, exam readiness score, and AI diagnostic summary.
+    """
+    with DBContext() as db:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return {}
+
+        sessions = db.query(ChatSession).filter(ChatSession.user_id == user_id).all()
+        attempts = db.query(QuizAttempt).filter(QuizAttempt.user_id == user_id).order_by(QuizAttempt.attempted_at.desc()).all()
+        docs = db.query(Document).filter(Document.user_id == user_id).all()
+        plans = db.query(StudyPlan).filter(StudyPlan.user_id == user_id).all()
+        notes = db.query(StudyNote).filter(StudyNote.user_id == user_id).order_by(StudyNote.created_at.desc()).all()
+
+        # Unique topic IDs
+        topic_ids = set()
+        for s in sessions:
+            if s.topic_id:
+                topic_ids.add(s.topic_id)
+        for d in docs:
+            if d.topic_id:
+                topic_ids.add(d.topic_id)
+
+        # Flashcards count & mastered
+        flashcards_mastered = 0
+        total_flashcards_in_topics = 0
+        for tid in list(topic_ids) + ["general", "sslc-math", "sslc-physics", "sslc-chemistry"]:
+            cards = db.query(Flashcard).filter(Flashcard.topic_id == tid).all()
+            total_flashcards_in_topics += len(cards)
+            flashcards_mastered += len([c for c in cards if c.mastered])
+
+        # Study plans completion
+        completed_plan_days = sum(len(p.completed_days or []) for p in plans)
+
+        # Quiz attempts with detailed question breakdowns
+        detailed_attempts = []
+        quiz_ids = list(set([a.quiz_id for a in attempts]))
+        quizzes_map = {}
+        if quiz_ids:
+            quiz_records = db.query(Quiz).filter(Quiz.id.in_(quiz_ids)).all()
+            for q in quiz_records:
+                questions = db.query(QuizQuestion).filter(QuizQuestion.quiz_id == q.id).all()
+                quizzes_map[q.id] = {
+                    "quiz": q,
+                    "questions": [
+                        {
+                            "id": qu.id,
+                            "question_text": qu.question_text,
+                            "question_type": qu.question_type,
+                            "options": qu.options,
+                            "correct_answer": qu.correct_answer,
+                            "explanation": qu.explanation,
+                        }
+                        for qu in questions
+                    ]
+                }
+
+        for a in attempts:
+            q_info = quizzes_map.get(a.quiz_id)
+            quiz_obj = q_info["quiz"] if q_info else None
+            q_list = q_info["questions"] if q_info else []
+            answers_dict = a.answers or {}
+
+            # Build review array
+            reviewed_questions = []
+            for qu in q_list:
+                user_ans = answers_dict.get(qu["id"], "")
+                is_correct = (user_ans == qu["correct_answer"])
+                reviewed_questions.append({
+                    "id": qu["id"],
+                    "question_text": qu["question_text"],
+                    "options": qu["options"],
+                    "user_answer": user_ans,
+                    "correct_answer": qu["correct_answer"],
+                    "is_correct": is_correct,
+                    "explanation": qu["explanation"],
+                })
+
+            detailed_attempts.append({
+                "id": a.id,
+                "quiz_id": a.quiz_id,
+                "quiz_title": quiz_obj.title if quiz_obj else "AI Practice Quiz",
+                "topic_id": quiz_obj.topic_id if quiz_obj else "general",
+                "difficulty": quiz_obj.difficulty if quiz_obj else "medium",
+                "score": a.score,
+                "total_questions": a.total_questions,
+                "percentage": round(a.percentage, 1),
+                "attempted_at": a.attempted_at,
+                "answers": answers_dict,
+                "questions_review": reviewed_questions,
+            })
+
+        # Activity dates & streak
+        activity_dates = set()
+        for s in sessions:
+            if s.started_at:
+                try:
+                    activity_dates.add(s.started_at.split("T")[0])
+                except Exception:
+                    pass
+        for a in attempts:
+            if a.attempted_at:
+                try:
+                    activity_dates.add(a.attempted_at.split("T")[0])
+                except Exception:
+                    pass
+        for n in notes:
+            if n.created_at:
+                try:
+                    activity_dates.add(n.created_at.split("T")[0])
+                except Exception:
+                    pass
+
+        today = datetime.utcnow().date()
+        streak_days = 0
+        check_date = today
+        while check_date.strftime("%Y-%m-%d") in activity_dates:
+            streak_days += 1
+            check_date -= timedelta(days=1)
+        if streak_days == 0 and (len(sessions) > 0 or len(attempts) > 0 or flashcards_mastered > 0 or len(notes) > 0):
+            streak_days = 1
+
+        # Calculate XP & Scholar Level
+        session_xp = len(sessions) * 50
+        quiz_xp = sum(100 + int(a.percentage * 2) for a in attempts)
+        flashcard_xp = flashcards_mastered * 30
+        plan_xp = completed_plan_days * 40
+        notes_xp = len(notes) * 75
+        streak_xp = streak_days * 50
+
+        total_xp = session_xp + quiz_xp + flashcard_xp + plan_xp + notes_xp + streak_xp
+        level = 1 + (total_xp // 250)
+        xp_in_level = total_xp % 250
+        xp_for_next = 250
+
+        if level <= 2:
+            level_title = "Novice Scholar"
+        elif level <= 4:
+            level_title = "Knowledge Explorer"
+        elif level <= 7:
+            level_title = "Concept Craftsman"
+        elif level <= 10:
+            level_title = "GraphRAG Master"
+        elif level <= 15:
+            level_title = "AI Tutor Polymath"
+        else:
+            level_title = "Grand Academician"
+
+        # Calculate average quiz accuracy
+        avg_score = round(sum(a.percentage for a in attempts) / len(attempts), 1) if attempts else 0.0
+
+        # Exam Readiness Score calculation (0 - 100%)
+        # Weighted factors: Quiz accuracy (45%), Study consistency/streak (20%), Coverage/Sessions (20%), Flashcard mastery (15%)
+        quiz_factor = min(100.0, avg_score) * 0.45 if attempts else 20.0
+        streak_factor = min(100.0, streak_days * 15.0) * 0.20
+        coverage_factor = min(100.0, (len(sessions) * 10.0) + (len(docs) * 15.0) + (len(notes) * 20.0)) * 0.20
+        flashcard_factor = (min(100.0, (flashcards_mastered / max(1, total_flashcards_in_topics)) * 100.0) if total_flashcards_in_topics > 0 else (min(100.0, flashcards_mastered * 20.0))) * 0.15
+
+        exam_readiness = round(quiz_factor + streak_factor + coverage_factor + flashcard_factor, 1)
+        exam_readiness = max(10.0, min(99.0, exam_readiness))
+
+        if exam_readiness >= 85:
+            readiness_label = "High Exam Readiness"
+            readiness_status = "Excellent"
+        elif exam_readiness >= 70:
+            readiness_label = "Solid Exam Preparation"
+            readiness_status = "Good"
+        elif exam_readiness >= 50:
+            readiness_label = "Developing Foundation"
+            readiness_status = "Moderate"
+        else:
+            readiness_label = "Needs Systematic Revision"
+            readiness_status = "Action Required"
+
+        # Subject Competency Breakdown
+        subject_map = {
+            "Mathematics": {"scores": [], "sessions": 0, "quizzes": 0, "notes": 0},
+            "Physics": {"scores": [], "sessions": 0, "quizzes": 0, "notes": 0},
+            "Chemistry": {"scores": [], "sessions": 0, "quizzes": 0, "notes": 0},
+            "Custom Materials": {"scores": [], "sessions": 0, "quizzes": 0, "notes": 0},
+        }
+
+        for s in sessions:
+            t = (s.topic_id or "").lower()
+            if "math" in t:
+                subject_map["Mathematics"]["sessions"] += 1
+            elif "phys" in t:
+                subject_map["Physics"]["sessions"] += 1
+            elif "chem" in t:
+                subject_map["Chemistry"]["sessions"] += 1
+            else:
+                subject_map["Custom Materials"]["sessions"] += 1
+
+        for a in attempts:
+            q_info = quizzes_map.get(a.quiz_id)
+            t = (q_info["quiz"].topic_id if q_info and q_info["quiz"] else "").lower()
+            if "math" in t:
+                subject_map["Mathematics"]["quizzes"] += 1
+                subject_map["Mathematics"]["scores"].append(a.percentage)
+            elif "phys" in t:
+                subject_map["Physics"]["quizzes"] += 1
+                subject_map["Physics"]["scores"].append(a.percentage)
+            elif "chem" in t:
+                subject_map["Chemistry"]["quizzes"] += 1
+                subject_map["Chemistry"]["scores"].append(a.percentage)
+            else:
+                subject_map["Custom Materials"]["quizzes"] += 1
+                subject_map["Custom Materials"]["scores"].append(a.percentage)
+
+        for n in notes:
+            sub = (n.subject or "").lower()
+            if "math" in sub:
+                subject_map["Mathematics"]["notes"] += 1
+            elif "phys" in sub:
+                subject_map["Physics"]["notes"] += 1
+            elif "chem" in sub:
+                subject_map["Chemistry"]["notes"] += 1
+            else:
+                subject_map["Custom Materials"]["notes"] += 1
+
+        subject_competencies = []
+        for sub_name, data in subject_map.items():
+            if data["scores"]:
+                sub_score = round(sum(data["scores"]) / len(data["scores"]), 1)
+            elif data["sessions"] > 0 or data["notes"] > 0:
+                sub_score = 70.0
+            else:
+                sub_score = 0.0
+
+            subject_competencies.append({
+                "subject": sub_name,
+                "score": sub_score,
+                "quizzes_taken": data["quizzes"],
+                "sessions_count": data["sessions"],
+                "notes_count": data["notes"],
+            })
+
+        # Detailed sessions summary
+        sessions_summary = []
+        for s in sessions[:15]:
+            msg_count = db.query(ChatMessage).filter(ChatMessage.session_id == s.id).count()
+            sessions_summary.append({
+                "id": s.id,
+                "title": s.session_title or "AI Learning Session",
+                "topic_id": s.topic_id or "general",
+                "started_at": s.started_at,
+                "messages_count": msg_count,
+            })
+
+        # AI Diagnostic Remarks
+        weak_subjects = [sc["subject"] for sc in subject_competencies if sc["score"] > 0 and sc["score"] < 70]
+        strong_subjects = [sc["subject"] for sc in subject_competencies if sc["score"] >= 75]
+
+        if not attempts and not sessions:
+            diagnostic_summary = "Student has newly joined DeepTutor. Start by chatting with an AI Tutor or uploading a chapter PDF with Previous Year Questions (PYQs) to establish performance benchmarks."
+            recommended_action = "Upload your study material and take your first 5-question diagnostic quiz."
+        elif weak_subjects:
+            diagnostic_summary = f"Student shows good engagement with {len(sessions)} study sessions. Special reinforcement needed in {', '.join(weak_subjects)} where accuracy is below 70%."
+            recommended_action = f"Generate a high-yield Smart Note on {weak_subjects[0]} and practice 10 targeted PYQ questions."
+        else:
+            strong_str = ', '.join(strong_subjects) if strong_subjects else "General Curriculum"
+            diagnostic_summary = f"Strong conceptual foundation demonstrated across {strong_str}. Accuracy is steady at {avg_score}% with active {streak_days}-day streak."
+            recommended_action = "Continue regular timed quizzes and review 5 flashcards daily to maintain peak recall."
+
+        return {
+            "student": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "role": user.role,
+                "is_premium": getattr(user, "is_premium", False),
+                "plan": getattr(user, "plan", "free"),
+                "member_since": user.created_at,
+            },
+            "scholar_rank": {
+                "level": level,
+                "level_title": level_title,
+                "total_xp": total_xp,
+                "xp_in_level": xp_in_level,
+                "xp_for_next": xp_for_next,
+                "streak_days": streak_days,
+            },
+            "metrics": {
+                "avg_quiz_score": avg_score,
+                "total_quizzes_taken": len(attempts),
+                "total_sessions": len(sessions),
+                "flashcards_mastered": flashcards_mastered,
+                "total_flashcards": total_flashcards_in_topics,
+                "study_plans_completed_days": completed_plan_days,
+                "notes_generated": len(notes),
+                "documents_uploaded": len(docs),
+                "exam_readiness_score": exam_readiness,
+                "readiness_label": readiness_label,
+                "readiness_status": readiness_status,
+            },
+            "subject_competencies": subject_competencies,
+            "quiz_attempts": detailed_attempts,
+            "recent_sessions": sessions_summary,
+            "saved_notes": [_note_dict(n) for n in notes[:10]],
+            "diagnostic": {
+                "summary": diagnostic_summary,
+                "recommended_action": recommended_action,
+                "weak_subjects": weak_subjects,
+                "strong_subjects": strong_subjects,
+                "last_evaluated": now_iso(),
+            }
+        }
+
 
 
