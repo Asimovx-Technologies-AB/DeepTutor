@@ -38,199 +38,210 @@ export default function SubjectsPage() {
   })
 
   return (
-    <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-8 bg-[#F7F7F7] text-[#3C3C3C] font-sans">
-      {/* ─── 1. HEADER ─── */}
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Sparkles size={16} className="text-[#1CB0F6]" />
-          <span className="text-xs font-black text-[#1CB0F6] uppercase tracking-widest bg-[#DDF4FF] px-2.5 py-0.5 rounded-full border border-[#1CB0F6]/20">
-            Personalized Workspace
-          </span>
+    <div className="min-h-screen bg-[#F7F7F7] pb-12">
+      {/* ─── 1. HERO BANNER ─── */}
+      <div className="relative bg-white border-b border-[#E2E8F0] pt-8 pb-12 overflow-hidden shadow-sm">
+        <div className="absolute right-0 top-0 w-1/3 h-full pointer-events-none opacity-40">
+          <div className="w-full h-full bg-gradient-to-l from-[#1CB0F6]/20 via-[#1CB0F6]/5 to-transparent blur-3xl"></div>
         </div>
-        <h1 className="text-3xl font-black text-[#3C3C3C] tracking-tight">My Subjects & Learning Hub</h1>
-        <p className="text-[#777777] text-sm font-medium">
-          Track your progress across enrolled subjects, continue active lessons, or explore new topics.
-        </p>
-      </motion.div>
-
-      {/* ─── 2. SEARCH & TAB FILTERS BAR ─── */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        {/* Tab Filters */}
-        <div className="flex items-center gap-1.5 bg-white border border-[#E2E8F0] p-1.5 rounded-[1.5rem] elevation-1 overflow-x-auto">
-          {[
-            { key: 'MY_SUBJECTS', label: 'My Subjects' },
-            { key: 'ALL', label: 'All Catalog' },
-            { key: 'IN_PROGRESS', label: 'In Progress' },
-            { key: 'COMPLETED', label: 'Completed' },
-            { key: 'NOT_STARTED', label: 'Not Started' },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key as any)}
-              className={`px-3.5 py-2 rounded-[1.25rem] text-xs font-extrabold transition-all whitespace-nowrap cursor-pointer ${
-                activeTab === tab.key
-                  ? 'bg-[#1CB0F6] text-white elevation-1'
-                  : 'text-[#777777] hover:text-[#3C3C3C] hover:bg-[#F7F7F7]'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Search Input */}
-        <div className="relative w-full md:w-72">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#AFAFAF]" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 text-xs font-bold rounded-[1.5rem] bg-white border border-[#E2E8F0] text-[#3C3C3C] placeholder-[#AFAFAF] focus:outline-none focus:border-[#1CB0F6] focus:ring-2 focus:ring-[#1CB0F6]/20 elevation-1"
-            placeholder="Search subjects or topics..."
-          />
+        
+        <div className="max-w-7xl mx-auto px-6 sm:px-8 relative z-10">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-xl bg-[#DDF4FF] flex items-center justify-center text-[#1CB0F6] border border-[#1CB0F6]/20">
+                <Sparkles size={16} />
+              </div>
+              <span className="text-xs font-black text-[#1CB0F6] uppercase tracking-widest">
+                Curriculum Hub
+              </span>
+            </div>
+            <h1 className="text-4xl sm:text-5xl font-black text-[#3C3C3C] tracking-tight mb-3 leading-[1.1]">
+              Master your <br />
+              <span className="text-[#1CB0F6]">learning journey.</span>
+            </h1>
+            <p className="text-[#777777] text-sm sm:text-base font-medium max-w-md leading-relaxed">
+              Track your progress across enrolled subjects, continue active lessons, or explore our complete catalog of topics.
+            </p>
+          </motion.div>
         </div>
       </div>
 
-      {/* ─── 3. SUBJECT CARDS GRID ─── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredSubjects.map((subject, index) => {
-          const progressVal = getSubjectProgress(subject.id)
-          const status = getSubjectStatus(subject.id)
-          const currentTopic = getCurrentTopic(subject.id)
-          const subjectTopics = getTopics(subject.id)
-          const completedCount = subjectTopics.filter((t) => t.status === 'COMPLETED').length
+      <div className="max-w-7xl mx-auto px-6 sm:px-8 mt-8 space-y-8">
+        
+        {/* ─── 2. FLOATING CONTROLS BAR ─── */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 sticky top-4 z-20">
+          {/* Tab Filters */}
+          <div className="flex items-center gap-1.5 bg-white border border-[#E2E8F0] p-1.5 rounded-[1.5rem] shadow-sm overflow-x-auto">
+            {[
+              { key: 'MY_SUBJECTS', label: 'My Subjects' },
+              { key: 'ALL', label: 'All Catalog' },
+              { key: 'IN_PROGRESS', label: 'In Progress' },
+              { key: 'COMPLETED', label: 'Completed' },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key as any)}
+                className={`px-4 py-2.5 rounded-[1.25rem] text-xs font-extrabold transition-all whitespace-nowrap cursor-pointer ${
+                  activeTab === tab.key
+                    ? 'bg-[#1CB0F6] text-white shadow-md shadow-[#1CB0F6]/20 scale-100'
+                    : 'text-[#777777] hover:text-[#3C3C3C] hover:bg-[#F7F7F7] active:scale-95'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
-          return (
-            <motion.div
-              key={subject.id}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  navigate(`/subjects/${subject.id}`)
-                }
-              }}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-              onClick={() => navigate(`/subjects/${subject.id}`)}
-              className="glass-card p-6 text-left group relative border border-[#E2E8F0] elevation-1 hover:border-[#1CB0F6]/50 cursor-pointer rounded-[2rem] bg-white flex flex-col justify-between space-y-5 transition-all hover:elevation-4 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <div className="space-y-4">
-                {/* Header Row: Illustration & Category Badge */}
-                <div className="flex items-center justify-between">
-                  <div className="w-12 h-12 rounded-[1.5rem] bg-[#DDF4FF] border border-[#1CB0F6]/30 flex items-center justify-center p-2 elevation-1">
-                    <img src={subject.illustration} alt={subject.name} className="w-full h-full object-contain" />
-                  </div>
+          {/* Search Input */}
+          <div className="relative w-full md:w-80 group">
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#AFAFAF] group-focus-within:text-[#1CB0F6] transition-colors" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-12 pr-4 py-3.5 text-sm font-bold rounded-[1.5rem] bg-white border border-[#E2E8F0] text-[#3C3C3C] placeholder-[#AFAFAF] focus:outline-none focus:border-[#1CB0F6] focus:ring-4 focus:ring-[#1CB0F6]/10 shadow-sm transition-all"
+              placeholder="Search subjects or topics..."
+            />
+          </div>
+        </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-black uppercase tracking-wider bg-[#DDF4FF] text-[#1CB0F6] px-2.5 py-0.5 rounded-full border border-[#1CB0F6]/20">
-                      {subject.category}
-                    </span>
+        {/* ─── 3. SUBJECT CARDS GRID ─── */}
+        {filteredSubjects.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredSubjects.map((subject, index) => {
+              const progressVal = getSubjectProgress(subject.id)
+              const status = getSubjectStatus(subject.id)
+              const currentTopic = getCurrentTopic(subject.id)
+              const subjectTopics = getTopics(subject.id)
+              const completedCount = subjectTopics.filter((t) => t.status === 'COMPLETED').length
 
-                    {status === 'COMPLETED' && (
-                      <span className="text-[10px] font-bold bg-[#D7FFB8] text-[#46A302] px-2 py-0.5 rounded-full border border-[#58CC02]/30">
-                        Done 🎉
-                      </span>
+              return (
+                <motion.div
+                  key={subject.id}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      navigate(`/subjects/${subject.id}`)
+                    }
+                  }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  onClick={() => navigate(`/subjects/${subject.id}`)}
+                  className="group relative bg-white border border-[#E2E8F0] rounded-[2rem] p-6 flex flex-col justify-between shadow-sm hover:shadow-xl hover:shadow-[#1CB0F6]/10 hover:border-[#1CB0F6]/40 transition-all duration-300 cursor-pointer overflow-hidden min-h-[320px]"
+                >
+                  {/* Decorative glow on hover */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#1CB0F6]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+                  <div className="relative z-10 space-y-5">
+                    {/* Header Row: Illustration & Category Badge */}
+                    <div className="flex items-start justify-between">
+                      <div className="w-14 h-14 rounded-[1.25rem] bg-info-soft border border-info/20 flex items-center justify-center p-2.5 shadow-sm group-hover:scale-110 transition-transform duration-300 text-3xl">
+                        {subject.emoji || subject.illustration}
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-[#F7F7F7] text-[#777777] px-2.5 py-1 rounded-full border border-[#E2E8F0]">
+                          {subject.category}
+                        </span>
+                        {status === 'COMPLETED' && (
+                          <span className="text-[10px] font-bold bg-[#D7FFB8] text-[#46A302] px-2 py-0.5 rounded-full border border-[#58CC02]/30 flex items-center gap-1">
+                            <Check size={10} strokeWidth={3} /> Done
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Title & Description */}
+                    <div>
+                      <h3 className="font-black text-[#3C3C3C] text-xl group-hover:text-[#1CB0F6] transition-colors leading-tight">
+                        {subject.name}
+                      </h3>
+                      <p className="text-[#777777] text-xs leading-relaxed line-clamp-2 font-medium mt-2">
+                        {subject.description}
+                      </p>
+                    </div>
+
+                    {/* Currently Learning Highlight */}
+                    {currentTopic && status !== 'COMPLETED' && (
+                      <div className="bg-[#FAF8F3] border border-[#E7E1D8] rounded-[1.25rem] p-3 text-xs space-y-1 group-hover:bg-white group-hover:border-[#1CB0F6]/20 transition-colors">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Play size={12} className="text-[#1CB0F6] fill-[#1CB0F6]" />
+                          <span className="text-[10px] font-black text-[#1CB0F6] uppercase tracking-wider">Up Next</span>
+                        </div>
+                        <p className="font-bold text-[#3C3C3C] truncate pr-2">{currentTopic.title}</p>
+                      </div>
                     )}
                   </div>
-                </div>
 
-                {/* Title & Description */}
-                <div>
-                  <h3 className="font-black text-[#3C3C3C] text-lg group-hover:text-[#1CB0F6] transition-colors">
-                    {subject.name}
-                  </h3>
-                  <p className="text-[#777777] text-xs leading-relaxed line-clamp-2 font-medium mt-1">
-                    {subject.description}
-                  </p>
-                </div>
+                  {/* Progress & Bottom Actions */}
+                  <div className="relative z-10 mt-6 pt-5 border-t border-[#E2E8F0]/80">
+                    <div className="flex items-end justify-between">
+                      
+                      <div className="flex-1 pr-4">
+                        <div className="flex items-center justify-between text-[11px] font-bold mb-2">
+                          <span className="text-[#777777]">
+                            {completedCount} / {subjectTopics.length} topics
+                          </span>
+                          <span className="text-[#1CB0F6] font-black">{progressVal}%</span>
+                        </div>
+                        <div className="w-full bg-[#E5E5E5] rounded-full h-2.5 overflow-hidden border border-[#E2E8F0]">
+                          <div
+                            className="bg-gradient-to-r from-[#1CB0F6] to-[#58CC02] h-full rounded-full transition-all duration-700 ease-out"
+                            style={{ width: `${progressVal}%` }}
+                          />
+                        </div>
+                      </div>
 
-                {/* Currently Learning Highlight */}
-                {currentTopic && status !== 'COMPLETED' && (
-                  <div className="bg-[#FFFFFF] border border-[#1CB0F6]/20 rounded-[1.5rem] p-3 text-xs space-y-1">
-                    <span className="text-[10px] font-black text-[#1CB0F6] uppercase tracking-wider">Currently Learning</span>
-                    <p className="font-bold text-[#3C3C3C] truncate">{currentTopic.title}</p>
+                      <div className="flex-shrink-0">
+                        {!subject.isEnrolled ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              enrollSubject(subject.id)
+                            }}
+                            className="w-10 h-10 rounded-[1.25rem] bg-white border-2 border-[#E2E8F0] text-[#777777] hover:border-[#1CB0F6] hover:text-[#1CB0F6] flex items-center justify-center transition-colors cursor-pointer group-hover:bg-[#1CB0F6] group-hover:border-[#1CB0F6] group-hover:text-white"
+                          >
+                            <Plus size={18} strokeWidth={3} />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              navigate(`/subjects/${subject.id}`)
+                            }}
+                            className="w-10 h-10 rounded-[1.25rem] bg-[#1CB0F6] text-white flex items-center justify-center shadow-md shadow-[#1CB0F6]/20 transition-transform active:scale-95 cursor-pointer group-hover:scale-110"
+                          >
+                            <ChevronRight size={18} strokeWidth={3} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-
-              {/* Progress & Bottom Actions */}
-              <div className="space-y-3 pt-3 border-t border-[#E2E8F0]/60">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="text-[#777777]">
-                      {completedCount} / {subjectTopics.length} topics completed
-                    </span>
-                    <span className="text-[#3C3C3C] font-black">{progressVal}%</span>
-                  </div>
-                  <div className="w-full bg-[#E5E5E5] rounded-full h-2 overflow-hidden">
-                    <div
-                      className="bg-[#1CB0F6] h-full rounded-full transition-all duration-300"
-                      style={{ width: `${progressVal}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-1">
-                  {!subject.isEnrolled ? (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        enrollSubject(subject.id)
-                      }}
-                      className="btn-primary text-xs py-2 px-3 rounded-[1.25rem] flex items-center gap-1.5 cursor-pointer elevation-1"
-                    >
-                      <Plus size={14} /> Add Subject
-                    </button>
-                  ) : (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        navigate(`/subjects/${subject.id}`)
-                      }}
-                      className="btn-primary text-xs font-extrabold py-2 px-4 rounded-[1.25rem] flex items-center gap-1.5 cursor-pointer elevation-1"
-                    >
-                      <span>{status === 'COMPLETED' ? 'Review Workspace' : 'Continue'}</span>
-                      <ChevronRight size={14} />
-                    </button>
-                  )}
-
-                  <span className="text-[11px] font-semibold text-[#AFAFAF] flex items-center gap-1">
-                    <Clock size={12} />
-                    {subject.lastStudiedAt
-                      ? `Active ${Math.round((Date.now() - new Date(subject.lastStudiedAt).getTime()) / 3600000)}h ago`
-                      : 'Not started'}
-                  </span>
-                </div>
-              </div>
-            </motion.div>
-          )
-        })}
-      </div>
-
-      {/* Empty State */}
-      {filteredSubjects.length === 0 && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center justify-center py-20 px-4 text-center">
-          <div className="w-32 h-32 mb-4 pointer-events-none">
-            <img src="/assets/illustrations/empty_state.jpg" alt="Empty State" className="w-full h-full object-contain mix-blend-multiply" />
+                </motion.div>
+              )
+            })}
           </div>
-          <h3 className="text-xl font-bold text-[#3C3C3C] tracking-tight mb-2">No subjects found</h3>
-          <p className="text-sm text-[#777777] font-medium max-w-sm mx-auto mb-8">
-            Try adjusting your search filter or explore the full catalog to find new subjects to master.
-          </p>
-          <button
-            onClick={() => {
-              setSearch('')
-              setActiveTab('ALL')
-            }}
-            className="btn-primary text-sm font-medium py-2.5 px-6 rounded-lg cursor-pointer flex items-center gap-2"
-          >
-            Explore Catalog <ChevronRight size={16} />
-          </button>
-        </motion.div>
-      )}
+        ) : (
+          <div className="text-center py-20">
+            <div className="w-20 h-20 bg-white rounded-[2rem] border border-[#E2E8F0] flex items-center justify-center mx-auto mb-4 shadow-sm">
+              <Search size={32} className="text-[#AFAFAF]" />
+            </div>
+            <h3 className="text-xl font-black text-[#3C3C3C] mb-2">No subjects found</h3>
+            <p className="text-[#777777] text-sm font-medium">Try adjusting your filters or search query.</p>
+          </div>
+        )}
+      </div>
     </div>
   )
+}
+
+function formatTimeAgo(date: Date) {
+  const diff = Date.now() - date.getTime()
+  const hours = Math.floor(diff / (1000 * 60 * 60))
+  if (hours < 1) return 'Just now'
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
 }

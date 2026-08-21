@@ -91,8 +91,8 @@ export default function SubjectWorkspacePage() {
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 relative z-10">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-[1.5rem] bg-[#DDF4FF] border border-[#1CB0F6]/30 flex items-center justify-center p-2.5 elevation-1 flex-shrink-0">
-              <img src={subject.illustration} alt={subject.name} className="w-full h-full object-contain" />
+            <div className="w-16 h-16 rounded-[1.5rem] bg-info-soft border border-info/30 flex items-center justify-center p-2.5 elevation-1 flex-shrink-0 text-3xl">
+              {subject.emoji || subject.illustration}
             </div>
 
             <div>
@@ -254,10 +254,10 @@ export default function SubjectWorkspacePage() {
                           {/* Last Quiz Score Badge */}
                           {topic.lastQuizPct !== undefined && (
                             <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${topic.lastQuizPct >= 70
-                              ? 'bg-[#E3F0E5] border-[#4F8A68]/30 text-[#35654B]'
+                              ? 'bg-success-soft border-success/30 text-[#35654B]'
                               : 'bg-[#FFF3D8] border-[#D99A32]/30 text-[#B45309]'
                               }`}>
-                              <Trophy size={11} className={topic.lastQuizPct >= 70 ? 'text-[#4F8A68]' : 'text-[#D99A32]'} />
+                              <Trophy size={11} className={topic.lastQuizPct >= 70 ? 'text-success' : 'text-[#D99A32]'} />
                               <span>Quiz: {topic.lastQuizPct}% ({topic.lastQuizScore}/{topic.lastQuizTotal})</span>
                             </span>
                           )}

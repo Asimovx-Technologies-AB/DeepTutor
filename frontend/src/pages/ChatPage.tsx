@@ -306,7 +306,7 @@ function UploadStatusCard({
               ? 'bg-[#58CC02]'
               : isError
                 ? 'bg-[#FF4B4B]'
-                : 'bg-gradient-to-r from-[#1CB0F6] via-[#FFB070] to-[#1CB0F6]'
+                : 'bg-info'
             }`}
           style={{ width: `${smoothProgress}%`, transition: 'width 75ms ease-out' }}
         >
@@ -321,14 +321,15 @@ function UploadStatusCard({
         </motion.div>
       </div>
 
-      {/* Done Stats Pill */}
-      {isDone && status.stats && (
-        <motion.div
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-3 pt-2.5 border-t border-[#E2E8F0]/60 flex items-center justify-between text-xs font-bold text-[#58CC02]"
-        >
-          <div className="flex items-center gap-3 flex-wrap">
+      {/* Done Stats Pill */ }
+  {
+    isDone && status.stats && (
+      <motion.div
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mt-3 pt-2.5 border-t border-[#E2E8F0]/60 flex items-center justify-between text-xs font-bold text-[#58CC02]"
+      >
+        <div className="flex items-center gap-3 flex-wrap">
           <span>✨ {status.stats.chunks_indexed || 0} Chunks Indexed</span>
           <span>•</span>
           <span>🧠 {status.stats.entities_extracted || 0} Graph Entities</span>
@@ -854,7 +855,7 @@ export default function ChatPage() {
   const allMessages = extMessages
 
   return (
-    <div className="flex flex-col md:flex-row h-screen w-full bg-[#F7F7F7] overflow-hidden text-[#3C3C3C] font-sans">
+    <div className="flex flex-col md:flex-row h-screen w-full bg-white overflow-hidden text-[#20201D] font-sans">
 
       {/* ─── MOBILE BACKDROP OVERLAYS ────────────────────────────────────────── */}
       <AnimatePresence>
@@ -871,7 +872,7 @@ export default function ChatPage() {
 
       {/* ─── MOBILE LEFT DRAWER (CHAT HISTORY) ─── */}
       <aside
-        className={`fixed xl:static inset-y-0 left-0 z-40 w-72 bg-white border-r border-[#E2E8F0] p-4 flex flex-col justify-between shadow-2xl xl:shadow-none transition-transform duration-300 ${mobileLeftOpen ? 'translate-x-0' : '-translate-x-full xl:translate-x-0'
+        className={`fixed xl:static inset-y-0 left-0 z-40 w-72 bg-white border-r border-border p-4 flex flex-col justify-between shadow-2xl xl:shadow-none transition-transform duration-300 ${mobileLeftOpen ? 'translate-x-0' : '-translate-x-full xl:translate-x-0'
           }`}
       >
         <div className="space-y-4">
@@ -913,8 +914,8 @@ export default function ChatPage() {
                     setMobileLeftOpen(false)
                   }}
                   className={`group flex items-center justify-between px-3 py-2.5 rounded-[1.25rem] text-xs cursor-pointer transition-all ${isSelected
-                      ? 'bg-[#DDF4FF] text-[#1CB0F6] font-extrabold border border-[#1CB0F6]/30 elevation-1'
-                      : 'text-[#777777] hover:text-[#3C3C3C] hover:bg-[#E5E5E5] font-medium'
+                      ? 'bg-white text-[#20201D] font-extrabold border border-border shadow-sm'
+                      : 'text-[#6F6B63] hover:text-[#20201D] hover:bg-white/50 font-medium border border-transparent'
                     }`}
                 >
                   <span className="truncate pr-2">{s.session_title || 'Untitled Chat'}</span>
@@ -933,7 +934,7 @@ export default function ChatPage() {
       </aside>
 
       {/* ─── MAIN CHAT WORKSPACE AREA ───────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col bg-[#F7F7F7] overflow-hidden relative">
+      <main className="flex-1 flex flex-col bg-white overflow-hidden relative">
 
         {/* Hidden File Input */}
         <input
@@ -945,7 +946,7 @@ export default function ChatPage() {
         />
 
         {/* Top Header Bar */}
-        <header className="h-16 border-b border-[#E2E8F0] flex items-center justify-between px-4 sm:px-6 flex-shrink-0 bg-[#F7F7F7]/80 backdrop-blur-md">
+        <header className="h-16 border-b border-border flex items-center justify-between px-4 sm:px-6 flex-shrink-0 bg-white/80 backdrop-blur-md">
 
           <div className="flex items-center gap-3">
             {/* Mobile Left Drawer Trigger */}
@@ -958,8 +959,8 @@ export default function ChatPage() {
             </button>
 
             {/* Model Switcher Pill */}
-            <div className="flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-[1.5rem] border border-[#E2E8F0] bg-white hover:bg-[#DDF4FF] hover:border-[#1CB0F6]/40 cursor-pointer transition-all elevation-1">
-              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-[1.25rem] bg-[#DDF4FF] text-[#1CB0F6] flex items-center justify-center border border-[#1CB0F6]/30">
+            <div className="flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-[1.5rem] border border-border bg-white hover:bg-gray-50 hover:border-[#20201D]/40 cursor-pointer transition-all shadow-sm">
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-[1.25rem] bg-info-soft text-info flex items-center justify-center border border-info/20">
                 <Sparkles size={13} />
               </div>
               <span className="text-xs font-black text-[#3C3C3C] truncate max-w-[140px] sm:max-w-none">{selectedModel}</span>
@@ -1016,40 +1017,27 @@ export default function ChatPage() {
             <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-8 sm:py-10 max-w-3xl mx-auto w-full text-center">
 
               {/* AI Tutor Avatar Graphic */}
-              <div className="w-32 h-32 sm:w-40 sm:h-40 mb-2 sm:mb-4 pointer-events-none">
-                <img src="/assets/illustrations/ai_tutor.jpg" alt="AI Tutor" className="w-full h-full object-contain mix-blend-multiply" />
+              <div className="relative w-36 h-36 sm:w-48 sm:h-48 mb-6 mx-auto pointer-events-none">
+                <div className="absolute inset-0 bg-info/20 rounded-full blur-2xl scale-110 opacity-50"></div>
+                <img src="/assets/illustrations/ai_tutor.jpg" alt="AI Tutor" className="w-full h-full object-contain mix-blend-multiply relative z-10" />
               </div>
 
               {/* Personal Greeting & Headline */}
-              <p className="text-[#777777] font-extrabold text-sm sm:text-base mb-1 tracking-wide">
-                Hello, {user?.username ?? 'Learner'}
+              <p className="text-info font-extrabold text-xs sm:text-sm mb-2 tracking-widest uppercase">
+                Welcome back, {user?.username ?? 'Learner'}!
               </p>
-              <h1 className="text-2xl sm:text-4xl font-black text-[#3C3C3C] tracking-tight mb-6 sm:mb-8">
-                What are you working on today?
+              <h1 className="text-3xl sm:text-5xl font-black text-text-primary tracking-tight mb-8 leading-tight">
+                What are we<br />learning today?
               </h1>
 
               {/* Clean Multi-Tool Input Container */}
-              <div className="w-full bg-white border border-[#E7E1D8] rounded-3xl p-3.5 sm:p-5 shadow-xs focus-within:border-[#F28A45] focus-within:ring-2 focus-within:ring-[#F28A45]/20 transition-all text-left">
-                
-                {/* 4 Quick Study Tool Action Buttons */}
-                <div className="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b border-[#E7E1D8]">
-                  <span className="text-[11px] font-black uppercase text-[#6F6B63] tracking-wider mr-1 flex items-center gap-1">
-                    <Sparkles size={13} className="text-[#F28A45]" /> Tools:
-                  </span>
+              <div className="w-full bg-white border border-border rounded-[2rem] p-3.5 sm:p-5 shadow-sm focus-within:border-info focus-within:ring-2 focus-within:ring-info/20 transition-all text-left">
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const topic = input.trim() || 'this topic'
-                      handleSend(`Give me 5 minute cheatcode for ${topic}`)
-                    }}
-                    disabled={isStreaming}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FFF0E4] hover:bg-[#F28A45] border border-[#F28A45]/30 hover:border-[#F28A45] text-[#F28A45] hover:text-white text-xs font-black transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
-                    title="Generate 5-minute structured revision cheat sheet"
-                  >
-                    <Zap size={13} />
-                    <span>⚡ 5-Min Cheatcode</span>
-                  </button>
+                {/* 3 Quick Study Tool Action Buttons */}
+                <div className="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b border-[#E2E8F0]">
+                  <span className="text-[11px] font-black uppercase text-[#777777] tracking-wider mr-1 flex items-center gap-1">
+                    <Sparkles size={13} className="text-[#1CB0F6]" /> Tools:
+                  </span>
 
                   <button
                     type="button"
@@ -1099,13 +1087,9 @@ export default function ChatPage() {
                   value={input}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
-                  placeholder={
-                    selectedModel.includes('Vision')
-                      ? 'Ask a question or describe an image/diagram...'
-                      : 'Ask anything about your study material, or click ⚡ 5-Min Cheatcode...'
-                  }
                   rows={2}
-                  className="w-full bg-transparent resize-none outline-none text-[#20201D] font-medium text-sm sm:text-base placeholder-[#969188] leading-relaxed px-1"
+                  className="w-full bg-transparent resize-none outline-none text-[#3C3C3C] font-medium text-sm sm:text-base placeholder-[#AFAFAF] leading-relaxed px-1"
+                  placeholder="What are you working on today?"
                 />
 
                 {/* Sub Action Toolbar */}
@@ -1147,14 +1131,7 @@ export default function ChatPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 w-full mt-6 sm:mt-8">
 
                 <SuggestionCard
-                  icon={<div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] text-[#F28A45] flex items-center justify-center border border-[#F28A45]/20"><Zap className="w-5 h-5" /></div>}
-                  title="5-Min Cheatcode"
-                  description="Get a structured 6-section 5-minute revision cheat sheet with analogies, tables & visual flowchart."
-                  onClick={() => handleSend("Give me 5 minute cheatcode for this topic.")}
-                />
-
-                <SuggestionCard
-                  icon={<div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] text-[#F28A45] flex items-center justify-center border border-[#F28A45]/20"><Clock className="w-5 h-5" /></div>}
+                  icon={<div className="w-10 h-10 rounded-[1.5rem] bg-[#DDF4FF] text-[#1CB0F6] flex items-center justify-center border border-[#1CB0F6]/20"><Clock className="w-5 h-5" /></div>}
                   title="Synthesize Notes"
                   description="Turn my uploaded PDF notes into 5 key bullet points for quick review."
                   onClick={() => handleSend("Turn my uploaded PDF notes into 5 key bullet points for quick review.")}
@@ -1202,8 +1179,8 @@ export default function ChatPage() {
 
         {/* Input Bar (Sticky at bottom when chat messages exist) */}
         {allMessages.length > 0 && (
-          <div className="p-3 sm:p-4 border-t border-[#E2E8F0] bg-white">
-            <div className="max-w-4xl mx-auto bg-[#F7F7F7] border border-[#E2E8F0] rounded-[1.5rem] p-3 sm:p-3.5 focus-within:border-[#1CB0F6] focus-within:ring-2 focus-within:ring-[#1CB0F6]/20 transition-all elevation-1">
+          <div className="p-3 sm:p-4 border-t border-border bg-white">
+            <div className="max-w-4xl mx-auto bg-white border border-border rounded-[1.5rem] p-3 sm:p-3.5 focus-within:border-info focus-within:ring-2 focus-within:ring-info/20 transition-all shadow-sm">
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -1296,18 +1273,18 @@ export default function ChatPage() {
           <motion.div
             whileHover={{ scale: 1.02 }}
             onClick={() => { setShowQuizGame(true); setMobileRightOpen(false); }}
-            className="p-5 rounded-2xl bg-surface border border-warning/30 hover:border-warning shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden"
+            className="p-5 rounded-2xl bg-surface border border-border hover:border-info shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden"
           >
-            <div className="w-12 h-12 rounded-xl bg-warning-soft border border-warning/30 flex items-center justify-center mb-3 shadow-sm p-2 group-hover:scale-105 transition-transform">
+            <div className="w-12 h-12 rounded-xl bg-info-soft border border-info/30 flex items-center justify-center mb-3 shadow-sm p-2 group-hover:scale-105 transition-transform">
               <img src="/assets/uimojis/uimoji_quiz.jpg" alt="Quiz" className="w-full h-full object-cover mix-blend-multiply rounded-lg" />
             </div>
-            <h4 className="text-md font-bold text-text-primary group-hover:text-warning transition-colors">
+            <h4 className="text-md font-bold text-text-primary group-hover:text-info transition-colors">
               Play Gamified Quiz
             </h4>
             <p className="text-sm text-text-secondary mt-2 leading-relaxed">
               Test your understanding with PDF-based quizzes, score XP & master topics.
             </p>
-            <div className="mt-4 flex items-center gap-1.5 text-sm font-bold text-warning group-hover:translate-x-1 transition-transform">
+            <div className="mt-4 flex items-center gap-1.5 text-sm font-bold text-info group-hover:translate-x-1 transition-transform">
               <span>Start Quiz Game</span> <ArrowRight size={16} />
             </div>
           </motion.div>
@@ -1454,11 +1431,11 @@ function SuggestionCard({ icon, title, description, onClick }: {
           onClick()
         }
       }}
-      className="p-4 sm:p-5 rounded-[2rem] bg-white border border-[#E2E8F0] hover:border-[#1CB0F6]/40 hover:bg-[#FFFFFF] transition-all cursor-pointer text-left group elevation-1 hover:elevation-2 hover:scale-[1.02] active:scale-[0.98]"
+      className="p-4 sm:p-5 rounded-[2rem] bg-white border border-border hover:border-info/30 hover:bg-info-soft transition-all cursor-pointer text-left group shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98]"
     >
       <div className="mb-2 sm:mb-3">{icon}</div>
-      <h3 className="font-extrabold text-sm sm:text-base text-[#3C3C3C] group-hover:text-[#1CB0F6] mb-1">{title}</h3>
-      <p className="text-xs text-[#777777] leading-relaxed font-medium">{description}</p>
+      <h3 className="font-extrabold text-sm sm:text-base text-[#20201D] group-hover:text-info mb-1 transition-colors">{title}</h3>
+      <p className="text-xs text-[#6F6B63] leading-relaxed font-medium">{description}</p>
     </div>
   )
 }

@@ -127,12 +127,11 @@ export default function QuizResultPage() {
       {isSubjectQuiz && detectedSubjectId && (
         <button
           onClick={() => navigate(`/subjects/${detectedSubjectId}`)}
-          className="text-xs font-extrabold text-[#F28A45] hover:text-[#D97706] bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-xl flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+          className="text-xs font-extrabold text-brand-primary hover:text-[#D97706] bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-xl flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
         >
           <span>{activeSubject?.name || 'Subject'} Page</span> →
         </button>
       )}
-    </div>
 
       {/* Score Card */ }
   <motion.div
@@ -174,14 +173,14 @@ export default function QuizResultPage() {
     {isSubjectQuiz && detectedSubjectId ? (
       <button
         onClick={() => navigate(`/subjects/${detectedSubjectId}`)}
-        className="btn-ghost flex items-center justify-center gap-2 cursor-pointer font-extrabold border-[#E7E1D8] bg-white text-[#20201D] hover:bg-orange-50/50 shadow-2xs py-3 px-4 rounded-2xl text-xs"
+        className="btn-ghost flex items-center justify-center gap-2 cursor-pointer font-extrabold border-border bg-white text-text-primary hover:bg-orange-50/50 shadow-2xs py-3 px-4 rounded-2xl text-xs"
       >
         🏛️ Subject Overview
       </button>
     ) : (
       <button
         onClick={() => navigate(-1)}
-        className="btn-ghost flex items-center justify-center gap-2 cursor-pointer font-bold border-[#E7E1D8] bg-white text-[#20201D] hover:bg-[#FFF9F2] shadow-2xs py-3 px-4 rounded-2xl text-xs"
+        className="btn-ghost flex items-center justify-center gap-2 cursor-pointer font-bold border-border bg-white text-text-primary hover:bg-[#FFF9F2] shadow-2xs py-3 px-4 rounded-2xl text-xs"
       >
         <ArrowLeft size={15} /> Back
       </button>

@@ -69,7 +69,7 @@ export default function TopicsPage() {
               initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.07 }}
-              className="glass-card p-5 flex items-center gap-4 group border border-[#E2E8F0] elevation-1 hover:border-[#1CB0F6]/40"
+              className="glass-card p-5 flex items-center gap-4 group border border-[#E2E8F0] elevation-1 hover:border-[#1CB0F6]/40 rounded-[1.5rem]"
             >
               {/* Order number */}
               <div className="w-10 h-10 rounded-[1.25rem] bg-[#DDF4FF] border border-[#1CB0F6]/30 flex items-center justify-center text-sm font-black text-[#1CB0F6] flex-shrink-0">

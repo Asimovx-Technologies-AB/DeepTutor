@@ -26,6 +26,7 @@ import {
   Check,
   Flame,
   Zap,
+  Lightbulb,
 } from 'lucide-react'
 import { flashcardsApi } from '../services/api'
 import { useSubjectStore } from '../stores/subjectStore'
@@ -149,6 +150,7 @@ export default function FlashcardsPage() {
   const [gridFilter, setGridFilter] = useState<'all' | 'unmastered' | 'mastered'>('all')
   const [generating, setGenerating] = useState(false)
   const [showCompletionModal, setShowCompletionModal] = useState(false)
+  const [showHint, setShowHint] = useState(false)
 
   // Subject metadata detection
   const subjects = useSubjectStore((s) => s.subjects)
@@ -349,33 +351,35 @@ export default function FlashcardsPage() {
 
   if (cards.length === 0) {
     return (
-      <div className="p-6 max-w-xl mx-auto text-center">
+      <div className="p-6 max-w-xl mx-auto text-center mt-12">
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="glass-card p-12 text-center"
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          className="bg-white border border-border shadow-md p-10 text-center rounded-[2rem] relative overflow-hidden"
         >
-          <div className="w-16 h-16 rounded-[1.5rem] bg-gradient-to-br from-indigo-500/20 to-violet-500/20 flex items-center justify-center mx-auto mb-4">
-            <BookOpen size={28} className="text-indigo-500" />
-          </div>
-          <h2 className="text-xl font-black text-[#20201D]">Ready to Master {topicTitle}?</h2>
-          <p className="text-[#6F6B63] text-sm">
-            Generate an AI-powered visual flashcard deck to review key formulas, definitions, and mental models.
-          </p>
-          <div className="flex items-center justify-center gap-3 pt-2">
-            <button
-              onClick={handleBackToChat}
-              className="flex items-center gap-2 text-xs font-bold text-[#6F6B63] hover:text-[#F28A45] py-3 px-5 rounded-2xl bg-white border border-[#E7E1D8] shadow-2xs cursor-pointer"
-            >
-              <ArrowLeft size={14} /> Back to Chat
-            </button>
-            <button
-              onClick={() => generateMutation.mutate()}
-              disabled={generating}
-              className="btn-primary flex items-center gap-2 font-bold py-3 px-6 rounded-2xl cursor-pointer"
-            >
-              <Sparkles size={16} /> Generate AI Deck
-            </button>
+          <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-[#FAF8F3] to-transparent pointer-events-none" />
+          <div className="relative z-10">
+            <img src="/images/flashcards_empty.jpg" alt="Study Deck" className="w-56 h-56 mx-auto rounded-[2rem] shadow-xl mb-8 object-cover border-4 border-white" />
+            <h2 className="text-2xl font-black text-text-primary mb-3">Ready to Master {topicTitle}?</h2>
+            <p className="text-text-secondary text-sm font-medium mb-8 max-w-sm mx-auto leading-relaxed">
+              Generate an AI-powered visual flashcard deck to review key formulas, definitions, and mental models.
+            </p>
+            <div className="flex items-center justify-center gap-4">
+              <button
+                onClick={handleBackToChat}
+                className="flex items-center gap-2 text-xs font-bold text-text-secondary hover:text-text-primary py-4 px-6 rounded-2xl bg-white border-2 border-border shadow-sm hover:shadow-md transition-all cursor-pointer"
+              >
+                <ArrowLeft size={16} /> Back to Chat
+              </button>
+              <button
+                onClick={() => generateMutation.mutate()}
+                disabled={generating}
+                className="btn-primary flex items-center gap-2 font-black py-4 px-8 rounded-2xl cursor-pointer shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all text-sm"
+                style={{ background: theme.primary || '#F28A45', color: 'white' }}
+              >
+                <Sparkles size={16} /> Generate AI Deck
+              </button>
+            </div>
           </div>
         </motion.div>
       </div>
@@ -389,31 +393,31 @@ export default function FlashcardsPage() {
   })
 
   return (
-    <div className="p-6 max-w-2xl mx-auto space-y-6 bg-[#F7F7F7]">
+    <div className="p-6 max-w-2xl mx-auto space-y-6 bg-transparent min-h-[calc(100vh-4rem)]">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between bg-white border border-border p-3 rounded-[1.5rem] shadow-sm">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-[#777777] hover:text-[#1CB0F6] transition-colors text-sm font-bold cursor-pointer"
+          className="flex items-center gap-2 text-[#777777] hover:text-text-primary transition-colors text-xs font-black cursor-pointer px-4 py-2 rounded-xl hover:bg-gray-50 border border-transparent hover:border-border"
         >
-          <ArrowLeft size={14} />
+          <ArrowLeft size={16} />
           <span>Back to Chat</span>
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {/* View Mode Toggle */}
           <button
             onClick={() => setViewMode(viewMode === 'single' ? 'grid' : 'single')}
-            className="text-xs px-3 py-1.5 rounded-[1.25rem] border border-[#E2E8F0] bg-white text-[#3C3C3C] hover:bg-[#FFFFFF] font-black flex items-center gap-1.5 transition-all cursor-pointer elevation-1"
+            className={`text-[11px] px-5 py-2.5 rounded-xl font-black flex items-center gap-2 transition-all cursor-pointer ${viewMode === 'single' ? 'bg-[#20201D] text-white shadow-md' : 'bg-white border-2 border-border text-text-secondary hover:text-text-primary hover:border-[#20201D]'}`}
           >
             {viewMode === 'single' ? <Grid size={14} /> : <Layers size={14} />}
-            <span>{viewMode === 'single' ? 'Cheat Sheet View' : 'Focus Mode'}</span>
+            <span>{viewMode === 'single' ? 'Grid View' : 'Focus Mode'}</span>
           </button>
 
           <button
             onClick={() => generateMutation.mutate()}
             disabled={generating}
-            className="text-xs text-[#1CB0F6] hover:text-[#1899D6] font-black flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="text-[11px] px-5 py-2.5 rounded-xl font-black flex items-center gap-2 transition-all cursor-pointer bg-white border-2 border-border text-[#1CB0F6] hover:bg-[#F0F9FF] hover:border-[#1CB0F6] shadow-sm"
           >
             <RefreshCw size={13} className={generating ? 'animate-spin' : ''} />
             <span>Regenerate</span>
@@ -422,33 +426,24 @@ export default function FlashcardsPage() {
       </div>
 
       {/* Progress Bar */}
-      <div className="space-y-2">
+      <div className="bg-white p-6 rounded-[1.5rem] border border-border shadow-sm space-y-5">
         <div className="flex items-center justify-between text-xs font-black text-[#777777]">
-          <span>
+          <span className="bg-transparent border border-border px-4 py-1.5 rounded-full text-text-secondary">
             {viewMode === 'single' ? `Card ${currentIndex + 1} of ${cards.length}` : `${cards.length} Total Cards`}
           </span>
-          <span className="text-[#58CC02]">
-            {completionPercentage}% Mastered ({masteredCount}/{cards.length})
+          <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-1.5 rounded-full flex items-center gap-1.5 shadow-xs">
+            <CheckCircle2 size={14} /> {completionPercentage}% Mastered ({masteredCount}/{cards.length})
           </span>
         </div>
-
-        <div className="w-full sm:w-auto flex items-center gap-4 bg-[#FAF8F3] px-4 py-2.5 rounded-2xl border border-[#E7E1D8]">
-          <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600">
-            <Flame size={20} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 text-xs font-black text-[#20201D]">
-              <span>{masteredCount} of {cards.length} Mastered</span>
-              <span className="text-emerald-600">({completionPercentage}%)</span>
-            </div>
-            <div className="w-36 h-2 bg-gray-200 rounded-full mt-1.5 overflow-hidden">
-              <motion.div
-                className="h-full bg-emerald-500 rounded-full"
-                animate={{ width: `${completionPercentage}%` }}
-                transition={{ duration: 0.4 }}
-              />
-            </div>
-          </div>
+        
+        <div className="w-full h-4 bg-gray-100 rounded-full overflow-hidden shadow-inner border border-gray-200/60">
+          <motion.div
+            className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full relative"
+            animate={{ width: `${completionPercentage}%` }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+          >
+            <div className="absolute inset-0 bg-white/20 w-full h-full" style={{ backgroundImage: 'linear-gradient(45deg, rgba(255,255,255,.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.15) 75%, transparent 75%, transparent)', backgroundSize: '1rem 1rem' }} />
+          </motion.div>
         </div>
       </div>
 
@@ -498,17 +493,36 @@ export default function FlashcardsPage() {
                     {currentCard?.front}
                   </h2>
 
-                  {currentCard?.mastered && (
-                    <span className="text-[11px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1 mt-4">
+                  {showHint && (
+                    <motion.p
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-4 text-xs text-[#FFC800] bg-[#FFF0B3] border border-[#FFC800]/30 rounded-[1.25rem] px-4 py-2 font-bold"
+                    >
+                      💡 Think about the concept carefully...
+                    </motion.p>
+                  )}
+                    {currentCard?.mastered && (
+                    <span className="text-[11px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1">
                       <Check size={12} /> Mastered
                     </span>
                   )}
                 </div>
 
-                <div className="flex items-center justify-center pt-3 border-t border-[#E2E8F0]/60">
-                  <p className="text-xs text-[#AFAFAF] font-semibold">Click Card to Flip 🔄</p>
-                </div>
+              <div className="flex items-center justify-between pt-3 border-t border-[#E2E8F0]/60">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setShowHint(!showHint)
+                  }}
+                  className="text-xs font-black text-[#FFC800] hover:text-[#B57C20] flex items-center gap-1 cursor-pointer"
+                >
+                  <Lightbulb size={14} /> {showHint ? 'Hide Hint' : 'Reveal Hint'}
+                </button>
+                <p className="text-xs text-[#AFAFAF] font-semibold">Click Card to Flip 🔄</p>
               </div>
+          </div>
 
           {/* ─── Back Side (Structured 3-Part Answer) ─── */}
           <div
@@ -544,20 +558,19 @@ export default function FlashcardsPage() {
           </div>
 
           {/* ─── Review Confidence Buttons (3-Tier Spaced Repetition) ─── */ }
-  <div className="grid grid-cols-2 gap-3 pt-2">
+  <div className="grid grid-cols-2 gap-4 pt-3">
     <button
       onClick={() => handleReview(false)}
-      className="btn-ghost flex items-center justify-center gap-2 py-3.5 border-[#FF4B4B]/40 text-[#FF4B4B] hover:bg-[#FFD1D1] font-black rounded-[1.5rem] cursor-pointer"
+      className="flex items-center justify-center gap-2 py-4 bg-white border-2 border-border text-text-secondary hover:border-red-400 hover:bg-red-50 hover:text-red-600 font-black rounded-[1.5rem] cursor-pointer transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5"
     >
-      <AlertCircle size={16} />
+      <AlertCircle size={18} />
       <span>Needs Practice (←)</span>
     </button>
     <button
       onClick={() => handleReview(true)}
-      className="btn-primary flex items-center justify-center gap-2 py-3.5 font-black rounded-[1.5rem] cursor-pointer elevation-1"
-      style={{ background: '#58CC02' }}
+      className="flex items-center justify-center gap-2 py-4 font-black rounded-[1.5rem] cursor-pointer shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all bg-gradient-to-br from-emerald-400 to-emerald-500 text-white border-none"
     >
-      <CheckCircle2 size={16} />
+      <CheckCircle2 size={18} />
       <span>Mastered! (→)</span>
     </button>
   </div>
@@ -578,18 +591,18 @@ export default function FlashcardsPage() {
       Next Card <ChevronRight size={16} />
     </button>
   </div>
-        </div >
+</div>
       ) : (
     /* ─── INTERACTIVE CHEAT-SHEET GRID VIEW ─── */
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
+    <div className="space-y-6">
+      <div className="flex items-center gap-3 bg-white p-2.5 rounded-[1.5rem] border border-border shadow-sm w-fit mx-auto md:mx-0">
         {(['all', 'unmastered', 'mastered'] as const).map((filter) => (
           <button
             key={filter}
             onClick={() => setGridFilter(filter)}
-            className={`text-xs px-3 py-1.5 rounded-[1.25rem] capitalize font-black transition-all cursor-pointer ${gridFilter === filter
-                ? 'bg-[#1CB0F6] text-white elevation-1'
-                : 'bg-[#E5E5E5] text-[#777777] hover:text-[#3C3C3C]'
+            className={`text-xs px-5 py-2 rounded-xl capitalize font-black transition-all cursor-pointer ${gridFilter === filter
+                ? 'bg-[#20201D] text-white shadow-md'
+                : 'bg-transparent text-text-secondary hover:bg-gray-100 hover:text-text-primary'
               }`}
           >
             {filter}
@@ -597,7 +610,7 @@ export default function FlashcardsPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[600px] overflow-y-auto pr-1">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
         {filteredCards.map((card, idx) => (
           <motion.div
             key={card.id}
@@ -606,93 +619,94 @@ export default function FlashcardsPage() {
               setViewMode('single')
               setIsFlipped(false)
             }}
-            className={`p-4 rounded-[1.5rem] border transition-all text-left cursor-pointer flex flex-col justify-between space-y-3 ${card.mastered
-                ? 'bg-[#D7FFB8]/50 border-[#58CC02]/40 hover:border-[#58CC02]'
-                : 'bg-white border-[#E2E8F0] hover:border-[#1CB0F6]'
+            className={`p-6 rounded-[1.75rem] border-2 transition-all text-left cursor-pointer flex flex-col justify-between space-y-4 hover:-translate-y-1 hover:shadow-lg ${card.mastered
+                ? 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-400'
+                : 'bg-white border-border hover:border-brand-primary'
               }`}
           >
             <div>
-              <span className="text-[10px] font-black text-[#1CB0F6] uppercase tracking-wider block mb-1">
-                Concept
+              <span className={`text-[10px] font-black uppercase tracking-wider block mb-3 px-2.5 py-1 rounded-md w-fit ${card.mastered ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                {card.mastered ? 'Mastered' : 'Needs Review'}
               </span>
-              <p className="text-xs font-extrabold text-[#3C3C3C] leading-snug">{card.front}</p>
+              <p className="text-[15px] font-black text-text-primary leading-snug">{card.front}</p>
             </div>
-            <div className="pt-2 border-t border-[#E2E8F0]/60 flex items-center justify-between">
-              <span className="text-[11px] text-[#777777] line-clamp-2 font-medium">{card.back}</span>
+            <div className="pt-4 border-t border-border flex items-center justify-between">
+              <span className="text-[12px] text-text-secondary line-clamp-2 font-medium max-w-[65%]">{card.back}</span>
               <button
                 onClick={(e) => {
                   e.stopPropagation()
                   handleReview(!card.mastered, card.id)
                 }}
-                className={`p-1.5 rounded-[1.25rem] border flex-shrink-0 cursor-pointer ml-2 ${card.mastered
-                    ? 'bg-[#58CC02] text-white border-[#58CC02]'
-                    : 'bg-[#F7F7F7] text-[#AFAFAF] border-[#E2E8F0] hover:text-[#58CC02]'
+                className={`p-2 rounded-xl border-2 flex-shrink-0 cursor-pointer ml-3 transition-colors ${card.mastered
+                    ? 'bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600'
+                    : 'bg-white text-text-secondary border-border hover:border-emerald-400 hover:text-emerald-500'
                   }`}
               >
-                {card.mastered ? 'Mark for Review' : 'Mark as Mastered'}
+                <CheckCircle2 size={16} />
               </button>
             </div>
           </motion.div>
         ))}
       </div>
     </div>
-  )
-}
+  )}
 
 {/* ─── Celebration Completion Modal ─── */ }
 <AnimatePresence>
   {showCompletionModal && (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-white rounded-3xl p-8 max-w-md w-full text-center border border-[#E7E1D8] shadow-2xl space-y-5"
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: -20 }}
+        className="bg-white rounded-[2rem] p-10 max-w-md w-full text-center border border-border shadow-2xl relative overflow-hidden"
       >
-        <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
-          <Trophy size={36} />
-        </div>
-        <div>
-          <h2 className="text-2xl font-black text-[#20201D]">Deck Review Completed! 🎉</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            You reviewed all {cards.length} cards for <span className="font-bold text-gray-800">{topicTitle}</span>.
-          </p>
-        </div>
+        <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-b from-amber-50 to-transparent pointer-events-none" />
+        <div className="relative z-10 space-y-6">
+          <img src="/images/flashcards_trophy.jpg" alt="Completed" className="w-44 h-44 mx-auto rounded-[2rem] shadow-xl object-cover border-4 border-white mb-2" />
+          
+          <div>
+            <h2 className="text-2xl font-black text-text-primary">Deck Mastered! 🎉</h2>
+            <p className="text-sm text-text-secondary mt-2 font-medium">
+              You reviewed all {cards.length} cards for <span className="font-bold text-text-primary">{topicTitle}</span>.
+            </p>
+          </div>
 
-        <div className="bg-[#FAF8F3] p-4 rounded-2xl border border-[#E7E1D8] flex items-center justify-around">
-          <div>
-            <p className="text-2xl font-black text-emerald-600">{masteredCount}</p>
-            <p className="text-xs font-bold text-gray-500">Mastered</p>
+          <div className="bg-transparent p-5 rounded-[1.5rem] border border-border flex items-center justify-around shadow-inner">
+            <div className="text-center">
+              <p className="text-3xl font-black text-emerald-500">{masteredCount}</p>
+              <p className="text-[10px] uppercase font-black text-emerald-800 tracking-wider mt-1">Mastered</p>
+            </div>
+            <div className="w-px h-12 bg-[#E7E1D8]" />
+            <div className="text-center">
+              <p className="text-3xl font-black text-amber-500">{cards.length - masteredCount}</p>
+              <p className="text-[10px] uppercase font-black text-amber-800 tracking-wider mt-1">Needs Study</p>
+            </div>
+            <div className="w-px h-12 bg-[#E7E1D8]" />
+            <div className="text-center">
+              <p className="text-3xl font-black text-orange-500">+{cards.length * 5}</p>
+              <p className="text-[10px] uppercase font-black text-orange-800 tracking-wider mt-1">XP Earned</p>
+            </div>
           </div>
-          <div className="w-px h-8 bg-gray-200" />
-          <div>
-            <p className="text-2xl font-black text-amber-600">{cards.length - masteredCount}</p>
-            <p className="text-xs font-bold text-gray-500">Needs Study</p>
-          </div>
-          <div className="w-px h-8 bg-gray-200" />
-          <div>
-            <p className="text-2xl font-black text-orange-600">+{cards.length * 5} XP</p>
-            <p className="text-xs font-bold text-gray-500">Earned</p>
-          </div>
-        </div>
 
-        <div className="flex gap-3 pt-2">
-          <button
-            onClick={() => {
-              setShowCompletionModal(false)
-              setCurrentIndex(0)
-              setIsFlipped(false)
-            }}
-            className="flex-1 py-3 px-4 rounded-2xl border border-[#E7E1D8] bg-white font-bold text-xs hover:bg-gray-50 flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
-          >
-            <RotateCcw size={14} /> Review Again
-          </button>
-          <button
-            onClick={handleBackToChat}
-            className="flex-1 py-3 px-4 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-black text-xs flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-          >
-            <ArrowLeft size={14} /> Back to Chat
-          </button>
+          <div className="flex gap-4 pt-3">
+            <button
+              onClick={() => {
+                setShowCompletionModal(false)
+                setCurrentIndex(0)
+                setIsFlipped(false)
+              }}
+              className="flex-1 py-4 px-4 rounded-2xl border-2 border-border bg-white font-black text-sm text-text-secondary hover:border-[#20201D] hover:text-text-primary flex items-center justify-center gap-2 cursor-pointer shadow-sm hover:shadow-md transition-all"
+            >
+              <RotateCcw size={16} /> Review Again
+            </button>
+            <button
+              onClick={handleBackToChat}
+              className="flex-1 py-4 px-4 rounded-2xl bg-[#20201D] hover:bg-black text-white font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all"
+            >
+              <ArrowLeft size={16} /> Back to Chat
+            </button>
+          </div>
         </div>
       </motion.div>
     </div>

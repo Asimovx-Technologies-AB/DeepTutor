@@ -896,7 +896,7 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
                         {selectedNode.name}
                       </h4>
                       {selectedNode.description ? (
-                        <p className={`text-xs mt-3 leading-relaxed font-medium p-4 rounded-[1.5rem] border ${darkMode
+                        <div className={`text-xs mt-3 leading-relaxed font-medium p-4 rounded-[1.5rem] border ${darkMode
                             ? 'bg-slate-800/60 border-slate-700/60 text-slate-300'
                             : 'bg-slate-50 border-slate-200/80 text-slate-700'
                           }`}>

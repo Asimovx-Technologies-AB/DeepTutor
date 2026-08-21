@@ -28,20 +28,20 @@ export default function ContinueLearningCard({ subjectId, topicId, topicTitle, p
     >
       <div className="flex items-start justify-between z-10">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-[#EAF0F8] text-blue-500 flex items-center justify-center flex-shrink-0">
+          <div className="w-12 h-12 rounded-xl bg-[#EAF0F8] text-info flex items-center justify-center flex-shrink-0">
             <PlayCircle size={24} />
           </div>
           <div>
-            <p className="text-[11px] text-[#64748B] font-medium uppercase tracking-wider mb-0.5">Continue Learning</p>
-            <h3 className="font-semibold text-base text-[#1E293B] line-clamp-1">{topicTitle}</h3>
+            <p className="text-[11px] text-text-secondary font-medium uppercase tracking-wider mb-0.5">Continue Learning</p>
+            <h3 className="font-semibold text-base text-text-primary line-clamp-1">{topicTitle}</h3>
           </div>
         </div>
       </div>
       
       <div className="mt-2 z-10">
         <div className="flex justify-between items-end mb-2">
-          <span className="text-2xl font-bold text-[#1E293B]">{progress}%</span>
-          <div className="flex items-center text-[11px] text-[#64748B] gap-1">
+          <span className="text-2xl font-bold text-text-primary">{progress}%</span>
+          <div className="flex items-center text-[11px] text-text-secondary gap-1">
             <Clock size={12} />
             <span>Active {getRelativeTime(lastStudied)}</span>
           </div>
@@ -50,7 +50,7 @@ export default function ContinueLearningCard({ subjectId, topicId, topicTitle, p
         {/* Progress Bar */}
         <div className="w-full bg-[#F1F5F9] rounded-full h-2 overflow-hidden">
           <div 
-            className="bg-[#1E293B] h-2 rounded-full transition-all duration-1000 ease-out" 
+            className="bg-brand-primary h-2 rounded-full transition-all duration-1000 ease-out" 
             style={{ width: `${progress}%` }}
           />
         </div>

@@ -291,7 +291,7 @@ export default function StudyPlanPage() {
   const completionPct = Math.round((completedCount / totalScheduleDays) * 100)
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8 bg-[#F7F7F7]">
+    <div className="p-6 max-w-7xl mx-auto space-y-8 bg-transparent">
       {/* ─── HEADER ─── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -328,7 +328,7 @@ export default function StudyPlanPage() {
           className="glass-card p-12 text-center border border-[#E2E8F0] max-w-xl mx-auto space-y-5"
         >
           <motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }} className="w-24 h-24 mx-auto select-none pointer-events-none mb-2">
-            <img src="/assets/illustrations/mountain_goal.png" alt="Study Plan" className="w-full h-full object-contain" />
+            <img src="/assets/illustrations/mountain_goal.png" alt="Study Plan" className="w-full h-full object-contain" style={{ filter: 'hue-rotate(200deg) saturate(1.2)' }} />
           </motion.div>
           <div>
             <h2 className="text-xl font-black text-[#3C3C3C]">Nothing here yet.</h2>
@@ -651,7 +651,7 @@ export default function StudyPlanPage() {
                       className={`flex-1 p-3 border rounded-[1.5rem] text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                         selectedFile
                           ? 'bg-indigo-50 border-indigo-400 text-indigo-900'
-                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                          : 'bg-black/5 border-border text-slate-600 hover:bg-black/10'
                       }`}
                     >
                       <UploadCloud size={16} className="text-indigo-600" />
@@ -665,7 +665,7 @@ export default function StudyPlanPage() {
                           setSelectedSessionId(e.target.value)
                           setSelectedFile(null)
                         }}
-                        className="bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 rounded-[1.5rem] px-3 py-2.5 focus:outline-none"
+                        className="bg-black/5 border border-border text-xs font-semibold text-slate-700 rounded-[1.5rem] px-3 py-2.5 focus:outline-none"
                       >
                         <option value="">Or pick chat session...</option>
                         {sessions.map((s) => (
@@ -689,7 +689,7 @@ export default function StudyPlanPage() {
                     value={targetDate}
                     onChange={(e) => setTargetDate(e.target.value)}
                     min={new Date().toISOString().split('T')[0]}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-[1.5rem] px-4 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-black/5 border border-border rounded-[1.5rem] px-4 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-indigo-500"
                   />
                   <p className="text-[10px] text-slate-400 mt-1">
                     AI will automatically calculate days remaining until this date to construct your schedule.
@@ -710,7 +710,7 @@ export default function StudyPlanPage() {
                         className={`flex-1 py-2 rounded-[1.25rem] text-xs font-bold border transition-all cursor-pointer ${
                           hoursPerDay === hrs
                             ? 'bg-indigo-600 text-white border-indigo-600 elevation-3'
-                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                            : 'bg-black/5 text-slate-600 border-border hover:bg-black/10'
                         }`}
                       >
                         {hrs} hr{hrs > 1 ? 's' : ''}/day
@@ -759,7 +759,7 @@ export default function StudyPlanPage() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="w-full max-w-2xl bg-white rounded-[2rem] p-7 shadow-2xl border border-slate-200 relative overflow-hidden flex flex-col max-h-[85vh]"
+              className="w-full max-w-2xl bg-white rounded-[2rem] p-7 shadow-2xl border border-border relative overflow-hidden flex flex-col max-h-[85vh]"
             >
               {/* Header */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
@@ -792,7 +792,7 @@ export default function StudyPlanPage() {
 
                   <button
                     onClick={() => speakNotes(activeNotesModal.notes)}
-                    className="p-2 rounded-[1.25rem] text-slate-500 hover:bg-slate-100 transition-colors"
+                    className="p-2 rounded-[1.25rem] text-slate-500 hover:bg-black/10 transition-colors"
                     title="Audio Reader"
                   >
                     <Volume2 size={18} className={isSpeaking ? 'text-indigo-600 animate-pulse' : ''} />
@@ -800,7 +800,7 @@ export default function StudyPlanPage() {
 
                   <button
                     onClick={() => copyNotes(activeNotesModal.notes)}
-                    className="p-2 rounded-[1.25rem] text-slate-500 hover:bg-slate-100 transition-colors"
+                    className="p-2 rounded-[1.25rem] text-slate-500 hover:bg-black/10 transition-colors"
                     title="Copy Notes"
                   >
                     {copied ? <Check size={18} className="text-emerald-600" /> : <Copy size={18} />}
@@ -812,7 +812,7 @@ export default function StudyPlanPage() {
                       setIsSpeaking(false)
                       setActiveNotesModal(null)
                     }}
-                    className="p-2 rounded-[1.25rem] text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                    className="p-2 rounded-[1.25rem] text-slate-400 hover:text-slate-700 hover:bg-black/10 transition-colors"
                   >
                     <X size={20} />
                   </button>

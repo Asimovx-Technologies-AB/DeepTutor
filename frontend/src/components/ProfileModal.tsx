@@ -60,19 +60,19 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          className="relative w-full max-w-md bg-white border border-[#E2E8F0] rounded-[2rem] shadow-2xl overflow-hidden font-sans text-[#3C3C3C] z-10 max-h-[90vh] overflow-y-auto"
+          className="relative w-full max-w-md card overflow-hidden font-sans text-text-primary z-10 max-h-[90vh] overflow-y-auto"
         >
           {/* Header Banner */}
-          <div className="bg-gradient-to-r from-[#FFF5EB] via-[#FFFFFF] to-[#FFF5EB] p-6 border-b border-[#E2E8F0] relative text-center">
+          <div className="bg-transparent p-6 border-b border-border relative text-center">
             <button
               onClick={onClose}
-              className="absolute top-4 right-4 text-[#AFAFAF] hover:text-[#3C3C3C] p-1 rounded-full hover:bg-white/60 transition-colors cursor-pointer"
+              className="absolute top-4 right-4 text-text-muted hover:text-text-primary p-1 rounded-full hover:bg-black/5 transition-colors cursor-pointer"
             >
               <X size={18} />
             </button>
 
             {/* User Avatar Circle */}
-            <div className="w-20 h-20 rounded-full bg-[#3C3C3C] text-white font-bold text-2xl flex items-center justify-center mx-auto elevation-4 border-4 ring-2 ring-[#1CB0F6]/30 border-white mb-3">
+            <div className="w-20 h-20 rounded-full bg-brand-primary text-white font-bold text-2xl flex items-center justify-center mx-auto elevation-2 border-4 ring-2 ring-brand-primary/20 border-white mb-3">
               {username[0]?.toUpperCase() ?? 'A'}
             </div>
 
@@ -96,7 +96,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               <motion.div
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-[#D7FFB8] border border-[#58CC02]/30 text-[#46A302] text-xs font-bold p-3 rounded-[1.5rem] flex items-center gap-2"
+                className="bg-success-soft border border-success/30 text-success text-xs font-bold p-3 rounded-[1.5rem] flex items-center gap-2"
               >
                 <Check size={16} /> Profile changes saved successfully!
               </motion.div>
@@ -138,7 +138,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                 <div className="flex items-center gap-3 pt-2">
                   <button
                     onClick={() => setIsEditing(true)}
-                    className="flex-1 btn-primary py-2.5 text-xs font-semibold rounded-[1.5rem] flex items-center justify-center gap-2 elevation-1 cursor-pointer"
+                    className="flex-1 btn-primary py-2.5 text-xs flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Edit3 size={15} /> Edit Profile
                   </button>
@@ -148,7 +148,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                       logout()
                       onClose()
                     }}
-                    className="btn-orange-outline py-2.5 px-4 text-xs font-semibold rounded-[1.5rem] flex items-center gap-1.5 cursor-pointer text-[#FF4B4B] border-[#FF4B4B]/40 hover:bg-[#FFD1D1]"
+                    className="btn-ghost py-2.5 px-4 text-xs flex items-center gap-1.5 cursor-pointer text-error hover:bg-error-soft"
                   >
                     <LogOut size={15} /> Logout
                   </button>
@@ -158,23 +158,23 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               /* EDIT MODE */
               <form onSubmit={handleSave} className="space-y-4 text-xs">
                 <div className="space-y-1">
-                  <label className="font-bold text-[#3C3C3C]">Username</label>
+                  <label className="font-bold text-text-primary">Username</label>
                   <input
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full bg-white border border-[#E2E8F0] rounded-[1.25rem] px-3.5 py-2.5 text-xs font-semibold text-[#3C3C3C] focus:outline-none focus:border-[#1CB0F6] focus:ring-2 focus:ring-[#1CB0F6]/20"
+                    className="w-full input-field px-3.5 py-2.5 text-xs"
                     placeholder="Enter username..."
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-[#3C3C3C]">Email Address</label>
+                  <label className="font-bold text-text-primary">Email Address</label>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-white border border-[#E2E8F0] rounded-[1.25rem] px-3.5 py-2.5 text-xs font-semibold text-[#3C3C3C] focus:outline-none focus:border-[#1CB0F6] focus:ring-2 focus:ring-[#1CB0F6]/20"
+                    className="w-full input-field px-3.5 py-2.5 text-xs"
                     placeholder="Enter email address..."
                   />
                 </div>
@@ -222,7 +222,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                 <div className="flex items-center gap-3 pt-2">
                   <button
                     type="submit"
-                    className="flex-1 btn-primary py-2.5 text-xs font-semibold rounded-[1.5rem] flex items-center justify-center gap-2 elevation-1 cursor-pointer"
+                    className="flex-1 btn-primary py-2.5 text-xs flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Save size={15} /> Save Changes
                   </button>
@@ -230,7 +230,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                   <button
                     type="button"
                     onClick={() => setIsEditing(false)}
-                    className="btn-orange-outline py-2.5 px-4 text-xs font-semibold rounded-[1.5rem] cursor-pointer"
+                    className="btn-ghost py-2.5 px-4 text-xs cursor-pointer"
                   >
                     Cancel
                   </button>

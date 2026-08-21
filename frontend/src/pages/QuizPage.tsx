@@ -201,7 +201,7 @@ export default function QuizPage() {
         </p>
         <button
           onClick={handleBackToChat}
-          className="flex items-center gap-2 text-xs font-bold text-[#6F6B63] hover:text-[#F28A45] transition-colors py-2 px-4 rounded-xl bg-white border border-[#E7E1D8] shadow-2xs cursor-pointer"
+          className="flex items-center gap-2 text-xs font-bold text-text-secondary hover:text-brand-primary transition-colors py-2 px-4 rounded-xl bg-white border border-border shadow-2xs cursor-pointer"
         >
           <ArrowLeft size={14} /> Back to Chat
         </button>

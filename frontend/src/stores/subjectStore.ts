@@ -31,6 +31,7 @@ export interface Subject {
   totalTopics: number
   isEnrolled: boolean
   lastStudiedAt: string | null
+  emoji: string
 }
 
 // SSLC (Class 10) Core Subjects Catalog
@@ -40,6 +41,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     name: 'Class 10 Mathematics',
     description: 'Arithmetic sequences, circles, algebra of sequences, mathematics of chance, second degree equations, trigonometry & coordinates',
     illustration: '/assets/illustrations/math_fx.png',
+    emoji: '📐',
     category: 'SSLC / 10th STEM',
     totalTopics: 7,
     isEnrolled: true,
@@ -50,6 +52,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     name: 'Class 10 Physics',
     description: 'Wave motion & oscillations, refraction of light & lenses, dispersion of light & colours, magnetic effect of electric current',
     illustration: '/assets/illustrations/physics_atom.png',
+    emoji: '⚛️',
     category: 'SSLC / 10th Science',
     totalTopics: 4,
     isEnrolled: true,
@@ -60,6 +63,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     name: 'Class 10 Chemistry',
     description: 'Nomenclature of organic compounds & isomerism, reactions of organic compounds, periodic table & electron configuration, gas laws & mole concept',
     illustration: '/assets/illustrations/chemistry_flask.png',
+    emoji: '🧪',
     category: 'SSLC / 10th Science',
     totalTopics: 4,
     isEnrolled: true,

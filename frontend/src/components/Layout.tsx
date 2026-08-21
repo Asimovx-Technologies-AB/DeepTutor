@@ -22,7 +22,7 @@ import {
   FileText,
   Trash2,
   GraduationCap,
-  Award,
+  Award
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
@@ -36,6 +36,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', icon: Home, label: 'Home', badge: null },
   { to: '/chat', icon: BookOpen, label: 'Learn', badge: 'Live' },
   { to: '/subjects', icon: Layers, label: 'My Subjects', badge: null },
+  { to: '/notes', icon: FileText, label: 'Smart Notes', badge: 'PYQ AI' },
   { to: '/records', icon: Award, label: 'Student Records', badge: 'Live' },
   { to: '/study-plan', icon: CalendarCheck, label: 'Study Plan', badge: 'AI' },
 ]
@@ -99,7 +100,7 @@ export default function Layout() {
   }, [confirmDeleteSid, activeSession?.id, removeSession, setActiveSession, navigate])
 
   return (
-    <div className="flex h-screen bg-bg-primary overflow-hidden text-text-primary font-sans antialiased">
+    <div className="flex h-screen bg-transparent overflow-hidden text-text-primary font-sans antialiased">
       {/* Modals */}
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
       <UpgradeModal isOpen={isUpgradeOpen} onClose={() => setIsUpgradeOpen(false)} />
@@ -116,7 +117,7 @@ export default function Layout() {
 
       {/* ─── DESKTOP SIDEBAR ─── */}
       <aside className="hidden lg:flex w-[104px] flex-shrink-0 flex-col p-4 z-20">
-        <div className="flex-1 rounded-3xl bg-white/80 backdrop-blur-xl border border-white/60 elevation-1 flex flex-col items-center py-8 justify-between relative">
+        <div className="flex-1 rounded-[2rem] bg-white/80 backdrop-blur-xl border border-white/60 elevation-1 flex flex-col items-center py-8 justify-between relative">
 
           {/* Top Logo */}
           <div className="flex items-center justify-center cursor-pointer mb-8" onClick={() => navigate('/dashboard')}>
@@ -202,7 +203,7 @@ export default function Layout() {
       {/* ─── MAIN CONTENT CONTAINER ─── */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
         {/* Mobile Top Navbar */}
-        <div className="lg:hidden px-4 h-16 bg-white border-b border-border flex items-center justify-between sticky top-0 z-30 elevation-1 shrink-0">
+        <div className="lg:hidden px-4 h-16 bg-white/80 backdrop-blur-md border-b border-border flex items-center justify-between sticky top-0 z-30 elevation-1 shrink-0">
           <button
             onClick={() => setMobileOpen(true)}
             className="p-2 rounded-lg border border-border text-text-primary hover:bg-bg-secondary"

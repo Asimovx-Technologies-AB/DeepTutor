@@ -32,7 +32,7 @@ export default function ConfirmModal({
         <motion.div
           initial={{ opacity: 0, scale: 0.94, y: 8 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          className="w-full max-w-md bg-[#FFFDF9] border border-[#E2E8F0] rounded-[2rem] p-6 shadow-2xl space-y-5 text-[#3C3C3C] max-h-[90vh] overflow-y-auto"
+          className="w-full max-w-md card p-6 space-y-5 max-h-[90vh] overflow-y-auto"
         >
           {/* Header */}
           <div className="flex items-start justify-between gap-3">
@@ -47,22 +47,22 @@ export default function ConfirmModal({
                 {isDanger ? <Trash2 size={20} /> : <AlertTriangle size={20} />}
               </div>
               <div>
-                <h3 className="font-black text-base sm:text-lg text-[#3C3C3C] leading-tight">
+                <h3 className="font-semibold text-lg text-text-primary leading-tight">
                   {title}
                 </h3>
-                <p className="text-xs font-bold text-[#AFAFAF] mt-0.5">Confirmation Required</p>
+                <p className="text-xs font-medium text-text-muted mt-0.5">Confirmation Required</p>
               </div>
             </div>
             <button
               onClick={onCancel}
-              className="p-2 rounded-[1.25rem] text-[#AFAFAF] hover:text-[#3C3C3C] hover:bg-black/5 transition-all cursor-pointer"
+              className="p-2 rounded-full text-text-muted hover:text-text-primary hover:bg-black/5 transition-all cursor-pointer"
             >
               <X size={18} />
             </button>
           </div>
 
           {/* Message Content */}
-          <div className="p-4 rounded-[1.5rem] bg-[#F7F7F7] border border-[#E2E8F0] text-xs sm:text-sm font-medium text-[#777777] leading-relaxed">
+          <div className="p-4 rounded-[1.5rem] bg-white/50 border border-border text-xs sm:text-sm font-medium text-text-secondary leading-relaxed">
             {message}
           </div>
 
@@ -70,17 +70,17 @@ export default function ConfirmModal({
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
               onClick={onCancel}
-              className="px-4 py-2.5 rounded-[1.25rem] border border-[#E2E8F0] text-xs font-black text-[#777777] hover:bg-[#F7F7F7] transition-all cursor-pointer"
+              className="btn-ghost text-xs cursor-pointer"
             >
               {cancelText}
             </button>
 
             <button
               onClick={onConfirm}
-              className={`px-5 py-2.5 rounded-[1.25rem] text-xs font-black text-white transition-all elevation-2 cursor-pointer active:scale-95 flex items-center gap-2 ${
+              className={`btn-primary px-5 py-2.5 text-xs flex items-center gap-2 ${
                 isDanger
-                  ? 'bg-red-600 hover:bg-red-700'
-                  : 'bg-[#1CB0F6] hover:bg-[#E07934]'
+                  ? '!bg-error !text-white !border-error hover:!bg-red-600'
+                  : '!bg-success !text-white !border-success hover:!bg-emerald-600'
               }`}
             >
               {isDanger ? <Trash2 size={14} /> : <Check size={14} />}

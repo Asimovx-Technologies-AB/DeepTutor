@@ -115,12 +115,12 @@ export default function NotificationPopup() {
       {/* Notification Bell Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-10 h-10 rounded-full bg-white border border-[#E2E8F0] hover:bg-[#FFFFFF] text-[#3C3C3C] flex items-center justify-center relative elevation-1 transition-colors cursor-pointer"
+        className="w-10 h-10 rounded-full bg-white/80 backdrop-blur-md border border-white hover:bg-white text-text-primary flex items-center justify-center relative elevation-1 transition-colors cursor-pointer"
         title="Notifications & Study Reminders"
       >
         <Bell size={18} />
         {unreadCount > 0 && (
-          <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-[#1CB0F6] ring-2 ring-white animate-pulse" />
+          <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-brand-primary ring-2 ring-white animate-pulse" />
         )}
       </button>
 
@@ -136,15 +136,15 @@ export default function NotificationPopup() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.98 }}
               transition={{ duration: 0.15 }}
-              className="absolute right-0 mt-3 w-80 sm:w-96 bg-white border border-[#E2E8F0] rounded-[2rem] shadow-xl z-50 overflow-hidden font-sans text-[#3C3C3C]"
+              className="absolute right-0 mt-3 w-80 sm:w-96 card z-50 overflow-hidden font-sans text-text-primary"
             >
               {/* Dropdown Header */}
-              <div className="bg-[#FFFFFF] p-4 border-b border-[#E2E8F0] flex items-center justify-between">
+              <div className="bg-transparent p-4 border-b border-border flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Bell size={16} className="text-[#1CB0F6]" />
-                  <h3 className="text-sm font-bold text-[#3C3C3C]">Study Reminders</h3>
+                  <Bell size={16} className="text-brand-primary" />
+                  <h3 className="text-sm font-semibold text-text-primary">Study Reminders</h3>
                   {unreadCount > 0 && (
-                    <span className="text-[10px] font-bold bg-[#1CB0F6] text-white px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-bold bg-brand-primary text-white px-2 py-0.5 rounded-full">
                       {unreadCount} new
                     </span>
                   )}
@@ -153,7 +153,7 @@ export default function NotificationPopup() {
                   <button
                     onClick={() => setShowSettings(!showSettings)}
                     className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                      showSettings ? 'bg-[#1CB0F6]/20 text-[#1CB0F6]' : 'text-[#AFAFAF] hover:text-[#3C3C3C]'
+                      showSettings ? 'bg-brand-primary-soft text-brand-primary' : 'text-text-muted hover:text-text-primary'
                     }`}
                     title="Notification Settings"
                   >
@@ -161,7 +161,7 @@ export default function NotificationPopup() {
                   </button>
                   <button
                     onClick={() => setIsOpen(false)}
-                    className="text-[#AFAFAF] hover:text-[#3C3C3C] p-1 rounded-lg transition-colors cursor-pointer"
+                    className="text-text-muted hover:text-text-primary p-1 rounded-lg transition-colors cursor-pointer"
                   >
                     <X size={16} />
                   </button>
@@ -174,28 +174,28 @@ export default function NotificationPopup() {
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  className="bg-[#F7F7F7] border-b border-[#E2E8F0] p-4 space-y-3"
+                  className="bg-white/50 border-b border-border p-4 space-y-3"
                 >
-                  <h4 className="text-xs font-black text-[#3C3C3C] uppercase tracking-wider">
+                  <h4 className="text-xs font-semibold text-text-primary uppercase tracking-wider">
                     Notification Preferences
                   </h4>
                   <div className="space-y-2 text-xs">
                     <label className="flex items-center justify-between cursor-pointer">
-                      <span className="font-semibold text-[#777777]">Daily Study Plan Reminders</span>
+                      <span className="font-medium text-text-secondary">Daily Study Plan Reminders</span>
                       <input
                         type="checkbox"
                         checked={remindersEnabled}
                         onChange={(e) => setRemindersEnabled(e.target.checked)}
-                        className="rounded text-[#1CB0F6] focus:ring-0 cursor-pointer"
+                        className="rounded text-brand-primary focus:ring-0 cursor-pointer"
                       />
                     </label>
                     <label className="flex items-center justify-between cursor-pointer">
-                      <span className="font-semibold text-[#777777]">Learning Streak Alerts</span>
+                      <span className="font-medium text-text-secondary">Learning Streak Alerts</span>
                       <input
                         type="checkbox"
                         checked={streakAlertsEnabled}
                         onChange={(e) => setStreakAlertsEnabled(e.target.checked)}
-                        className="rounded text-[#1CB0F6] focus:ring-0 cursor-pointer"
+                        className="rounded text-brand-primary focus:ring-0 cursor-pointer"
                       />
                     </label>
                   </div>
@@ -203,9 +203,9 @@ export default function NotificationPopup() {
               )}
 
               {/* Notifications List */}
-              <div className="max-h-96 overflow-y-auto divide-y divide-[#E2E8F0]/60 p-2 space-y-1">
+              <div className="max-h-96 overflow-y-auto divide-y divide-border/60 p-2 space-y-1">
                 {notifications.length === 0 ? (
-                  <div className="p-6 text-center text-xs font-bold text-[#AFAFAF]">
+                  <div className="p-6 text-center text-xs font-medium text-text-muted">
                     No active study notifications.
                   </div>
                 ) : (
@@ -213,7 +213,7 @@ export default function NotificationPopup() {
                     <div
                       key={item.id}
                       className={`p-3.5 rounded-[1.5rem] transition-colors ${
-                        item.unread ? 'bg-[#DDF4FF]/40 border border-[#1CB0F6]/20' : 'hover:bg-[#F7F7F7]'
+                        item.unread ? 'bg-brand-primary-soft/40 border border-brand-primary/20' : 'hover:bg-bg-secondary'
                       }`}
                     >
                       <div className="flex items-start gap-3">
@@ -239,10 +239,10 @@ export default function NotificationPopup() {
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
-                            <h4 className="text-xs font-bold text-[#3C3C3C] truncate">{item.title}</h4>
-                            <span className="text-[10px] text-[#AFAFAF] font-normal">{item.timeAgo}</span>
+                            <h4 className="text-xs font-semibold text-text-primary truncate">{item.title}</h4>
+                            <span className="text-[10px] text-text-muted">{item.timeAgo}</span>
                           </div>
-                          <p className="text-xs text-[#777777] font-normal leading-relaxed mt-1">{item.message}</p>
+                          <p className="text-xs text-text-secondary leading-relaxed mt-1">{item.message}</p>
 
                           {item.actionText && item.actionPath && (
                             <button
@@ -250,7 +250,7 @@ export default function NotificationPopup() {
                                 setIsOpen(false)
                                 navigate(item.actionPath!)
                               }}
-                              className="mt-2 text-xs font-semibold text-[#1CB0F6] hover:underline flex items-center gap-1 cursor-pointer"
+                              className="mt-2 text-xs font-semibold text-brand-primary hover:underline flex items-center gap-1 cursor-pointer"
                             >
                               <span>{item.actionText}</span>
                               <ChevronRight size={13} />
@@ -264,13 +264,13 @@ export default function NotificationPopup() {
               </div>
 
               {/* Dropdown Footer */}
-              <div className="bg-[#F7F7F7] p-3 text-center border-t border-[#E2E8F0]">
+              <div className="bg-transparent p-3 text-center border-t border-border">
                 <button
                   onClick={() => {
                     setIsOpen(false)
                     navigate('/study-plan')
                   }}
-                  className="text-xs font-semibold text-[#58CC02] hover:underline cursor-pointer"
+                  className="text-xs font-semibold text-brand-primary hover:underline cursor-pointer"
                 >
                   Manage Study Plan & Goal Schedule &rarr;
                 </button>
