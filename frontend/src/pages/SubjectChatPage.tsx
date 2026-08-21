@@ -287,7 +287,7 @@ export default function SubjectChatPage() {
               <button
                 onClick={handleResetChat}
                 disabled={isStreaming}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-[1.25rem] border border-[#E2E8F0] hover:border-[#1CB0F6] text-xs font-bold text-[#777777] hover:text-[#1CB0F6] transition-colors cursor-pointer bg-white"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-[1.25rem] border border-[#E2E8F0] hover:border-[#4F46E5] text-xs font-bold text-[#777777] hover:text-[#4F46E5] transition-colors cursor-pointer bg-white"
                 title="Start a new chat for this chapter"
               >
                 <RotateCcw size={13} />
@@ -299,13 +299,13 @@ export default function SubjectChatPage() {
               <>
                 <button
                   onClick={() => navigate(`/quiz/${selectedTopicId}`)}
-                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-[1.25rem] border border-[#E2E8F0] hover:border-[#1CB0F6] text-xs font-bold text-[#777777] hover:text-[#1CB0F6] transition-colors cursor-pointer bg-white"
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-[1.25rem] border border-[#E2E8F0] hover:border-[#4F46E5] text-xs font-bold text-[#777777] hover:text-[#4F46E5] transition-colors cursor-pointer bg-white"
                 >
                   <Trophy size={14} /> Practice Quiz
                 </button>
                 <button
                   onClick={() => navigate(`/flashcards/${selectedTopicId}`)}
-                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-[1.25rem] border border-[#E2E8F0] hover:border-[#1CB0F6] text-xs font-bold text-[#777777] hover:text-[#1CB0F6] transition-colors cursor-pointer bg-white"
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-[1.25rem] border border-[#E2E8F0] hover:border-[#4F46E5] text-xs font-bold text-[#777777] hover:text-[#4F46E5] transition-colors cursor-pointer bg-white"
                 >
                   <Layers size={14} /> Flashcards
                 </button>
@@ -334,7 +334,7 @@ export default function SubjectChatPage() {
                 onClick={() => setSelectedTopicId(t.id)}
                 className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
                   isSelected
-                    ? 'bg-[#1CB0F6] text-white elevation-2'
+                    ? 'bg-[#4F46E5] text-white elevation-2'
                     : 'bg-[#F2ECE4] text-[#777777] hover:bg-[#E2E8F0]'
                 }`}
               >
@@ -349,7 +349,7 @@ export default function SubjectChatPage() {
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 max-w-4xl w-full mx-auto">
         {loadingSession ? (
           <div className="h-full flex flex-col items-center justify-center py-20 space-y-4">
-            <div className="w-10 h-10 border-3 border-[#1CB0F6] border-t-transparent rounded-full animate-spin" />
+            <div className="w-10 h-10 border-3 border-[#4F46E5] border-t-transparent rounded-full animate-spin" />
             <p className="text-xs font-bold text-[#AFAFAF] animate-pulse">Loading AI Textbook Tutor...</p>
           </div>
         ) : messages.length === 0 ? (
@@ -398,12 +398,12 @@ export default function SubjectChatPage() {
                   whileHover={{ scale: 1.02, y: -2 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => sendMessage(starter)}
-                  className="p-4 rounded-[1.5rem] bg-white border border-[#E2E8F0] hover:border-[#1CB0F6] hover:elevation-2 transition-all cursor-pointer flex items-start gap-3 group text-left"
+                  className="p-4 rounded-[1.5rem] bg-white border border-[#E2E8F0] hover:border-[#4F46E5] hover:elevation-2 transition-all cursor-pointer flex items-start gap-3 group text-left"
                 >
-                  <div className="w-7 h-7 rounded-[1.25rem] bg-[#DDF4FF] flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform">
-                    <Sparkles size={14} className="text-[#1CB0F6]" />
+                  <div className="w-7 h-7 rounded-[1.25rem] bg-[#EEF2FF] flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform">
+                    <Sparkles size={14} className="text-[#4F46E5]" />
                   </div>
-                  <span className="text-xs font-bold text-[#3C3C3C] group-hover:text-[#1CB0F6] transition-colors leading-relaxed">
+                  <span className="text-xs font-bold text-[#3C3C3C] group-hover:text-[#4F46E5] transition-colors leading-relaxed">
                     {starter}
                   </span>
                 </motion.button>
@@ -441,7 +441,7 @@ export default function SubjectChatPage() {
             e.preventDefault()
             sendMessage()
           }}
-          className="relative bg-white border border-[#E2E8F0] focus-within:border-[#1CB0F6] focus-within:ring-3 focus-within:ring-[#1CB0F6]/15 rounded-[2rem] p-2 pl-5 elevation-2 transition-all flex items-center gap-3"
+          className="relative bg-white border border-[#E2E8F0] focus-within:border-[#4F46E5] focus-within:ring-3 focus-within:ring-[#4F46E5]/15 rounded-[2rem] p-2 pl-5 elevation-2 transition-all flex items-center gap-3"
         >
           <input
             type="text"
@@ -457,7 +457,7 @@ export default function SubjectChatPage() {
             whileTap={{ scale: 0.95 }}
             type="submit"
             disabled={!input.trim() || isStreaming || loadingSession}
-            className="p-3.5 bg-[#1CB0F6] hover:bg-[#D97706] disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-[1.5rem] transition-all cursor-pointer flex-shrink-0 elevation-2 flex items-center justify-center"
+            className="p-3.5 bg-[#4F46E5] hover:bg-[#4338CA] disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-[1.5rem] transition-all cursor-pointer flex-shrink-0 elevation-2 flex items-center justify-center"
             title="Send Message"
           >
             <Send size={16} />

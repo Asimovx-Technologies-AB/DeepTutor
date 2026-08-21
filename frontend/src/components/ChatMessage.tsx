@@ -61,7 +61,7 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding }
         <div className={`px-4 py-2 ${
           isAssistant
             ? content.includes("Topic Not Found") 
-              ? 'bg-warning-soft border border-warning/40 rounded-[2rem] rounded-tl-sm text-text-primary px-5 py-4'
+              ? 'bg-brand-primary-soft border border-brand-primary/20 rounded-[2rem] rounded-tl-sm text-text-primary px-5 py-4 shadow-sm'
               : 'text-text-primary'
             : 'bg-brand-primary text-white rounded-[2rem] rounded-tr-sm shadow-sm px-5 py-3 font-medium'
         }`}>

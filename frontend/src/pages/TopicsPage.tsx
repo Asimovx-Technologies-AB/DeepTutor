@@ -45,7 +45,7 @@ export default function TopicsPage() {
         initial={{ opacity: 0, x: -8 }}
         animate={{ opacity: 1, x: 0 }}
         onClick={() => navigate('/subjects')}
-        className="flex items-center gap-2 text-[#777777] hover:text-[#1CB0F6] transition-colors mb-6 text-sm font-bold cursor-pointer"
+        className="flex items-center gap-2 text-[#777777] hover:text-[#4F46E5] transition-colors mb-6 text-sm font-bold cursor-pointer"
       >
         <ArrowLeft size={16} /> Back to Subjects
       </motion.button>
@@ -69,17 +69,17 @@ export default function TopicsPage() {
               initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.07 }}
-              className="glass-card p-5 flex items-center gap-4 group border border-[#E2E8F0] elevation-1 hover:border-[#1CB0F6]/40 rounded-[1.5rem]"
+              className="glass-card p-5 flex items-center gap-4 group border border-[#E2E8F0] elevation-1 hover:border-[#4F46E5]/40 rounded-[1.5rem]"
             >
               {/* Order number */}
-              <div className="w-10 h-10 rounded-[1.25rem] bg-[#DDF4FF] border border-[#1CB0F6]/30 flex items-center justify-center text-sm font-black text-[#1CB0F6] flex-shrink-0">
+              <div className="w-10 h-10 rounded-[1.25rem] bg-[#EEF2FF] border border-[#4F46E5]/30 flex items-center justify-center text-sm font-black text-[#4F46E5] flex-shrink-0">
                 {topic.order_index ?? i + 1}
               </div>
 
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-extrabold text-[#3C3C3C] text-sm group-hover:text-[#1CB0F6] transition-colors">
+                  <h3 className="font-extrabold text-[#3C3C3C] text-sm group-hover:text-[#4F46E5] transition-colors">
                     {topic.title}
                   </h3>
                   <span className={`badge badge-${topic.difficulty_level}`}>
@@ -95,7 +95,7 @@ export default function TopicsPage() {
                   onClick={() => navigate(`/flashcards/${topic.id}`)}
                   className="btn-ghost flex items-center gap-1.5 text-xs px-3 py-2 cursor-pointer"
                 >
-                  <BookOpen size={13} className="text-[#1CB0F6]" /> Flashcards
+                  <BookOpen size={13} className="text-[#4F46E5]" /> Flashcards
                 </button>
                 <button
                   onClick={() => navigate(`/quiz/${topic.id}`)}

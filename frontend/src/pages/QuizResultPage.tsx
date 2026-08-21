@@ -38,7 +38,7 @@ function getGrade(pct: number) {
   if (pct >= 90) return { label: 'Excellent!', color: 'text-[#58CC02]', emoji: '🏆' }
   if (pct >= 75) return { label: 'Great Job!', color: 'text-[#58CC02]', emoji: '🎉' }
   if (pct >= 60) return { label: 'Good Effort', color: 'text-[#FFC800]', emoji: '👍' }
-  if (pct >= 40) return { label: 'Keep Practicing', color: 'text-[#1CB0F6]', emoji: '📚' }
+  if (pct >= 40) return { label: 'Keep Practicing', color: 'text-[#4F46E5]', emoji: '📚' }
   return { label: 'Need More Study', color: 'text-[#FF4B4B]', emoji: '💪' }
 }
 
@@ -119,7 +119,7 @@ export default function QuizResultPage() {
             navigate(-1)
           }
         }}
-        className="flex items-center gap-2 text-[#777777] hover:text-[#1CB0F6] transition-colors mb-6 text-sm font-bold cursor-pointer"
+        className="flex items-center gap-2 text-[#777777] hover:text-[#4F46E5] transition-colors mb-6 text-sm font-bold cursor-pointer"
       >
         <ArrowLeft size={16} /> Back to {isSubjectQuiz ? (activeSubject?.name || 'Subject') : 'Topic'}
       </motion.button>
@@ -258,10 +258,10 @@ export default function QuizResultPage() {
                 </div>
 
                 {q.explanation && (
-                  <div className="ml-9 mt-3 p-3 rounded-[1.25rem] bg-[#DDF4FF] border border-[#1CB0F6]/20 text-xs text-[#3C3C3C] flex items-start gap-2">
-                    <Sparkles size={14} className="text-[#1CB0F6] flex-shrink-0 mt-0.5" />
+                  <div className="ml-9 mt-3 p-3 rounded-[1.25rem] bg-[#EEF2FF] border border-[#4F46E5]/20 text-xs text-[#3C3C3C] flex items-start gap-2">
+                    <Sparkles size={14} className="text-[#4F46E5] flex-shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-black text-[#1CB0F6]">Explanation: </span>
+                      <span className="font-black text-[#4F46E5]">Explanation: </span>
                       <span>{q.explanation}</span>
                     </div>
                   </div>
@@ -274,7 +274,7 @@ export default function QuizResultPage() {
                         const specificPrompt = `In the ${topicName || 'subject'} quiz, I missed Question ${i + 1}: "${q.question_text}". Can you explain why the correct answer is "${q.correct_answer}" and guide me through the concept?`
                         handleAskAITutor(specificPrompt)
                       }}
-                      className="text-xs font-bold text-[#1CB0F6] hover:text-[#D97706] flex items-center gap-1.5 py-1 px-2.5 rounded-lg hover:bg-[#DDF4FF] transition-colors cursor-pointer"
+                      className="text-xs font-bold text-[#4F46E5] hover:text-[#D97706] flex items-center gap-1.5 py-1 px-2.5 rounded-lg hover:bg-[#EEF2FF] transition-colors cursor-pointer"
                     >
                       <MessageSquare size={13} /> Ask Tutor About This Question
                     </button>

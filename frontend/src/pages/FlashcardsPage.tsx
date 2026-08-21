@@ -370,7 +370,7 @@ export default function FlashcardsPage() {
           <button
             onClick={() => generateMutation.mutate()}
             disabled={generating}
-            className="text-[11px] px-5 py-2.5 rounded-xl font-black flex items-center gap-2 transition-all cursor-pointer bg-white border-2 border-border text-[#1CB0F6] hover:bg-[#F0F9FF] hover:border-[#1CB0F6] shadow-sm"
+            className="text-[11px] px-5 py-2.5 rounded-xl font-black flex items-center gap-2 transition-all cursor-pointer bg-white border-2 border-border text-[#4F46E5] hover:bg-[#EEF2FF] hover:border-[#4F46E5] shadow-sm"
           >
             <RefreshCw size={13} className={generating ? 'animate-spin' : ''} />
             <span>Regenerate</span>
@@ -425,16 +425,16 @@ export default function FlashcardsPage() {
               }}
             >
               {/* Front Side */}
-              <div className="absolute inset-0 w-full h-full backface-hidden bg-white border border-[#E2E8F0] border-t-4 border-t-[#1CB0F6] rounded-[2rem] p-8 flex flex-col justify-between elevation-2">
+              <div className="absolute inset-0 w-full h-full backface-hidden bg-white border border-[#E2E8F0] border-t-4 border-t-[#4F46E5] rounded-[2rem] p-8 flex flex-col justify-between elevation-2">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs text-[#1CB0F6] font-black uppercase tracking-wider">
+                  <div className="flex items-center gap-1.5 text-xs text-[#4F46E5] font-black uppercase tracking-wider">
                     <HelpCircle size={14} /> Concept / Question
                   </div>
 
                   <button
                     type="button"
                     onClick={(e) => speakText(currentCard?.front || '', e)}
-                    className="p-2 rounded-[1.25rem] text-[#AFAFAF] hover:text-[#1CB0F6] hover:bg-[#DDF4FF] transition-colors cursor-pointer"
+                    className="p-2 rounded-[1.25rem] text-[#AFAFAF] hover:text-[#4F46E5] hover:bg-[#EEF2FF] transition-colors cursor-pointer"
                     title="Listen to card audio"
                   >
                     <Volume2 size={18} />
@@ -520,14 +520,14 @@ export default function FlashcardsPage() {
           <div className="flex items-center justify-between text-sm px-2 text-[#777777]">
             <button
               onClick={handlePrev}
-              className="hover:text-[#1CB0F6] font-black transition-colors flex items-center gap-1 cursor-pointer"
+              className="hover:text-[#4F46E5] font-black transition-colors flex items-center gap-1 cursor-pointer"
             >
               <ChevronLeft size={16} /> Previous Card
             </button>
             <span className="text-xs text-[#AFAFAF]">Shortcuts: Space / Arrow Keys</span>
             <button
               onClick={handleNext}
-              className="hover:text-[#1CB0F6] font-black transition-colors flex items-center gap-1 cursor-pointer"
+              className="hover:text-[#4F46E5] font-black transition-colors flex items-center gap-1 cursor-pointer"
             >
               Next Card <ChevronRight size={16} />
             </button>
