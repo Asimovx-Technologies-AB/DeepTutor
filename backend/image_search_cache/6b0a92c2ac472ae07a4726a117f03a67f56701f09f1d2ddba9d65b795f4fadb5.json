@@ -1,0 +1,18 @@
+[
+  {
+    "url": "https://i.ytimg.com/vi/MmTVhIxEEqA/hq720.jpg?sqp=-oaymwEhCK4FEIIDSFryq4qpAxMIARUAAAAAGAElAADIQj0AgKJD&rs=AOn4CLD429MPGFZ_ylXxepL1MXJ-ttrcVg",
+    "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQHglorpp-yFjtG1_YlOXk56sdqFzUuLfv_DTKgaEhc-w&s=10",
+    "source_page": "https://www.youtube.com/watch?v=MmTVhIxEEqA",
+    "title": "What is Support Vector Machine? | SVM Algorithm in Machine Learning | ML  Tutorial For Beginners",
+    "relevance_reason": "The image clearly illustrates the core concepts of a Support Vector Machine, including the optimal hyperplane, margin, decision boundary, and support vectors.",
+    "quality": "good"
+  },
+  {
+    "url": "https://media.geeksforgeeks.org/wp-content/uploads/20250807122724737293/support_vectors_hyperplane.webp",
+    "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQG76KDmR9VySfWtQrVboy5brncGywlrNPHFCV-wMVEeQ&s=10",
+    "source_page": "https://www.geeksforgeeks.org/machine-learning/support-vector-machine-algorithm/",
+    "title": "Support Vector Machine (SVM) Algorithm - GeeksforGeeks",
+    "relevance_reason": "The diagram clearly explains SVM concepts with correct visual representations, despite minor typos in the labels.",
+    "quality": "fair"
+  }
+]
