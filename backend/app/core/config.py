@@ -87,8 +87,11 @@ class Settings(BaseSettings):
     VLM_MAX_CONCURRENT_PAGES: int = 4        # Concurrent page processing cap
     VLM_MAX_PAGES_PER_DOC: int = 50          # Max pages to process via VLM per document (cost & time safety cap)
 
-
-
+    # ── AI-Verified Image Search (Serper API) ────────────────────────────────
+    SERPER_API_KEY: str = ""
+    IMAGE_SEARCH_FETCH_COUNT: int = 5        # Images to fetch from Serper API
+    IMAGE_SEARCH_KEEP_COUNT: int = 2         # Images to keep after AI validation
+    IMAGE_SEARCH_CACHE_DIR: str = "./image_search_cache" # Disk cache for verified images
 
     # ── Stage 1: Semantic Chunking (Fast 350–650 words per chunk) ───────────
     CHUNKING_STRATEGY: str = "semantic"      # "semantic" | "sliding_window" | "hierarchical"

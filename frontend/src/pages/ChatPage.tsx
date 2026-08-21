@@ -382,7 +382,10 @@ const StreamingMessageBubble = memo(function StreamingMessageBubble({ liveSource
   )
 })
 
-const isSubjectCurriculumTopic = (topicId?: string): boolean => {
+const isSubjectCurriculumTopic = (topicId?: string, title?: string): boolean => {
+  if (title && (title.includes('Class 10') && title.includes('Chat'))) return true
+  if (title && title.startsWith('Class ') && title.includes('Mathematics')) return true
+  
   if (!topicId) return false
   const tid = topicId.toLowerCase()
   return (
@@ -517,7 +520,7 @@ export default function ChatPage() {
     queryKey: ['chat-sessions-learn'],
     queryFn: async () => {
       const res = await chatApi.sessions('learn')
-      const data = (res.data || []).filter((s: any) => !isSubjectCurriculumTopic(s.topic_id))
+      const data = (res.data || []).filter((s: any) => !isSubjectCurriculumTopic(s.topic_id, s.session_title))
       setSessions(data)
       if (sessionId) {
         const found = data.find((s: any) => s.id === sessionId)
@@ -525,8 +528,7 @@ export default function ChatPage() {
       }
       return data
     },
-    staleTime: 0,
-    refetchOnMount: 'always',
+    staleTime: 30_000,
     refetchOnWindowFocus: true,
   })
 
@@ -923,7 +925,7 @@ export default function ChatPage() {
 
           <div className="space-y-1.5 max-h-[65vh] overflow-y-auto">
             {sessions
-              .filter((s) => !isSubjectCurriculumTopic(s.topic_id))
+              .filter((s) => !isSubjectCurriculumTopic(s.topic_id, s.session_title))
               .map((s) => {
                 const isSelected = activeSession?.id === s.id || sessionId === s.id
                 return (
@@ -978,15 +980,6 @@ export default function ChatPage() {
             >
               <Menu size={20} />
             </button>
-
-            {/* Model Switcher Pill */}
-            <div className="flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-[1.5rem] border border-border bg-white hover:bg-gray-50 hover:border-[#20201D]/40 cursor-pointer transition-all shadow-sm">
-              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-[1.25rem] bg-info-soft text-info flex items-center justify-center border border-info/20">
-                <Sparkles size={13} />
-              </div>
-              <span className="text-xs font-black text-[#3C3C3C] truncate max-w-[140px] sm:max-w-none">{selectedModel}</span>
-              <ChevronDown size={14} className="text-[#AFAFAF] flex-shrink-0" />
-            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -1361,12 +1354,6 @@ export default function ChatPage() {
               <span>Explore 3D Graph</span> <ArrowRight size={16} />
             </div>
           </motion.div>
-        </div>
-
-        <div className="pt-4 border-t border-border text-center">
-          <p className="text-xs font-semibold text-text-muted">
-            🧠 GraphRAG + Ollama AI Tutor Engine
-          </p>
         </div>
       </aside>
 

@@ -13,7 +13,6 @@ import LearningStatsRow from '../components/dashboard/LearningStatsRow'
 import RecentActivityTimeline from '../components/dashboard/RecentActivityTimeline'
 import LearningStreak from '../components/dashboard/LearningStreak'
 import PageContainer from '../components/PageContainer'
-import ExamPrepArchitectureFlow from '../components/ExamPrepArchitectureFlow'
 
 export default function DashboardPage() {
   const { user } = useAuthStore()
@@ -21,15 +20,14 @@ export default function DashboardPage() {
 
   const [isProfileOpen, setIsProfileOpen] = useState(false)
 
-  // Fetch Dynamic Data with immediate invalidation
+  // Fetch Dynamic Data with snappy in-memory caching (background revalidation)
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: async () => {
       const res = await dashboardApi.stats()
       return res.data
     },
-    staleTime: 2000,
-    refetchOnMount: 'always'
+    staleTime: 60_000,
   })
 
   const { data: recentActivity, isLoading: activityLoading } = useQuery({
@@ -38,8 +36,7 @@ export default function DashboardPage() {
       const res = await dashboardApi.activity(8)
       return res.data
     },
-    staleTime: 2000,
-    refetchOnMount: 'always'
+    staleTime: 60_000,
   })
 
   const { data: continueData, isLoading: continueLoading } = useQuery({
@@ -48,8 +45,7 @@ export default function DashboardPage() {
       const res = await dashboardApi.continue()
       return res.data
     },
-    staleTime: 2000,
-    refetchOnMount: 'always'
+    staleTime: 60_000,
   })
 
   const { getSubject, getTopics } = useSubjectStore()
@@ -73,9 +69,6 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-xl font-bold text-slate-800 tracking-tight">Dashboard Overview</h1>
         <div className="flex items-center gap-4">
-          <button className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-slate-500 hover:text-slate-800 shadow-xs border border-slate-200 transition-colors">
-            <Search size={18} />
-          </button>
           <NotificationPopup />
 
           <div
@@ -245,11 +238,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-        </div>
-
-        {/* ROW 3: DeepTutor Exam Prep Architecture Flow */}
-        <div className="card p-6 sm:p-8 bg-white border border-slate-200/80 shadow-xs rounded-3xl">
-          <ExamPrepArchitectureFlow showHeading={true} />
         </div>
 
       </div>

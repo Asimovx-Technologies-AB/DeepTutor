@@ -12,7 +12,6 @@ import {
   LayoutDashboard
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
-import ExamPrepArchitectureFlow from '../components/ExamPrepArchitectureFlow'
 
 const PRODUCT_SHOWCASES = [
   {
@@ -230,11 +229,6 @@ export default function LandingPage() {
             />
           </div>
         </div>
-      </section>
-
-      {/* ─── HOW IT WORKS (EXAM PREP ARCHITECTURE) ─── */}
-      <section id="how-it-works" className="py-20 px-6 max-w-6xl mx-auto border-t border-slate-200">
-        <ExamPrepArchitectureFlow showHeading={true} />
       </section>
 
       {/* ─── FOOTER ─── */}

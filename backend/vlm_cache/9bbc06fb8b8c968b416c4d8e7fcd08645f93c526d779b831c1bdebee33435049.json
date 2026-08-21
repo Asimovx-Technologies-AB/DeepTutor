@@ -1,0 +1,5 @@
+{
+  "key": "9bbc06fb8b8c968b416c4d8e7fcd08645f93c526d779b831c1bdebee33435049",
+  "text": "{\"relevant\": true, \"accurate\": true, \"quality\": \"good\", \"reason\": \"The image clearly illustrates the K-Nearest Neighbors algorithm by showing a query point with a radius encompassing $K=3$ nearest neighbors for classification voting.\"}",
+  "metadata": {}
+}

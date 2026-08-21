@@ -1,0 +1,18 @@
+[
+  {
+    "url": "https://media.geeksforgeeks.org/wp-content/uploads/Untitled-drawing-6-2.png",
+    "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS2p3AYIUgrQK0k197EnZLVUP-0o597n0V8WGdDzbLUlg&s=10",
+    "source_page": "https://www.geeksforgeeks.org/operating-systems/virtualization-vmware-full-virtualization/",
+    "title": "Virtualization | VMware: Full Virtualization - GeeksforGeeks",
+    "relevance_reason": "The diagram clearly illustrates VMware's classic binary translation virtualization model, mapping the guest OS and hypervisor to x86 privilege rings.",
+    "quality": "fair"
+  },
+  {
+    "url": "https://www.starwindsoftware.com/blog/wp-content/uploads/2025/10/word-image-38.png",
+    "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRMNhiPVdQW_leAzO751Yge6eI9GM2-1jRfyzFvNzIwcg&s=10",
+    "source_page": "https://www.starwindsoftware.com/blog/esxi-vsphere-vcenter/",
+    "title": "The Difference Between VMware vSphere, ESXi and vCenter",
+    "relevance_reason": "The diagram accurately depicts the standard VMware vSphere architecture components, including clients, vCenter, ESXi, VMs, and storage, in a clear layout.",
+    "quality": "fair"
+  }
+]

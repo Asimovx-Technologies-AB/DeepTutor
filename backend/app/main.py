@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from app.core.config import get_settings
 from app.api import auth, chat, documents, quiz, flashcards, progress, study_plan, leaderboard, mcp, notes, dashboard
+from app.api.endpoints import images
 
 settings = get_settings()
 
@@ -20,6 +21,7 @@ async def lifespan(app: FastAPI):
         settings.LIGHTRAG_DATA_DIR,
         settings.CHROMA_PERSIST_DIR,  # keep for legacy fallback
         settings.GRAPH_DATA_DIR,       # keep for legacy fallback
+        settings.IMAGE_SEARCH_CACHE_DIR,
     ]
     for dir_path in dirs:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
@@ -75,6 +77,9 @@ all_routers = [
 for r in all_routers:
     app.include_router(r, prefix="/api")
     app.include_router(r)
+
+app.include_router(images.router, prefix="/api/images", tags=["Images"])
+app.include_router(images.router, prefix="/images", tags=["Images"])
 
 app.include_router(mcp.router)
 
