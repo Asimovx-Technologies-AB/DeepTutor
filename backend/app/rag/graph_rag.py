@@ -134,6 +134,7 @@ Detect the mode requested in the student's query. If unspecified, default to Mod
 13. TIMELINE — Chronological sequence of events or developmental stages.
 14. MEMORY TRICK / MNEMONIC — A catchy mnemonic or acronym for remembering lists or sequences.
 15. DEEP DIVE — Exhaustive long-form master guide with deep technical breakdown.
+16. ⚡ 5-MINUTE CHEATCODE / CHEAT NOTES — The structured 6-section student revision cheat sheet (Big Idea, 1-Min Analogy Table, Core Concepts Table, Mermaid Flowchart, Formulas/Dates Table, Common Exam Traps Table).
 
 ═══════════════════════════════
 SIMPLIFIED STUDENT PEDAGOGY & PRACTICE QUESTION GENERATION
@@ -340,6 +341,49 @@ def classify_learning_response_instruction(
     """
     q_raw = question or ""
     q_lower = q_raw.lower().strip()
+
+    # 0. 5-Minute Cheatcode / Cheat Notes Mode (e.g. "5 minute cheatcode", "5 min cheat notes", "cheatcode", "cheat code", "cheat notes", "5 minute notes", "quick cheat sheet", "cheat sheet")
+    if any(w in q_lower for w in [
+        "cheatcode", "cheat code", "cheatcodes", "cheat codes", "cheatnote", "cheatnotes",
+        "cheat note", "cheat notes", "5 minute cheat", "5 min cheat", "5-minute cheat", "5-min cheat",
+        "5 minute note", "5 min note", "5 minute notes", "5 min notes", "5minute cheat", "5minute notes",
+        "5 minute cheet", "5 min cheet", "5minute cheet", "cheet notes", "cheet note", "cheetcode", "cheet code",
+        "quick cheat sheet", "cheat sheet", "cheatsheet", "5 min revision", "5 minute revision"
+    ]):
+        return (
+            "The student specifically requested a ⚡ 5-MINUTE CHEATCODE / CHEAT NOTES for this topic.\n"
+            "You MUST create an ultra-clear, simple, friendly 5-MINUTE REVISION CHEAT SHEET strictly following this EXACT 6-section structure with Markdown tables and Mermaid diagram:\n\n"
+            "# ⚡ 5-Minute Cheat Notes: [Topic Name]\n\n"
+            "### Section 1 — ⚡ The Big Idea (30 seconds)\n"
+            "> [2 simple, friendly sentences explaining what this topic is and why it matters in plain English]\n"
+            "- **Why it matters for exams:** [1 short, direct line on where marks are scored]\n\n"
+            "### Section 2 — 🍕 Think of It Like This (1-minute analogy)\n"
+            "[A fun, relatable everyday comparison (like cooking, gaming, smartphones, or daily life) with a clear 3-row table that makes the concept click instantly]\n\n"
+            "| Step / Approach | What You Do | How It Works |\n"
+            "|:---|:---|:---|\n"
+            "| 1. ... | ... | ... |\n"
+            "| 2. ... | ... | ... |\n"
+            "| 3. ... | ... | ... |\n\n"
+            "### Section 3 — 💡 Core Concepts (Plain English)\n"
+            "A Markdown table with columns: | # | Concept / Term | What It Means in Simple Words |\n"
+            "Listing 5-7 core concepts with zero complicated jargon.\n\n"
+            "### Section 4 — 🗺️ How It All Connects (Visual Map)\n"
+            "```mermaid\n"
+            "flowchart TD\n"
+            "    A[\"[Topic Name]\"] --> B[\"Core Rule / Foundation\"]\n"
+            "    A --> C[\"Working Method\"]\n"
+            "    A --> D[\"Exam Scoring\"]\n"
+            "    B --> E[\"Full Marks! 🎯\"]\n"
+            "    C --> E\n"
+            "    D --> E\n"
+            "```\n\n"
+            "### Section 5 — 📐 Key Formulas & Equations (or 📅 Landmark Events, Treaties & Key Chronology for History/Humanities)\n"
+            "A Markdown table with columns: | # | Formula / Event | What It Does / Period | Quick Example / Significance |\n"
+            "(Use LaTeX math $...$ for STEM, or historical dates and events for History/Theory)\n\n"
+            "### Section 6 — ⚠️ Common Exam Traps (Easy Mistakes to Avoid)\n"
+            "A Markdown table with columns: | # | Common Mistake | Why Students Get Confused | How to Get It Right |\n"
+            "Highlighting the top 3-4 easiest mistakes to avoid for full marks.\n"
+        )
 
     # 1. Page Specific Explanation
     if requested_pages and has_page_chunks:

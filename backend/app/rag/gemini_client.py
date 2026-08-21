@@ -337,4 +337,5 @@ class GeminiClient:
 
 # Singleton
 gemini = GeminiClient()
+gemini_client = gemini
 

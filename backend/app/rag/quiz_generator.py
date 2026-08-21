@@ -1,48 +1,43 @@
 """
-AI Quiz Generator using local Ollama LLM.
-Draws context STRICTLY from the requesting user's own section via
-app.rag.section_scope — no cross-section or cross-user fallback.
+AI Quiz Generator using Gemini and local Ollama LLM.
+Draws context STRICTLY from the requesting user's own section, study notes, or textbook chapter.
 """
 import json
 import re
 from typing import Dict, List, Optional
+from app.rag.gemini_client import gemini_client
 from app.rag.ollama_client import ollama
 from app.core import database as db
 
-QUIZ_PROMPT_TEMPLATE = """You are a precise academic study engine. Create a multiple choice quiz of exactly {num_questions} questions derived STRICTLY from the provided UPLOADED DOCUMENT CONTEXT.
+QUIZ_PROMPT_TEMPLATE = """You are an expert Kerala SCERT Class 10 Board Exam Professor and Quiz Engine. 
+Create a multiple choice quiz of exactly {num_questions} questions derived STRICTLY from the provided STUDY CONTEXT.
 
 {topic_instruction}
 
 STRICT MANDATORY RULES:
-1. Every question, option, correct answer, and explanation MUST be directly supported by the text in the provided document context.
-2. DO NOT include external facts, definitions, or unmentioned topics not explicitly written in the provided document text.
-3. If page numbers (e.g., "[Page 12]") appear in the context, include the page citation in the question explanation.
-4. Return ONLY valid JSON in this exact structure:
+1. Every question, option, correct answer, and explanation MUST be directly supported by the text in the provided study context.
+2. Questions should test core conceptual definitions, formula applications, numerical calculations, and key principles.
+3. Every question must have EXACTLY 4 distinct, real, meaningful options (A, B, C, D) with no placeholder or filler options.
+4. Format mathematical expressions and symbols with clean KaTeX LaTeX ($...$).
+5. Return ONLY valid JSON in this exact structure:
 {{
   "title": "{title_hint}",
   "questions": [
     {{
       "question_text": "Clear, concise question derived directly from the document text",
       "options": [
-        "First option",
-        "Second option",
-        "Third option",
-        "Fourth option"
+        "First plausible option",
+        "Second plausible option",
+        "Third plausible option",
+        "Fourth plausible option"
       ],
       "correct_answer": "A",
-      "explanation": "Detailed explanation of why this option is correct based on the PDF [Page X if available]"
+      "explanation": "Step-by-step rationale for why this option is correct based on the study note"
     }}
   ]
 }}
 
-Rules:
-- Generate exactly {num_questions} questions.
-- Each question must have EXACTLY 4 options, and every option must be a real, complete, meaningful answer choice grounded in the document context.
-- NEVER use placeholder text like "Option 4", "Fourth option", "N/A", or leave an option blank — if you cannot come up with 4 real distinct options for a question, choose a different question instead.
-- The "correct_answer" must be one of: "A", "B", "C", "D".
-- The response MUST contain only the JSON block.
-
-UPLOADED PDF DOCUMENT CONTEXT:
+STUDY CONTEXT:
 {context}
 
 JSON:"""
@@ -55,68 +50,83 @@ async def generate_quiz_for_section(
     difficulty: str = "medium",
     time_limit_mins: int = 10,
     num_questions: int = 5,
-    topic_id: Optional[str] = None,  # optional label only, not used for retrieval
+    topic_id: Optional[str] = None,
+    note_id: Optional[str] = None,
+    note_content: Optional[str] = None,
 ) -> Optional[dict]:
     """
-    Generate a quiz using ONLY the content in this user's section. No
-    fallback to other sections, other users, or a shared "general"
-    collection — if this section has no processed content, we return
-    None rather than generating an off-topic quiz.
+    Generate a quiz using either a specific Smart Note or the user's textbook/document context.
     """
     from app.rag.section_scope import get_section_context, user_owns_section
-
-    if not user_owns_section(user_id, section_id):
-        print(f"[quiz_generator] Refusing: user {user_id} does not own section {section_id}")
-        return None
-
-    query_text = focus_topic if (focus_topic and focus_topic.lower() != "all topics (entire pdf)") else None
-    context_docs = await get_section_context(
-        user_id=user_id,
-        section_id=section_id,
-        query=query_text,
-        top_k=max(8, num_questions * 2),
-    )
-
-    print(
-        f"[quiz_generator] section_id={section_id} user_id={user_id} "
-        f"chunks_retrieved={len(context_docs)}"
-    )
-
-    if not context_docs:
-        print(
-            f"[quiz_generator] No content found for section_id={section_id} "
-            f"(user_id={user_id}). Not generating a quiz from unrelated content."
-        )
-        return None
-
-    # Sample and format context randomly each run to generate fresh, unique questions every time.
-    max_chunks = max(12, num_questions * 3)
-    max_chars = max(4500, num_questions * 700)
-
-    import random
-    import uuid
-    sample_chunks = list(context_docs)
-    random.shuffle(sample_chunks)
-    if len(sample_chunks) > max_chunks:
-        sample_chunks = random.sample(sample_chunks, max_chunks)
-    context = "\n\n".join(sample_chunks)[:max_chars]
-
     from app.rag.textbook_reader import get_chapter_title, is_curriculum_topic
 
+    context = ""
+    context_docs = []
+    title_hint = f"Quiz: {focus_topic or 'Class 10 Practice'}"
+
+    # ── CASE 1: Directly Grounded in a Specific Smart Note ─────────────────────
+    if note_id:
+        note = db.get_study_note(note_id)
+        if note:
+            note_formulas = "\n".join([f"- {f}" for f in (note.get("key_formulas") or [])])
+            note_topics = ", ".join(note.get("high_yield_topics") or [])
+            note_solved = "\n".join([
+                f"Q: {sq.get('question')}\nA: {sq.get('step_by_step_solution')}"
+                for sq in (note.get("solved_questions") or [])
+            ])
+            context = f"""--- STUDY NOTE TITLE: {note.get('title')} ---
+SUBJECT: {note.get('subject')}
+HIGH YIELD TOPICS: {note_topics}
+
+KEY FORMULAS:
+{note_formulas}
+
+NOTE CONTENT:
+{note.get('content_markdown', '')[:6000]}
+
+SOLVED PRACTICE QUESTIONS:
+{note_solved[:3000]}"""
+            title_hint = f"Quiz: {note.get('title', 'Smart Note')}"
+
+    if not context and note_content:
+        context = note_content[:7000]
+        if focus_topic:
+            title_hint = f"Quiz: {focus_topic}"
+
+    # ── CASE 2: Section or Textbook Grounding ──────────────────────────────────
+    if not context:
+        if not user_owns_section(user_id, section_id):
+            print(f"[quiz_generator] Refusing: user {user_id} does not own section {section_id}")
+            return None
+
+        query_text = focus_topic if (focus_topic and focus_topic.lower() != "all topics (entire pdf)") else None
+        context_docs = await get_section_context(
+            user_id=user_id,
+            section_id=section_id,
+            query=query_text,
+            top_k=max(8, num_questions * 2),
+        )
+
+        if not context_docs:
+            print(f"[quiz_generator] No content found for section_id={section_id} (user_id={user_id})")
+            return None
+
+        import random
+        max_chunks = max(12, num_questions * 3)
+        max_chars = max(4500, num_questions * 700)
+        sample_chunks = list(context_docs)
+        random.shuffle(sample_chunks)
+        if len(sample_chunks) > max_chunks:
+            sample_chunks = random.sample(sample_chunks, max_chunks)
+        context = "\n\n".join(sample_chunks)[:max_chars]
+
+    import uuid
     gen_seed = str(uuid.uuid4())[:8]
-    topic_label = get_chapter_title(topic_id or section_id)
+    topic_label = get_chapter_title(topic_id or section_id) or focus_topic or "Class 10 Syllabus"
     topic_instruction = (
-        f"FOCUS TOPIC: The quiz MUST focus specifically on '{focus_topic}'. Generate NEW and DIVERSE questions (Seed: {gen_seed})."
-        if (focus_topic and focus_topic.lower() != "all topics (entire pdf)")
-        else f"Scope: Comprehensive quiz on '{topic_label}' from the Kerala SCERT Class 10 syllabus. Generate NEW and DIVERSE questions (Seed: {gen_seed})."
-    )
-    title_hint = (
-        f"Quiz: {focus_topic}"
-        if (focus_topic and focus_topic.lower() != "all topics (entire pdf)")
-        else f"Quiz: {topic_label}"
+        f"FOCUS TOPIC: The quiz MUST focus specifically on '{focus_topic or topic_label}'. Generate NEW and DIVERSE questions (Seed: {gen_seed})."
     )
 
-    # 2. Call Ollama to generate quiz
     prompt = QUIZ_PROMPT_TEMPLATE.format(
         num_questions=num_questions,
         topic_instruction=topic_instruction,
@@ -125,7 +135,7 @@ async def generate_quiz_for_section(
     )
     
     messages = [
-        {"role": "system", "content": "You are a quiz generation engine that outputs ONLY structured JSON."},
+        {"role": "system", "content": "You are a specialized quiz generation engine that outputs ONLY valid JSON."},
         {"role": "user", "content": prompt},
     ]
 
@@ -134,44 +144,56 @@ async def generate_quiz_for_section(
     best_parsed = None
     best_valid_count = 0
 
-    # Try up to 2 times: once normally, once with a stricter reminder if parsing fails.
-    for attempt in range(2):
+    # 1. Primary LLM: Google Gemini
+    if await gemini_client.is_available():
         try:
-            response = await ollama.chat(messages, temperature=0.3)
+            print(f"[quiz_generator] Calling Gemini for quiz generation ({title_hint})...")
+            gemini_resp = await gemini_client.chat(messages, temperature=0.25)
+            last_raw_response = gemini_resp
+            parsed = _parse_quiz_json(gemini_resp)
+            if parsed:
+                valid_questions = _validate_questions(parsed.get("questions", []))
+                if len(valid_questions) >= max(2, (num_questions + 1) // 2):
+                    parsed["questions"] = valid_questions
+                    quiz_data = parsed
         except Exception as e:
-            print(f"[quiz_generator] Ollama call failed (attempt {attempt + 1}): {e}")
-            continue
+            print(f"[quiz_generator] Gemini quiz generation error: {e}")
 
-        last_raw_response = response
-        parsed = _parse_quiz_json(response)
+    # 2. Secondary Fallback: Ollama
+    if not quiz_data:
+        for attempt in range(2):
+            try:
+                print(f"[quiz_generator] Calling Ollama for quiz generation attempt {attempt + 1}...")
+                response = await ollama.chat(messages, temperature=0.3)
+                last_raw_response = response
+                parsed = _parse_quiz_json(response)
 
-        if parsed:
-            valid_questions = _validate_questions(parsed.get("questions", []))
-            if len(valid_questions) > best_valid_count:
-                best_valid_count = len(valid_questions)
-                best_parsed = dict(parsed)
-                best_parsed["questions"] = valid_questions
+                if parsed:
+                    valid_questions = _validate_questions(parsed.get("questions", []))
+                    if len(valid_questions) > best_valid_count:
+                        best_valid_count = len(valid_questions)
+                        best_parsed = dict(parsed)
+                        best_parsed["questions"] = valid_questions
 
-            required = max(2, (num_questions + 1) // 2)  # at least half of what was requested
-            if len(valid_questions) >= required:
-                parsed["questions"] = valid_questions
-                quiz_data = parsed
-                break
+                    if len(valid_questions) >= max(2, (num_questions + 1) // 2):
+                        parsed["questions"] = valid_questions
+                        quiz_data = parsed
+                        break
 
-        print(
-            f"[quiz_generator] Attempt {attempt + 1} produced no valid questions. "
-            f"Raw response (first 1000 chars): {response[:1000]!r}"
-        )
-        # Nudge the model harder on the retry.
-        messages.append({"role": "assistant", "content": response[:2000]})
-        messages.append({
-            "role": "user",
-            "content": (
-                "Your last response was not valid JSON matching the required structure, "
-                "or contained no questions. Respond again with ONLY the raw JSON object, "
-                "no markdown, no commentary, no truncation."
-            ),
-        })
+                print(
+                    f"[quiz_generator] Attempt {attempt + 1} produced insufficient valid questions. Retrying..."
+                )
+                messages.append({"role": "assistant", "content": (response or "")[:2000]})
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Your last response was not valid JSON matching the required structure, "
+                        "or contained no questions. Respond again with ONLY the raw JSON object, "
+                        "no markdown, no commentary, no truncation."
+                    ),
+                })
+            except Exception as e:
+                print(f"[quiz_generator] Ollama attempt {attempt + 1} failed: {e}")
 
     # If we never hit the target threshold, fall back to whichever attempt
     # produced the most valid (real, non-placeholder) questions, as long as

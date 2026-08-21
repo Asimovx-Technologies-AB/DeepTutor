@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Trophy, Clock, ArrowLeft, ChevronRight, Sparkles, RefreshCw, AlertCircle, CheckCircle2, BookOpen } from 'lucide-react'
@@ -10,15 +10,22 @@ import { useSubjectStore } from '../stores/subjectStore'
 const OPTION_LABELS = ['A', 'B', 'C', 'D']
 
 export default function QuizPage() {
-  const { topicId } = useParams<{ topicId: string }>()
+  const { topicId: rawTopicId } = useParams<{ topicId?: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  const locationState = (location.state || {}) as any
   const queryClient = useQueryClient()
   const activeSession = useChatStore((s) => s.activeSession)
+
+  const effectiveTopicId = (rawTopicId || locationState.topicId || 'math-10-1').trim()
+  const focusTopic = locationState.focusTopic || locationState.title || ''
+
   const [currentQ, setCurrentQ] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [timeLeft, setTimeLeft] = useState(0)
   const [submitted, setSubmitted] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Find topic metadata from subject store
@@ -29,7 +36,7 @@ export default function QuizPage() {
   let currentSubjectMeta: any = null
 
   for (const [sId, topics] of Object.entries(subjectTopics)) {
-    const found = topics.find((t) => t.id === topicId)
+    const found = topics.find((t) => t.id === effectiveTopicId)
     if (found) {
       currentTopicMeta = found
       currentSubjectMeta = subjects.find((s) => s.id === sId)
@@ -37,15 +44,18 @@ export default function QuizPage() {
     }
   }
 
-  const topicName = currentTopicMeta?.name || (topicId ? topicId.replace(/[-_]/g, ' ').toUpperCase() : 'Topic Quiz')
+  const topicName = focusTopic || currentTopicMeta?.title || currentTopicMeta?.name || (effectiveTopicId ? effectiveTopicId.replace(/[-_]/g, ' ').toUpperCase() : 'Class 10 Practice Quiz')
+
+  const isNoteQuiz = Boolean(locationState.noteId || locationState.noteContent || locationState.forceGenerate)
 
   const { data: quizzes, isLoading, refetch } = useQuery({
-    queryKey: ['quiz', topicId],
-    queryFn: () => quizApi.list(topicId!).then((r) => r.data),
-    enabled: !!topicId,
+    queryKey: ['quiz', effectiveTopicId, locationState.noteId || 'default'],
+    queryFn: () => quizApi.list(effectiveTopicId).then((r) => r.data),
+    enabled: !!effectiveTopicId && !isNoteQuiz,
   })
 
-  const activeQuiz = Array.isArray(quizzes) && quizzes.length > 0 ? quizzes[0] : null
+  const [activeQuizData, setActiveQuizData] = useState<any>(null)
+  const activeQuiz = activeQuizData || (Array.isArray(quizzes) && quizzes.length > 0 ? quizzes[0] : null)
   const questions = activeQuiz?.questions ?? []
   const totalQ = questions.length
   const currentQuestion = questions[currentQ]
@@ -55,14 +65,18 @@ export default function QuizPage() {
     setCurrentQ(0)
     setAnswers({})
     setSubmitted(false)
-  }, [topicId])
+    setErrorMsg(null)
+    setActiveQuizData(null)
+  }, [effectiveTopicId, locationState.noteId])
 
-  // If no quiz exists after loading, auto-trigger quiz generation for curriculum topics
+  // If navigated from a Smart Note or no quiz exists, generate a dedicated quiz
   useEffect(() => {
-    if (!isLoading && !activeQuiz && !generating && topicId) {
+    if (isNoteQuiz) {
+      generateQuiz()
+    } else if (!isLoading && !activeQuiz && !generating && effectiveTopicId) {
       generateQuiz()
     }
-  }, [isLoading, activeQuiz, topicId])
+  }, [isLoading, isNoteQuiz, effectiveTopicId, locationState.noteId])
 
   useEffect(() => {
     if (activeQuiz?.time_limit_mins) {
@@ -106,9 +120,9 @@ export default function QuizPage() {
     const pct = totalQ > 0 ? Math.round((score / totalQ) * 100) : 0
 
     // Update real subject and topic progress & quiz score
-    if (topicId && currentSubjectMeta) {
+    if (effectiveTopicId && currentSubjectMeta) {
       const subjectState = useSubjectStore.getState()
-      subjectState.recordQuizResult(currentSubjectMeta.id, topicId, score, totalQ, pct)
+      subjectState.recordQuizResult(currentSubjectMeta.id, effectiveTopicId, score, totalQ, pct)
     }
 
     if (activeQuiz?.id) {
@@ -124,14 +138,14 @@ export default function QuizPage() {
       }
     }
 
-    navigate(`/quiz/${topicId}/result`, {
+    navigate(`/quiz/${effectiveTopicId}/result`, {
       state: {
         score,
         total: totalQ,
         pct,
         answers,
         quiz: activeQuiz,
-        topicId,
+        topicId: effectiveTopicId,
         subjectId: currentSubjectMeta?.id,
       },
     })
@@ -140,28 +154,34 @@ export default function QuizPage() {
   const generateQuiz = async () => {
     if (generating) return
     setGenerating(true)
+    setErrorMsg(null)
     try {
       const res = await quizApi.generate({
-        topic_id: topicId!,
+        topic_id: effectiveTopicId,
+        note_id: locationState.noteId || undefined,
+        note_content: locationState.noteContent || undefined,
+        focus_topic: focusTopic || locationState.title || undefined,
         difficulty: 'medium',
         num_questions: 5,
       })
       if (res.data) {
-        queryClient.setQueryData(['quiz', topicId], [res.data])
+        setActiveQuizData(res.data)
+        queryClient.setQueryData(['quiz', effectiveTopicId, locationState.noteId || 'default'], [res.data])
         setCurrentQ(0)
         setAnswers({})
         setSubmitted(false)
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to generate quiz:', err)
+      setErrorMsg(err.response?.data?.detail || 'Failed to generate quiz questions. Click below to try again.')
     } finally {
       setGenerating(false)
     }
   }
 
   const handleBackToChat = () => {
-    if (currentSubjectMeta && topicId) {
-      navigate(`/subjects/${currentSubjectMeta.id}/chat/${topicId}`)
+    if (currentSubjectMeta && effectiveTopicId) {
+      navigate(`/subjects/${currentSubjectMeta.id}/chat/${effectiveTopicId}`)
     } else if (activeSession?.id) {
       navigate(`/chat/${activeSession.id}`)
     } else {
@@ -192,15 +212,23 @@ export default function QuizPage() {
   if (!questions.length) {
     return (
       <div className="p-6 max-w-2xl mx-auto text-center pt-16">
-        <div className="glass-card p-12 bg-white border border-[#E7E1D8] shadow-sm rounded-3xl">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center mx-auto mb-4 border border-amber-200">
+        <div className="glass-card p-12 bg-white border border-[#E7E1D8] shadow-sm rounded-3xl space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center mx-auto mb-2 border border-amber-200">
             <Trophy size={28} className="text-amber-600" />
           </div>
-          <h2 className="text-xl font-black text-[#20201D] mb-2">Ready to Test Your Knowledge?</h2>
-          <p className="text-[#6F6B63] text-sm mb-6">
+          <h2 className="text-xl font-black text-[#20201D]">Ready to Test Your Knowledge?</h2>
+          <p className="text-[#6F6B63] text-sm max-w-md mx-auto">
             Generate an AI-powered practice quiz for <span className="font-bold text-[#20201D]">{topicName}</span>.
           </p>
-          <div className="flex items-center justify-center gap-3">
+
+          {errorMsg && (
+            <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold max-w-md mx-auto flex items-center gap-2 text-left">
+              <AlertCircle size={16} className="flex-shrink-0 text-red-500" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-center gap-3 pt-2">
             <button
               onClick={handleBackToChat}
               className="flex items-center gap-2 text-xs font-bold text-[#6F6B63] hover:text-[#F28A45] transition-colors py-3 px-5 rounded-2xl bg-white border border-[#E7E1D8] shadow-2xs cursor-pointer"

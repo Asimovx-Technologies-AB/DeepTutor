@@ -14,6 +14,8 @@ router = APIRouter(prefix="/quiz", tags=["quiz"])
 class GenerateQuizRequest(BaseModel):
     session_id: Optional[str] = None
     topic_id: Optional[str] = None
+    note_id: Optional[str] = None
+    note_content: Optional[str] = None
     focus_topic: Optional[str] = None
     custom_topic: Optional[str] = None
     difficulty: Optional[str] = "medium"
@@ -101,8 +103,7 @@ async def get_topic_suggestions(
 
 
 from app.rag.ollama_client import ollama
-
-
+from app.rag.gemini_client import gemini_client
 from app.rag.textbook_reader import is_curriculum_topic
 
 
@@ -131,6 +132,8 @@ async def generate_quiz(
         time_limit_mins=body.time_limit_mins,
         num_questions=body.num_questions or 5,
         topic_id=section_id,
+        note_id=body.note_id,
+        note_content=body.note_content,
     )
     if not quiz:
         if not is_curriculum_topic(section_id):

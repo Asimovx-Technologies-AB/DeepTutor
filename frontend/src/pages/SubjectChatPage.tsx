@@ -37,7 +37,7 @@ const SUBJECT_CONFIGS: Record<string, {
     title: 'Class 10 Mathematics AI Tutor',
     icon: '📐',
     starters: [
-      'Explain the formula for nth term of an Arithmetic Sequence with an example.',
+      'Give me 5 minute cheatcode for Arithmetic Sequences.',
       'How to solve second degree equations by completing the square?',
       'What are the angle properties of cyclic quadrilaterals in circles?',
       'How do I calculate probability using geometric area method?',
@@ -50,10 +50,10 @@ const SUBJECT_CONFIGS: Record<string, {
     title: 'Class 10 Physics AI Tutor',
     icon: '⚡',
     starters: [
+      'Give me 5 minute cheatcode for Wave Motion & Light Refraction.',
       'Explain how convex lenses form images at different object distances.',
       'Why does light disperse into a spectrum when passing through a glass prism?',
       'Explain the Right-Hand Thumb Rule for magnetic fields around a conductor.',
-      'What is the difference between transverse and longitudinal wave motion?',
     ],
   },
   'sslc-chemistry': {
@@ -63,10 +63,10 @@ const SUBJECT_CONFIGS: Record<string, {
     title: 'Class 10 Chemistry AI Tutor',
     icon: '🧪',
     starters: [
+      'Give me 5 minute cheatcode for Nomenclature of Organic Compounds.',
       'How do I write IUPAC names for branched alkanes and alkenes?',
       'Explain the subshell electron configuration (s, p, d, f) with examples.',
       'What are Boyle’s Law and Charles’s Law? Explain with mole concept.',
-      'Explain chain isomerism vs functional isomerism in organic compounds.',
     ],
   },
 }

@@ -1044,12 +1044,26 @@ export default function ChatPage() {
               {/* Clean Multi-Tool Input Container */}
               <div className="w-full bg-white border border-[#E7E1D8] rounded-3xl p-3.5 sm:p-5 shadow-xs focus-within:border-[#F28A45] focus-within:ring-2 focus-within:ring-[#F28A45]/20 transition-all text-left">
                 
-                {/* 3 Quick Study Tool Action Buttons */}
+                {/* 4 Quick Study Tool Action Buttons */}
                 <div className="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b border-[#E7E1D8]">
                   <span className="text-[11px] font-black uppercase text-[#6F6B63] tracking-wider mr-1 flex items-center gap-1">
                     <Sparkles size={13} className="text-[#F28A45]" /> Tools:
                   </span>
                   
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const topic = input.trim() || 'this topic'
+                      handleSend(`Give me 5 minute cheatcode for ${topic}`)
+                    }}
+                    disabled={isStreaming}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FFF0E4] hover:bg-[#F28A45] border border-[#F28A45]/30 hover:border-[#F28A45] text-[#F28A45] hover:text-white text-xs font-black transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
+                    title="Generate 5-minute structured revision cheat sheet"
+                  >
+                    <Zap size={13} />
+                    <span>⚡ 5-Min Cheatcode</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -1098,9 +1112,13 @@ export default function ChatPage() {
                   value={input}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
+                  placeholder={
+                    selectedModel.includes('Vision')
+                      ? 'Ask a question or describe an image/diagram...'
+                      : 'Ask anything about your study material, or click ⚡ 5-Min Cheatcode...'
+                  }
                   rows={2}
                   className="w-full bg-transparent resize-none outline-none text-[#20201D] font-medium text-sm sm:text-base placeholder-[#969188] leading-relaxed px-1"
-                  placeholder="Ask your AI Tutor anything..."
                 />
 
                 {/* Sub Action Toolbar */}
@@ -1142,6 +1160,13 @@ export default function ChatPage() {
               {/* Starter Action Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 w-full mt-6 sm:mt-8">
                 
+                <SuggestionCard
+                  icon={<div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] text-[#F28A45] flex items-center justify-center border border-[#F28A45]/20"><Zap className="w-5 h-5" /></div>}
+                  title="5-Min Cheatcode"
+                  description="Get a structured 6-section 5-minute revision cheat sheet with analogies, tables & visual flowchart."
+                  onClick={() => handleSend("Give me 5 minute cheatcode for this topic.")}
+                />
+
                 <SuggestionCard
                   icon={<div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] text-[#F28A45] flex items-center justify-center border border-[#F28A45]/20"><Clock className="w-5 h-5" /></div>}
                   title="Synthesize Notes"
