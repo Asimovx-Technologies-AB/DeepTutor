@@ -141,6 +141,8 @@ class SemanticChunker:
             buffer: List[str] = list(overlap_buffer)
             buffer_words = _count_words(" ".join(buffer))
 
+            extraction_method = page_data.get("extraction_method", "traditional")
+
             for sent in sentences:
                 sent_words = _count_words(sent)
 
@@ -157,7 +159,7 @@ class SemanticChunker:
                         chunks.append(self._make_chunk(
                             display_text, source_name, page_num,
                             section_title, section_level, section_path,
-                            chunk_idx, chunk_formulas,
+                            chunk_idx, chunk_formulas, extraction_method,
                         ))
                         chunk_idx += 1
 
@@ -182,7 +184,7 @@ class SemanticChunker:
                     chunks.append(self._make_chunk(
                         display_text, source_name, page_num,
                         section_title, section_level, section_path,
-                        chunk_idx, chunk_formulas,
+                        chunk_idx, chunk_formulas, extraction_method,
                     ))
                     chunk_idx += 1
 
@@ -204,6 +206,7 @@ class SemanticChunker:
         section_path: str,
         chunk_index: int,
         formulas: List[str],
+        extraction_method: str = "traditional",
     ) -> Dict:
         wc = _count_words(text)
         return {
@@ -220,8 +223,10 @@ class SemanticChunker:
                 "estimated_tokens": wc * 4 // 3,   # ~1.33 tokens/word
                 "chunk_type": "semantic",
                 "has_formulas": len(formulas) > 0,
+                "extraction_method": extraction_method,
             },
         }
+
 
 
 # Singleton

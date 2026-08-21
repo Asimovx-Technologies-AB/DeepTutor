@@ -78,6 +78,18 @@ class Settings(BaseSettings):
     DOCLING_ENABLE_OCR: bool = True
     DOCLING_OCR_ENGINE: str = "easyocr"     # "easyocr" | "tesseract" | "rapidocr"
 
+    # ── VLM (Vision-Language Model) Document & Image Parser ────────────────
+    ENABLE_VLM_PARSER: bool = True           # Use Gemini Flash VLM for diagrams, images, and scanned PDFs
+    GEMINI_VLM_MODEL: str = "gemini-2.5-flash"  # "gemini-2.5-flash" | "gemini-3.5-flash" | "gemini-flash-latest"
+    VLM_MIN_WORDS_THRESHOLD: int = 50        # Flag page for VLM if word count < this threshold
+    VLM_IMAGE_COVERAGE_THRESHOLD: float = 0.70  # Flag page for VLM if image coverage > this percentage
+    VLM_CACHE_DIR: str = "./vlm_cache"       # Disk cache directory for per-page VLM transcriptions
+    VLM_MAX_CONCURRENT_PAGES: int = 4        # Concurrent page processing cap
+    VLM_MAX_PAGES_PER_DOC: int = 50          # Max pages to process via VLM per document (cost & time safety cap)
+
+
+
+
     # ── Stage 1: Semantic Chunking (Fast 350–650 words per chunk) ───────────
     CHUNKING_STRATEGY: str = "semantic"      # "semantic" | "sliding_window" | "hierarchical"
     CHUNK_MIN_WORDS: int = 350               # min words per chunk

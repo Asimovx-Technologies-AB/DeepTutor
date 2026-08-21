@@ -1,0 +1,26 @@
+[
+  {
+    "head": "VMware",
+    "relation": "USES",
+    "tail": "Hypervisor",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_07e0aa6f-ff9b-4e25-898b-56c40825cbc7_46708072",
+    "source_doc": "Screenshot 2026-08-21 120736.png p.1 §VMware (It is a virtualization software)"
+  },
+  {
+    "head": "VMware",
+    "relation": "USES",
+    "tail": "Binary Translation",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_07e0aa6f-ff9b-4e25-898b-56c40825cbc7_46708072",
+    "source_doc": "Screenshot 2026-08-21 120736.png p.1 §VMware (It is a virtualization software)"
+  },
+  {
+    "head": "Hypervisor",
+    "relation": "PART_OF",
+    "tail": "Privilege Rings",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_07e0aa6f-ff9b-4e25-898b-56c40825cbc7_46708072",
+    "source_doc": "Screenshot 2026-08-21 120736.png p.1 §VMware (It is a virtualization software)"
+  }
+]

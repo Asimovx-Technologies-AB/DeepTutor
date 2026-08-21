@@ -1,0 +1,32 @@
+{
+  "vmware___USES___hypervisor": {
+    "id": "vmware___USES___hypervisor",
+    "source_entity": "VMware",
+    "target_entity": "Hypervisor",
+    "type": "USES",
+    "description": "VMware uses Type 1 or Type 2 hypervisors for virtualization.",
+    "sources": [
+      "VMware"
+    ]
+  },
+  "vmware___USES___binary_translation": {
+    "id": "vmware___USES___binary_translation",
+    "source_entity": "VMware",
+    "target_entity": "Binary Translation",
+    "type": "USES",
+    "description": "VMware uses binary translation to manage CPU instructions.",
+    "sources": [
+      "VMware"
+    ]
+  },
+  "hypervisor___APPLIES_TO___privilege_rings": {
+    "id": "hypervisor___APPLIES_TO___privilege_rings",
+    "source_entity": "Hypervisor",
+    "target_entity": "Privilege Rings",
+    "type": "APPLIES_TO",
+    "description": "The hypervisor operates within Ring 0 of the privilege rings.",
+    "sources": [
+      "Hypervisor"
+    ]
+  }
+}
