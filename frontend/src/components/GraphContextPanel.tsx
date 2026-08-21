@@ -906,7 +906,7 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
                           </div>
                           <div className="h-2 bg-slate-300 dark:bg-slate-700 rounded-full w-full" />
                           <div className="h-2 bg-slate-300 dark:bg-slate-700 rounded-full w-4/5" />
-                        </div>
+                        </p>
                       ) : (
                         <div className="space-y-2.5 mt-3">
                           {/* Core Meaning Card */}

@@ -1048,6 +1048,9 @@ def get_study_note_by_id(note_id: str) -> Optional[dict]:
         return _note_dict(note) if note else None
 
 
+get_study_note = get_study_note_by_id
+
+
 def delete_study_note(note_id: str, user_id: str) -> bool:
     with DBContext() as db:
         note = db.query(StudyNote).filter(StudyNote.id == note_id, StudyNote.user_id == user_id).first()

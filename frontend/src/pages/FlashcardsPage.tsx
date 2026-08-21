@@ -377,8 +377,8 @@ export default function FlashcardsPage() {
               <Sparkles size={16} /> Generate AI Deck
             </button>
           </div>
+        </motion.div>
       </div>
-      </div >
     )
   }
 
@@ -498,36 +498,17 @@ export default function FlashcardsPage() {
                     {currentCard?.front}
                   </h2>
 
-                  {showHint && (
-                    <motion.p
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="mt-4 text-xs text-[#FFC800] bg-[#FFF0B3] border border-[#FFC800]/30 rounded-[1.25rem] px-4 py-2 font-bold"
-                    >
-                      <Volume2 size={18} />
-                    </button>
-                    {currentCard?.mastered && (
-                    <span className="text-[11px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1">
+                  {currentCard?.mastered && (
+                    <span className="text-[11px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1 mt-4">
                       <Check size={12} /> Mastered
                     </span>
                   )}
                 </div>
-              </div>
 
-              <div className="flex items-center justify-between pt-3 border-t border-[#E2E8F0]/60">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setShowHint(!showHint)
-                  }}
-                  className="text-xs font-black text-[#FFC800] hover:text-[#B57C20] flex items-center gap-1 cursor-pointer"
-                >
-                  <Lightbulb size={14} /> {showHint ? 'Hide Hint' : 'Reveal Hint'}
-                </button>
-                <p className="text-xs text-[#AFAFAF] font-semibold">Click Card to Flip 🔄</p>
+                <div className="flex items-center justify-center pt-3 border-t border-[#E2E8F0]/60">
+                  <p className="text-xs text-[#AFAFAF] font-semibold">Click Card to Flip 🔄</p>
+                </div>
               </div>
-          </div>
 
           {/* ─── Back Side (Structured 3-Part Answer) ─── */}
           <div

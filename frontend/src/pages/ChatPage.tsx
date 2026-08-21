@@ -284,7 +284,7 @@ function UploadStatusCard({
         <div className="flex items-center gap-3 flex-shrink-0">
           <div className="text-right">
             <span className={`text-xl sm:text-2xl font-black tracking-tight ${isDone ? 'text-[#58CC02]' : isError ? 'text-[#FF4B4B]' : 'text-[#1CB0F6]'}`}>
-              {displayProgress}%
+              {smoothProgress}%
             </span>
           </div>
 
@@ -318,18 +318,17 @@ function UploadStatusCard({
               transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
             />
           )}
+        </motion.div>
       </div>
-    </div>
 
-      {/* Done Stats Pill */ }
-  {
-    isDone && status.stats && (
-      <motion.div
-        initial={{ opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mt-3 pt-2.5 border-t border-[#E2E8F0]/60 flex items-center justify-between text-xs font-bold text-[#58CC02]"
-      >
-        <div className="flex items-center gap-3 flex-wrap">
+      {/* Done Stats Pill */}
+      {isDone && status.stats && (
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-3 pt-2.5 border-t border-[#E2E8F0]/60 flex items-center justify-between text-xs font-bold text-[#58CC02]"
+        >
+          <div className="flex items-center gap-3 flex-wrap">
           <span>✨ {status.stats.chunks_indexed || 0} Chunks Indexed</span>
           <span>•</span>
           <span>🧠 {status.stats.entities_extracted || 0} Graph Entities</span>
@@ -1030,13 +1029,27 @@ export default function ChatPage() {
               </h1>
 
               {/* Clean Multi-Tool Input Container */}
-              <div className="w-full bg-white border border-[#E2E8F0] rounded-[2rem] p-3.5 sm:p-5 elevation-2 focus-within:border-[#1CB0F6] focus-within:ring-2 focus-within:ring-[#1CB0F6]/20 transition-all text-left">
-
-                {/* 3 Quick Study Tool Action Buttons */}
-                <div className="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b border-[#E2E8F0]">
-                  <span className="text-[11px] font-black uppercase text-[#777777] tracking-wider mr-1 flex items-center gap-1">
-                    <Sparkles size={13} className="text-[#1CB0F6]" /> Tools:
+              <div className="w-full bg-white border border-[#E7E1D8] rounded-3xl p-3.5 sm:p-5 shadow-xs focus-within:border-[#F28A45] focus-within:ring-2 focus-within:ring-[#F28A45]/20 transition-all text-left">
+                
+                {/* 4 Quick Study Tool Action Buttons */}
+                <div className="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b border-[#E7E1D8]">
+                  <span className="text-[11px] font-black uppercase text-[#6F6B63] tracking-wider mr-1 flex items-center gap-1">
+                    <Sparkles size={13} className="text-[#F28A45]" /> Tools:
                   </span>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const topic = input.trim() || 'this topic'
+                      handleSend(`Give me 5 minute cheatcode for ${topic}`)
+                    }}
+                    disabled={isStreaming}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FFF0E4] hover:bg-[#F28A45] border border-[#F28A45]/30 hover:border-[#F28A45] text-[#F28A45] hover:text-white text-xs font-black transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
+                    title="Generate 5-minute structured revision cheat sheet"
+                  >
+                    <Zap size={13} />
+                    <span>⚡ 5-Min Cheatcode</span>
+                  </button>
 
                   <button
                     type="button"
@@ -1086,9 +1099,13 @@ export default function ChatPage() {
                   value={input}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
+                  placeholder={
+                    selectedModel.includes('Vision')
+                      ? 'Ask a question or describe an image/diagram...'
+                      : 'Ask anything about your study material, or click ⚡ 5-Min Cheatcode...'
+                  }
                   rows={2}
-                  className="w-full bg-transparent resize-none outline-none text-[#3C3C3C] font-medium text-sm sm:text-base placeholder-[#AFAFAF] leading-relaxed px-1"
-                  placeholder="What are you working on today?"
+                  className="w-full bg-transparent resize-none outline-none text-[#20201D] font-medium text-sm sm:text-base placeholder-[#969188] leading-relaxed px-1"
                 />
 
                 {/* Sub Action Toolbar */}
@@ -1130,7 +1147,14 @@ export default function ChatPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 w-full mt-6 sm:mt-8">
 
                 <SuggestionCard
-                  icon={<div className="w-10 h-10 rounded-[1.5rem] bg-[#DDF4FF] text-[#1CB0F6] flex items-center justify-center border border-[#1CB0F6]/20"><Clock className="w-5 h-5" /></div>}
+                  icon={<div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] text-[#F28A45] flex items-center justify-center border border-[#F28A45]/20"><Zap className="w-5 h-5" /></div>}
+                  title="5-Min Cheatcode"
+                  description="Get a structured 6-section 5-minute revision cheat sheet with analogies, tables & visual flowchart."
+                  onClick={() => handleSend("Give me 5 minute cheatcode for this topic.")}
+                />
+
+                <SuggestionCard
+                  icon={<div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] text-[#F28A45] flex items-center justify-center border border-[#F28A45]/20"><Clock className="w-5 h-5" /></div>}
                   title="Synthesize Notes"
                   description="Turn my uploaded PDF notes into 5 key bullet points for quick review."
                   onClick={() => handleSend("Turn my uploaded PDF notes into 5 key bullet points for quick review.")}

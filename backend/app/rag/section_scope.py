@@ -138,7 +138,10 @@ async def get_section_context(
             print(f"[section_scope] Using populated user collection {found_collection} for user {user_id}")
             target_collection_id = found_collection
         else:
-            print(f"[section_scope] No populated document collections found for user {user_id}.")
+            print(f"[section_scope] No populated document collections found for user {user_id}. Falling back to curriculum textbook.")
+            tb_chunks = extract_textbook_chunks("math-10-1", query=query, max_chunks=top_k)
+            if tb_chunks:
+                return tb_chunks
             return []
 
     if query and query.strip():

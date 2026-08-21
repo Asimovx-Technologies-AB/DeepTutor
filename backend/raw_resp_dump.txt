@@ -1,0 +1,26 @@
+{
+  "title": "5-Minute Cheat Notes: Classical Machine Learning: Seventy Years of Algorithmic Learning Evolution",
+  "high_yield_topics": [
+    "Definition and Scope of Classical Machine Learning (ML) as a subfield of Artificial Intelligence (AI)",
+    "Major Classical ML Algorithms (Perceptron, Random Forests, Decision Trees, Linear Regression, Logistic Regression, Support Vector Machines)",
+    "Bibliometric Analysis Techniques (Citation analysis, keyword analysis, collaborative networks)",
+    "Impact and Applications across industries (Healthcare, finance, engineering, manufacturing, autonomous vehicles, NLP)"
+  ],
+  "key_formulas": [],
+  "exam_tips": [
+    "Remember that classical ML serves as the foundational building block for contemporary deep learning and modern AI advancements.",
+    "Be familiar with key bibliometric techniques like citation analysis and keyword mapping used to evaluate historical research trends.",
+    "Know the core algorithms explicitly mentioned in the text: Perceptron, Random Forests, Decision Trees, Linear/Logistic Regression, and SVMs."
+  ],
+  "solved_questions": [
+    {
+      "question": "What primary research methodology did Ezugwu et al. use to examine the state-of-the-art publications in classical machine learning?",
+      "answer": "The authors employed an extensive bibliometric analysis study, analyzing a dataset of highly cited papers from prominent ML conferences and journals using techniques such as citation and keyword analyses."
+    },
+    {
+      "question": "What is the primary role of classical machine learning publications in relation to modern technological advancements?",
+      "answer": "The foundational knowledge encapsulated within classic ML publications provides the essential building blocks and origins for contemporary research, algorithmic evolution, and modern technological advancements."
+    }
+  ],
+  "content_markdown": "# Classical Machine Learning: Seventy Years of Algorithmic Learning Evolution\n\n## Overview\nThis paper provides a comprehensive overview of major classical machine learning (ML) algorithms and conducts an extensive bibliometric analysis spanning twelve decades of literature. \n\n## Key Concepts\n- **Machine Learning (ML):** A vital subfield of artificial intelligence (AI) that drives exponential changes across multiple industries.\n- **Core Algorithms Highlighted:**\n  - Perceptron\n  - Decision Trees & Random Forests\n  - Linear Regression & Logistic Regression\n  - Support Vector Machines (SVMs)\n- **Bibliometric Insights:** Evaluates influential papers, top-contributing authors, collaborative global networks, prevailing research themes, and geographic publication distributions (with an emphasis on the Global South).\n\n## Significance\nUnderstanding the foundational literature of classical ML is critical for contextualizing current AI breakthroughs and charting future research trajectories."
+}

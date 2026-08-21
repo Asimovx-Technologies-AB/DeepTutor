@@ -25,9 +25,9 @@ class User(Base):
     last_active_date = Column(String, nullable=True)
 
     sessions = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
-    activities = relationship("UserActivity", back_populates="user", cascade="all, delete-orphan")
-    progress = relationship("UserProgress", back_populates="user", cascade="all, delete-orphan")
-    learning_goals = relationship("LearningGoal", back_populates="user", cascade="all, delete-orphan")
+    # activities = relationship("UserActivity", back_populates="user", cascade="all, delete-orphan")
+    # progress = relationship("UserProgress", back_populates="user", cascade="all, delete-orphan")
+    # learning_goals = relationship("LearningGoal", back_populates="user", cascade="all, delete-orphan")
 
 
 class ChatSession(Base):

@@ -108,7 +108,8 @@ export default function QuizResultPage() {
   return (
     <div className="p-6 max-w-3xl mx-auto bg-[#F7F7F7]">
       {/* Header */}
-      <motion.button
+      <div className="flex items-center justify-between">
+        <motion.button
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         onClick={() => {

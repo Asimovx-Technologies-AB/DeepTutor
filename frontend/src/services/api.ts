@@ -204,6 +204,8 @@ export const quizApi = {
   get: (id: string) => api.get(`/quiz/${id}`),
   generate: (data: {
     topic_id?: string
+    note_id?: string
+    note_content?: string
     difficulty?: string
     session_id?: string
     focus_topic?: string

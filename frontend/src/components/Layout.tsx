@@ -21,7 +21,8 @@ import {
   Plus,
   FileText,
   Trash2,
-  GraduationCap
+  GraduationCap,
+  Award,
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
@@ -35,10 +36,8 @@ const NAV_ITEMS = [
   { to: '/dashboard', icon: Home, label: 'Home', badge: null },
   { to: '/chat', icon: BookOpen, label: 'Learn', badge: 'Live' },
   { to: '/subjects', icon: Layers, label: 'My Subjects', badge: null },
-  { to: '/notes', icon: FileText, label: 'Smart Notes', badge: 'PYQ AI' },
   { to: '/records', icon: Award, label: 'Student Records', badge: 'Live' },
   { to: '/study-plan', icon: CalendarCheck, label: 'Study Plan', badge: 'AI' },
-  { to: '/progress', icon: TrendingUp, label: 'Progress', badge: null },
 ]
 
 export default function Layout() {
