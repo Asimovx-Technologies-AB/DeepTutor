@@ -31,7 +31,7 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         // Also wipe the chat store persisted data so the next user
         // doesn't see a previous user's sessions on first render
-        try { localStorage.removeItem('deep-tutor-chat') } catch {}
+        try { localStorage.removeItem('indie-tutor-chat') } catch {}
         set({ user: null, token: null, isAuthenticated: false })
       },
       updateUser: (fields) =>
@@ -39,6 +39,6 @@ export const useAuthStore = create<AuthState>()(
           user: state.user ? { ...state.user, ...fields } : null,
         })),
     }),
-    { name: 'deep-tutor-auth' }
+    { name: 'indie-tutor-auth' }
   )
 )

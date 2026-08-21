@@ -32,7 +32,7 @@ const SUBJECT_CONFIGS: Record<string, {
 }> = {
   'sslc-math': {
     color: '#D97706',
-    accentBg: '#FFFBEB',
+    accentBg: '#FFF0B3',
     borderColor: '#FDE68A',
     title: 'Class 10 Mathematics AI Tutor',
     icon: '📐',
@@ -250,14 +250,14 @@ export default function SubjectChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-68px)] bg-[#FAF8F3] text-[#20201D] font-sans">
+    <div className="flex flex-col h-[calc(100vh-68px)] bg-[#F7F7F7] text-[#3C3C3C] font-sans">
       {/* ─── Top Subject Navigation & Chapter Bar ─── */}
-      <header className="bg-white border-b border-[#E7E1D8] px-4 sm:px-8 py-3.5 flex flex-col gap-3 shadow-2xs">
+      <header className="bg-white border-b border-[#E2E8F0] px-4 sm:px-8 py-3.5 flex flex-col gap-3 elevation-1">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(`/subjects/${activeSubjectId}`)}
-              className="p-2 rounded-xl hover:bg-[#F2ECE4] text-[#6F6B63] hover:text-[#20201D] transition-colors cursor-pointer"
+              className="p-2 rounded-[1.25rem] hover:bg-[#F2ECE4] text-[#777777] hover:text-[#3C3C3C] transition-colors cursor-pointer"
               title="Back to Subject Workspace"
             >
               <ArrowLeft size={18} />
@@ -266,10 +266,10 @@ export default function SubjectChatPage() {
             <div className="flex items-center gap-2.5">
               <span className="text-2xl">{config.icon}</span>
               <div>
-                <h1 className="text-base sm:text-lg font-bold text-[#20201D] leading-tight">
+                <h1 className="text-base sm:text-lg font-bold text-[#3C3C3C] leading-tight">
                   {subject.name} AI Tutor
                 </h1>
-                <p className="text-xs text-[#6F6B63]">
+                <p className="text-xs text-[#777777]">
                   Connected to Official Kerala SCERT Class 10 Textbook (Pinecone Cloud)
                 </p>
               </div>
@@ -282,7 +282,7 @@ export default function SubjectChatPage() {
               <button
                 onClick={handleResetChat}
                 disabled={isStreaming}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#E7E1D8] hover:border-[#F28A45] text-xs font-bold text-[#6F6B63] hover:text-[#F28A45] transition-colors cursor-pointer bg-white"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-[1.25rem] border border-[#E2E8F0] hover:border-[#1CB0F6] text-xs font-bold text-[#777777] hover:text-[#1CB0F6] transition-colors cursor-pointer bg-white"
                 title="Start a new chat for this chapter"
               >
                 <RotateCcw size={13} />
@@ -294,13 +294,13 @@ export default function SubjectChatPage() {
               <>
                 <button
                   onClick={() => navigate(`/quiz/${selectedTopicId}`)}
-                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#E7E1D8] hover:border-[#F28A45] text-xs font-bold text-[#6F6B63] hover:text-[#F28A45] transition-colors cursor-pointer bg-white"
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-[1.25rem] border border-[#E2E8F0] hover:border-[#1CB0F6] text-xs font-bold text-[#777777] hover:text-[#1CB0F6] transition-colors cursor-pointer bg-white"
                 >
                   <Trophy size={14} /> Practice Quiz
                 </button>
                 <button
                   onClick={() => navigate(`/flashcards/${selectedTopicId}`)}
-                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#E7E1D8] hover:border-[#F28A45] text-xs font-bold text-[#6F6B63] hover:text-[#F28A45] transition-colors cursor-pointer bg-white"
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-[1.25rem] border border-[#E2E8F0] hover:border-[#1CB0F6] text-xs font-bold text-[#777777] hover:text-[#1CB0F6] transition-colors cursor-pointer bg-white"
                 >
                   <Layers size={14} /> Flashcards
                 </button>
@@ -315,8 +315,8 @@ export default function SubjectChatPage() {
             onClick={() => setSelectedTopicId('')}
             className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
               selectedTopicId === ''
-                ? 'bg-[#20201D] text-white shadow-xs'
-                : 'bg-[#F2ECE4] text-[#6F6B63] hover:bg-[#E7E1D8]'
+                ? 'bg-[#3C3C3C] text-white elevation-2'
+                : 'bg-[#F2ECE4] text-[#777777] hover:bg-[#E2E8F0]'
             }`}
           >
             📖 All Chapters
@@ -329,8 +329,8 @@ export default function SubjectChatPage() {
                 onClick={() => setSelectedTopicId(t.id)}
                 className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
                   isSelected
-                    ? 'bg-[#F28A45] text-white shadow-xs'
-                    : 'bg-[#F2ECE4] text-[#6F6B63] hover:bg-[#E7E1D8]'
+                    ? 'bg-[#1CB0F6] text-white elevation-2'
+                    : 'bg-[#F2ECE4] text-[#777777] hover:bg-[#E2E8F0]'
                 }`}
               >
                 {t.title}
@@ -344,8 +344,8 @@ export default function SubjectChatPage() {
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 max-w-4xl w-full mx-auto">
         {loadingSession ? (
           <div className="h-full flex flex-col items-center justify-center py-20 space-y-4">
-            <div className="w-10 h-10 border-3 border-[#F28A45] border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs font-bold text-[#969188] animate-pulse">Loading AI Textbook Tutor...</p>
+            <div className="w-10 h-10 border-3 border-[#1CB0F6] border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs font-bold text-[#AFAFAF] animate-pulse">Loading AI Textbook Tutor...</p>
           </div>
         ) : messages.length === 0 ? (
           <motion.div
@@ -361,13 +361,13 @@ export default function SubjectChatPage() {
               className="relative"
             >
               <div
-                className="w-20 h-20 rounded-3xl flex items-center justify-center text-4xl shadow-md border"
+                className="w-20 h-20 rounded-[2rem] flex items-center justify-center text-4xl elevation-4 border"
                 style={{ backgroundColor: config.accentBg, borderColor: config.borderColor }}
               >
                 {config.icon}
               </div>
               <div
-                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-white border flex items-center justify-center shadow-xs text-xs font-bold"
+                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-white border flex items-center justify-center elevation-2 text-xs font-bold"
                 style={{ borderColor: config.borderColor, color: config.color }}
               >
                 10th
@@ -375,10 +375,10 @@ export default function SubjectChatPage() {
             </motion.div>
 
             <div className="max-w-md space-y-2">
-              <h2 className="text-2xl font-black text-[#20201D] tracking-tight">
+              <h2 className="text-2xl font-black text-[#3C3C3C] tracking-tight">
                 {selectedTopic ? selectedTopic.title : `${subject.name} AI Tutor`}
               </h2>
-              <p className="text-sm text-[#6F6B63] leading-relaxed">
+              <p className="text-sm text-[#777777] leading-relaxed">
                 {selectedTopic
                   ? selectedTopic.description
                   : 'Ask any question from official textbook chapters. I will explain concepts, provide step-by-step examples, solved calculations, and exam model answers.'}
@@ -393,12 +393,12 @@ export default function SubjectChatPage() {
                   whileHover={{ scale: 1.02, y: -2 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => sendMessage(starter)}
-                  className="p-4 rounded-2xl bg-white border border-[#E7E1D8] hover:border-[#F28A45] hover:shadow-xs transition-all cursor-pointer flex items-start gap-3 group text-left"
+                  className="p-4 rounded-[1.5rem] bg-white border border-[#E2E8F0] hover:border-[#1CB0F6] hover:elevation-2 transition-all cursor-pointer flex items-start gap-3 group text-left"
                 >
-                  <div className="w-7 h-7 rounded-xl bg-[#FFF0E4] flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform">
-                    <Sparkles size={14} className="text-[#F28A45]" />
+                  <div className="w-7 h-7 rounded-[1.25rem] bg-[#DDF4FF] flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform">
+                    <Sparkles size={14} className="text-[#1CB0F6]" />
                   </div>
-                  <span className="text-xs font-bold text-[#20201D] group-hover:text-[#F28A45] transition-colors leading-relaxed">
+                  <span className="text-xs font-bold text-[#3C3C3C] group-hover:text-[#1CB0F6] transition-colors leading-relaxed">
                     {starter}
                   </span>
                 </motion.button>
@@ -436,14 +436,14 @@ export default function SubjectChatPage() {
             e.preventDefault()
             sendMessage()
           }}
-          className="relative bg-white border border-[#E7E1D8] focus-within:border-[#F28A45] focus-within:ring-3 focus-within:ring-[#F28A45]/15 rounded-3xl p-2 pl-5 shadow-xs transition-all flex items-center gap-3"
+          className="relative bg-white border border-[#E2E8F0] focus-within:border-[#1CB0F6] focus-within:ring-3 focus-within:ring-[#1CB0F6]/15 rounded-[2rem] p-2 pl-5 elevation-2 transition-all flex items-center gap-3"
         >
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={`Ask a question or topic from ${selectedTopic ? selectedTopic.title : subject.name}...`}
-            className="flex-1 bg-transparent text-sm sm:text-base text-[#20201D] font-medium placeholder-[#9E9B95] focus:outline-none"
+            className="flex-1 bg-transparent text-sm sm:text-base text-[#3C3C3C] font-medium placeholder-[#9E9B95] focus:outline-none"
             disabled={isStreaming || loadingSession}
           />
 
@@ -452,7 +452,7 @@ export default function SubjectChatPage() {
             whileTap={{ scale: 0.95 }}
             type="submit"
             disabled={!input.trim() || isStreaming || loadingSession}
-            className="p-3.5 bg-[#F28A45] hover:bg-[#D97706] disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-2xl transition-all cursor-pointer flex-shrink-0 shadow-xs flex items-center justify-center"
+            className="p-3.5 bg-[#1CB0F6] hover:bg-[#D97706] disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-[1.5rem] transition-all cursor-pointer flex-shrink-0 elevation-2 flex items-center justify-center"
             title="Send Message"
           >
             <Send size={16} />

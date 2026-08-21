@@ -7,7 +7,8 @@ from datetime import datetime
 from app.core.database import DBContext, engine
 from app.core.models import (
     Base, User, ChatSession, ChatMessage, Document, 
-    Quiz, QuizQuestion, QuizAttempt, Flashcard, StudyPlan
+    Quiz, QuizQuestion, QuizAttempt, Flashcard, StudyPlan,
+    UserActivity, UserProgress, LearningGoal
 )
 from app.rag.storage import active_vector_store, active_graph_store
 
@@ -39,8 +40,11 @@ def wipe_all_data(reseed_default_user: bool = True):
             db.query(Flashcard).delete()
             db.query(StudyPlan).delete()
             db.query(Document).delete()
+            db.query(UserActivity).delete()
+            db.query(UserProgress).delete()
+            db.query(LearningGoal).delete()
             db.query(User).delete()
-        print("   [OK] Cleared all SQL tables (Chats, Documents, Quizzes, Flashcards, Study Plans, Users).")
+        print("   [OK] Cleared all SQL tables (Chats, Documents, Quizzes, Flashcards, Study Plans, Activities, Progress, Users).")
     except Exception as e:
         print(f"   [WARN] SQL clear warning: {e}")
         # Fallback drop and recreate
@@ -50,6 +54,12 @@ def wipe_all_data(reseed_default_user: bool = True):
             print("   [OK] Re-created clean schema tables.")
         except Exception as e2:
             print(f"   [ERROR] Could not recreate tables: {e2}")
+
+    # Force create new tables if they don't exist yet!
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception:
+        pass
 
     print("\n2. Resetting Active Vector Store & Knowledge Graph...")
     try:

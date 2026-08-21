@@ -21,7 +21,7 @@ import {
   Plus,
   FileText,
   Trash2,
-  Award
+  GraduationCap
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
@@ -100,12 +100,10 @@ export default function Layout() {
   }, [confirmDeleteSid, activeSession?.id, removeSession, setActiveSession, navigate])
 
   return (
-    <div className="flex h-screen bg-[#FAF8F3] overflow-hidden text-[#20201D] font-sans antialiased">
-      {/* Profile Modal */}
+    <div className="flex h-screen bg-bg-primary overflow-hidden text-text-primary font-sans antialiased">
+      {/* Modals */}
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
-      {/* Upgrade Modal */}
       <UpgradeModal isOpen={isUpgradeOpen} onClose={() => setIsUpgradeOpen(false)} />
-      {/* Confirm Delete Modal */}
       <ConfirmModal
         isOpen={Boolean(confirmDeleteSid)}
         title="Delete Chat Session?"
@@ -117,296 +115,146 @@ export default function Layout() {
         onCancel={() => setConfirmDeleteSid(null)}
       />
 
+      {/* ─── DESKTOP SIDEBAR ─── */}
+      <aside className="hidden lg:flex w-[104px] flex-shrink-0 flex-col p-4 z-20">
+        <div className="flex-1 rounded-3xl bg-white/80 backdrop-blur-xl border border-white/60 elevation-1 flex flex-col items-center py-8 justify-between relative">
 
-      {/* ─── LEFT SIDEBAR NAVIGATION ─── */}
-      <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-72 bg-white border-r border-[#E7E1D8] flex flex-col justify-between shadow-2xl lg:shadow-none transition-transform duration-300 ${
-          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        }`}
-      >
-        {/* Top Header Logo */}
-        <div className="p-6 border-b border-[#E7E1D8]/60 flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/dashboard')}>
-            <div className="w-9 h-9 rounded-xl bg-[#FFF0E4] border border-[#F28A45]/30 flex items-center justify-center p-1.5 shadow-2xs">
-              <div className="grid grid-cols-2 gap-1 w-full h-full">
-                <div className="bg-[#F28A45] rounded-xs" />
-                <div className="bg-[#4F8A68] rounded-xs" />
-                <div className="bg-[#D99A32] rounded-xs" />
-                <div className="bg-[#A99BCB] rounded-xs" />
-              </div>
-            </div>
-            <div>
-              <span className="font-extrabold text-lg text-[#20201D] tracking-tight block leading-none">
-                DeepTutor
-              </span>
-              <span className="text-[10px] text-[#F28A45] font-extrabold uppercase tracking-widest mt-0.5 block">
-                AI Learning Platform
-              </span>
+          {/* Top Logo */}
+          <div className="flex items-center justify-center cursor-pointer mb-8" onClick={() => navigate('/dashboard')}>
+            <div className="w-12 h-12 rounded-2xl bg-brand-primary text-white flex items-center justify-center elevation-2">
+              <GraduationCap size={24} />
             </div>
           </div>
-          <button
-            onClick={() => setMobileOpen(false)}
-            className="lg:hidden text-[#969188] hover:text-[#20201D] p-1.5 rounded-xl hover:bg-[#F4EFE7]"
-          >
-            <X size={18} />
-          </button>
-        </div>
 
-        {/* Middle Navigation Items */}
-        <div className="flex-1 px-4 py-5 overflow-y-auto space-y-6">
-          <div>
-            <nav className="space-y-1.5">
-              {NAV_ITEMS.map(({ to, icon: Icon, label, badge }) => {
-                const isActive = location.pathname.startsWith(to)
-                const isChat = to === '/chat'
-                const isSubject = to === '/subjects'
-                const learnSessions = sessions.filter(
-                  (s) => !s.topic_id?.startsWith('sslc-') &&
-                         !s.topic_id?.startsWith('math-') &&
-                         !s.topic_id?.startsWith('phys-') &&
-                         !s.topic_id?.startsWith('chem-')
-                )
+          {/* Navigation Items */}
+          <nav className="flex-1 flex flex-col items-center gap-6 overflow-y-auto no-scrollbar w-full">
+            {NAV_ITEMS.map(({ to, icon: Icon, label }) => {
+              const isActive = location.pathname.startsWith(to)
+              return (
+                <NavLink
+                  key={to}
+                  to={to}
+                  title={label}
+                  className={`flex items-center justify-center w-12 h-12 rounded-2xl transition-all group ${isActive
+                      ? 'bg-white elevation-1 text-brand-primary'
+                      : 'text-text-muted hover:text-brand-primary hover:bg-white/50'
+                    }`}
+                >
+                  <Icon
+                    size={22}
+                    className={isActive ? 'text-brand-primary' : 'text-text-muted group-hover:text-brand-primary transition-colors'}
+                  />
+                </NavLink>
+              )
+            })}
+          </nav>
 
-                return (
-                  <div key={to} className="space-y-1.5">
-                    <NavLink
-                      to={to}
-                      onClick={() => setMobileOpen(false)}
-                      className={`flex items-center justify-between px-4 py-3 rounded-2xl text-[15px] leading-[22px] transition-all group ${
-                        isActive
-                          ? 'bg-[#FFF0E4] text-[#F28A45] font-semibold shadow-xs'
-                          : 'text-[#6F6B63] font-medium hover:text-[#20201D] hover:bg-[#F4EFE7]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3.5">
-                        <Icon
-                          size={20}
-                          className={isActive ? 'text-[#F28A45]' : 'text-[#969188] group-hover:text-[#20201D] transition-colors'}
-                        />
-                        <span>{label}</span>
-                      </div>
-
-                      {badge ? (
-                        <span
-                          className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full ${
-                            isActive
-                              ? 'bg-[#F28A45] text-white'
-                              : 'bg-[#F4EFE7] text-[#6F6B63] border border-[#E7E1D8]'
-                          }`}
-                        >
-                          {badge}
-                        </span>
-                      ) : isActive ? (
-                        <ChevronRight size={16} className="text-[#F28A45]" />
-                      ) : null}
-                    </NavLink>
-
-                    {/* Learn History Sub-panel (Only for custom uploaded documents) */}
-                    {isChat && isActive && (
-                      <div className="ml-3 pl-3 border-l-2 border-[#F28A45]/30 space-y-3 pt-2 pb-1">
-                        {/* New Chat Button */}
-                        <button
-                          onClick={() => {
-                            setActiveSession(null)
-                            navigate('/chat')
-                            setMobileOpen(false)
-                          }}
-                          className="w-full btn-primary font-bold text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 shadow-2xs transition-all active:scale-[0.98] cursor-pointer"
-                        >
-                          <Plus size={15} />
-                          <span>New Document Chat</span>
-                        </button>
-
-                        {/* History Header & List */}
-                        <div className="space-y-1">
-                          <p className="px-2 text-[10px] font-black text-[#969188] uppercase tracking-wider">
-                            Document Chat History
-                          </p>
-
-                          {learnSessions.length === 0 ? (
-                            <p className="px-2 py-1 text-xs text-[#969188] italic">No document chats yet</p>
-                          ) : (
-                            learnSessions.slice(0, 6).map((s) => {
-                              const isSelected = activeSession?.id === s.id
-                              return (
-                                <div
-                                  key={s.id}
-                                  onClick={() => {
-                                    navigate(`/chat/${s.id}`)
-                                    setMobileOpen(false)
-                                  }}
-                                  className={`group flex items-center justify-between px-2.5 py-2 rounded-xl text-xs cursor-pointer transition-all ${
-                                    isSelected
-                                      ? 'bg-white text-[#F28A45] font-black border border-[#F28A45]/30 shadow-2xs'
-                                      : 'text-[#6F6B63] hover:text-[#20201D] hover:bg-[#F4EFE7] font-semibold'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2 min-w-0 pr-1">
-                                    <FileText size={13} className={isSelected ? 'text-[#F28A45]' : 'text-[#969188]'} />
-                                    <span className="truncate">{s.session_title || 'Untitled Session'}</span>
-                                  </div>
-                                  <button
-                                    onClick={(e) => handleDeleteSession(e, s.id)}
-                                    className="opacity-0 group-hover:opacity-100 text-[#969188] hover:text-[#C85C52] p-1 rounded transition-opacity"
-                                    title="Delete chat"
-                                  >
-                                    <Trash2 size={12} />
-                                  </button>
-                                </div>
-                              )
-                            })
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* My Subjects Sub-panel (Direct AI Tutor shortcuts) */}
-                    {isSubject && isActive && (
-                      <div className="ml-3 pl-3 border-l-2 border-[#D97706]/30 space-y-2 pt-2 pb-1">
-                        <p className="px-2 text-[10px] font-black text-[#969188] uppercase tracking-wider">
-                          Class 10 AI Tutors
-                        </p>
-                        <div className="space-y-1">
-                          <button
-                            onClick={() => {
-                              navigate('/subjects/sslc-math/chat')
-                              setMobileOpen(false)
-                            }}
-                            className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                              location.pathname.includes('/sslc-math')
-                                ? 'bg-white text-[#D97706] border border-[#D97706]/30 shadow-2xs'
-                                : 'text-[#6F6B63] hover:text-[#20201D] hover:bg-[#F4EFE7]'
-                            }`}
-                          >
-                            <span>📐</span>
-                            <span className="truncate">Mathematics Tutor</span>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              navigate('/subjects/sslc-physics/chat')
-                              setMobileOpen(false)
-                            }}
-                            className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                              location.pathname.includes('/sslc-physics')
-                                ? 'bg-white text-[#0284C7] border border-[#0284C7]/30 shadow-2xs'
-                                : 'text-[#6F6B63] hover:text-[#20201D] hover:bg-[#F4EFE7]'
-                            }`}
-                          >
-                            <span>⚡</span>
-                            <span className="truncate">Physics Tutor</span>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              navigate('/subjects/sslc-chemistry/chat')
-                              setMobileOpen(false)
-                            }}
-                            className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                              location.pathname.includes('/sslc-chemistry')
-                                ? 'bg-white text-[#059669] border border-[#059669]/30 shadow-2xs'
-                                : 'text-[#6F6B63] hover:text-[#20201D] hover:bg-[#F4EFE7]'
-                            }`}
-                          >
-                            <span>🧪</span>
-                            <span className="truncate">Chemistry Tutor</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </nav>
-          </div>
-        </div>
-
-        {/* Sidebar Footer User Profile */}
-        <div className="p-4 border-t border-[#E7E1D8]/60 bg-[#FAF8F3]">
-          <div className="flex items-center justify-between">
+          {/* Footer User Profile */}
+          <div className="pt-6 border-t border-border w-full flex flex-col items-center gap-4">
             <div
               onClick={() => setIsProfileOpen(true)}
-              className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity min-w-0"
+              className="w-10 h-10 rounded-full bg-brand-primary text-white flex items-center justify-center font-bold text-sm cursor-pointer elevation-1 hover:opacity-90 transition-opacity"
               title="View & Edit Profile"
             >
-              <div className="w-9 h-9 rounded-full bg-[#20201D] text-white flex items-center justify-center font-extrabold text-xs flex-shrink-0 shadow-2xs">
-                {user?.username?.[0]?.toUpperCase() ?? 'A'}
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-extrabold text-[#20201D] truncate">{user?.username || 'Adwaid'}</p>
-                <p className="text-[11px] text-[#969188] truncate">{user?.email || 'adwaid08@gmail.com'}</p>
-              </div>
+              {user?.username?.charAt(0).toUpperCase() || 'U'}
             </div>
-
             <button
-              onClick={handleLogout}
-              className="text-[#969188] hover:text-[#C85C52] transition-colors p-1.5 rounded-xl hover:bg-[#FBE7E4] flex-shrink-0 cursor-pointer"
+              onClick={() => logout()}
+              className="text-text-muted hover:text-error transition-colors p-2 rounded-full hover:bg-error-soft cursor-pointer"
               title="Logout"
             >
-              <LogOut size={16} />
+              <LogOut size={18} />
             </button>
           </div>
         </div>
       </aside>
 
-      {/* ─── MAIN CONTENT CONTAINER ─── */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Mobile top navbar toggle */}
-        <div className="md:hidden p-4 bg-white border-b border-[#E7E1D8] flex items-center justify-between sticky top-0 z-30 elevation-1">
-          <button
-            onClick={() => setMobileOpen(true)}
-            className="p-2 rounded-xl border border-[#E7E1D8] text-[#20201D] hover:bg-[#F4EFE7]"
-          >
-            <Menu size={18} />
+      {/* ─── MOBILE SIDEBAR (Drawer) ─── */}
+      <div className={`fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden transition-opacity ${mobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setMobileOpen(false)} />
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-border transform transition-transform duration-300 lg:hidden flex flex-col ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 flex items-center justify-between border-b border-border">
+          <div className="flex items-center gap-3 text-brand-primary">
+            <GraduationCap size={24} />
+            <span className="font-bold text-lg">Indie-Tutor</span>
+          </div>
+          <button onClick={() => setMobileOpen(false)} className="p-2 text-text-muted hover:bg-bg-secondary rounded-lg">
+            <X size={20} />
           </button>
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/dashboard')}>
-            <span className="font-black text-base text-[#20201D]">DeepTutor</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-[#4F8A68]' : 'bg-[#C85C52] animate-ping'}`} title={isOnline ? 'API Connected' : 'API Offline'} />
-            <button
-              onClick={handleLogout}
-              className="w-8 h-8 rounded-full bg-[#F28A45] text-white flex items-center justify-center font-extrabold text-xs shadow-xs"
-            >
-              {user?.username?.[0]?.toUpperCase() ?? 'A'}
-            </button>
-          </div>
         </div>
-
-        {/* Network Warning Banner */}
-        {!isOnline && (
-          <div className="bg-[#FFF3D8] text-[#D99A32] border-b border-[#E7E1D8] px-4 py-2 text-xs font-bold flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <WifiOff size={14} />
-              <span>Network Warning: Backend server offline. Start http://localhost:8000.</span>
-            </div>
-            <button
-              onClick={() => window.location.reload()}
-              className="bg-[#D99A32] text-white px-2.5 py-1 rounded-lg text-[11px] font-extrabold"
-            >
-              Retry
-            </button>
-          </div>
-        )}
-
-        {/* Page Outlet */}
-        <main className="flex-1 overflow-y-auto bg-[#FAF8F3] pb-16 lg:pb-0">
-          <Outlet />
-        </main>
-
-        {/* ─── MOBILE BOTTOM QUICK NAVIGATION BAR ─── */}
-        <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#FAF8F3]/95 backdrop-blur-md border-t border-[#E7E1D8] py-2 px-3 flex items-center justify-around z-40 shadow-lg">
+        <nav className="flex-1 p-4 flex flex-col gap-2 overflow-y-auto">
           {NAV_ITEMS.map(({ to, icon: Icon, label }) => {
             const isActive = location.pathname.startsWith(to)
             return (
               <NavLink
                 key={to}
                 to={to}
-                className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive ? 'text-[#F28A45] font-extrabold scale-105' : 'text-[#969188] font-semibold hover:text-[#20201D]'
+                onClick={() => setMobileOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${isActive ? 'bg-bg-secondary text-brand-primary' : 'text-text-secondary hover:bg-bg-primary hover:text-brand-primary'
                   }`}
               >
-                <Icon size={18} />
-                <span className="text-[10px]">{label}</span>
+                <Icon size={20} className={isActive ? 'text-brand-primary' : 'text-text-muted'} />
+                {label}
+              </NavLink>
+            )
+          })}
+        </nav>
+      </aside>
+
+      {/* ─── MAIN CONTENT CONTAINER ─── */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
+        {/* Mobile Top Navbar */}
+        <div className="lg:hidden px-4 h-16 bg-white border-b border-border flex items-center justify-between sticky top-0 z-30 elevation-1 shrink-0">
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="p-2 rounded-lg border border-border text-text-primary hover:bg-bg-secondary"
+          >
+            <Menu size={20} />
+          </button>
+          <div className="flex items-center gap-2 cursor-pointer font-bold text-brand-primary text-lg" onClick={() => navigate('/dashboard')}>
+            Indie-Tutor
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-success' : 'bg-error animate-ping'}`} title={isOnline ? 'API Connected' : 'API Offline'} />
+            <button
+              onClick={() => setIsProfileOpen(true)}
+              className="w-8 h-8 rounded-full bg-brand-primary text-white flex items-center justify-center font-bold text-sm elevation-1"
+            >
+              {user?.username?.[0]?.toUpperCase() ?? 'U'}
+            </button>
+          </div>
+        </div>
+
+        {/* Network Warning Banner */}
+        {!isOnline && (
+          <div className="bg-warning-soft text-warning border-b border-warning/20 px-4 py-3 text-sm font-semibold flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <WifiOff size={16} />
+              <span>Backend server offline. Please check your connection.</span>
+            </div>
+            <button onClick={() => window.location.reload()} className="bg-warning text-white px-3 py-1.5 rounded-lg text-xs font-bold">
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Page Outlet */}
+        <main className="flex-1 overflow-y-auto pb-20 lg:pb-0">
+          <Outlet />
+        </main>
+
+        {/* Mobile Bottom Navigation (Optional/Fallback) */}
+        <nav className="lg:hidden absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-border px-4 py-2 flex items-center justify-around z-40 elevation-2 pb-safe">
+          {NAV_ITEMS.map(({ to, icon: Icon, label }) => {
+            const isActive = location.pathname.startsWith(to)
+            return (
+              <NavLink
+                key={to}
+                to={to}
+                className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive ? 'text-brand-primary scale-105' : 'text-text-muted hover:text-text-primary'
+                  }`}
+              >
+                <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                <span className={`text-[10px] font-medium ${isActive ? 'font-bold' : ''}`}>{label}</span>
               </NavLink>
             )
           })}

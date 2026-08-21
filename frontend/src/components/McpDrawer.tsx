@@ -143,36 +143,36 @@ export default function McpDrawer({ isOpen, onClose }: Props) {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-2xl shadow-2xl border border-[#E7E1D8] flex flex-col relative max-h-[90vh] overflow-y-auto text-left"
+        className="bg-white rounded-[2rem] p-6 sm:p-8 w-full max-w-2xl shadow-2xl border border-[#E2E8F0] flex flex-col relative max-h-[90vh] overflow-y-auto text-left"
       >
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 text-[#969188] hover:text-[#20201D] rounded-full hover:bg-[#FAF8F3] transition-colors z-20 cursor-pointer"
+          className="absolute top-5 right-5 p-2 text-[#AFAFAF] hover:text-[#3C3C3C] rounded-full hover:bg-[#F7F7F7] transition-colors z-20 cursor-pointer"
         >
           <X size={20} />
         </button>
 
         {/* Drawer Header */}
-        <div className="flex items-center gap-3 border-b border-[#E7E1D8] pb-4 mb-6">
-          <div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] border border-[#F28A45]/30 text-[#F28A45] flex items-center justify-center shadow-2xs">
+        <div className="flex items-center gap-3 border-b border-[#E2E8F0] pb-4 mb-6">
+          <div className="w-10 h-10 rounded-[1.5rem] bg-[#DDF4FF] border border-[#1CB0F6]/30 text-[#1CB0F6] flex items-center justify-center elevation-1">
             <Cpu size={20} />
           </div>
           <div>
-            <h2 className="text-xl font-black text-[#20201D]">Model Context Protocol (MCP)</h2>
-            <p className="text-xs text-[#6F6B63] font-medium">Connect external tool sandboxes & solvers to DeepTutor AI</p>
+            <h2 className="text-xl font-black text-[#3C3C3C]">Model Context Protocol (MCP)</h2>
+            <p className="text-xs text-[#777777] font-medium">Connect external tool sandboxes & solvers to Indie-Tutor</p>
           </div>
         </div>
 
         {/* Active MCP Servers List */}
         <div className="space-y-4 mb-6">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-black uppercase tracking-wider text-[#969188]">
+            <span className="text-xs font-black uppercase tracking-wider text-[#AFAFAF]">
               Configured Tool Servers ({servers.length})
             </span>
             <button
               onClick={() => setShowAddForm(!showAddForm)}
-              className="text-xs font-bold text-[#F28A45] hover:text-[#DF7635] flex items-center gap-1 bg-[#FFF0E4] px-3 py-1.5 rounded-xl border border-[#F28A45]/30 transition-colors cursor-pointer"
+              className="text-xs font-bold text-[#1CB0F6] hover:text-[#1899D6] flex items-center gap-1 bg-[#DDF4FF] px-3 py-1.5 rounded-[1.25rem] border border-[#1CB0F6]/30 transition-colors cursor-pointer"
             >
               <Plus size={14} /> <span>Add MCP Server</span>
             </button>
@@ -180,14 +180,14 @@ export default function McpDrawer({ isOpen, onClose }: Props) {
 
           {/* Add Form */}
           {showAddForm && (
-            <form onSubmit={handleAddServer} className="p-4 bg-[#FFF9F2] border border-[#E7E1D8] rounded-2xl space-y-3">
-              <h4 className="text-xs font-black text-[#20201D]">Register Stdio / SSE Server</h4>
+            <form onSubmit={handleAddServer} className="p-4 bg-[#FFFFFF] border border-[#E2E8F0] rounded-[1.5rem] space-y-3">
+              <h4 className="text-xs font-black text-[#3C3C3C]">Register Stdio / SSE Server</h4>
               <input
                 type="text"
                 placeholder="Server Name (e.g. Wolfram Alpha MCP)..."
                 value={newServerName}
                 onChange={(e) => setNewServerName(e.target.value)}
-                className="w-full bg-white border border-[#E7E1D8] rounded-xl px-3 py-2 text-xs font-semibold text-[#20201D] outline-none focus:border-[#F28A45]"
+                className="w-full bg-white border border-[#E2E8F0] rounded-[1.25rem] px-3 py-2 text-xs font-semibold text-[#3C3C3C] outline-none focus:border-[#1CB0F6]"
                 required
               />
               <input
@@ -195,19 +195,19 @@ export default function McpDrawer({ isOpen, onClose }: Props) {
                 placeholder="Command or URL (e.g. npx -y @modelcontextprotocol/server-fetch)..."
                 value={newServerCmd}
                 onChange={(e) => setNewServerCmd(e.target.value)}
-                className="w-full bg-white border border-[#E7E1D8] rounded-xl px-3 py-2 text-xs font-semibold text-[#20201D] outline-none focus:border-[#F28A45]"
+                className="w-full bg-white border border-[#E2E8F0] rounded-[1.25rem] px-3 py-2 text-xs font-semibold text-[#3C3C3C] outline-none focus:border-[#1CB0F6]"
               />
               <div className="flex justify-end gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => setShowAddForm(false)}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-[#6F6B63] hover:bg-[#F4EFE7] cursor-pointer"
+                  className="px-3 py-1.5 rounded-[1.25rem] text-xs font-bold text-[#777777] hover:bg-[#E5E5E5] cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn-primary px-4 py-1.5 text-xs font-black shadow-2xs cursor-pointer"
+                  className="btn-primary px-4 py-1.5 text-xs font-black elevation-1 cursor-pointer"
                 >
                   Add Server
                 </button>
@@ -220,28 +220,28 @@ export default function McpDrawer({ isOpen, onClose }: Props) {
             {servers.map((s) => (
               <div
                 key={s.id}
-                className={`p-4 rounded-2xl border transition-all flex items-center justify-between ${
+                className={`p-4 rounded-[1.5rem] border transition-all flex items-center justify-between ${
                   s.enabled
-                    ? 'bg-[#FFF0E4]/40 border-[#F28A45]/30 shadow-2xs'
-                    : 'bg-[#FAF8F3] border-[#E7E1D8] opacity-60'
+                    ? 'bg-[#DDF4FF]/40 border-[#1CB0F6]/30 elevation-1'
+                    : 'bg-[#F7F7F7] border-[#E2E8F0] opacity-60'
                 }`}
               >
                 <div className="flex items-start gap-3 min-w-0 pr-4">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white flex-shrink-0 shadow-2xs ${
-                    s.id.includes('python') ? 'bg-[#4F8A68]' :
-                    s.id.includes('sympy') ? 'bg-[#D99A32]' : 'bg-[#A99BCB]'
+                  <div className={`w-9 h-9 rounded-[1.25rem] flex items-center justify-center text-white flex-shrink-0 elevation-1 ${
+                    s.id.includes('python') ? 'bg-[#58CC02]' :
+                    s.id.includes('sympy') ? 'bg-[#FFC800]' : 'bg-[#A99BCB]'
                   }`}>
                     {s.id.includes('python') ? <Terminal size={18} /> :
                      s.id.includes('sympy') ? <Calculator size={18} /> : <Folder size={18} />}
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="font-black text-sm text-[#20201D] truncate">{s.name}</p>
-                      <span className="text-[9px] font-black uppercase bg-white border border-[#E7E1D8] text-[#6F6B63] px-1.5 py-0.5 rounded-md">
+                      <p className="font-black text-sm text-[#3C3C3C] truncate">{s.name}</p>
+                      <span className="text-[9px] font-black uppercase bg-white border border-[#E2E8F0] text-[#777777] px-1.5 py-0.5 rounded-md">
                         {s.type}
                       </span>
                     </div>
-                    <p className="text-xs text-[#6F6B63] mt-0.5 font-medium leading-normal">{s.description}</p>
+                    <p className="text-xs text-[#777777] mt-0.5 font-medium leading-normal">{s.description}</p>
                   </div>
                 </div>
 
@@ -250,11 +250,11 @@ export default function McpDrawer({ isOpen, onClose }: Props) {
                   type="button"
                   onClick={() => handleToggle(s.id, s.enabled)}
                   className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 cursor-pointer p-0.5 ${
-                    s.enabled ? 'bg-[#F28A45]' : 'bg-[#E7E1D8]'
+                    s.enabled ? 'bg-[#1CB0F6]' : 'bg-[#E2E8F0]'
                   }`}
                 >
                   <div
-                    className={`w-5 h-5 bg-white rounded-full shadow-2xs transition-transform ${
+                    className={`w-5 h-5 bg-white rounded-full elevation-1 transition-transform ${
                       s.enabled ? 'translate-x-6' : 'translate-x-0'
                     }`}
                   />
@@ -265,32 +265,32 @@ export default function McpDrawer({ isOpen, onClose }: Props) {
         </div>
 
         {/* Live Test MCP Tool */}
-        <div className="p-4 bg-[#20201D] text-white rounded-2xl space-y-2 border border-[#E7E1D8]">
+        <div className="p-4 bg-[#3C3C3C] text-white rounded-[1.5rem] space-y-2 border border-[#E2E8F0]">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-black text-[#F28A45] uppercase tracking-wider flex items-center gap-1.5">
+            <span className="text-xs font-black text-[#1CB0F6] uppercase tracking-wider flex items-center gap-1.5">
               <Sparkles size={13} /> Live Tool Tester
             </span>
             <button
               onClick={handleTestPythonTool}
               disabled={testingTool}
-              className="btn-primary text-xs px-3 py-1.5 font-black shadow-2xs transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              className="btn-primary text-xs px-3 py-1.5 font-black elevation-1 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
             >
               <Play size={12} />
               <span>{testingTool ? 'Running...' : 'Run Python Test'}</span>
             </button>
           </div>
-          <p className="text-xs text-[#E7E1D8] font-medium">Tests sending a Python code execution request through MCP Client Manager.</p>
+          <p className="text-xs text-[#E2E8F0] font-medium">Tests sending a Python code execution request through MCP Client Manager.</p>
           
           {testOutput && (
-            <div className="mt-2 p-3 bg-black/40 border border-[#4F8A68]/40 rounded-xl font-mono text-xs text-[#4F8A68]">
+            <div className="mt-2 p-3 bg-black/40 border border-[#58CC02]/40 rounded-[1.25rem] font-mono text-xs text-[#58CC02]">
               {testOutput}
             </div>
           )}
         </div>
 
         {/* Footer info */}
-        <div className="mt-6 pt-4 border-t border-[#E7E1D8] text-center">
-          <p className="text-xs font-medium text-[#969188]">
+        <div className="mt-6 pt-4 border-t border-[#E2E8F0] text-center">
+          <p className="text-xs font-medium text-[#AFAFAF]">
             Model Context Protocol v1.0 • Standards-based AI Tool Integration
           </p>
         </div>

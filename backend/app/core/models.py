@@ -17,8 +17,17 @@ class User(Base):
     is_premium = Column(Boolean, default=False)
     plan = Column(String, default='free')  # 'free' or 'premium'
     created_at = Column(String, default=lambda: datetime.utcnow().isoformat())
+    
+    # Dynamic Dashboard Stats
+    current_streak = Column(Integer, default=0)
+    longest_streak = Column(Integer, default=0)
+    total_learning_hours = Column(Float, default=0.0)
+    last_active_date = Column(String, nullable=True)
 
     sessions = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
+    activities = relationship("UserActivity", back_populates="user", cascade="all, delete-orphan")
+    progress = relationship("UserProgress", back_populates="user", cascade="all, delete-orphan")
+    learning_goals = relationship("LearningGoal", back_populates="user", cascade="all, delete-orphan")
 
 
 class ChatSession(Base):

@@ -74,7 +74,7 @@ export const useChatStore = create<ChatState>()(
       },
     }),
     {
-      name: 'deep-tutor-chat',
+      name: 'indie-tutor-chat',
       // Only persist sessions + activeSession — messages are always loaded from server
       partialize: (state) => ({
         sessions: state.sessions,

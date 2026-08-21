@@ -32,38 +32,37 @@ export default function ConfirmModal({
         <motion.div
           initial={{ opacity: 0, scale: 0.94, y: 8 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.94, y: 8 }}
-          className="w-full max-w-md bg-[#FFFDF9] border border-[#E7E1D8] rounded-3xl p-6 shadow-2xl space-y-5 text-[#20201D]"
+          className="w-full max-w-md bg-[#FFFDF9] border border-[#E2E8F0] rounded-[2rem] p-6 shadow-2xl space-y-5 text-[#3C3C3C] max-h-[90vh] overflow-y-auto"
         >
           {/* Header */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
               <div
-                className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+                className={`w-11 h-11 rounded-[1.5rem] flex items-center justify-center flex-shrink-0 ${
                   isDanger
                     ? 'bg-red-500/10 border border-red-500/20 text-red-600'
-                    : 'bg-[#F28A45]/15 border border-[#F28A45]/30 text-[#F28A45]'
+                    : 'bg-[#1CB0F6]/15 border border-[#1CB0F6]/30 text-[#1CB0F6]'
                 }`}
               >
                 {isDanger ? <Trash2 size={20} /> : <AlertTriangle size={20} />}
               </div>
               <div>
-                <h3 className="font-black text-base sm:text-lg text-[#20201D] leading-tight">
+                <h3 className="font-black text-base sm:text-lg text-[#3C3C3C] leading-tight">
                   {title}
                 </h3>
-                <p className="text-xs font-bold text-[#969188] mt-0.5">Confirmation Required</p>
+                <p className="text-xs font-bold text-[#AFAFAF] mt-0.5">Confirmation Required</p>
               </div>
             </div>
             <button
               onClick={onCancel}
-              className="p-2 rounded-xl text-[#969188] hover:text-[#20201D] hover:bg-black/5 transition-all cursor-pointer"
+              className="p-2 rounded-[1.25rem] text-[#AFAFAF] hover:text-[#3C3C3C] hover:bg-black/5 transition-all cursor-pointer"
             >
               <X size={18} />
             </button>
           </div>
 
           {/* Message Content */}
-          <div className="p-4 rounded-2xl bg-[#FAF8F3] border border-[#E7E1D8] text-xs sm:text-sm font-medium text-[#6F6B63] leading-relaxed">
+          <div className="p-4 rounded-[1.5rem] bg-[#F7F7F7] border border-[#E2E8F0] text-xs sm:text-sm font-medium text-[#777777] leading-relaxed">
             {message}
           </div>
 
@@ -71,17 +70,17 @@ export default function ConfirmModal({
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
               onClick={onCancel}
-              className="px-4 py-2.5 rounded-xl border border-[#E7E1D8] text-xs font-black text-[#6F6B63] hover:bg-[#FAF8F3] transition-all cursor-pointer"
+              className="px-4 py-2.5 rounded-[1.25rem] border border-[#E2E8F0] text-xs font-black text-[#777777] hover:bg-[#F7F7F7] transition-all cursor-pointer"
             >
               {cancelText}
             </button>
 
             <button
               onClick={onConfirm}
-              className={`px-5 py-2.5 rounded-xl text-xs font-black text-white transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-2 ${
+              className={`px-5 py-2.5 rounded-[1.25rem] text-xs font-black text-white transition-all elevation-2 cursor-pointer active:scale-95 flex items-center gap-2 ${
                 isDanger
                   ? 'bg-red-600 hover:bg-red-700'
-                  : 'bg-[#F28A45] hover:bg-[#E07934]'
+                  : 'bg-[#1CB0F6] hover:bg-[#E07934]'
               }`}
             >
               {isDanger ? <Trash2 size={14} /> : <Check size={14} />}

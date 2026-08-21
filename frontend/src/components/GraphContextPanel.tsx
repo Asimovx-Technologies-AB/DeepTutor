@@ -32,15 +32,15 @@ interface Props {
 
 /* ─── Rich Vibrant Color Palette for Node Types ─────────────────── */
 const NODE_TYPE_COLORS: Record<string, { bg: string; border: string; glow: string }> = {
-  concept:    { bg: '#F28A45', border: '#FFF0E4', glow: 'rgba(242, 138, 69, 0.4)' },  // Apricot Orange
-  person:     { bg: '#D99A32', border: '#FFF3D8', glow: 'rgba(217, 154, 50, 0.4)' },  // Warm Amber
-  place:      { bg: '#4F8A68', border: '#E3F0E5', glow: 'rgba(79, 138, 104, 0.4)' },  // Sage Green
-  event:      { bg: '#C85C52', border: '#FBE7E4', glow: 'rgba(200, 92, 82, 0.4)' },   // Soft Red
-  formula:    { bg: '#06b6d4', border: '#22d3ee', glow: 'rgba(6, 182, 212, 0.4)' },   // Cyan
-  law:        { bg: '#A99BCB', border: '#F0ECF7', glow: 'rgba(169, 155, 203, 0.4)' },  // Soft Lavender
-  theorem:    { bg: '#ec4899', border: '#f472b6', glow: 'rgba(236, 72, 153, 0.4)' },  // Pink
-  document:   { bg: '#3b82f6', border: '#60a5fa', glow: 'rgba(59, 130, 246, 0.4)' },  // Blue
-  example_of: { bg: '#6F6B63', border: '#E7E1D8', glow: 'rgba(111, 107, 99, 0.4)' }, // Soft Ink
+  concept: { bg: '#1CB0F6', border: '#DDF4FF', glow: 'rgba(242, 138, 69, 0.4)' },  // Apricot Orange
+  person: { bg: '#FFC800', border: '#FFF0B3', glow: 'rgba(217, 154, 50, 0.4)' },  // Warm Amber
+  place: { bg: '#58CC02', border: '#D7FFB8', glow: 'rgba(79, 138, 104, 0.4)' },  // Sage Green
+  event: { bg: '#FF4B4B', border: '#FFD1D1', glow: 'rgba(200, 92, 82, 0.4)' },   // Soft Red
+  formula: { bg: '#06b6d4', border: '#22d3ee', glow: 'rgba(6, 182, 212, 0.4)' },   // Cyan
+  law: { bg: '#A99BCB', border: '#F0ECF7', glow: 'rgba(169, 155, 203, 0.4)' },  // Soft Lavender
+  theorem: { bg: '#ec4899', border: '#f472b6', glow: 'rgba(236, 72, 153, 0.4)' },  // Pink
+  document: { bg: '#3b82f6', border: '#60a5fa', glow: 'rgba(59, 130, 246, 0.4)' },  // Blue
+  example_of: { bg: '#777777', border: '#E2E8F0', glow: 'rgba(111, 107, 99, 0.4)' }, // Soft Ink
 }
 
 function getNodeColor(type?: string) {
@@ -86,7 +86,7 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string | null>(null)
-  const [darkMode, setDarkMode] = useState(false) // Default to warm light theme matching DeepTutor design system
+  const [darkMode, setDarkMode] = useState(false) // Default to warm light theme matching Indie-Tutor design system
 
   // Dynamic AI Concept Explanation State
   const [conceptDetails, setConceptDetails] = useState<{
@@ -119,7 +119,7 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
           setConceptDetails(res.data)
         }
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => {
         setLoadingDetails(false)
       })
@@ -314,7 +314,7 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
     // Canvas Background Fill
-    ctx.fillStyle = darkMode ? '#0B0F19' : '#F8FAFC'
+    ctx.fillStyle = darkMode ? '#0B0F19' : '#F7F7F7'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
     ctx.save()
@@ -373,8 +373,8 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
       const tgt = nodes.find((n) => n.id === edge.target)
       if (!src || !tgt) return
 
-      const isTypeFilterMatch = !selectedTypeFilter || 
-        src.type.toLowerCase() === selectedTypeFilter || 
+      const isTypeFilterMatch = !selectedTypeFilter ||
+        src.type.toLowerCase() === selectedTypeFilter ||
         tgt.type.toLowerCase() === selectedTypeFilter
 
       const isHighlighted = selected ? connectedEdgeIndices.has(i) : false
@@ -401,8 +401,8 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
       ctx.strokeStyle = isDimmed
         ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')
         : isHighlighted
-        ? '#818cf8'
-        : (darkMode ? 'rgba(148,163,184,0.35)' : 'rgba(100,116,139,0.35)')
+          ? '#818cf8'
+          : (darkMode ? 'rgba(148,163,184,0.35)' : 'rgba(100,116,139,0.35)')
       ctx.lineWidth = isHighlighted ? 3 : 1.8
       ctx.stroke()
 
@@ -423,8 +423,8 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
       ctx.fillStyle = isDimmed
         ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')
         : isHighlighted
-        ? '#818cf8'
-        : (darkMode ? 'rgba(148,163,184,0.45)' : 'rgba(100,116,139,0.45)')
+          ? '#818cf8'
+          : (darkMode ? 'rgba(148,163,184,0.45)' : 'rgba(100,116,139,0.45)')
       ctx.fill()
 
       // Relationship Tag Pill
@@ -449,7 +449,7 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
 
         ctx.fillStyle = isHighlighted
           ? (darkMode ? '#c7d2fe' : '#4338ca')
-          : (darkMode ? '#94a3b8' : '#64748b')
+          : (darkMode ? '#AFAFAF' : '#777777')
         ctx.fillText(label, mx, my)
         ctx.restore()
       }
@@ -463,9 +463,9 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
       const isConnected = connectedIds.has(node.id)
       const isSearchMatch = searchMatchIds.has(node.id)
       const isTypeMatch = !selectedTypeFilter || node.type.toLowerCase() === selectedTypeFilter
-      const isDimmed = (selected && !isConnected) || 
-                       (searchMatchIds.size > 0 && !isSearchMatch) ||
-                       (!isTypeMatch)
+      const isDimmed = (selected && !isConnected) ||
+        (searchMatchIds.size > 0 && !isSearchMatch) ||
+        (!isTypeMatch)
 
       const r = node.radius
 
@@ -480,21 +480,21 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
       // Main Node Circle
       ctx.beginPath()
       ctx.arc(node.x, node.y, r, 0, Math.PI * 2)
-      ctx.fillStyle = isDimmed ? (darkMode ? '#1e293b' : '#f1f5f9') : colors.bg
+      ctx.fillStyle = isDimmed ? (darkMode ? '#1e293b' : '#E5E5E5') : colors.bg
       ctx.fill()
 
       ctx.lineWidth = isSelected ? 3.5 : 2
       ctx.strokeStyle = isDimmed
         ? (darkMode ? '#334155' : '#cbd5e1')
         : isSelected
-        ? '#ffffff'
-        : colors.border
+          ? '#ffffff'
+          : colors.border
       ctx.stroke()
 
       // Center Core Dot
       ctx.beginPath()
       ctx.arc(node.x, node.y, r * 0.35, 0, Math.PI * 2)
-      ctx.fillStyle = isDimmed ? (darkMode ? '#475569' : '#cbd5e1') : '#ffffff'
+      ctx.fillStyle = isDimmed ? (darkMode ? '#777777' : '#cbd5e1') : '#ffffff'
       ctx.fill()
 
       // Node Label (Clean Crisp Badge)
@@ -509,7 +509,7 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
         const px = 7
         const py = 3
         ctx.fillStyle = isSelected
-          ? (darkMode ? '#ffffff' : '#0F172A')
+          ? (darkMode ? '#ffffff' : '#3C3C3C')
           : (darkMode ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.95)')
 
         ctx.beginPath()
@@ -526,11 +526,11 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
         ctx.stroke()
 
         ctx.fillStyle = isSelected
-          ? (darkMode ? '#0F172A' : '#ffffff')
-          : (darkMode ? '#f8fafc' : '#0f172a')
+          ? (darkMode ? '#3C3C3C' : '#ffffff')
+          : (darkMode ? '#F7F7F7' : '#3C3C3C')
         ctx.fillText(label, node.x, textY)
       } else {
-        ctx.fillStyle = darkMode ? '#475569' : '#94a3b8'
+        ctx.fillStyle = darkMode ? '#777777' : '#AFAFAF'
         ctx.fillText(label, node.x, textY)
       }
     })
@@ -697,16 +697,16 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
   // Connected Nodes for Inspection Drawer
   const selectedNodeConnections = selectedNode
     ? edgesRef.current
-        .filter((e) => e.source === selectedNode.id || e.target === selectedNode.id)
-        .map((e) => {
-          const targetId = e.source === selectedNode.id ? e.target : e.source
-          const targetNode = nodesRef.current.find((n) => n.id === targetId)
-          return {
-            edgeType: e.type,
-            targetNode,
-          }
-        })
-        .filter((c) => c.targetNode)
+      .filter((e) => e.source === selectedNode.id || e.target === selectedNode.id)
+      .map((e) => {
+        const targetId = e.source === selectedNode.id ? e.target : e.source
+        const targetNode = nodesRef.current.find((n) => n.id === targetId)
+        return {
+          edgeType: e.type,
+          targetNode,
+        }
+      })
+      .filter((c) => c.targetNode)
     : []
 
   return (
@@ -721,24 +721,20 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
           initial={{ scale: 0.96, opacity: 0, y: 15 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.96, opacity: 0, y: 15 }}
-          className={`relative flex flex-col rounded-3xl shadow-2xl border transition-all duration-300 overflow-hidden ${
-            darkMode 
-              ? 'bg-[#0B0F19] border-slate-800 text-slate-100' 
+          className={`relative flex flex-col rounded-[2rem] shadow-2xl border transition-all duration-300 overflow-hidden ${darkMode
+              ? 'bg-[#0B0F19] border-slate-800 text-slate-100'
               : 'bg-white border-slate-200 text-slate-900'
-          } ${
-            isFullscreen 
-              ? 'w-full h-full rounded-none border-none' 
+            } ${isFullscreen
+              ? 'w-full h-full rounded-none border-none'
               : 'w-[96vw] max-w-[1400px] h-[92vh] max-h-[880px]'
-          }`}
+            }`}
         >
           {/* ─── TOP HEADER CONTROL BAR ─── */}
-          <div className={`flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b ${
-            darkMode ? 'border-slate-800/80 bg-[#0F172A]/80' : 'border-slate-100 bg-white'
-          }`}>
+          <div className={`flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b ${darkMode ? 'border-slate-800/80 bg-[#3C3C3C]/80' : 'border-slate-100 bg-white'
+            }`}>
             <div className="flex items-center gap-3">
-              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg transition-transform hover:scale-105 ${
-                darkMode ? 'bg-indigo-600 text-white shadow-indigo-500/20' : 'bg-slate-900 text-white'
-              }`}>
+              <div className={`w-11 h-11 rounded-[1.5rem] flex items-center justify-center shadow-lg transition-transform hover:scale-105 ${darkMode ? 'bg-indigo-600 text-white shadow-indigo-500/20' : 'bg-slate-900 text-white'
+                }`}>
                 <Network size={22} />
               </div>
               <div>
@@ -746,9 +742,8 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
                   <h3 className="text-lg font-black tracking-tight leading-tight">
                     3D Knowledge Graph
                   </h3>
-                  <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
-                    darkMode ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
-                  }`}>
+                  <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${darkMode ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+                    }`}>
                     Live Interactive
                   </span>
                 </div>
@@ -762,19 +757,17 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
             <div className="flex items-center gap-3">
               {/* Search Bar */}
               <div className="relative w-64 md:w-72">
-                <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${
-                  darkMode ? 'text-slate-400' : 'text-slate-400'
-                }`} />
+                <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${darkMode ? 'text-slate-400' : 'text-slate-400'
+                  }`} />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search entity in graph..."
-                  className={`w-full rounded-xl pl-9 pr-8 py-2 text-xs font-semibold focus:outline-none transition-all ${
-                    darkMode 
-                      ? 'bg-slate-900/90 border border-slate-700/80 text-slate-100 placeholder:text-slate-500 focus:border-indigo-500' 
+                  className={`w-full rounded-[1.25rem] pl-9 pr-8 py-2 text-xs font-semibold focus:outline-none transition-all ${darkMode
+                      ? 'bg-slate-900/90 border border-slate-700/80 text-slate-100 placeholder:text-slate-500 focus:border-indigo-500'
                       : 'bg-slate-50 border border-slate-200 text-slate-800 focus:border-slate-900'
-                  }`}
+                    }`}
                 />
                 {searchQuery && (
                   <button
@@ -789,11 +782,10 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
               {/* Dark / Light Mode Canvas Toggle */}
               <button
                 onClick={() => setDarkMode(!darkMode)}
-                className={`p-2.5 rounded-xl border transition-all ${
-                  darkMode 
-                    ? 'bg-slate-800/80 border-slate-700 text-amber-400 hover:bg-slate-800' 
+                className={`p-2.5 rounded-[1.25rem] border transition-all ${darkMode
+                    ? 'bg-slate-800/80 border-slate-700 text-amber-400 hover:bg-slate-800'
                     : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
-                }`}
+                  }`}
                 title={darkMode ? 'Switch to Light Studio' : 'Switch to Dark Cyberpunk'}
               >
                 {darkMode ? <Sun size={17} /> : <Moon size={17} />}
@@ -802,11 +794,10 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
               {/* Fullscreen Toggle */}
               <button
                 onClick={() => setIsFullscreen(!isFullscreen)}
-                className={`p-2.5 rounded-xl border transition-all ${
-                  darkMode 
-                    ? 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800' 
+                className={`p-2.5 rounded-[1.25rem] border transition-all ${darkMode
+                    ? 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
                     : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
-                }`}
+                  }`}
                 title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
               >
                 {isFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
@@ -815,11 +806,10 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
               {/* Close Button */}
               <button
                 onClick={onClose}
-                className={`p-2.5 rounded-xl border transition-all ${
-                  darkMode 
-                    ? 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white hover:bg-red-500/20 hover:border-red-500/30' 
+                className={`p-2.5 rounded-[1.25rem] border transition-all ${darkMode
+                    ? 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white hover:bg-red-500/20 hover:border-red-500/30'
                     : 'bg-slate-100 border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-200'
-                }`}
+                  }`}
                 title="Close Graph"
               >
                 <X size={19} />
@@ -853,11 +843,10 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
             )}
 
             {/* Floating Navigation Instruction Pill */}
-            <div className={`absolute top-4 left-4 backdrop-blur-xl px-4 py-2.5 rounded-2xl shadow-xl border flex items-center gap-2.5 text-xs font-bold ${
-              darkMode 
-                ? 'bg-slate-900/90 border-slate-700/80 text-slate-300' 
+            <div className={`absolute top-4 left-4 backdrop-blur-xl px-4 py-2.5 rounded-[1.5rem] shadow-xl border flex items-center gap-2.5 text-xs font-bold ${darkMode
+                ? 'bg-slate-900/90 border-slate-700/80 text-slate-300'
                 : 'bg-white/90 border-slate-200/80 text-slate-700'
-            }`}>
+              }`}>
               <MousePointer size={15} className="text-indigo-500 animate-pulse" />
               <span>Click node to inspect · Drag to move · Scroll to zoom</span>
             </div>
@@ -876,30 +865,27 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
                   initial={{ opacity: 0, x: 30 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 30 }}
-                  className={`absolute top-4 right-4 bottom-4 w-88 md:w-96 backdrop-blur-xl rounded-3xl shadow-2xl p-6 flex flex-col justify-between z-20 overflow-y-auto border ${
-                    darkMode 
-                      ? 'bg-slate-900/95 border-slate-700 text-slate-100' 
+                  className={`absolute top-4 right-4 bottom-4 w-88 md:w-96 backdrop-blur-xl rounded-[2rem] shadow-2xl p-6 flex flex-col justify-between z-20 overflow-y-auto border ${darkMode
+                      ? 'bg-slate-900/95 border-slate-700 text-slate-100'
                       : 'bg-white/95 border-slate-200 text-slate-900'
-                  }`}
+                    }`}
                 >
                   <div className="space-y-5">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-2">
                         <div
-                          className="w-4 h-4 rounded-full flex-shrink-0 shadow-md"
+                          className="w-4 h-4 rounded-full flex-shrink-0 elevation-4"
                           style={{ backgroundColor: getNodeColor(selectedNode.type).bg }}
                         />
-                        <span className={`text-[11px] font-extrabold uppercase tracking-wider ${
-                          darkMode ? 'text-slate-400' : 'text-slate-500'
-                        }`}>
+                        <span className={`text-[11px] font-extrabold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'
+                          }`}>
                           {selectedNode.type} Entity
                         </span>
                       </div>
                       <button
                         onClick={() => setSelectedNode(null)}
-                        className={`p-1.5 rounded-xl transition-colors ${
-                          darkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
-                        }`}
+                        className={`p-1.5 rounded-[1.25rem] transition-colors ${darkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                          }`}
                       >
                         <X size={17} />
                       </button>
@@ -909,12 +895,11 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
                       <h4 className="text-xl font-black leading-snug tracking-tight">
                         {selectedNode.name}
                       </h4>
-
-                      {/* Main Educational Definition */}
-                      {loadingDetails ? (
-                        <div className={`mt-3 p-4 rounded-2xl border text-xs space-y-2.5 animate-pulse ${
-                          darkMode ? 'bg-slate-800/60 border-slate-700/60 text-slate-400' : 'bg-slate-50 border-slate-200/80 text-slate-500'
-                        }`}>
+                      {selectedNode.description ? (
+                        <p className={`text-xs mt-3 leading-relaxed font-medium p-4 rounded-[1.5rem] border ${darkMode
+                            ? 'bg-slate-800/60 border-slate-700/60 text-slate-300'
+                            : 'bg-slate-50 border-slate-200/80 text-slate-700'
+                          }`}>
                           <div className="flex items-center gap-2 text-indigo-500 font-bold">
                             <Sparkles size={14} className="animate-spin" />
                             <span>DeepTutor is analyzing textbook context...</span>
@@ -925,11 +910,10 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
                       ) : (
                         <div className="space-y-2.5 mt-3">
                           {/* Core Meaning Card */}
-                          <div className={`text-xs leading-relaxed font-medium p-3.5 rounded-2xl border ${
-                            darkMode 
-                              ? 'bg-slate-800/80 border-slate-700 text-slate-200' 
+                          <div className={`text-xs leading-relaxed font-medium p-3.5 rounded-2xl border ${darkMode
+                              ? 'bg-slate-800/80 border-slate-700 text-slate-200'
                               : 'bg-emerald-50/70 border-emerald-200/80 text-emerald-950'
-                          }`}>
+                            }`}>
                             <div className="flex items-center gap-1.5 font-black text-[11px] text-emerald-700 dark:text-emerald-400 uppercase tracking-wide mb-1">
                               <BookOpen size={13} />
                               <span>Core Meaning</span>
@@ -939,11 +923,10 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
 
                           {/* Key Takeaway / Formula */}
                           {conceptDetails?.key_takeaway && (
-                            <div className={`text-xs leading-relaxed font-medium p-3 rounded-2xl border ${
-                              darkMode 
-                                ? 'bg-amber-950/30 border-amber-800/50 text-amber-200' 
+                            <div className={`text-xs leading-relaxed font-medium p-3 rounded-2xl border ${darkMode
+                                ? 'bg-amber-950/30 border-amber-800/50 text-amber-200'
                                 : 'bg-amber-50/70 border-amber-200/80 text-amber-950'
-                            }`}>
+                              }`}>
                               <div className="flex items-center gap-1.5 font-black text-[11px] text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-0.5">
                                 <Lightbulb size={13} />
                                 <span>Key Rule / Formula</span>
@@ -954,11 +937,10 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
 
                           {/* Exam Tip */}
                           {conceptDetails?.exam_tip && (
-                            <div className={`text-xs leading-relaxed font-medium p-3 rounded-2xl border ${
-                              darkMode 
-                                ? 'bg-orange-950/30 border-orange-800/50 text-orange-200' 
+                            <div className={`text-xs leading-relaxed font-medium p-3 rounded-2xl border ${darkMode
+                                ? 'bg-orange-950/30 border-orange-800/50 text-orange-200'
                                 : 'bg-orange-50/70 border-orange-200/80 text-orange-950'
-                            }`}>
+                              }`}>
                               <div className="flex items-center gap-1.5 font-black text-[11px] text-orange-700 dark:text-orange-400 uppercase tracking-wide mb-0.5">
                                 <Target size={13} />
                                 <span>Exam Focus</span>
@@ -973,9 +955,8 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
                     {/* Direct Connections List */}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className={`text-xs font-extrabold uppercase tracking-wider ${
-                          darkMode ? 'text-slate-400' : 'text-slate-500'
-                        }`}>
+                        <span className={`text-xs font-extrabold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'
+                          }`}>
                           Connected Entities
                         </span>
                         <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
@@ -993,11 +974,10 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
                             <div
                               key={idx}
                               onClick={() => conn.targetNode && setSelectedNode(conn.targetNode)}
-                              className={`p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group ${
-                                darkMode 
-                                  ? 'bg-slate-800/50 border-slate-700/80 hover:bg-indigo-950/40 hover:border-indigo-500/50' 
+                              className={`p-3 rounded-[1.5rem] border transition-all cursor-pointer flex items-center justify-between group ${darkMode
+                                  ? 'bg-slate-800/50 border-slate-700/80 hover:bg-indigo-950/40 hover:border-indigo-500/50'
                                   : 'bg-slate-50 border-slate-200/80 hover:bg-indigo-50 hover:border-indigo-200'
-                              }`}
+                                }`}
                             >
                               <div className="flex items-center gap-2.5">
                                 <div
@@ -1009,17 +989,15 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
                                     {conn.targetNode?.name}
                                   </p>
                                   {conn.edgeType && (
-                                    <p className={`text-[10px] font-semibold mt-0.5 capitalize ${
-                                      darkMode ? 'text-slate-400' : 'text-slate-500'
-                                    }`}>
+                                    <p className={`text-[10px] font-semibold mt-0.5 capitalize ${darkMode ? 'text-slate-400' : 'text-slate-500'
+                                      }`}>
                                       {conn.edgeType.replace(/_/g, ' ')}
                                     </p>
                                   )}
                                 </div>
                               </div>
-                              <ChevronRight size={15} className={`group-hover:translate-x-1 transition-transform ${
-                                darkMode ? 'text-slate-500 group-hover:text-indigo-400' : 'text-slate-400 group-hover:text-indigo-600'
-                              }`} />
+                              <ChevronRight size={15} className={`group-hover:translate-x-1 transition-transform ${darkMode ? 'text-slate-500 group-hover:text-indigo-400' : 'text-slate-400 group-hover:text-indigo-600'
+                                }`} />
                             </div>
                           ))
                         )}
@@ -1027,42 +1005,23 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
                     </div>
                   </div>
 
-                  <div className="space-y-2 mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800">
-                    {onAskTutor && selectedNode.type !== 'document' && (
-                      <button
-                        onClick={() => {
-                          const name = selectedNode.name
-                          setSelectedNode(null)
-                          onClose()
-                          onAskTutor(name)
-                        }}
-                        className="w-full py-2.5 px-4 rounded-2xl font-black text-xs transition-all shadow-sm flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white cursor-pointer"
-                      >
-                        <MessageSquare size={14} />
-                        <span>Ask DeepTutor About "{selectedNode.name}"</span>
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => setSelectedNode(null)}
-                      className={`w-full py-2.5 rounded-2xl font-bold text-xs transition-all border cursor-pointer ${
-                        darkMode 
-                          ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' 
-                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  <button
+                    onClick={() => setSelectedNode(null)}
+                    className={`w-full py-3 rounded-[1.5rem] font-bold text-xs transition-all shadow-lg mt-5 ${darkMode
+                        ? 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-indigo-600/25'
+                        : 'bg-slate-900 text-white hover:bg-slate-800'
                       }`}
-                    >
-                      Close Inspection
-                    </button>
-                  </div>
+                  >
+                    Close Inspection
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
           {/* ─── FOOTER BAR: ZOOM CONTROLS & ENTITY TYPE FILTERS ─── */}
-          <div className={`flex flex-wrap items-center justify-between gap-4 px-6 py-3.5 border-t text-xs ${
-            darkMode ? 'border-slate-800/80 bg-[#0F172A]/90 text-slate-300' : 'border-slate-100 bg-white text-slate-700'
-          }`}>
+          <div className={`flex flex-wrap items-center justify-between gap-4 px-6 py-3.5 border-t text-xs ${darkMode ? 'border-slate-800/80 bg-[#3C3C3C]/90 text-slate-300' : 'border-slate-100 bg-white text-slate-700'
+            }`}>
             {/* Zoom & View Controls */}
             <div className="flex items-center gap-2">
               <button
@@ -1070,14 +1029,13 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
                   camRef.current.zoom = Math.max(0.35, camRef.current.zoom - 0.15)
                   setZoom(camRef.current.zoom)
                 }}
-                className={`p-2 rounded-xl border transition-all ${
-                  darkMode ? 'bg-slate-800/80 border-slate-700 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 hover:bg-slate-200'
-                }`}
+                className={`p-2 rounded-[1.25rem] border transition-all ${darkMode ? 'bg-slate-800/80 border-slate-700 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 hover:bg-slate-200'
+                  }`}
                 title="Zoom Out"
               >
                 <ZoomOut size={15} />
               </button>
-              
+
               <span className="font-extrabold w-12 text-center text-xs">
                 {Math.round(zoom * 100)}%
               </span>
@@ -1087,9 +1045,8 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
                   camRef.current.zoom = Math.min(3.0, camRef.current.zoom + 0.15)
                   setZoom(camRef.current.zoom)
                 }}
-                className={`p-2 rounded-xl border transition-all ${
-                  darkMode ? 'bg-slate-800/80 border-slate-700 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 hover:bg-slate-200'
-                }`}
+                className={`p-2 rounded-[1.25rem] border transition-all ${darkMode ? 'bg-slate-800/80 border-slate-700 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 hover:bg-slate-200'
+                  }`}
                 title="Zoom In"
               >
                 <ZoomIn size={15} />
@@ -1097,9 +1054,8 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
 
               <button
                 onClick={resetView}
-                className={`flex items-center gap-1.5 font-bold px-3.5 py-2 rounded-xl border transition-all ml-2 ${
-                  darkMode ? 'bg-slate-800/80 border-slate-700 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 hover:bg-slate-200'
-                }`}
+                className={`flex items-center gap-1.5 font-bold px-3.5 py-2 rounded-[1.25rem] border transition-all ml-2 ${darkMode ? 'bg-slate-800/80 border-slate-700 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 hover:bg-slate-200'
+                  }`}
               >
                 <RefreshCw size={13} /> Reset View
               </button>
@@ -1107,19 +1063,17 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
 
             {/* Entity Types Filter Bar */}
             <div className="flex items-center gap-3 overflow-x-auto max-w-full py-1">
-              <span className={`text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 ${
-                darkMode ? 'text-slate-400' : 'text-slate-400'
-              }`}>
+              <span className={`text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 ${darkMode ? 'text-slate-400' : 'text-slate-400'
+                }`}>
                 <Filter size={12} /> Entity Filter:
               </span>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setSelectedTypeFilter(null)}
-                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
-                    selectedTypeFilter === null
-                      ? (darkMode ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-900 text-white')
+                  className={`px-3 py-1 rounded-[1.25rem] text-xs font-bold transition-all ${selectedTypeFilter === null
+                      ? (darkMode ? 'bg-indigo-600 text-white elevation-4' : 'bg-slate-900 text-white')
                       : (darkMode ? 'bg-slate-800/60 border border-slate-700/60 text-slate-400 hover:text-slate-200' : 'bg-slate-100 border border-slate-200 text-slate-600')
-                  }`}
+                    }`}
                 >
                   All ({entities.length})
                 </button>
@@ -1133,11 +1087,10 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
                     <button
                       key={type}
                       onClick={() => setSelectedTypeFilter(isSelected ? null : type)}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition-all border ${
-                        isSelected
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-[1.25rem] text-xs font-bold transition-all border ${isSelected
                           ? (darkMode ? 'bg-indigo-500/30 border-indigo-500 text-white' : 'bg-indigo-50 border-indigo-300 text-indigo-700')
                           : (darkMode ? 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:border-slate-600' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300')
-                      }`}
+                        }`}
                     >
                       <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colors.bg }} />
                       <span className="capitalize">{type}</span>

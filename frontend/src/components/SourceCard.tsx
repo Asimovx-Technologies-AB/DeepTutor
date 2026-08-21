@@ -16,7 +16,7 @@ interface Props {
 function ScoreBadge({ score }: { score: number }) {
   const pct = Math.round(score * 100)
   return (
-    <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-[#E3F0E5] text-[#4F8A68] border border-[#4F8A68]/30">
+    <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-[#D7FFB8] text-[#58CC02] border border-[#58CC02]/30">
       {pct}%
     </span>
   )
@@ -38,10 +38,10 @@ export default function SourceCard({ sources }: Props) {
     >
       {/* Header */}
       <div className="flex items-center gap-2 mb-2">
-        <div className="w-5 h-5 rounded-md bg-[#FFF0E4] text-[#F28A45] flex items-center justify-center border border-[#F28A45]/30">
+        <div className="w-5 h-5 rounded-md bg-[#DDF4FF] text-[#1CB0F6] flex items-center justify-center border border-[#1CB0F6]/30">
           <FileText size={12} />
         </div>
-        <span className="text-xs font-black text-[#20201D]">
+        <span className="text-xs font-black text-[#3C3C3C]">
           Sources ({sources.length})
         </span>
       </div>
@@ -51,25 +51,25 @@ export default function SourceCard({ sources }: Props) {
         {displayed.map((src, i) => (
           <div
             key={i}
-            className="rounded-2xl border border-[#E7E1D8] bg-white shadow-2xs overflow-hidden transition-all hover:border-[#F28A45]/40"
+            className="rounded-[1.5rem] border border-[#E2E8F0] bg-white elevation-1 overflow-hidden transition-all hover:border-[#1CB0F6]/40"
           >
             {/* Source header */}
             <button
               onClick={() => setExpanded(expanded === i ? null : i)}
-              className="w-full flex items-center gap-3 px-3.5 py-3 text-left hover:bg-[#FFF9F2] transition-colors cursor-pointer"
+              className="w-full flex items-center gap-3 px-3.5 py-3 text-left hover:bg-[#FFFFFF] transition-colors cursor-pointer"
             >
-              <div className="w-8 h-8 rounded-xl bg-[#F0ECF7] text-[#A99BCB] border border-[#A99BCB]/30 flex items-center justify-center flex-shrink-0 shadow-2xs">
+              <div className="w-8 h-8 rounded-[1.25rem] bg-[#F0ECF7] text-[#A99BCB] border border-[#A99BCB]/30 flex items-center justify-center flex-shrink-0 elevation-1">
                 <FileText size={15} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-black text-[#20201D] truncate">{src.doc}</p>
-                <p className="text-[11px] font-bold text-[#969188]">Page {src.page}</p>
+                <p className="text-xs font-black text-[#3C3C3C] truncate">{src.doc}</p>
+                <p className="text-[11px] font-bold text-[#AFAFAF]">Page {src.page}</p>
               </div>
               <ScoreBadge score={src.score} />
               {expanded === i ? (
-                <ChevronUp size={15} className="text-[#969188] flex-shrink-0" />
+                <ChevronUp size={15} className="text-[#AFAFAF] flex-shrink-0" />
               ) : (
-                <ChevronDown size={15} className="text-[#969188] flex-shrink-0" />
+                <ChevronDown size={15} className="text-[#AFAFAF] flex-shrink-0" />
               )}
             </button>
 
@@ -84,8 +84,8 @@ export default function SourceCard({ sources }: Props) {
                   className="overflow-hidden"
                 >
                   <div className="px-3.5 pb-3.5 pt-0">
-                    <div className="bg-[#FFF9F2] border border-[#E7E1D8] rounded-xl p-3">
-                      <p className="text-xs text-[#20201D] leading-relaxed font-medium">{src.text}</p>
+                    <div className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-[1.25rem] p-3">
+                      <p className="text-xs text-[#3C3C3C] leading-relaxed font-medium">{src.text}</p>
                     </div>
                   </div>
                 </motion.div>
@@ -99,7 +99,7 @@ export default function SourceCard({ sources }: Props) {
       {sources.length > 3 && (
         <button
           onClick={() => setShowAll(!showAll)}
-          className="text-xs font-black text-[#F28A45] hover:text-[#DF7635] transition-colors flex items-center gap-1.5 pt-1 px-1 cursor-pointer"
+          className="text-xs font-black text-[#1CB0F6] hover:text-[#1899D6] transition-colors flex items-center gap-1.5 pt-1 px-1 cursor-pointer"
         >
           {showAll ? (
             <><Minus size={13} /> Show less</>

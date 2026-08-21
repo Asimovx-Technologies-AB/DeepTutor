@@ -83,8 +83,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
         <motion.div
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.9, y: 20 }}
-          className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-slate-900 border border-amber-500/30 shadow-2xl shadow-amber-500/10 text-white"
+          className="relative w-full max-w-lg overflow-hidden rounded-[2rem] bg-slate-900 border border-amber-500/30 shadow-2xl shadow-amber-500/10 text-white max-h-[90vh] overflow-y-auto"
         >
           {/* Top Decorative Banner */}
           <div className="h-2 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600" />
@@ -101,7 +100,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             {/* Header Badge */}
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold tracking-wide uppercase">
               <Crown className="w-4 h-4 text-amber-400" />
-              <span>DeepTutor Premium</span>
+              <span>Indie-Tutor Premium</span>
             </div>
 
             {/* Title & Description */}
@@ -116,7 +115,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
 
             {/* Exceeded File Size Callout (if triggered by file upload) */}
             {exceededFileName && (
-              <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/30 space-y-1">
+              <div className="p-4 rounded-[1.5rem] bg-amber-950/40 border border-amber-500/30 space-y-1">
                 <div className="flex items-center gap-2 text-amber-300 font-semibold text-sm">
                   <FileText className="w-4 h-4 text-amber-400 shrink-0" />
                   <span className="truncate">{exceededFileName}</span>
@@ -133,7 +132,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
 
             {/* Comparison Grid */}
             <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-3.5 rounded-2xl bg-slate-800/50 border border-slate-700/60 space-y-2">
+              <div className="p-3.5 rounded-[1.5rem] bg-slate-800/50 border border-slate-700/60 space-y-2">
                 <div className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">
                   Free Plan
                 </div>
@@ -150,7 +149,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                 </ul>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-500/10 via-slate-800 to-amber-500/5 border border-amber-500/40 space-y-2 relative overflow-hidden">
+              <div className="p-3.5 rounded-[1.5rem] bg-gradient-to-br from-amber-500/10 via-slate-800 to-amber-500/5 border border-amber-500/40 space-y-2 relative overflow-hidden">
                 <div className="font-bold text-amber-400 uppercase tracking-wider text-[10px] flex items-center justify-between">
                   <span>Premium Plan</span>
                   <Sparkles className="w-3 h-3 text-amber-400" />
@@ -178,7 +177,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
               <button
                 onClick={handleUpgrade}
                 disabled={loading || success}
-                className="w-full py-3.5 px-6 rounded-2xl font-bold text-slate-950 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 shadow-lg shadow-amber-500/20 active:scale-[0.98] transition flex items-center justify-center gap-2 text-sm disabled:opacity-75"
+                className="w-full py-3.5 px-6 rounded-[1.5rem] font-bold text-slate-950 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 shadow-lg shadow-amber-500/20 active:scale-[0.98] transition flex items-center justify-center gap-2 text-sm disabled:opacity-75"
               >
                 {success ? (
                   <>

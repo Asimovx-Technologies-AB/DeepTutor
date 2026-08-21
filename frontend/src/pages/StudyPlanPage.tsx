@@ -291,25 +291,25 @@ export default function StudyPlanPage() {
   const completionPct = Math.round((completedCount / totalScheduleDays) * 100)
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8 bg-[#FAF8F3]">
+    <div className="p-6 max-w-7xl mx-auto space-y-8 bg-[#F7F7F7]">
       {/* ─── HEADER ─── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Calendar size={18} className="text-[#F28A45]" />
-            <span className="text-xs font-black text-[#F28A45] uppercase tracking-widest bg-[#FFF0E4] px-2.5 py-0.5 rounded-full border border-[#F28A45]/20">
+            <Calendar size={18} className="text-[#1CB0F6]" />
+            <span className="text-xs font-black text-[#1CB0F6] uppercase tracking-widest bg-[#DDF4FF] px-2.5 py-0.5 rounded-full border border-[#1CB0F6]/20">
               AI Study Plan Engine
             </span>
           </div>
-          <h1 className="text-3xl font-black text-[#20201D] tracking-tight">Study Roadmap</h1>
-          <p className="text-[#6F6B63] text-sm mt-0.5 font-medium">
+          <h1 className="text-3xl font-black text-[#3C3C3C] tracking-tight">Study Roadmap</h1>
+          <p className="text-[#777777] text-sm mt-0.5 font-medium">
             Upload document material + set target completion date to generate a personalized day-by-day study plan.
           </p>
         </div>
 
         <button
           onClick={() => setShowCreateModal(true)}
-          className="btn-primary flex items-center gap-2 py-2.5 px-5 text-xs shadow-xs self-start md:self-auto cursor-pointer"
+          className="btn-primary flex items-center gap-2 py-2.5 px-5 text-xs elevation-2 self-start md:self-auto cursor-pointer"
         >
           <Plus size={16} /> Create New Study Plan
         </button>
@@ -317,30 +317,30 @@ export default function StudyPlanPage() {
 
       {isLoading ? (
         <div className="p-12 text-center">
-          <RefreshCw size={28} className="animate-spin text-[#F28A45] mx-auto mb-3" />
-          <p className="text-xs font-bold text-[#6F6B63]">Loading study plans...</p>
+          <RefreshCw size={28} className="animate-spin text-[#1CB0F6] mx-auto mb-3" />
+          <p className="text-xs font-bold text-[#777777]">Loading study plans...</p>
         </div>
       ) : plans.length === 0 ? (
         /* ─── EMPTY STATE ─── */
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="glass-card p-12 text-center border border-[#E7E1D8] max-w-xl mx-auto space-y-5"
+          className="glass-card p-12 text-center border border-[#E2E8F0] max-w-xl mx-auto space-y-5"
         >
-          <div className="w-24 h-24 mx-auto select-none pointer-events-none mb-2">
+          <motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }} className="w-24 h-24 mx-auto select-none pointer-events-none mb-2">
             <img src="/assets/illustrations/mountain_goal.png" alt="Study Plan" className="w-full h-full object-contain" />
-          </div>
+          </motion.div>
           <div>
-            <h2 className="text-xl font-black text-[#20201D]">No Active Study Plans</h2>
-            <p className="text-xs text-[#6F6B63] mt-2 max-w-md mx-auto leading-relaxed font-medium">
-              Analyze your PDF documents against your target completion date. Ollama AI will calculate your days remaining and build a custom daily schedule.
+            <h2 className="text-xl font-black text-[#3C3C3C]">Nothing here yet.</h2>
+            <p className="text-xs text-[#777777] mt-2 max-w-md mx-auto leading-relaxed font-medium">
+              Start a learning path and your progress will appear here.
             </p>
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="btn-primary flex items-center gap-2 mx-auto py-2.5 px-6 text-xs shadow-xs cursor-pointer"
+            className="btn-primary flex items-center gap-2 mx-auto py-2.5 px-6 text-xs elevation-2 cursor-pointer"
           >
-            <Sparkles size={15} /> Analyze Material & Generate Plan
+            <Sparkles size={15} /> Start Learning
           </button>
         </motion.div>
       ) : (
@@ -348,7 +348,7 @@ export default function StudyPlanPage() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Left: Saved Plans Sidebar */}
           <div className="space-y-3">
-            <h3 className="text-xs font-black text-[#969188] uppercase tracking-wider px-1">
+            <h3 className="text-xs font-black text-[#AFAFAF] uppercase tracking-wider px-1">
               Your Saved Plans ({plans.length})
             </h3>
             <div className="space-y-2">
@@ -360,19 +360,19 @@ export default function StudyPlanPage() {
                   <button
                     key={p.id}
                     onClick={() => setActivePlanId(p.id)}
-                    className={`w-full text-left p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col gap-2 ${
+                    className={`w-full text-left p-3.5 rounded-[1.5rem] border transition-all cursor-pointer flex flex-col gap-2 hover:scale-[1.02] active:scale-[0.98] ${
                       isSel
-                        ? 'bg-[#FFF0E4] text-[#F28A45] border-[#F28A45]/40 shadow-xs'
-                        : 'bg-white text-[#20201D] border-[#E7E1D8] hover:border-[#F28A45]/40 hover:bg-[#FFF9F2]'
+                        ? 'bg-[#DDF4FF] text-[#1CB0F6] border-[#1CB0F6]/40 elevation-2'
+                        : 'bg-white text-[#3C3C3C] border-[#E2E8F0] hover:border-[#1CB0F6]/40 hover:bg-[#FFFFFF]'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
-                        isSel ? 'bg-[#F28A45] text-white' : 'bg-[#F4EFE7] text-[#6F6B63]'
+                        isSel ? 'bg-[#1CB0F6] text-white' : 'bg-[#E5E5E5] text-[#777777]'
                       }`}>
                         Target: {p.target_date}
                       </span>
-                      <span className={`text-xs font-black ${isSel ? 'text-[#F28A45]' : 'text-[#6F6B63]'}`}>
+                      <span className={`text-xs font-black ${isSel ? 'text-[#1CB0F6]' : 'text-[#777777]'}`}>
                         {pct}%
                       </span>
                     </div>
@@ -397,19 +397,19 @@ export default function StudyPlanPage() {
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`p-4 rounded-2xl border flex items-center justify-between text-xs font-extrabold shadow-2xs ${
+                  className={`p-4 rounded-[1.5rem] border flex items-center justify-between text-xs font-extrabold elevation-1 ${
                     quizVerificationMessage.passed
-                      ? 'bg-[#E3F0E5] text-[#35654B] border-[#4F8A68]/40'
-                      : 'bg-[#FFF0E4] text-[#C85C52] border-[#F28A45]/40'
+                      ? 'bg-[#D7FFB8] text-[#46A302] border-[#58CC02]/40'
+                      : 'bg-[#DDF4FF] text-[#FF4B4B] border-[#1CB0F6]/40'
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Sparkles size={16} className={quizVerificationMessage.passed ? 'text-[#4F8A68]' : 'text-[#F28A45]'} />
+                    <Sparkles size={16} className={quizVerificationMessage.passed ? 'text-[#58CC02]' : 'text-[#1CB0F6]'} />
                     <span>{quizVerificationMessage.message}</span>
                   </div>
                   <button
                     onClick={() => setQuizVerificationMessage(null)}
-                    className="p-1 text-[#969188] hover:text-[#20201D] cursor-pointer"
+                    className="p-1 text-[#AFAFAF] hover:text-[#3C3C3C] cursor-pointer"
                   >
                     <X size={16} />
                   </button>
@@ -417,7 +417,7 @@ export default function StudyPlanPage() {
               )}
 
               {/* Plan Overview Card */}
-              <div className="glass-card p-6 border border-[#E7E1D8] bg-gradient-to-r from-[#FFF9F2] via-white to-[#FFF0E4] space-y-4 shadow-xs">
+              <div className="glass-card p-6 border border-[#E2E8F0] bg-gradient-to-r from-[#FFFFFF] via-white to-[#DDF4FF] space-y-4 elevation-2">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     {(() => {
@@ -429,20 +429,20 @@ export default function StudyPlanPage() {
                         <span
                           className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md border ${
                             isOverdue
-                              ? 'bg-[#FBE7E4] text-[#C85C52] border-[#C85C52]/30 animate-pulse'
-                              : 'bg-[#FFF0E4] text-[#F28A45] border-[#F28A45]/20'
+                              ? 'bg-[#FFD1D1] text-[#FF4B4B] border-[#FF4B4B]/30 animate-pulse'
+                              : 'bg-[#DDF4FF] text-[#1CB0F6] border-[#1CB0F6]/20'
                           }`}
                         >
                           {isOverdue ? `⚠️ Target Overdue: ${currentPlan.target_date}` : `Target Finish Date: ${currentPlan.target_date}`}
                         </span>
                       )
                     })()}
-                    <h2 className="text-xl font-black text-[#20201D] mt-2">{currentPlan.title}</h2>
+                    <h2 className="text-xl font-black text-[#3C3C3C] mt-2">{currentPlan.title}</h2>
                   </div>
 
                   <button
                     onClick={() => deletePlanMutation.mutate(currentPlan.id)}
-                    className="p-2 text-[#969188] hover:text-[#C85C52] hover:bg-[#FBE7E4] rounded-xl transition-colors self-start sm:self-auto"
+                    className="p-2 text-[#AFAFAF] hover:text-[#FF4B4B] hover:bg-[#FFD1D1] rounded-[1.25rem] transition-colors self-start sm:self-auto"
                     title="Delete Study Plan"
                   >
                     <Trash2 size={16} />
@@ -451,15 +451,15 @@ export default function StudyPlanPage() {
 
                 {/* Progress bar */}
                 <div className="space-y-1.5 pt-2">
-                  <div className="flex items-center justify-between text-xs font-extrabold text-[#6F6B63]">
+                  <div className="flex items-center justify-between text-xs font-extrabold text-[#777777]">
                     <span>Overall Study Completion</span>
-                    <span className="text-[#4F8A68]">
+                    <span className="text-[#58CC02]">
                       {completedCount} of {currentPlan.total_days} Days Completed ({completionPct}%)
                     </span>
                   </div>
-                  <div className="w-full bg-[#F4EFE7] rounded-full h-2 overflow-hidden">
+                  <div className="w-full bg-[#E5E5E5] rounded-full h-2 overflow-hidden">
                     <motion.div
-                      className="bg-[#4F8A68] h-full rounded-full"
+                      className="bg-[#58CC02] h-full rounded-full"
                       animate={{ width: `${completionPct}%` }}
                       transition={{ duration: 0.5 }}
                     />
@@ -469,8 +469,8 @@ export default function StudyPlanPage() {
 
               {/* Day-by-Day Timeline Schedule */}
               <div className="space-y-4">
-                <h3 className="text-sm font-black text-[#20201D] flex items-center gap-2">
-                  <Clock size={16} className="text-[#F28A45]" />
+                <h3 className="text-sm font-black text-[#3C3C3C] flex items-center gap-2">
+                  <Clock size={16} className="text-[#1CB0F6]" />
                   Day-by-Day Study Schedule ({currentPlan.schedule?.length ?? 0} Days)
                 </h3>
 
@@ -485,10 +485,10 @@ export default function StudyPlanPage() {
                         {isNewPhase && (
                           <div className="pt-3 pb-1">
                             <div className="flex items-center gap-2.5">
-                              <span className="text-xs font-black text-[#F28A45] bg-[#FFF0E4] border border-[#F28A45]/30 px-3 py-1 rounded-xl uppercase tracking-wider shadow-2xs">
+                              <span className="text-xs font-black text-[#1CB0F6] bg-[#DDF4FF] border border-[#1CB0F6]/30 px-3 py-1 rounded-[1.25rem] uppercase tracking-wider elevation-1">
                                 {dayItem.phase}
                               </span>
-                              <div className="flex-1 h-[1px] bg-[#E7E1D8]" />
+                              <div className="flex-1 h-[1px] bg-[#E2E8F0]" />
                             </div>
                           </div>
                         )}
@@ -496,20 +496,20 @@ export default function StudyPlanPage() {
                         <motion.div
                           initial={{ opacity: 0, y: 6 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className={`p-5 rounded-2xl border transition-all ${
+                          className={`p-5 rounded-[1.5rem] border transition-all ${
                             isDone
-                              ? 'bg-[#E3F0E5]/50 border-[#4F8A68]/30 shadow-2xs'
-                              : 'bg-white border-[#E7E1D8] shadow-2xs hover:border-[#F28A45]/40'
+                              ? 'bg-[#D7FFB8]/50 border-[#58CC02]/30 elevation-1'
+                              : 'bg-white border-[#E2E8F0] elevation-1 hover:border-[#1CB0F6]/40'
                           }`}
                         >
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex items-start gap-3.5">
                               {/* Status Indicator (completed via quiz only) */}
                               <div
-                                className={`w-7 h-7 rounded-xl border flex items-center justify-center mt-0.5 flex-shrink-0 ${
+                                className={`w-7 h-7 rounded-[1.25rem] border flex items-center justify-center mt-0.5 flex-shrink-0 ${
                                   isDone
-                                    ? 'bg-[#4F8A68] border-[#4F8A68] text-white shadow-2xs'
-                                    : 'bg-[#FAF8F3] border-[#E7E1D8] text-transparent'
+                                    ? 'bg-[#58CC02] border-[#58CC02] text-white elevation-1'
+                                    : 'bg-[#F7F7F7] border-[#E2E8F0] text-transparent'
                                 }`}
                                 title={isDone ? '✅ Passed Day Quiz (≥70%)' : 'Pass the Day Quiz to complete'}
                               >
@@ -518,32 +518,32 @@ export default function StudyPlanPage() {
 
                               <div>
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-xs font-black text-[#F28A45] bg-[#FFF0E4] px-2 py-0.5 rounded-md border border-[#F28A45]/20">
+                                  <span className="text-xs font-black text-[#1CB0F6] bg-[#DDF4FF] px-2 py-0.5 rounded-md border border-[#1CB0F6]/20">
                                     Day {dayItem.day}
                                   </span>
                                   {dayItem.phase && (
-                                    <span className="text-[10px] font-bold text-[#4F8A68] bg-[#E3F0E5] px-2 py-0.5 rounded-md border border-[#4F8A68]/20">
+                                    <span className="text-[10px] font-bold text-[#58CC02] bg-[#D7FFB8] px-2 py-0.5 rounded-md border border-[#58CC02]/20">
                                       {dayItem.phase.split(':')[0]}
                                     </span>
                                   )}
-                                  <span className="text-[11px] font-semibold text-[#969188] flex items-center gap-1">
+                                  <span className="text-[11px] font-semibold text-[#AFAFAF] flex items-center gap-1">
                                     <Clock size={11} /> {dayItem.estimated_hours} hrs
                                   </span>
                                 </div>
 
-                                <h4 className={`text-sm font-extrabold mt-1.5 ${isDone ? 'line-through text-[#969188]' : 'text-[#20201D]'}`}>
+                                <h4 className={`text-sm font-extrabold mt-1.5 ${isDone ? 'line-through text-[#AFAFAF]' : 'text-[#3C3C3C]'}`}>
                                   {dayItem.topic}
                                 </h4>
 
-                                <p className="text-xs text-[#6F6B63] mt-1 leading-relaxed font-medium">
+                                <p className="text-xs text-[#777777] mt-1 leading-relaxed font-medium">
                                   {dayItem.focus}
                                 </p>
 
                                 {/* Recommended Action */}
                                 {dayItem.recommended_action && (
-                                  <div className="mt-3 p-2.5 bg-[#FFF9F2] border border-[#E7E1D8] rounded-xl text-xs text-[#20201D] flex items-center gap-2">
-                                    <Brain size={13} className="text-[#F28A45] flex-shrink-0" />
-                                    <span><strong className="text-[#F28A45]">Action:</strong> {dayItem.recommended_action}</span>
+                                  <div className="mt-3 p-2.5 bg-[#FFFFFF] border border-[#E2E8F0] rounded-[1.25rem] text-xs text-[#3C3C3C] flex items-center gap-2">
+                                    <Brain size={13} className="text-[#1CB0F6] flex-shrink-0" />
+                                    <span><strong className="text-[#1CB0F6]">Action:</strong> {dayItem.recommended_action}</span>
                                   </div>
                                 )}
 
@@ -553,7 +553,7 @@ export default function StudyPlanPage() {
                                     {dayItem.key_concepts.map((concept, idx) => (
                                       <span
                                         key={idx}
-                                        className="text-[10px] font-bold bg-[#E3F0E5] text-[#35654B] border border-[#4F8A68]/20 px-2 py-0.5 rounded-lg"
+                                        className="text-[10px] font-bold bg-[#D7FFB8] text-[#46A302] border border-[#58CC02]/20 px-2 py-0.5 rounded-lg"
                                       >
                                         {concept}
                                       </span>
@@ -566,7 +566,7 @@ export default function StudyPlanPage() {
                                   <button
                                     type="button"
                                     onClick={() => handleOpenStudyNotes(dayItem)}
-                                    className="btn-primary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
+                                    className="btn-primary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer elevation-1 active:scale-95"
                                   >
                                     <BookOpen size={14} /> View AI Study Notes
                                   </button>
@@ -579,10 +579,10 @@ export default function StudyPlanPage() {
                                         : ''
                                       setDayQuizModal({ dayNum: dayItem.day, topic: dayItem.topic + conceptsStr })
                                     }}
-                                    className={`py-2 px-3.5 text-xs font-extrabold rounded-xl border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95 ${
+                                    className={`py-2 px-3.5 text-xs font-extrabold rounded-[1.25rem] border flex items-center gap-1.5 transition-all cursor-pointer elevation-1 active:scale-95 ${
                                       isDone
-                                        ? 'bg-[#E3F0E5] text-[#35654B] border-[#4F8A68]/30 hover:bg-[#d5e8d8]'
-                                        : 'bg-[#FFF0E4] text-[#F28A45] border-[#F28A45]/40 hover:bg-[#ffe3ce]'
+                                        ? 'bg-[#D7FFB8] text-[#46A302] border-[#58CC02]/30 hover:bg-[#d5e8d8]'
+                                        : 'bg-[#DDF4FF] text-[#1CB0F6] border-[#1CB0F6]/40 hover:bg-[#ffe3ce]'
                                     }`}
                                   >
                                     <Target size={14} />
@@ -611,10 +611,10 @@ export default function StudyPlanPage() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-lg bg-white rounded-3xl p-7 shadow-2xl border border-slate-100 relative overflow-hidden"
+              className="w-full max-w-lg bg-white rounded-[2rem] p-7 shadow-2xl border border-slate-100 relative overflow-hidden"
             >
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100">
+                <div className="w-10 h-10 rounded-[1.5rem] bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100">
                   <Sparkles size={20} />
                 </div>
                 <div>
@@ -648,7 +648,7 @@ export default function StudyPlanPage() {
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className={`flex-1 p-3 border rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                      className={`flex-1 p-3 border rounded-[1.5rem] text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                         selectedFile
                           ? 'bg-indigo-50 border-indigo-400 text-indigo-900'
                           : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
@@ -665,7 +665,7 @@ export default function StudyPlanPage() {
                           setSelectedSessionId(e.target.value)
                           setSelectedFile(null)
                         }}
-                        className="bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 rounded-2xl px-3 py-2.5 focus:outline-none"
+                        className="bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 rounded-[1.5rem] px-3 py-2.5 focus:outline-none"
                       >
                         <option value="">Or pick chat session...</option>
                         {sessions.map((s) => (
@@ -689,7 +689,7 @@ export default function StudyPlanPage() {
                     value={targetDate}
                     onChange={(e) => setTargetDate(e.target.value)}
                     min={new Date().toISOString().split('T')[0]}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-[1.5rem] px-4 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-indigo-500"
                   />
                   <p className="text-[10px] text-slate-400 mt-1">
                     AI will automatically calculate days remaining until this date to construct your schedule.
@@ -707,9 +707,9 @@ export default function StudyPlanPage() {
                         key={hrs}
                         type="button"
                         onClick={() => setHoursPerDay(hrs)}
-                        className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        className={`flex-1 py-2 rounded-[1.25rem] text-xs font-bold border transition-all cursor-pointer ${
                           hoursPerDay === hrs
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                            ? 'bg-indigo-600 text-white border-indigo-600 elevation-3'
                             : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                         }`}
                       >
@@ -759,12 +759,12 @@ export default function StudyPlanPage() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="w-full max-w-2xl bg-white rounded-3xl p-7 shadow-2xl border border-slate-200 relative overflow-hidden flex flex-col max-h-[85vh]"
+              className="w-full max-w-2xl bg-white rounded-[2rem] p-7 shadow-2xl border border-slate-200 relative overflow-hidden flex flex-col max-h-[85vh]"
             >
               {/* Header */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-[#111111] text-white flex items-center justify-center font-black">
+                  <div className="w-10 h-10 rounded-[1.5rem] bg-[#111111] text-white flex items-center justify-center font-black">
                     {activeNotesModal.dayNum}
                   </div>
                   <div>
@@ -784,7 +784,7 @@ export default function StudyPlanPage() {
                       if (dayItem) handleOpenStudyNotes(dayItem, true)
                     }}
                     disabled={activeNotesModal.loading}
-                    className="p-2 rounded-xl text-slate-500 hover:text-[#F28A45] hover:bg-[#FFF0E4] transition-colors disabled:opacity-40"
+                    className="p-2 rounded-[1.25rem] text-slate-500 hover:text-[#1CB0F6] hover:bg-[#DDF4FF] transition-colors disabled:opacity-40"
                     title="Regenerate Full Study Brief"
                   >
                     <Sparkles size={18} />
@@ -792,7 +792,7 @@ export default function StudyPlanPage() {
 
                   <button
                     onClick={() => speakNotes(activeNotesModal.notes)}
-                    className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors"
+                    className="p-2 rounded-[1.25rem] text-slate-500 hover:bg-slate-100 transition-colors"
                     title="Audio Reader"
                   >
                     <Volume2 size={18} className={isSpeaking ? 'text-indigo-600 animate-pulse' : ''} />
@@ -800,7 +800,7 @@ export default function StudyPlanPage() {
 
                   <button
                     onClick={() => copyNotes(activeNotesModal.notes)}
-                    className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors"
+                    className="p-2 rounded-[1.25rem] text-slate-500 hover:bg-slate-100 transition-colors"
                     title="Copy Notes"
                   >
                     {copied ? <Check size={18} className="text-emerald-600" /> : <Copy size={18} />}
@@ -812,7 +812,7 @@ export default function StudyPlanPage() {
                       setIsSpeaking(false)
                       setActiveNotesModal(null)
                     }}
-                    className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                    className="p-2 rounded-[1.25rem] text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
                   >
                     <X size={20} />
                   </button>
@@ -852,7 +852,7 @@ export default function StudyPlanPage() {
                       setDayQuizModal({ dayNum, topic })
                     }
                   }}
-                  className="btn-primary flex items-center gap-2 px-6 py-2.5 text-xs shadow-xs cursor-pointer"
+                  className="btn-primary flex items-center gap-2 px-6 py-2.5 text-xs elevation-2 cursor-pointer"
                 >
                   Done Reading — Take Day Quiz <Target size={14} />
                 </button>

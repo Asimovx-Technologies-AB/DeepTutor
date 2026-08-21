@@ -1,581 +1,224 @@
-import { useState, useCallback } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  MessageSquare, Star, BookOpen, CalendarCheck,
-  Flame, ArrowRight, Brain, Zap, Clock, Send,
-  Trophy, CheckCircle2, Sparkles, X, Lightbulb, Code2,
-  HelpCircle, Compass, LineChart, Hash, ChevronRight,
-  Target, Layers, Dna, Atom, Globe, Book, Check, Award,
-  Bell, User, MoreHorizontal
-} from 'lucide-react'
+import { Search, Bell, User, ChevronDown, Sparkles, Trophy, Download, PlayCircle, MoreHorizontal } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import { useSubjectStore } from '../stores/subjectStore'
-import { progressApi, chatApi } from '../services/api'
 
+import { useQuery } from '@tanstack/react-query'
+import { dashboardApi } from '../services/api'
 import NotificationPopup from '../components/NotificationPopup'
 import ProfileModal from '../components/ProfileModal'
-import WeakAreaAlertBanner from '../components/WeakAreaAlertBanner'
+import ContinueLearningCard from '../components/dashboard/ContinueLearningCard'
+import LearningStatsRow from '../components/dashboard/LearningStatsRow'
+import RecentActivityTimeline from '../components/dashboard/RecentActivityTimeline'
+import LearningStreak from '../components/dashboard/LearningStreak'
+import PageContainer from '../components/PageContainer'
 
 export default function DashboardPage() {
-
   const { user } = useAuthStore()
   const navigate = useNavigate()
 
-  const {
-    getSubject,
-    getSubjectProgress,
-    getCurrentTopic,
-    getTopics,
-    getRecommendation,
-  } = useSubjectStore()
-
-  const recommendation = getRecommendation()
-
-  // Profile Modal State
   const [isProfileOpen, setIsProfileOpen] = useState(false)
 
-  // Quick Chat input state
-  const [quickPrompt, setQuickPrompt] = useState('')
-  const [activeModal, setActiveModal] = useState<'sessions' | 'score' | 'topics' | 'streak' | null>(null)
-
-  // Interactive Weekly Study Goal State (Persisted)
-  const [targetGoalDays, setTargetGoalDays] = useState<number>(() => {
-    try {
-      return parseInt(localStorage.getItem('deeptutor_study_goal_days') || '5', 10)
-    } catch {
-      return 5
+  // Fetch Dynamic Data
+  const { data: stats, isLoading: statsLoading } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: async () => {
+      const res = await dashboardApi.stats()
+      return res.data
     }
   })
-  const [isEditingGoal, setIsEditingGoal] = useState(false)
 
-  const handleSetGoalDays = (days: number) => {
-    setTargetGoalDays(days)
-    try {
-      localStorage.setItem('deeptutor_study_goal_days', days.toString())
-    } catch {}
-    setIsEditingGoal(false)
+  const { data: recentActivity, isLoading: activityLoading } = useQuery({
+    queryKey: ['dashboard-activity'],
+    queryFn: async () => {
+      const res = await dashboardApi.activity(5)
+      return res.data
+    }
+  })
+
+  const { data: continueData, isLoading: continueLoading } = useQuery({
+    queryKey: ['dashboard-continue'],
+    queryFn: async () => {
+      const res = await dashboardApi.continue()
+      return res.data
+    }
+  })
+
+  const { getSubject, getTopics } = useSubjectStore()
+
+  // Resolve continue learning meta
+  let continueSubject = null
+  let continueTopic = null
+  if (continueData) {
+    continueSubject = getSubject(continueData.subject_id)
+    continueTopic = getTopics(continueData.subject_id)?.find(t => t.id === continueData.topic_id)
   }
 
-  // Interactive Daily Goals State
-  const [goals, setGoals] = useState([
-    { id: 1, text: 'Ask AI Tutor a concept question', completed: true },
-    { id: 2, text: 'Take a 5-question AI Quiz', completed: false },
-    { id: 3, text: 'Review 5 Flashcards', completed: false },
-  ])
-
-  const toggleGoal = useCallback((id: number) => {
-    setGoals(prev => prev.map(g => g.id === id ? { ...g, completed: !g.completed } : g))
-  }, [])
-
-  const { data: progress } = useQuery({
-    queryKey: ['progress-summary'],
-    queryFn: () => progressApi.summary().then((r) => r.data),
-    staleTime: 60000,
-  })
-
-  const { data: weeklyData = [] } = useQuery({
-    queryKey: ['progress-weekly'],
-    queryFn: () => progressApi.weekly().then((r) => r.data),
-    staleTime: 60000,
-  })
-
-  const { data: sessions } = useQuery({
-    queryKey: ['chat-sessions'],
-    queryFn: () => chatApi.sessions().then((r) => r.data),
-    staleTime: 60000,
-  })
-
-  const recentSessions = sessions?.slice(0, 4) ?? []
-  const lastSession = sessions?.[0] ?? null
-
-  const hour = new Date().getHours()
-  const timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
-
-  const handleQuickAsk = useCallback((e?: React.FormEvent, customText?: string) => {
-    if (e) e.preventDefault()
-    const textToSend = customText || quickPrompt
-    if (!textToSend.trim()) return
-    navigate('/chat', { state: { initialPrompt: textToSend } })
-  }, [quickPrompt, navigate])
-
-  // Calculate real active days this week based on today's day of week (0 = Monday ... 6 = Sunday)
-  const now = new Date()
-  const todayDayOfWeek = (now.getDay() + 6) % 7
-
-  const weekDayStatus = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((dayLetter, dayIdx) => {
-    const isToday = dayIdx === todayDayOfWeek
-    const isFuture = dayIdx > todayDayOfWeek
-
-    // Check if active on this day
-    let isDone = false
-    if (isToday) {
-      isDone = (progress?.streak_days ?? 0) > 0 || (progress?.total_sessions ?? 0) > 0
-    } else if (!isFuture) {
-      const daysAgo = todayDayOfWeek - dayIdx
-      isDone = (progress?.streak_days ?? 0) > daysAgo
-    }
-
-    return {
-      dayLetter,
-      dayIdx,
-      isDone,
-      isToday,
-      isFuture,
-    }
-  })
-
-  const effectiveActiveDays = weekDayStatus.filter((d) => d.isDone).length
-  const goalProgressPct = Math.min(100, Math.round((effectiveActiveDays / targetGoalDays) * 100))
-
   return (
-    <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-8 bg-[#FAF8F3] text-[#20201D] font-sans">
-      
-      {/* User View/Edit Profile Modal */}
+    <PageContainer maxWidth="2xl">
+
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
 
-      {/* ─── 1. TOP HEADER & HEADER ACTIONS ─── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E7E1D8]/60 pb-5">
-        <div>
-          <h1 className="text-[28px] sm:text-[32px] leading-[36px] sm:leading-[40px] tracking-[-0.6px] font-bold text-[#20201D] flex items-center gap-2">
-            <span>{timeGreeting}, <span className="text-[#F28A45] font-bold">{user?.username || 'adwaid'}</span></span>
-            <span className="text-2xl animate-bounce">👋</span>
-          </h1>
-          <p className="text-[#6F6B63] text-sm leading-[22px] font-normal mt-1">
-            Let's continue your learning journey.
-          </p>
-        </div>
-
-        {/* Top Right Header Action Items matching reference image */}
-        <div className="flex items-center gap-3 self-start sm:self-auto">
-          {/* Ask Your Tutor Button */}
-          <button
-            onClick={() => navigate('/chat')}
-            className="btn-primary font-semibold text-sm py-2.5 px-4 rounded-full flex items-center gap-2 shadow-2xs transition-all active:scale-[0.98] cursor-pointer"
-          >
-            <Sparkles size={16} />
-            <span>Ask your tutor</span>
+      {/* TOP HEADER: "Dashboard overview" + Top Right Nav */}
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-xl font-semibold text-[#1E293B]">Dashboard overview</h1>
+        <div className="flex items-center gap-4">
+          <button className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-[#64748B] hover:text-[#1E293B] shadow-[0_4px_15px_rgba(0,0,0,0.02)] transition-colors">
+            <Search size={18} />
           </button>
-
-          {/* Dynamic Notification Bell & Study Plan Reminders Dropdown */}
           <NotificationPopup />
 
-          {/* User Profile Avatar Pill (Triggers Profile Modal) */}
           <div
             onClick={() => setIsProfileOpen(true)}
-            className="flex items-center gap-2 bg-white border border-[#E7E1D8] p-1 pr-3 rounded-full shadow-2xs cursor-pointer hover:bg-[#FFF9F2] transition-colors"
-            title="View & Edit Profile"
+            className="flex items-center gap-3 bg-white rounded-full py-1.5 px-2 pr-4 cursor-pointer shadow-[0_4px_15px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.05)] transition-all"
           >
-            <div className="w-8 h-8 rounded-full bg-[#20201D] text-white flex items-center justify-center font-bold text-xs">
-              {user?.username?.[0]?.toUpperCase() ?? 'A'}
+            <div className="w-8 h-8 rounded-full bg-[#1E293B] flex items-center justify-center text-white font-bold text-xs">
+              {user?.username?.[0]?.toUpperCase() ?? 'M'}
             </div>
-            <ChevronRight size={14} className="text-[#969188]" />
+            <div className="flex flex-col">
+              <span className="text-[13px] font-semibold text-[#1E293B] leading-none">{user?.username || 'Miquella strife'}</span>
+              <span className="text-[10px] text-[#64748B] mt-0.5 leading-none">{user?.email || 'miquella@gmail.com'}</span>
+            </div>
+            <ChevronDown size={14} className="text-[#94A3B8] ml-2" />
           </div>
         </div>
       </div>
 
-      {/* ─── 2. MAIN 2-COLUMN DASHBOARD GRID (CENTRAL LEARNING + RIGHT INSIGHTS PANEL) ─── */}
+      {/* MAIN LAYOUT GRID */}
+      <div className="flex flex-col gap-8 flex-1">
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* ─── CENTRAL COLUMN (Lg: col-span-8) ─── */}
-        <div className="lg:col-span-8 space-y-6">
+        {/* ROW 1: Hero & Courses */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
 
-          {/* AUTOMATED WEAK AREA DIAGNOSTIC ALERT BANNER */}
-          <WeakAreaAlertBanner />
-          
-          {/* ASK YOUR TUTOR HERO LEARNING CARD (EDITORIAL BORDERLESS COMPOSITION) */}
-          <div className="bg-[#FFF9F2] border border-[#E7E1D8] rounded-3xl p-6 sm:p-8 shadow-2xs relative overflow-hidden space-y-6">
-            
-            {/* Header Content with Left Desk Lamp & Right Plant Editorial Layout */}
-            <div className="relative flex flex-col items-center text-center space-y-3 px-4 sm:px-16 pt-2">
-              
-              {/* Left Decorative Illustration: Desk Lamp & Books (Borderless & Transparent) */}
-              <div className="hidden sm:block absolute left-2 top-0 w-24 sm:w-32 h-24 sm:h-32 pointer-events-none select-none">
-                <img src="/assets/illustrations/desk_lamp.png" alt="Desk Lamp" className="w-full h-full object-contain" />
-              </div>
-
-              {/* Right Decorative Illustration: Potted Plant (Borderless & Transparent) */}
-              <div className="hidden sm:block absolute right-2 top-0 w-24 sm:w-32 h-24 sm:h-32 pointer-events-none select-none">
-                <img src="/assets/illustrations/plant.png" alt="Plant" className="w-full h-full object-contain" />
-              </div>
-
-              {/* Floating Sparkle Accents */}
-              <span className="absolute top-1 left-28 text-[#D99A32] text-xs opacity-70 animate-pulse">✨</span>
-              <span className="absolute bottom-1 right-28 text-[#F28A45] text-xs opacity-70 animate-pulse">✨</span>
-
-              <h2 className="text-[24px] sm:text-[28px] leading-[32px] sm:leading-[36px] tracking-[-0.5px] font-bold text-[#20201D] max-w-md">
-                What would you like to <span className="text-[#F28A45] font-bold">understand</span> today?
-              </h2>
-
-              <p className="text-sm leading-[22px] font-normal text-[#6F6B63] max-w-sm">
-                Ask anything on Class 10 Math, Physics & Chemistry. I'll explain it step-by-step.
-              </p>
+          {/* Left Hero (4 Columns) */}
+          <div className="xl:col-span-4 flex flex-col justify-center">
+            {/* Hero Mascot Illustration */}
+            <div className="w-24 h-24 mb-1 opacity-90 pointer-events-none">
+              <img src="/assets/illustrations/hero_mascot.jpg" alt="Friendly Robot Mascot" className="w-full h-full object-contain mix-blend-multiply rounded-full" />
             </div>
 
-            {/* Action Buttons to Go to Learn Page */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 z-10 relative">
-              <button
-                onClick={() => navigate('/chat')}
-                className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-[#F28A45] hover:bg-[#DF7635] text-white font-extrabold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2.5 cursor-pointer active:scale-[0.98]"
-              >
-                <BookOpen size={18} />
-                <span>Go to Learn Page</span>
-                <ArrowRight size={16} />
-              </button>
-
+            <h2 className="text-display leading-[1.1] mb-2 tracking-tight">
+              Hi, {user?.username || 'Miquella'} 👋 <br className="hidden xl:block" />
+              what do you want <br className="hidden xl:block" /> to learn today?
+            </h2>
+            <p className="text-[#64748B] text-[14px] mb-5 max-w-sm">
+              Discover courses, track progress, and achieve your learning goals seamlessly.
+            </p>
+            <div>
               <button
                 onClick={() => navigate('/subjects')}
-                className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-white hover:bg-[#FFF0E4] border border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] font-bold text-sm shadow-2xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
+                className="btn-primary px-6 py-2.5 text-[14px]"
               >
-                <Layers size={16} className="text-[#6F6B63]" />
-                <span>Browse Subjects</span>
-              </button>
-            </div>
-
-            {/* Quick Actions Chips (SSLC 10th Grade STEM) */}
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-              <button
-                onClick={() => handleQuickAsk(undefined, "Explain Ohm's Law and factors affecting electrical resistance")}
-                className="flex items-center gap-1.5 bg-white hover:bg-[#FFF0E4] hover:-translate-y-0.5 border border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-transform duration-150 shadow-2xs cursor-pointer active:scale-[0.98]"
-              >
-                <img src="/assets/illustrations/physics_atom.png" alt="Physics" className="w-4 h-4 object-contain" />
-                <span>Explain Ohm's Law</span>
-              </button>
-
-              <button
-                onClick={() => handleQuickAsk(undefined, "How to solve quadratic equations using the quadratic formula x = (-b ± √(b² - 4ac)) / (2a)?")}
-                className="flex items-center gap-1.5 bg-white hover:bg-[#E3F0E5] hover:-translate-y-0.5 border border-[#E7E1D8] hover:border-[#4F8A68]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-transform duration-150 shadow-2xs cursor-pointer active:scale-[0.98]"
-              >
-                <img src="/assets/illustrations/math_fx.png" alt="Math" className="w-4 h-4 object-contain" />
-                <span>Quadratic Formula</span>
-              </button>
-
-              <button
-                onClick={() => handleQuickAsk(undefined, "Quiz me with 5 board exam questions on Chemical Reactions and Equations")}
-                className="flex items-center gap-1.5 bg-white hover:bg-[#F0ECF7] hover:-translate-y-0.5 border border-[#E7E1D8] hover:border-[#A99BCB]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-transform duration-150 shadow-2xs cursor-pointer active:scale-[0.98]"
-              >
-                <img src="/assets/illustrations/checklist_clipboard.png" alt="Quiz" className="w-4 h-4 object-contain" />
-                <span>Chemistry Quiz</span>
-              </button>
-
-              <button
-                onClick={() => handleQuickAsk(undefined, "Explain Light Reflection & Refraction ray diagrams for spherical lenses and mirrors")}
-                className="flex items-center gap-1.5 bg-white hover:bg-[#FFF0E4] hover:-translate-y-0.5 border border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] px-3.5 py-1.5 rounded-full text-xs font-semibold transition-transform duration-150 shadow-2xs cursor-pointer active:scale-[0.98]"
-              >
-                <img src="/assets/illustrations/open_book.png" alt="Ray Optics" className="w-4 h-4 object-contain" />
-                <span>Ray Diagrams</span>
+                Explore course
               </button>
             </div>
           </div>
 
-          {/* CONTINUE LEARNING SECTION */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-[20px] leading-[28px] tracking-[-0.2px] font-bold text-[#20201D]">Continue learning</h2>
-              <button
-                onClick={() => navigate('/subjects')}
-                className="text-xs font-bold text-[#F28A45] hover:text-[#DF7635] flex items-center gap-1 transition-colors cursor-pointer"
-              >
-                <span>View all subjects</span> <ArrowRight size={13} />
-              </button>
-            </div>
-
-            <div className="bg-white border border-[#E7E1D8] rounded-3xl p-6 shadow-2xs flex flex-col md:flex-row items-center justify-between gap-6 hover:border-[#F28A45]/40 transition-all relative overflow-hidden">
-              
-              {/* Left Concept Graphic Thumbnail */}
-              <div className="w-full md:w-36 h-28 rounded-2xl bg-[#4F8A68] border border-[#35654B]/30 flex items-center justify-center text-white flex-shrink-0 relative overflow-hidden p-3 shadow-2xs">
-                <div className="absolute inset-0 bg-gradient-to-br from-[#4F8A68] to-[#35654B] opacity-90" />
-                <div className="relative z-10 flex flex-col items-center justify-center text-center">
-                  <Atom size={32} className="text-[#E3F0E5] mb-1" />
-                  <span className="text-[10px] font-black uppercase tracking-wider text-[#E3F0E5]">Physics (10th)</span>
-                </div>
-                <span className="absolute bottom-2 right-2 bg-black/40 backdrop-blur-xs text-white text-[10px] font-extrabold px-2 py-0.5 rounded-md">
-                  85%
-                </span>
-              </div>
-
-              {/* Middle Course Information */}
-              <div className="space-y-2 flex-1 min-w-0 z-10">
-                <p className="text-[11px] font-bold text-[#6F6B63]">Class 10 Physics • Chapter 1</p>
-                <h3 className="text-xl font-black text-[#20201D] truncate">Light – Reflection & Refraction</h3>
-                <p className="text-xs text-[#969188] font-bold">Spherical Mirrors & Ray Diagrams</p>
-                
-                {/* Progress Bar & Percentage */}
-                <div className="flex items-center gap-3 pt-1">
-                  <div className="flex-1 bg-[#F4EFE7] rounded-full h-1.5 overflow-hidden">
-                    <div className="bg-[#F28A45] h-full rounded-full w-[85%]" />
-                  </div>
-                  <span className="text-xs font-black text-[#20201D]">85%</span>
-                </div>
-
-                <p className="text-xs text-[#6F6B63] font-semibold leading-relaxed line-clamp-1 pt-1">
-                  Master mirror formulas, refractive index ratios, and concave vs. convex lens ray diagrams.
-                </p>
-
-                <div className="pt-2">
-                  <button
-                    onClick={() => navigate(lastSession ? `/chat/${lastSession.id}` : '/chat', { state: lastSession ? {} : { initialPrompt: 'Continue Class 10 Physics: Light Reflection and Refraction ray diagrams' } })}
-                    className="btn-primary text-xs font-black py-2.5 px-5 rounded-2xl flex items-center gap-2 shadow-2xs cursor-pointer whitespace-nowrap"
-                  >
-                    <span>Continue learning</span>
-                    <ArrowRight size={14} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Right Friendly AI Robot Working on Laptop (Borderless Illustration) */}
-              <div className="w-28 sm:w-36 h-28 sm:h-36 flex-shrink-0 relative select-none pointer-events-none">
-                <img src="/assets/illustrations/ai_tutor_laptop.png" alt="AI Robot Laptop" className="w-full h-full object-contain filter drop-shadow-xs" />
-              </div>
-
-              {/* Top Right Context Menu (...) */}
-              <button className="absolute top-5 right-5 text-[#969188] hover:text-[#20201D] transition-colors p-1 cursor-pointer">
-                <MoreHorizontal size={18} />
-              </button>
-
-            </div>
+          {/* Right Horizontal Stats Row (8 Columns) */}
+          <div className="xl:col-span-8 flex flex-col justify-center h-full">
+            <LearningStatsRow stats={stats} />
           </div>
-
-          {/* YOUR SUBJECTS SECTION (DYNAMIC SINGLE SOURCE OF TRUTH) */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-black text-[#20201D]">Your subjects</h2>
-              <button
-                onClick={() => navigate('/subjects')}
-                className="text-xs font-black text-[#F28A45] hover:text-[#DF7635] flex items-center gap-1 transition-colors cursor-pointer"
-              >
-                <span>View all</span> <ChevronRight size={14} />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {['6', '3', '1'].map((subjectId) => {
-                const subject = getSubject(subjectId)
-                if (!subject) return null
-                const progressVal = getSubjectProgress(subjectId)
-                const subjectTopics = getTopics(subjectId)
-                const completedCount = subjectTopics.filter((t) => t.status === 'COMPLETED').length
-                const currentTopic = getCurrentTopic(subjectId)
-
-                return (
-                  <div
-                    key={subject.id}
-                    onClick={() => navigate(`/subjects/${subject.id}`)}
-                    className="bg-white border border-[#E7E1D8] hover:border-[#F28A45]/50 rounded-3xl p-5 shadow-2xs transition-all cursor-pointer group flex flex-col justify-between space-y-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-xl bg-[#FFF0E4] border border-[#F28A45]/30 flex items-center justify-center p-1.5">
-                          <img src={subject.illustration} alt={subject.name} className="w-full h-full object-contain" />
-                        </div>
-                        <h4 className="text-xs font-black text-[#20201D] group-hover:text-[#F28A45] transition-colors">
-                          {subject.name}
-                        </h4>
-                      </div>
-                    </div>
-
-                    {currentTopic && (
-                      <p className="text-[11px] font-semibold text-[#6F6B63] truncate">
-                        Next: <span className="text-[#20201D] font-bold">{currentTopic.title}</span>
-                      </p>
-                    )}
-
-                    <div className="space-y-1.5 pt-1">
-                      <div className="w-full bg-[#F4EFE7] rounded-full h-1.5 overflow-hidden">
-                        <div
-                          className="bg-[#F28A45] h-full rounded-full transition-all duration-300"
-                          style={{ width: `${progressVal}%` }}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between text-[11px] font-bold text-[#969188]">
-                        <span>{completedCount} / {subjectTopics.length} topics completed</span>
-                        <span className="text-[#20201D] font-black">{progressVal}%</span>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
         </div>
 
-        {/* ─── RIGHT INSIGHTS PANEL (Lg: col-span-4, ~300-330px) ─── */}
-        <div className="lg:col-span-4 space-y-6">
-          
-          {/* 1. YOUR STUDY GOAL CARD (DYNAMIC & EDITABLE) */}
-          <div className="bg-white border border-[#E7E1D8] rounded-3xl p-6 shadow-2xs space-y-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <img src="/assets/illustrations/target_arrow.png" alt="Target Goal" className="w-5 h-5 object-contain" />
-                <h3 className="font-extrabold text-[#20201D] text-xs">Your study goal</h3>
-              </div>
-              <button
-                onClick={() => setIsEditingGoal(!isEditingGoal)}
-                className="text-xs font-bold text-[#4F8A68] hover:underline cursor-pointer"
-              >
-                {isEditingGoal ? 'Cancel' : 'Change'}
-              </button>
-            </div>
+        {/* ROW 2: Bottom Section */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 flex-1">
 
-            {/* Inline Goal Selector when clicking Change */}
-            {isEditingGoal ? (
-              <div className="p-3 bg-[#FFF9F2] rounded-2xl border border-[#F28A45]/30 space-y-2">
-                <p className="text-[11px] font-bold text-[#6F6B63]">Set weekly study target:</p>
-                <div className="flex items-center gap-2">
-                  {[3, 5, 7].map((days) => (
-                    <button
-                      key={days}
-                      onClick={() => handleSetGoalDays(days)}
-                      className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                        targetGoalDays === days
-                          ? 'bg-[#4F8A68] text-white shadow-2xs'
-                          : 'bg-white border border-[#E7E1D8] text-[#20201D] hover:bg-[#FAF8F3]'
-                      }`}
-                    >
-                      {days} Days
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-black text-[#20201D]">Study {targetGoalDays} days this week</p>
-                  <span className="text-[11px] font-extrabold text-[#4F8A68]">
-                    {effectiveActiveDays} / {targetGoalDays} days
-                  </span>
-                </div>
-                
-                {/* 7 Day Indicators M T W T F S S */}
-                <div className="flex items-center justify-between pt-1">
-                  {weekDayStatus.map((d) => (
-                    <div key={d.dayIdx} className="flex flex-col items-center gap-1">
-                      <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-colors ${
-                          d.isDone
-                            ? 'bg-[#4F8A68] text-white shadow-2xs'
-                            : d.isToday
-                              ? 'border-2 border-[#F28A45] text-[#F28A45] bg-[#FFF0E4]'
-                              : 'border border-[#E7E1D8] text-[#969188]'
-                        }`}
-                      >
-                        {d.isDone ? '✓' : ''}
-                      </div>
-                      <span
-                        className={`text-[10px] font-extrabold ${
-                          d.isDone
-                            ? 'text-[#4F8A68]'
-                            : d.isToday
-                              ? 'text-[#F28A45] font-black'
-                              : 'text-[#969188]'
-                        }`}
-                      >
-                        {d.dayLetter}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+          {/* Left & Middle combined (8 Columns) */}
+          <div className="xl:col-span-8 flex flex-col gap-8">
 
-            {/* Weekly Goal Progress bar */}
-            <div className="space-y-1.5 pt-2">
-              <div className="flex items-center justify-between text-xs font-bold">
-                <span className="text-[#6F6B63]">Progress</span>
-                <span className="text-[#20201D] font-black">{goalProgressPct}%</span>
-              </div>
-              <div className="w-full bg-[#F4EFE7] rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-[#4F8A68] h-full rounded-full transition-all duration-500"
-                  style={{ width: `${goalProgressPct}%` }}
+            {/* Middle Row (Cards) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-auto">
+              {continueData && continueSubject && continueTopic ? (
+                <div className="col-span-1 h-[140px] xl:h-[160px]">
+                  <ContinueLearningCard
+                    subjectId={continueData.subject_id}
+                    topicId={continueData.topic_id}
+                    topicTitle={continueTopic.title}
+                    progress={continueData.progress_percentage}
+                    lastStudied={continueData.last_studied_at}
+                  />
+                </div>
+              ) : (
+                <div className="col-span-1 card p-6 flex flex-col justify-center items-center gap-3 bg-slate-50 border border-dashed border-slate-200">
+                  <span className="text-2xl">📚</span>
+                  <p className="text-sm font-medium text-[#1E293B]">Ready to start learning?</p>
+                  <button onClick={() => navigate('/subjects')} className="btn-primary px-4 py-1.5 text-xs">Explore Curriculum</button>
+                </div>
+              )}
+
+              <div className="col-span-1 h-[140px] xl:h-[160px]">
+                <LearningStreak
+                  currentStreak={stats?.current_streak || 0}
+                  longestStreak={stats?.longest_streak || 0}
                 />
               </div>
             </div>
+
+            {/* Today's Activity Timeline */}
+            <RecentActivityTimeline activities={recentActivity} isLoading={activityLoading} />
+
           </div>
 
-          {/* 2. TUTOR SUGGESTS CARD */}
-          <div className="bg-[#FFF9F2] border border-[#F28A45]/30 rounded-3xl p-6 shadow-2xs space-y-4 relative overflow-hidden">
-            <div className="flex items-center gap-2">
-              <img src="/assets/illustrations/lightbulb.png" alt="Lightbulb" className="w-5 h-5 object-contain" />
-              <h3 className="font-extrabold text-[#20201D] text-xs">Tutor suggests</h3>
-            </div>
+          {/* Right Sidebar: Performance report (4 Columns) */}
+          <div className="xl:col-span-4 card p-6 xl:p-8 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-6 xl:mb-8">
+                <h3 className="font-semibold text-lg xl:text-xl text-[#1E293B]">Performance report</h3>
+                <MoreHorizontal className="text-[#94A3B8] cursor-pointer" size={20} />
+              </div>
 
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-xs text-[#6F6B63] leading-relaxed font-semibold flex-1">
-                Review gradient descent before moving on to neural networks. It will strengthen your foundation.
-              </p>
-              
-              {/* Friendly AI Robot Reading Book (Borderless Graphic) */}
-              <div className="w-20 h-20 flex-shrink-0 relative select-none pointer-events-none -mt-4">
-                <img src="/assets/illustrations/ai_tutor_thinking.png" alt="AI Reading" className="w-full h-full object-contain filter drop-shadow-xs" />
-                <span className="absolute top-0 right-0 text-[#F28A45] text-[10px] animate-pulse">✨</span>
+              <div className="flex flex-col items-center mb-6 xl:mb-8">
+                <div className="w-20 h-20 xl:w-24 xl:h-24 rounded-full border-[3px] border-[#10B981] p-1 mb-4 relative shadow-[0_10px_30px_rgba(16,185,129,0.2)]">
+                  <div className="w-full h-full bg-[#1E293B] rounded-full flex items-center justify-center text-3xl xl:text-4xl text-white font-bold">
+                    {user?.username?.[0]?.toUpperCase() ?? 'M'}
+                  </div>
+                </div>
+                <h4 className="text-base xl:text-lg font-semibold text-[#1E293B]">{user?.username || 'Miquella strife'}</h4>
+                <p className="text-[#64748B] text-[12px] xl:text-[13px]">{user?.email}</p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 xl:gap-4 border-t border-b border-[#F1F5F9] py-5 xl:py-6 mb-6 xl:mb-8">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-9 h-9 xl:w-10 xl:h-10 rounded-xl bg-[#ECFDF5] text-[#10B981] flex items-center justify-center text-base xl:text-lg">📚</div>
+                  <div className="text-center">
+                    <p className="text-[10px] xl:text-[11px] text-[#64748B] font-medium">Courses</p>
+                    <p className="text-[12px] xl:text-[13px] font-semibold text-[#1E293B]">{stats?.courses_completed || 0}</p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-9 h-9 xl:w-10 xl:h-10 rounded-xl bg-[#F2E8FA] text-[#8B5CF6] flex items-center justify-center text-base xl:text-lg">✨</div>
+                  <div className="text-center">
+                    <p className="text-[10px] xl:text-[11px] text-[#64748B] font-medium">Lessons</p>
+                    <p className="text-[12px] xl:text-[13px] font-semibold text-[#1E293B]">{stats?.lessons_completed || 0}</p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-9 h-9 xl:w-10 xl:h-10 rounded-xl bg-[#FFFBEB] text-[#F59E0B] flex items-center justify-center text-base xl:text-lg">🏆</div>
+                  <div className="text-center">
+                    <p className="text-[10px] xl:text-[11px] text-[#64748B] font-medium">Top Streak</p>
+                    <p className="text-[12px] xl:text-[13px] font-semibold text-[#1E293B]">{stats?.longest_streak || 0}d</p>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <button
-              onClick={() => navigate('/chat', { state: { initialPrompt: 'Review Gradient Descent before moving on to neural networks.' } })}
-              className="btn-orange-outline w-full text-xs font-bold py-2.5 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-2xs cursor-pointer"
-            >
-              <span>Start suggested lesson &rarr;</span>
-            </button>
-          </div>
-
-          {/* 3. YOUR LEARNING AT A GLANCE CARD (DYNAMIC & CLICKABLE) */}
-          <div
-            onClick={() => navigate('/progress')}
-            className="bg-white border border-[#E7E1D8] hover:border-[#F28A45]/40 rounded-3xl p-6 shadow-2xs space-y-4 cursor-pointer transition-all group"
-          >
-            <div className="flex items-center justify-between border-b border-[#E7E1D8] pb-3">
-              <div className="flex items-center gap-2">
-                <LineChart size={16} className="text-[#F28A45]" />
-                <h3 className="font-extrabold text-[#20201D] text-xs group-hover:text-[#F28A45] transition-colors">
-                  Your learning at a glance
-                </h3>
-              </div>
-              <span className="text-[11px] font-bold text-[#F28A45] flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
-                View Details &rarr;
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between gap-4">
-              <div className="space-y-3 text-xs font-semibold flex-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[#6F6B63]">Sessions completed</span>
-                  <span className="text-[#4F8A68] font-black">{progress?.total_sessions ?? 0}</span>
+            <div>
+              <h3 className="font-semibold text-[14px] xl:text-[15px] text-[#1E293B] mb-3 xl:mb-4">Upcoming assignment</h3>
+              <div className="bg-[#E3FDF5] rounded-2xl p-3 xl:p-4 flex items-center gap-3 xl:gap-4 cursor-pointer hover:bg-[#D1F9EA] transition-colors">
+                <div className="w-9 h-9 xl:w-10 xl:h-10 bg-white rounded-full flex items-center justify-center text-base xl:text-lg flex-shrink-0 shadow-sm">
+                  🐼
                 </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-[#6F6B63]">Active subjects</span>
-                  <span className="text-[#20201D] font-black">{getSubject('6')?.isEnrolled ? 3 : 1}</span>
+                <div>
+                  <h4 className="text-[12px] xl:text-[13px] font-semibold text-[#1E293B]">Create a cute red panda mascot</h4>
+                  <p className="text-[10px] xl:text-[11px] text-[#64748B] mt-0.5 xl:mt-1">Due 12 august 2024 - 12:00 AM</p>
                 </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-[#6F6B63]">Topics studied</span>
-                  <span className="text-[#20201D] font-black">{progress?.topics_studied ?? 0}</span>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-[#6F6B63]">Current streak</span>
-                  <span className="text-[#F28A45] font-black">
-                    {progress?.streak_days ?? 0} {progress?.streak_days === 1 ? 'day' : 'days'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Analytics Donut Graphic */}
-              <div className="w-20 h-20 flex-shrink-0 select-none pointer-events-none group-hover:scale-105 transition-transform">
-                <img src="/assets/illustrations/donut_80_percent.png" alt="Donut Chart" className="w-full h-full object-contain filter drop-shadow-xs" />
               </div>
             </div>
           </div>
 
         </div>
-
       </div>
-
-    </div>
+    </PageContainer>
   )
 }
-

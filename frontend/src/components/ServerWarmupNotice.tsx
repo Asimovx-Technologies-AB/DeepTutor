@@ -77,24 +77,24 @@ export default function ServerWarmupNotice() {
         style={{
           backgroundColor: status === 'ready' ? 'rgba(235, 246, 238, 0.95)' : 'rgba(255, 249, 242, 0.95)',
           borderColor: status === 'ready' ? 'rgba(79, 138, 104, 0.3)' : 'rgba(242, 138, 69, 0.3)',
-          color: status === 'ready' ? '#35654B' : '#DF7635',
+          color: status === 'ready' ? '#46A302' : '#1899D6',
         }}
       >
         {status === 'ready' ? (
           <>
-            <CheckCircle2 size={15} className="text-[#4F8A68]" />
-            <span>DeepTutor AI Server Connected & Ready</span>
+            <CheckCircle2 size={15} className="text-[#58CC02]" />
+            <span>Indie-Tutor Server Connected & Ready</span>
           </>
         ) : (
           <>
-            <Loader2 size={15} className="animate-spin text-[#F28A45]" />
+            <Loader2 size={15} className="animate-spin text-[#1CB0F6]" />
             <span>
               Waking up AI Cloud Server ({elapsed}s)...{' '}
-              <span className="text-[#969188] font-normal hidden sm:inline">
+              <span className="text-[#AFAFAF] font-normal hidden sm:inline">
                 (Free tier instance takes ~30s on first load)
               </span>
             </span>
-            <Zap size={13} className="text-[#F28A45] animate-pulse" />
+            <Zap size={13} className="text-[#1CB0F6] animate-pulse" />
           </>
         )}
       </motion.div>

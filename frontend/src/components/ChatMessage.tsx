@@ -43,13 +43,13 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding }
       className={`flex gap-4 group ${isAssistant ? '' : 'flex-row-reverse'}`}
     >
       {/* Avatar */}
-      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 mt-1 shadow-2xs ${
+      <div className={`w-10 h-10 rounded-[1.5rem] flex items-center justify-center flex-shrink-0 mt-1 elevation-1 ${
         isAssistant
-          ? 'bg-[#FFF0E4] text-[#F28A45] border border-[#F28A45]/30'
-          : 'bg-[#20201D] text-white'
+          ? 'bg-[#DDF4FF] text-[#1CB0F6] border border-[#1CB0F6]/30'
+          : 'bg-[#3C3C3C] text-white'
       }`}>
         {isAssistant ? (
-          <Bot size={18} className="text-[#F28A45]" />
+          <Bot size={18} className="text-[#1CB0F6]" />
         ) : (
           <User size={18} className="text-white" />
         )}
@@ -58,16 +58,18 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding }
       {/* Content column */}
       <div className={`max-w-[85%] relative ${isAssistant ? '' : 'items-end'}`}>
         {/* Message bubble */}
-        <div className={`rounded-3xl px-5 py-4 shadow-2xs ${
+        <div className={`px-4 py-2 ${
           isAssistant
-            ? 'bg-white border border-[#E7E1D8] rounded-tl-sm text-[#20201D]'
-            : 'bg-[#F28A45] text-white rounded-tr-sm shadow-xs font-semibold'
+            ? content.includes("Topic Not Found") 
+              ? 'bg-[#FFF0B3] border border-[#FFC800]/40 rounded-[1.5rem] rounded-tl-sm text-[#3C3C3C] px-5 py-4'
+              : 'text-[#3C3C3C]'
+            : 'bg-[#F8FAFC] border border-[#E2E8F0] text-[#3C3C3C] rounded-[1.5rem] rounded-tr-sm elevation-3 px-5 py-3 font-medium'
         }`}>
           {isAssistant ? (
             <div className="markdown-content">
               {/* Grounding Badge (only for substantive answers) */}
               {grounding && grounding.formatted_badge && !content.includes("Topic Not Found") && (
-                <div className="mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-[#EBF6EE] text-[#4F8A68] border border-[#4F8A68]/30">
+                <div className="mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-[#EBF6EE] text-[#58CC02] border border-[#58CC02]/30">
                   <span>{grounding.formatted_badge}</span>
                 </div>
               )}
@@ -114,9 +116,9 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding }
         {isAssistant && content && !isStreaming && (
           <button
             onClick={handleCopy}
-            className="absolute -bottom-6 left-2 opacity-0 group-hover:opacity-100 transition-opacity text-[#969188] hover:text-[#F28A45] flex items-center gap-1.5 text-xs font-bold bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-lg border border-[#E7E1D8] shadow-2xs cursor-pointer"
+            className="absolute -bottom-6 left-2 opacity-0 group-hover:opacity-100 transition-opacity text-[#AFAFAF] hover:text-[#1CB0F6] flex items-center gap-1.5 text-xs font-bold bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-lg border border-[#E2E8F0] elevation-1 cursor-pointer"
           >
-            {copied ? <><Check size={12} className="text-[#4F8A68]" /> Copied</> : <><Copy size={12} /> Copy</>}
+            {copied ? <><Check size={12} className="text-[#58CC02]" /> Copied</> : <><Copy size={12} /> Copy</>}
           </button>
         )}
       </div>

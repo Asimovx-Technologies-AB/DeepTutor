@@ -281,6 +281,18 @@ export const notesApi = {
 }
 
 
+// ─── Dashboard ─────────────────────────────────────────────────
+export const dashboardApi = {
+  stats: () => api.get('/dashboard/stats'),
+  activity: (limit?: number) => api.get('/dashboard/activity', { params: { limit } }),
+  continue: () => api.get('/dashboard/continue'),
+  recordActivity: (data: { activity_type: string; title: string; subject_id?: string; topic_id?: string }) =>
+    api.post('/dashboard/activity/record', data),
+  updateProgress: (data: { subject_id: string; topic_id: string; progress_percentage: number }) =>
+    api.post('/dashboard/progress/update', data),
+  goals: () => api.get('/dashboard/goals'),
+}
+
 // ─── Documents ────────────────────────────────────────────────
 export const documentsApi = {
   upload: (topicId: string, file: File, sectionId?: string) => {

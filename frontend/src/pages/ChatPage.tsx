@@ -94,7 +94,7 @@ function UploadStatusCard({
 
       // In-progress: Target from backend status
       const backendTarget = typeof statusRef.current.progress === 'number' ? statusRef.current.progress : 10
-      
+
       let next: number
       if (current < backendTarget) {
         // Smoothly catch up to backend stage with gentle damping
@@ -161,15 +161,15 @@ function UploadStatusCard({
       return {
         label: 'Knowledge Base Ready',
         step: 'Complete',
-        badgeColor: 'bg-[#E3F0E5] text-[#4F8A68] border-[#4F8A68]/30',
-        description: 'All chunks, vector embeddings & Knowledge Graph indexed successfully',
+        badgeColor: 'bg-[#D7FFB8] text-[#58CC02] border-[#58CC02]/30',
+        description: 'All chunks, vector embeddings & GraphRAG nodes indexed successfully',
       }
     }
     if (isError) {
       return {
         label: 'Processing Failed',
         step: 'Error',
-        badgeColor: 'bg-[#FBE7E4] text-[#C85C52] border-[#C85C52]/30',
+        badgeColor: 'bg-[#FFD1D1] text-[#FF4B4B] border-[#FF4B4B]/30',
         description: status.error || 'Could not parse document. Please verify the file.',
       }
     }
@@ -177,16 +177,16 @@ function UploadStatusCard({
       return {
         label: 'Parsing Document Structure',
         step: 'Stage 1/4',
-        badgeColor: 'bg-[#FFF0E4] text-[#F28A45] border-[#F28A45]/30',
-        description: 'Extracting clean text, formulas & table layouts via PyMuPDF...',
+        badgeColor: 'bg-[#DDF4FF] text-[#1CB0F6] border-[#1CB0F6]/30',
+        description: 'Extracting text, formulas & table layouts via Docling / PyMuPDF cascade...',
       }
     }
     if (smoothProgress < 55) {
       return {
         label: 'Semantic Chunking',
         step: 'Stage 2/4',
-        badgeColor: 'bg-[#FFF3D8] text-[#D99A32] border-[#D99A32]/30',
-        description: 'Building section tree & context-preserving study chunks...',
+        badgeColor: 'bg-[#FFF0B3] text-[#FFC800] border-[#FFC800]/30',
+        description: 'Building section tree & context-preserving semantic study chunks...',
       }
     }
     if (smoothProgress < 80) {
@@ -197,19 +197,11 @@ function UploadStatusCard({
         description: 'Indexing high-dimensional semantic embeddings into vector store...',
       }
     }
-    if (smoothProgress < 96) {
-      return {
-        label: 'Constructing Knowledge Graph',
-        step: 'Stage 4/4',
-        badgeColor: 'bg-[#E3F0E5] text-[#4F8A68] border-[#4F8A68]/30',
-        description: 'Extracting key academic concepts & relationship triplets...',
-      }
-    }
     return {
-      label: 'Finalizing Index',
-      step: 'Finalizing',
-      badgeColor: 'bg-[#E3F0E5] text-[#4F8A68] border-[#4F8A68]/30',
-      description: 'Verifying vector namespace & caching graph nodes...',
+      label: 'Constructing GraphRAG',
+      step: 'Stage 4/4',
+      badgeColor: 'bg-[#D7FFB8] text-[#58CC02] border-[#58CC02]/30',
+      description: 'Extracting key concepts & entity relationship triplets for deep reasoning...',
     }
   }, [isDone, isError, smoothProgress, status.error])
 
@@ -219,63 +211,61 @@ function UploadStatusCard({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -8, scale: 0.96 }}
       transition={{ duration: 0.35, ease: 'easeOut' }}
-      className={`relative overflow-hidden rounded-2xl border p-4 sm:p-5 shadow-xs transition-all ${
-        isDone
-          ? 'bg-gradient-to-r from-[#F4FAF5] via-white to-[#F4FAF5] border-[#4F8A68]/40'
+      className={`relative overflow-hidden rounded-[1.5rem] border p-4 sm:p-5 elevation-2 transition-all ${isDone
+          ? 'bg-gradient-to-r from-[#F4FAF5] via-white to-[#F4FAF5] border-[#58CC02]/40'
           : isError
-          ? 'bg-gradient-to-r from-[#FFF5F4] via-white to-[#FFF5F4] border-[#C85C52]/40'
-          : 'bg-gradient-to-r from-[#FFFDF9] via-white to-[#FFF9F2] border-[#F28A45]/35'
-      }`}
+            ? 'bg-gradient-to-r from-[#FFF5F4] via-white to-[#FFF5F4] border-[#FF4B4B]/40'
+            : 'bg-gradient-to-r from-[#FFFDF9] via-white to-[#FFFFFF] border-[#1CB0F6]/35'
+        }`}
     >
       {/* Background glowing ambient light while processing */}
       {!isDone && !isError && (
-        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-44 h-44 bg-[#F28A45]/10 rounded-full blur-2xl pointer-events-none animate-pulse" />
+        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-44 h-44 bg-[#1CB0F6]/10 rounded-full blur-2xl pointer-events-none animate-pulse" />
       )}
 
       <div className="flex items-start justify-between gap-3 relative z-10">
-        
+
         {/* Left Icon with animated spinner */}
         <div className="flex items-center gap-3.5 flex-1 min-w-0">
           <div className="relative flex-shrink-0">
             <div
-              className={`w-12 h-12 rounded-2xl flex items-center justify-center border shadow-2xs transition-transform ${
-                isDone
-                  ? 'bg-[#E3F0E5] text-[#4F8A68] border-[#4F8A68]/30 scale-105'
+              className={`w-12 h-12 rounded-[1.5rem] flex items-center justify-center border elevation-1 transition-transform ${isDone
+                  ? 'bg-[#D7FFB8] text-[#58CC02] border-[#58CC02]/30 scale-105'
                   : isError
-                  ? 'bg-[#FBE7E4] text-[#C85C52] border-[#C85C52]/30'
-                  : 'bg-[#FFF0E4] text-[#F28A45] border-[#F28A45]/30'
-              }`}
+                    ? 'bg-[#FFD1D1] text-[#FF4B4B] border-[#FF4B4B]/30'
+                    : 'bg-[#DDF4FF] text-[#1CB0F6] border-[#1CB0F6]/30'
+                }`}
             >
               {isDone ? (
                 <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }}>
-                  <CheckCircle size={24} className="text-[#4F8A68]" />
+                  <CheckCircle size={24} className="text-[#58CC02]" />
                 </motion.div>
               ) : isError ? (
-                <AlertCircle size={22} className="text-[#C85C52]" />
+                <AlertCircle size={22} className="text-[#FF4B4B]" />
               ) : (
                 <motion.div
                   animate={{ rotate: 360 }}
                   transition={{ repeat: Infinity, duration: 3.5, ease: 'linear' }}
                 >
-                  <Sparkles size={22} className="text-[#F28A45]" />
+                  <Sparkles size={22} className="text-[#1CB0F6]" />
                 </motion.div>
               )}
             </div>
 
             {/* Orbital ring while indexing */}
             {!isDone && !isError && (
-              <div className="absolute -inset-1 rounded-2xl border-2 border-[#F28A45]/40 border-t-[#F28A45] animate-spin pointer-events-none" />
+              <div className="absolute -inset-1 rounded-[1.5rem] border-2 border-[#1CB0F6]/40 border-t-[#1CB0F6] animate-spin pointer-events-none" />
             )}
           </div>
 
           {/* Title & Live Stage */}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-extrabold text-sm text-[#20201D] truncate max-w-[220px] sm:max-w-md">
+              <span className="font-extrabold text-sm text-[#3C3C3C] truncate max-w-[220px] sm:max-w-md">
                 {upload.fileName}
               </span>
               {upload.sizeMb !== undefined && (
-                <span className="text-[10px] font-bold text-[#6F6B63] bg-[#F4EFE7] px-2 py-0.5 rounded-md border border-[#E7E1D8]">
+                <span className="text-[10px] font-bold text-[#777777] bg-[#E5E5E5] px-2 py-0.5 rounded-md border border-[#E2E8F0]">
                   {upload.sizeMb.toFixed(1)} MB
                 </span>
               )}
@@ -284,7 +274,7 @@ function UploadStatusCard({
               </span>
             </div>
 
-            <p className="text-xs text-[#6F6B63] font-medium mt-1 truncate">
+            <p className="text-xs text-[#777777] font-medium mt-1 truncate">
               {stageInfo.description}
             </p>
           </div>
@@ -293,14 +283,14 @@ function UploadStatusCard({
         {/* Right Percentage & Close Button */}
         <div className="flex items-center gap-3 flex-shrink-0">
           <div className="text-right">
-            <span className={`text-xl sm:text-2xl font-black tracking-tight ${isDone ? 'text-[#4F8A68]' : isError ? 'text-[#C85C52]' : 'text-[#F28A45]'}`}>
-              {smoothProgress}%
+            <span className={`text-xl sm:text-2xl font-black tracking-tight ${isDone ? 'text-[#58CC02]' : isError ? 'text-[#FF4B4B]' : 'text-[#1CB0F6]'}`}>
+              {displayProgress}%
             </span>
           </div>
 
           <button
             onClick={() => onDismiss(upload.docId)}
-            className="text-[#969188] hover:text-[#20201D] p-1.5 rounded-xl hover:bg-[#F4EFE7] transition-colors cursor-pointer"
+            className="text-[#AFAFAF] hover:text-[#3C3C3C] p-1.5 rounded-[1.25rem] hover:bg-[#E5E5E5] transition-colors cursor-pointer"
             title="Dismiss notification"
           >
             <X size={16} />
@@ -310,15 +300,14 @@ function UploadStatusCard({
       </div>
 
       {/* Animated Gradient Progress Bar with Shimmer */}
-      <div className="mt-3.5 w-full bg-[#F4EFE7] h-2.5 rounded-full overflow-hidden p-0.5 border border-[#E7E1D8] relative">
-        <div
-          className={`h-full rounded-full transition-all relative ${
-            isDone
-              ? 'bg-[#4F8A68]'
+      <div className="mt-3.5 w-full bg-[#E5E5E5] h-2.5 rounded-full overflow-hidden p-0.5 border border-[#E2E8F0] relative">
+        <motion.div
+          className={`h-full rounded-full transition-all relative ${isDone
+              ? 'bg-[#58CC02]'
               : isError
-              ? 'bg-[#C85C52]'
-              : 'bg-gradient-to-r from-[#F28A45] via-[#FFB070] to-[#F28A45]'
-          }`}
+                ? 'bg-[#FF4B4B]'
+                : 'bg-gradient-to-r from-[#1CB0F6] via-[#FFB070] to-[#1CB0F6]'
+            }`}
           style={{ width: `${smoothProgress}%`, transition: 'width 75ms ease-out' }}
         >
           {/* Shimmer sweep */}
@@ -329,34 +318,36 @@ function UploadStatusCard({
               transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
             />
           )}
-        </div>
       </div>
+    </div>
 
-      {/* Done Stats Pill */}
-      {isDone && status.stats && (
-        <motion.div
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-3 pt-2.5 border-t border-[#E7E1D8]/60 flex items-center justify-between text-xs font-bold text-[#4F8A68]"
-        >
-          <div className="flex items-center gap-3 flex-wrap">
-            <span>✨ {status.stats.chunks_indexed || 0} Chunks Indexed</span>
-            <span>•</span>
-            <span>🧠 {status.stats.entities_extracted || 0} Graph Entities</span>
-            {status.stats.extracted_topics?.length > 0 && (
-              <>
-                <span>•</span>
-                <span className="text-[#6F6B63]">Topics: {status.stats.extracted_topics.slice(0, 3).join(', ')}</span>
-              </>
-            )}
-          </div>
-          <span className="text-[11px] font-extrabold uppercase bg-[#E3F0E5] px-2.5 py-0.5 rounded-full">
-            Ready to study
-          </span>
-        </motion.div>
-      )}
+      {/* Done Stats Pill */ }
+  {
+    isDone && status.stats && (
+      <motion.div
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mt-3 pt-2.5 border-t border-[#E2E8F0]/60 flex items-center justify-between text-xs font-bold text-[#58CC02]"
+      >
+        <div className="flex items-center gap-3 flex-wrap">
+          <span>✨ {status.stats.chunks_indexed || 0} Chunks Indexed</span>
+          <span>•</span>
+          <span>🧠 {status.stats.entities_extracted || 0} Graph Entities</span>
+          {status.stats.extracted_topics?.length > 0 && (
+            <>
+              <span>•</span>
+              <span className="text-[#777777]">Topics: {status.stats.extracted_topics.slice(0, 3).join(', ')}</span>
+            </>
+          )}
+        </div>
+        <span className="text-[11px] font-extrabold uppercase bg-[#D7FFB8] px-2.5 py-0.5 rounded-full">
+          Ready to study
+        </span>
+      </motion.div>
+    )
+  }
 
-    </motion.div>
+    </motion.div >
   )
 }
 
@@ -370,15 +361,15 @@ const StreamingMessageBubble = memo(function StreamingMessageBubble({ liveSource
   if (!streamingContent) {
     return (
       <div className="flex gap-3 sm:gap-4">
-        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-[#FFF0E4] text-[#F28A45] border border-[#F28A45]/30 flex items-center justify-center flex-shrink-0 shadow-xs">
+        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-[1.5rem] bg-[#DDF4FF] text-[#1CB0F6] border border-[#1CB0F6]/30 flex items-center justify-center flex-shrink-0 elevation-2">
           <Sparkles size={16} />
         </div>
-        <div className="bg-white border border-[#E7E1D8] rounded-2xl px-4 sm:px-5 py-3 sm:py-4 shadow-2xs">
+        <div className="bg-white border border-[#E2E8F0] rounded-[1.5rem] px-4 sm:px-5 py-3 sm:py-4 elevation-1">
           <div className="flex items-center gap-2">
             <span className="flex gap-1">
               <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
             </span>
-            <span className="text-xs font-bold text-[#6F6B63]">Searching GraphRAG knowledge base...</span>
+            <span className="text-xs font-bold text-[#777777]">Searching GraphRAG knowledge base...</span>
           </div>
         </div>
       </div>
@@ -428,7 +419,7 @@ export default function ChatPage() {
 
   const [liveSources, setLiveSources] = useState<Source[]>([])
   const [extMessages, setExtMessages] = useState<ExtendedMessage[]>([])
-  const [selectedModel, setSelectedModel] = useState('DeepTutor AI (Llama 3.1)')
+  const [selectedModel, setSelectedModel] = useState('Indie-Tutor (Llama 3.1)')
 
   // Mobile Drawers State
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false)
@@ -604,7 +595,7 @@ export default function ChatPage() {
       },
       onError: (err) => {
         console.error('Stream error:', err)
-        const fallbackMsg = `⚠️ **Connection Error:** ${err?.message || 'Server did not respond'}.\n\nIf the AI server is waking up or indexing your PDF, please wait a moment and send your question again.`
+        const fallbackMsg = `⚠️ **Something went wrong.**\n\nYour tutor couldn't respond this time. Try again in a moment. (${err?.message || 'Server error'})`
         const fallback: ExtendedMessage = {
           id: Date.now().toString() + '_fallback',
           role: 'assistant',
@@ -689,9 +680,9 @@ export default function ChatPage() {
   const groupedSessions = useMemo(() => {
     const filtered = sessions.filter((s) => {
       const isSubjectSession = s.topic_id?.startsWith('sslc-') ||
-                               s.topic_id?.startsWith('math-') ||
-                               s.topic_id?.startsWith('phys-') ||
-                               s.topic_id?.startsWith('chem-')
+        s.topic_id?.startsWith('math-') ||
+        s.topic_id?.startsWith('phys-') ||
+        s.topic_id?.startsWith('chem-')
       if (isSubjectSession) return false
       return s.session_title.toLowerCase().includes(searchQuery.toLowerCase())
     })
@@ -780,11 +771,10 @@ export default function ChatPage() {
       const successMsg: ExtendedMessage = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `📄 **${fileName}** is fully processed and indexed!\n\n${
-          stats?.chunks_indexed
+        content: `📄 **${fileName}** is fully processed and indexed!\n\n${stats?.chunks_indexed
             ? `📊 **Knowledge Breakdown:**\n- **Chunks Indexed:** ${stats.chunks_indexed}\n- **Graph Entities:** ${stats.entities_extracted || 0}\n`
             : ''
-        }${stats?.extracted_topics?.length ? `- **Key Topics:** ${stats.extracted_topics.slice(0, 5).join(', ')}\n` : ''}\n💡 *You can now ask questions, generate practice quizzes, or study flashcards for this material.*`,
+          }${stats?.extracted_topics?.length ? `- **Key Topics:** ${stats.extracted_topics.slice(0, 5).join(', ')}\n` : ''}\n💡 *You can now ask questions, generate practice quizzes, or study flashcards for this material.*`,
         created_at: new Date().toISOString(),
       }
       setExtMessages((existing) => [...existing, successMsg])
@@ -865,8 +855,8 @@ export default function ChatPage() {
   const allMessages = extMessages
 
   return (
-    <div className="flex flex-col md:flex-row h-screen w-full bg-[#FAF8F3] overflow-hidden text-[#20201D] font-sans">
-      
+    <div className="flex flex-col md:flex-row h-screen w-full bg-[#F7F7F7] overflow-hidden text-[#3C3C3C] font-sans">
+
       {/* ─── MOBILE BACKDROP OVERLAYS ────────────────────────────────────────── */}
       <AnimatePresence>
         {(mobileLeftOpen || mobileRightOpen) && (
@@ -875,28 +865,27 @@ export default function ChatPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => { setMobileLeftOpen(false); setMobileRightOpen(false); }}
-            className="fixed inset-0 bg-[#20201D]/40 backdrop-blur-sm z-40 md:hidden"
+            className="fixed inset-0 bg-[#3C3C3C]/40 backdrop-blur-sm z-40 md:hidden"
           />
         )}
       </AnimatePresence>
 
       {/* ─── MOBILE LEFT DRAWER (CHAT HISTORY) ─── */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-[#E7E1D8] p-4 flex flex-col justify-between shadow-2xl transition-transform duration-300 md:hidden ${
-          mobileLeftOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed xl:static inset-y-0 left-0 z-40 w-72 bg-white border-r border-[#E2E8F0] p-4 flex flex-col justify-between shadow-2xl xl:shadow-none transition-transform duration-300 ${mobileLeftOpen ? 'translate-x-0' : '-translate-x-full xl:translate-x-0'
+          }`}
       >
         <div className="space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#E7E1D8]">
+          <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
             <div className="flex items-center gap-2">
-              <MessageSquare size={18} className="text-[#F28A45]" />
-              <h3 className="text-xs font-extrabold uppercase text-[#6F6B63] tracking-wider">
+              <MessageSquare size={18} className="text-[#1CB0F6]" />
+              <h3 className="text-xs font-extrabold uppercase text-[#777777] tracking-wider">
                 Chat History
               </h3>
             </div>
             <button
               onClick={() => setMobileLeftOpen(false)}
-              className="text-[#969188] hover:text-[#20201D] p-1.5 rounded-xl hover:bg-[#F4EFE7]"
+              className="xl:hidden text-[#AFAFAF] hover:text-[#3C3C3C] p-1.5 rounded-[1.25rem] hover:bg-[#E5E5E5]"
             >
               <X size={18} />
             </button>
@@ -908,7 +897,7 @@ export default function ChatPage() {
               navigate('/chat')
               setMobileLeftOpen(false)
             }}
-            className="w-full btn-primary font-bold text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 shadow-2xs cursor-pointer"
+            className="w-full btn-primary font-bold text-xs py-2.5 px-3 rounded-[1.25rem] flex items-center justify-center gap-2 elevation-1 cursor-pointer"
           >
             <Plus size={15} />
             <span>New Chat</span>
@@ -924,16 +913,15 @@ export default function ChatPage() {
                     navigate(`/chat/${s.id}`)
                     setMobileLeftOpen(false)
                   }}
-                  className={`group flex items-center justify-between px-3 py-2.5 rounded-xl text-xs cursor-pointer transition-all ${
-                    isSelected
-                      ? 'bg-[#FFF0E4] text-[#F28A45] font-extrabold border border-[#F28A45]/30 shadow-2xs'
-                      : 'text-[#6F6B63] hover:text-[#20201D] hover:bg-[#F4EFE7] font-medium'
-                  }`}
+                  className={`group flex items-center justify-between px-3 py-2.5 rounded-[1.25rem] text-xs cursor-pointer transition-all ${isSelected
+                      ? 'bg-[#DDF4FF] text-[#1CB0F6] font-extrabold border border-[#1CB0F6]/30 elevation-1'
+                      : 'text-[#777777] hover:text-[#3C3C3C] hover:bg-[#E5E5E5] font-medium'
+                    }`}
                 >
                   <span className="truncate pr-2">{s.session_title || 'Untitled Chat'}</span>
                   <button
                     onClick={(e) => handleDeleteSession(e, s.id)}
-                    className="text-[#969188] hover:text-[#C85C52] hover:bg-[#FBE7E4] p-1.5 rounded-lg transition-colors"
+                    className="text-[#AFAFAF] hover:text-[#FF4B4B] hover:bg-[#FFD1D1] p-1.5 rounded-lg transition-colors"
                     title="Delete session"
                   >
                     <Trash2 size={13} />
@@ -946,7 +934,7 @@ export default function ChatPage() {
       </aside>
 
       {/* ─── MAIN CHAT WORKSPACE AREA ───────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col bg-[#FAF8F3] overflow-hidden relative">
+      <main className="flex-1 flex flex-col bg-[#F7F7F7] overflow-hidden relative">
 
         {/* Hidden File Input */}
         <input
@@ -958,25 +946,25 @@ export default function ChatPage() {
         />
 
         {/* Top Header Bar */}
-        <header className="h-16 border-b border-[#E7E1D8] flex items-center justify-between px-4 sm:px-6 flex-shrink-0 bg-[#FAF8F3]/80 backdrop-blur-md">
-          
+        <header className="h-16 border-b border-[#E2E8F0] flex items-center justify-between px-4 sm:px-6 flex-shrink-0 bg-[#F7F7F7]/80 backdrop-blur-md">
+
           <div className="flex items-center gap-3">
             {/* Mobile Left Drawer Trigger */}
             <button
               onClick={() => setMobileLeftOpen(true)}
-              className="md:hidden p-2 text-[#20201D] hover:bg-[#F4EFE7] rounded-xl transition-colors"
+              className="xl:hidden p-2 text-[#3C3C3C] hover:bg-[#E5E5E5] rounded-[1.25rem] transition-colors"
               title="Open Chat History"
             >
               <Menu size={20} />
             </button>
 
             {/* Model Switcher Pill */}
-            <div className="flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl border border-[#E7E1D8] bg-white hover:bg-[#FFF0E4] hover:border-[#F28A45]/40 cursor-pointer transition-all shadow-2xs">
-              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-xl bg-[#FFF0E4] text-[#F28A45] flex items-center justify-center border border-[#F28A45]/30">
+            <div className="flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-[1.5rem] border border-[#E2E8F0] bg-white hover:bg-[#DDF4FF] hover:border-[#1CB0F6]/40 cursor-pointer transition-all elevation-1">
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-[1.25rem] bg-[#DDF4FF] text-[#1CB0F6] flex items-center justify-center border border-[#1CB0F6]/30">
                 <Sparkles size={13} />
               </div>
-              <span className="text-xs font-black text-[#20201D] truncate max-w-[140px] sm:max-w-none">{selectedModel}</span>
-              <ChevronDown size={14} className="text-[#969188] flex-shrink-0" />
+              <span className="text-xs font-black text-[#3C3C3C] truncate max-w-[140px] sm:max-w-none">{selectedModel}</span>
+              <ChevronDown size={14} className="text-[#AFAFAF] flex-shrink-0" />
             </div>
           </div>
 
@@ -984,10 +972,10 @@ export default function ChatPage() {
             {activeSession && (
               <button
                 onClick={(e) => handleDeleteSession(e, activeSession.id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-[#FBE7E4] border border-[#E7E1D8] hover:border-[#C85C52]/40 text-[#6F6B63] hover:text-[#C85C52] text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-[1.25rem] bg-white hover:bg-[#FFD1D1] border border-[#E2E8F0] hover:border-[#FF4B4B]/40 text-[#777777] hover:text-[#FF4B4B] text-xs font-bold transition-all elevation-1 cursor-pointer active:scale-95"
                 title="Delete this chat session & database records"
               >
-                <Trash2 size={13} className="text-[#C85C52]" />
+                <Trash2 size={13} className="text-[#FF4B4B]" />
                 <span className="hidden sm:inline">Delete Section</span>
               </button>
             )}
@@ -995,7 +983,7 @@ export default function ChatPage() {
             {/* Mobile Right Drawer Trigger */}
             <button
               onClick={() => setMobileRightOpen(true)}
-              className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#FFF0E4] border border-[#F28A45]/30 text-[#F28A45] text-xs font-extrabold hover:bg-[#DF7635] hover:text-white transition-colors"
+              className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-[1.25rem] bg-[#DDF4FF] border border-[#1CB0F6]/30 text-[#1CB0F6] text-xs font-extrabold hover:bg-[#1899D6] hover:text-white transition-colors"
               title="Study Tools & Graph"
             >
               <Zap size={14} />
@@ -1006,7 +994,7 @@ export default function ChatPage() {
 
         {/* Aesthetic Document Processing Banner */}
         {activeUploads.length > 0 && (
-          <div className="px-4 sm:px-6 py-3 border-b border-[#E7E1D8] bg-[#FAF8F3]/90 backdrop-blur-sm space-y-3">
+          <div className="px-4 sm:px-6 py-3 border-b border-[#E2E8F0] bg-[#F7F7F7]/90 backdrop-blur-sm space-y-3">
             <AnimatePresence>
               {activeUploads.map((upload) => (
                 <UploadStatusCard
@@ -1023,33 +1011,33 @@ export default function ChatPage() {
 
         {/* Workspace Content Area */}
         <div className="flex-1 overflow-y-auto flex flex-col">
-          
+
           {/* HERO STATE */}
           {allMessages.length === 0 && (
             <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-8 sm:py-10 max-w-3xl mx-auto w-full text-center">
-              
-              {/* Warm Icon Graphic */}
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-[#FFF0E4] border border-[#F28A45]/30 text-[#F28A45] flex items-center justify-center shadow-md mb-4 sm:mb-6">
-                <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 text-[#F28A45]" />
+
+              {/* AI Tutor Avatar Graphic */}
+              <div className="w-32 h-32 sm:w-40 sm:h-40 mb-2 sm:mb-4 pointer-events-none">
+                <img src="/assets/illustrations/ai_tutor.jpg" alt="AI Tutor" className="w-full h-full object-contain mix-blend-multiply" />
               </div>
 
               {/* Personal Greeting & Headline */}
-              <p className="text-[#6F6B63] font-extrabold text-sm sm:text-base mb-1 tracking-wide">
+              <p className="text-[#777777] font-extrabold text-sm sm:text-base mb-1 tracking-wide">
                 Hello, {user?.username ?? 'Learner'}
               </p>
-              <h1 className="text-2xl sm:text-4xl font-black text-[#20201D] tracking-tight mb-6 sm:mb-8">
-                How can I assist you today?
+              <h1 className="text-2xl sm:text-4xl font-black text-[#3C3C3C] tracking-tight mb-6 sm:mb-8">
+                What are you working on today?
               </h1>
 
               {/* Clean Multi-Tool Input Container */}
-              <div className="w-full bg-white border border-[#E7E1D8] rounded-3xl p-3.5 sm:p-5 shadow-xs focus-within:border-[#F28A45] focus-within:ring-2 focus-within:ring-[#F28A45]/20 transition-all text-left">
-                
+              <div className="w-full bg-white border border-[#E2E8F0] rounded-[2rem] p-3.5 sm:p-5 elevation-2 focus-within:border-[#1CB0F6] focus-within:ring-2 focus-within:ring-[#1CB0F6]/20 transition-all text-left">
+
                 {/* 3 Quick Study Tool Action Buttons */}
-                <div className="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b border-[#E7E1D8]">
-                  <span className="text-[11px] font-black uppercase text-[#6F6B63] tracking-wider mr-1 flex items-center gap-1">
-                    <Sparkles size={13} className="text-[#F28A45]" /> Tools:
+                <div className="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b border-[#E2E8F0]">
+                  <span className="text-[11px] font-black uppercase text-[#777777] tracking-wider mr-1 flex items-center gap-1">
+                    <Sparkles size={13} className="text-[#1CB0F6]" /> Tools:
                   </span>
-                  
+
                   <button
                     type="button"
                     onClick={() => {
@@ -1057,10 +1045,10 @@ export default function ChatPage() {
                       handleSend(`Summarize ${topic} into 5-7 clear, high-yield bullet points for quick revision.`)
                     }}
                     disabled={isStreaming}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FAF8F3] hover:bg-[#FFF0E4] border border-[#E7E1D8] hover:border-[#F28A45]/40 text-[#20201D] hover:text-[#F28A45] text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F7F7F7] hover:bg-[#DDF4FF] border border-[#E2E8F0] hover:border-[#1CB0F6]/40 text-[#3C3C3C] hover:text-[#1CB0F6] text-xs font-bold transition-all elevation-1 cursor-pointer active:scale-95 disabled:opacity-40"
                     title="Generate 5-7 key bullet points"
                   >
-                    <ListChecks size={13} className="text-[#F28A45]" />
+                    <ListChecks size={13} className="text-[#1CB0F6]" />
                     <span>Bullet Points</span>
                   </button>
 
@@ -1071,10 +1059,10 @@ export default function ChatPage() {
                       handleSend(`What are the most important exam-critical points, core formulas, and common misconceptions about ${topic}?`)
                     }}
                     disabled={isStreaming}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FAF8F3] hover:bg-[#FFF3D8] border border-[#E7E1D8] hover:border-[#D99A32]/40 text-[#20201D] hover:text-[#D99A32] text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F7F7F7] hover:bg-[#FFF0B3] border border-[#E2E8F0] hover:border-[#FFC800]/40 text-[#3C3C3C] hover:text-[#FFC800] text-xs font-bold transition-all elevation-1 cursor-pointer active:scale-95 disabled:opacity-40"
                     title="Highlight key exam-critical formulas & concepts"
                   >
-                    <Star size={13} className="text-[#D99A32]" />
+                    <Star size={13} className="text-[#FFC800]" />
                     <span>Important Points</span>
                   </button>
 
@@ -1085,10 +1073,10 @@ export default function ChatPage() {
                       handleSend(`Explain ${topic} using a simple, intuitive real-world analogy and visual mental model.`)
                     }}
                     disabled={isStreaming}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FAF8F3] hover:bg-[#E3F0E5] border border-[#E7E1D8] hover:border-[#4F8A68]/40 text-[#20201D] hover:text-[#4F8A68] text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F7F7F7] hover:bg-[#D7FFB8] border border-[#E2E8F0] hover:border-[#58CC02]/40 text-[#3C3C3C] hover:text-[#58CC02] text-xs font-bold transition-all elevation-1 cursor-pointer active:scale-95 disabled:opacity-40"
                     title="Explain with a simple real-world analogy"
                   >
-                    <Lightbulb size={13} className="text-[#4F8A68]" />
+                    <Lightbulb size={13} className="text-[#58CC02]" />
                     <span>Simple Analogy</span>
                   </button>
                 </div>
@@ -1099,29 +1087,28 @@ export default function ChatPage() {
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
                   rows={2}
-                  className="w-full bg-transparent resize-none outline-none text-[#20201D] font-medium text-sm sm:text-base placeholder-[#969188] leading-relaxed px-1"
-                  placeholder="Ask your AI Tutor anything..."
+                  className="w-full bg-transparent resize-none outline-none text-[#3C3C3C] font-medium text-sm sm:text-base placeholder-[#AFAFAF] leading-relaxed px-1"
+                  placeholder="What are you working on today?"
                 />
 
                 {/* Sub Action Toolbar */}
-                <div className="flex items-center justify-between gap-2 mt-3 sm:mt-4 pt-3 border-t border-[#E7E1D8]">
+                <div className="flex items-center justify-between gap-2 mt-3 sm:mt-4 pt-3 border-t border-[#E2E8F0]">
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploadingFile}
-                    className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-[#FAF8F3] hover:bg-[#FFF0E4] border border-[#E7E1D8] hover:border-[#F28A45]/30 text-[#20201D] text-xs font-bold transition-all shadow-2xs disabled:opacity-40 cursor-pointer"
+                    className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-[1.25rem] bg-[#F7F7F7] hover:bg-[#DDF4FF] border border-[#E2E8F0] hover:border-[#1CB0F6]/30 text-[#3C3C3C] text-xs font-bold transition-all elevation-1 disabled:opacity-40 cursor-pointer"
                   >
-                    {uploadingFile ? <Loader2 size={14} className="animate-spin text-[#F28A45]" /> : <Paperclip size={14} className="text-[#F28A45]" />}
+                    {uploadingFile ? <Loader2 size={14} className="animate-spin text-[#1CB0F6]" /> : <Paperclip size={14} className="text-[#1CB0F6]" />}
                     <span>{uploadingFile ? 'Uploading...' : 'Attach PDF'}</span>
                   </button>
 
                   <div className="flex items-center gap-2">
                     <button
                       onClick={toggleVoiceInput}
-                      className={`p-2.5 sm:p-3 rounded-full text-white transition-all shadow-xs cursor-pointer ${
-                        isListening
-                          ? 'bg-[#C85C52] animate-bounce ring-4 ring-[#FBE7E4]'
-                          : 'bg-[#F28A45] hover:bg-[#DF7635]'
-                      }`}
+                      className={`p-2.5 sm:p-3 rounded-full text-white transition-all elevation-2 cursor-pointer ${isListening
+                          ? 'bg-[#FF4B4B] animate-bounce ring-4 ring-[#FFD1D1]'
+                          : 'bg-[#1CB0F6] hover:bg-[#1899D6]'
+                        }`}
                       title={isListening ? 'Stop Recording' : 'Voice Input'}
                     >
                       {isListening ? <MicOff size={16} /> : <Mic size={16} />}
@@ -1130,7 +1117,7 @@ export default function ChatPage() {
                     <button
                       onClick={() => handleSend()}
                       disabled={!input.trim()}
-                      className="p-2.5 sm:p-3 rounded-full bg-[#F28A45] hover:bg-[#DF7635] text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-xs cursor-pointer"
+                      className="p-2.5 sm:p-3 rounded-full bg-[#1CB0F6] hover:bg-[#1899D6] text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all elevation-2 cursor-pointer"
                     >
                       <Send size={15} />
                     </button>
@@ -1141,23 +1128,23 @@ export default function ChatPage() {
 
               {/* Starter Action Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 w-full mt-6 sm:mt-8">
-                
+
                 <SuggestionCard
-                  icon={<div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] text-[#F28A45] flex items-center justify-center border border-[#F28A45]/20"><Clock className="w-5 h-5" /></div>}
+                  icon={<div className="w-10 h-10 rounded-[1.5rem] bg-[#DDF4FF] text-[#1CB0F6] flex items-center justify-center border border-[#1CB0F6]/20"><Clock className="w-5 h-5" /></div>}
                   title="Synthesize Notes"
                   description="Turn my uploaded PDF notes into 5 key bullet points for quick review."
                   onClick={() => handleSend("Turn my uploaded PDF notes into 5 key bullet points for quick review.")}
                 />
 
                 <SuggestionCard
-                  icon={<div className="w-10 h-10 rounded-2xl bg-[#FFF3D8] text-[#D99A32] flex items-center justify-center border border-[#D99A32]/20"><Trophy className="w-5 h-5" /></div>}
+                  icon={<div className="w-10 h-10 rounded-[1.5rem] bg-[#FFF0B3] text-[#FFC800] flex items-center justify-center border border-[#FFC800]/20"><Trophy className="w-5 h-5" /></div>}
                   title="Practice Quiz"
                   description="Generate a 5-question multiple choice practice quiz from my material."
                   onClick={() => handleSend("Generate a 5-question multiple choice practice quiz from my material.")}
                 />
 
                 <SuggestionCard
-                  icon={<div className="w-10 h-10 rounded-2xl bg-[#E3F0E5] text-[#4F8A68] flex items-center justify-center border border-[#4F8A68]/20"><Brain className="w-5 h-5" /></div>}
+                  icon={<div className="w-10 h-10 rounded-[1.5rem] bg-[#D7FFB8] text-[#58CC02] flex items-center justify-center border border-[#58CC02]/20"><Brain className="w-5 h-5" /></div>}
                   title="Concept Explanation"
                   description="Explain complex topics step-by-step with clear real-world examples."
                   onClick={() => handleSend("Explain quantum mechanics step-by-step with clear real-world examples.")}
@@ -1191,32 +1178,31 @@ export default function ChatPage() {
 
         {/* Input Bar (Sticky at bottom when chat messages exist) */}
         {allMessages.length > 0 && (
-          <div className="p-3 sm:p-4 border-t border-[#E7E1D8] bg-white">
-            <div className="max-w-4xl mx-auto bg-[#FAF8F3] border border-[#E7E1D8] rounded-2xl p-3 sm:p-3.5 focus-within:border-[#F28A45] focus-within:ring-2 focus-within:ring-[#F28A45]/20 transition-all shadow-2xs">
+          <div className="p-3 sm:p-4 border-t border-[#E2E8F0] bg-white">
+            <div className="max-w-4xl mx-auto bg-[#F7F7F7] border border-[#E2E8F0] rounded-[1.5rem] p-3 sm:p-3.5 focus-within:border-[#1CB0F6] focus-within:ring-2 focus-within:ring-[#1CB0F6]/20 transition-all elevation-1">
               <textarea
                 ref={textareaRef}
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 rows={1}
-                className="w-full bg-transparent resize-none outline-none text-[#20201D] font-medium text-sm sm:text-base placeholder-[#969188]"
+                className="w-full bg-transparent resize-none outline-none text-[#3C3C3C] font-medium text-sm sm:text-base placeholder-[#AFAFAF]"
                 placeholder="Ask follow-up question..."
                 style={{ minHeight: '28px', maxHeight: '160px' }}
               />
-              <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-[#E7E1D8]">
+              <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-[#E2E8F0]">
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-1.5 text-xs font-bold text-[#20201D] bg-white hover:bg-[#FFF0E4] px-2.5 py-1.5 rounded-xl border border-[#E7E1D8] hover:border-[#F28A45]/30 shadow-2xs transition-colors cursor-pointer"
+                    className="flex items-center gap-1.5 text-xs font-bold text-[#3C3C3C] bg-white hover:bg-[#DDF4FF] px-2.5 py-1.5 rounded-[1.25rem] border border-[#E2E8F0] hover:border-[#1CB0F6]/30 elevation-1 transition-colors cursor-pointer"
                   >
-                    <Paperclip size={13} className="text-[#F28A45]" />
+                    <Paperclip size={13} className="text-[#1CB0F6]" />
                     <span>Attach PDF</span>
                   </button>
                   <button
                     onClick={toggleVoiceInput}
-                    className={`p-2 rounded-xl transition-colors cursor-pointer ${
-                      isListening ? 'text-[#C85C52] bg-[#FBE7E4] animate-pulse' : 'text-[#6F6B63] hover:text-[#20201D] hover:bg-[#F4EFE7]'
-                    }`}
+                    className={`p-2 rounded-[1.25rem] transition-colors cursor-pointer ${isListening ? 'text-[#FF4B4B] bg-[#FFD1D1] animate-pulse' : 'text-[#777777] hover:text-[#3C3C3C] hover:bg-[#E5E5E5]'
+                      }`}
                     title="Voice input"
                   >
                     <Mic size={16} />
@@ -1225,7 +1211,7 @@ export default function ChatPage() {
                 <button
                   onClick={() => handleSend()}
                   disabled={!input.trim() || isStreaming}
-                  className="p-2.5 rounded-xl bg-[#F28A45] hover:bg-[#DF7635] text-white disabled:opacity-30 transition-all shadow-xs cursor-pointer"
+                  className="p-2.5 rounded-[1.25rem] bg-[#1CB0F6] hover:bg-[#1899D6] text-white disabled:opacity-30 transition-all elevation-2 cursor-pointer"
                 >
                   <Send size={15} />
                 </button>
@@ -1238,43 +1224,47 @@ export default function ChatPage() {
 
       {/* ─── RIGHT SIDEBAR ────────────────────────────────────────────────── */}
       <aside
-        className={`fixed lg:static inset-y-0 right-0 z-50 w-80 bg-[#FAF8F3] border-l border-[#E7E1D8] p-5 flex flex-col justify-between overflow-y-auto shadow-2xl lg:shadow-none transition-transform duration-300 ${
-          mobileRightOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
-        }`}
+        className={`fixed lg:static inset-y-0 right-0 z-50 w-80 bg-[#F7F7F7] border-l border-[#E2E8F0] p-5 flex flex-col justify-between overflow-y-auto shadow-2xl lg:shadow-none transition-transform duration-300 ${mobileRightOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
+          }`}
       >
         <div className="space-y-4">
-          <div className="flex items-center justify-between mb-1 pb-3 border-b border-[#E7E1D8]">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#E2E8F0]">
             <div className="flex items-center gap-2.5">
-              <Sparkles size={18} className="text-[#F28A45]" />
-              <h3 className="text-xs font-extrabold uppercase text-[#6F6B63] tracking-wider">
+              <Sparkles size={18} className="text-[#1CB0F6]" />
+              <h3 className="text-xs font-extrabold uppercase text-[#777777] tracking-wider">
                 Study Tools & Graph
               </h3>
             </div>
             <button
               onClick={() => setMobileRightOpen(false)}
-              className="lg:hidden text-[#969188] hover:text-[#20201D] p-1.5 rounded-xl hover:bg-[#F4EFE7]"
+              className="lg:hidden text-[#AFAFAF] hover:text-[#3C3C3C] p-1.5 rounded-[1.25rem] hover:bg-[#E5E5E5]"
             >
               <X size={18} />
             </button>
+          </div>
+
+          {/* Study Tools Graphic */}
+          <div className="w-full h-32 bg-white rounded-2xl mb-4 overflow-hidden border border-[#E2E8F0] shadow-sm flex items-center justify-center">
+            <img src="/assets/illustrations/study_tools.jpg" alt="Study Tools" className="w-full h-full object-cover mix-blend-multiply" />
           </div>
 
           {/* 1. Flashcards Card */}
           <motion.div
             whileHover={{ scale: 1.02 }}
             onClick={() => { setShowFlashcards(true); setMobileRightOpen(false); }}
-            className="p-4 sm:p-5 rounded-3xl bg-white border border-[#E7E1D8] hover:border-[#F28A45] shadow-2xs hover:shadow-xs transition-all cursor-pointer group relative overflow-hidden"
+            className="p-5 rounded-2xl bg-surface border border-border hover:border-info shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden"
           >
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[#FFF0E4] border border-[#F28A45]/30 flex items-center justify-center mb-3 shadow-2xs p-2 group-hover:scale-105 transition-transform">
-              <img src="/assets/illustrations/stack_of_books.png" alt="Flashcards" className="w-full h-full object-contain" />
+            <div className="w-12 h-12 rounded-xl bg-info-soft border border-info/30 flex items-center justify-center mb-3 shadow-sm p-2 group-hover:scale-105 transition-transform">
+              <img src="/assets/uimojis/uimoji_flashcards.jpg" alt="Flashcards" className="w-full h-full object-cover mix-blend-multiply rounded-lg" />
             </div>
-            <h4 className="text-base font-extrabold text-[#20201D] group-hover:text-[#F28A45] transition-colors">
+            <h4 className="text-md font-bold text-text-primary group-hover:text-info transition-colors">
               Flashcards Deck
             </h4>
-            <p className="text-xs text-[#6F6B63] mt-1.5 leading-relaxed font-medium">
+            <p className="text-sm text-text-secondary mt-2 leading-relaxed">
               Review AI study cards generated strictly from your uploaded PDF text.
             </p>
-            <div className="mt-4 flex items-center gap-1.5 text-xs font-extrabold text-[#F28A45] group-hover:translate-x-1 transition-transform">
-              <span>Study Flashcards</span> <ArrowRight size={14} />
+            <div className="mt-4 flex items-center gap-1.5 text-sm font-bold text-info group-hover:translate-x-1 transition-transform">
+              <span>Study Flashcards</span> <ArrowRight size={16} />
             </div>
           </motion.div>
 
@@ -1282,19 +1272,19 @@ export default function ChatPage() {
           <motion.div
             whileHover={{ scale: 1.02 }}
             onClick={() => { setShowQuizGame(true); setMobileRightOpen(false); }}
-            className="p-4 sm:p-5 rounded-3xl bg-[#FFF9F2] border border-[#F28A45]/30 shadow-2xs hover:shadow-xs transition-all cursor-pointer group relative overflow-hidden"
+            className="p-5 rounded-2xl bg-surface border border-warning/30 hover:border-warning shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden"
           >
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[#FFF3D8] border border-[#D99A32]/30 flex items-center justify-center mb-3 shadow-2xs p-2 group-hover:scale-105 transition-transform">
-              <img src="/assets/illustrations/gold_medal.png" alt="Quiz" className="w-full h-full object-contain" />
+            <div className="w-12 h-12 rounded-xl bg-warning-soft border border-warning/30 flex items-center justify-center mb-3 shadow-sm p-2 group-hover:scale-105 transition-transform">
+              <img src="/assets/uimojis/uimoji_quiz.jpg" alt="Quiz" className="w-full h-full object-cover mix-blend-multiply rounded-lg" />
             </div>
-            <h4 className="text-base font-extrabold text-[#20201D] group-hover:text-[#F28A45] transition-colors">
+            <h4 className="text-md font-bold text-text-primary group-hover:text-warning transition-colors">
               Play Gamified Quiz
             </h4>
-            <p className="text-xs text-[#6F6B63] mt-1.5 leading-relaxed font-medium">
+            <p className="text-sm text-text-secondary mt-2 leading-relaxed">
               Test your understanding with PDF-based quizzes, score XP & master topics.
             </p>
-            <div className="mt-4 flex items-center gap-1.5 text-xs font-extrabold text-[#F28A45] group-hover:translate-x-1 transition-transform">
-              <span>Start Quiz Game</span> <ArrowRight size={14} />
+            <div className="mt-4 flex items-center gap-1.5 text-sm font-bold text-warning group-hover:translate-x-1 transition-transform">
+              <span>Start Quiz Game</span> <ArrowRight size={16} />
             </div>
           </motion.div>
 
@@ -1302,32 +1292,32 @@ export default function ChatPage() {
           <motion.div
             whileHover={{ scale: 1.02 }}
             onClick={() => { setShowGraphPanel(true); setMobileRightOpen(false); }}
-            className="p-4 sm:p-5 rounded-3xl bg-white border border-[#E7E1D8] hover:border-[#4F8A68] shadow-2xs hover:shadow-xs transition-all cursor-pointer group relative overflow-hidden"
+            className="p-5 rounded-2xl bg-surface border border-border hover:border-success shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden"
           >
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[#E3F0E5] border border-[#4F8A68]/30 flex items-center justify-center mb-3 shadow-2xs p-2 group-hover:scale-105 transition-transform">
-              <img src="/assets/illustrations/cs_code.png" alt="Knowledge Graph" className="w-full h-full object-contain" />
+            <div className="w-12 h-12 rounded-xl bg-success-soft border border-success/30 flex items-center justify-center mb-3 shadow-sm p-2 group-hover:scale-105 transition-transform">
+              <img src="/assets/uimojis/uimoji_graph.jpg" alt="Knowledge Graph" className="w-full h-full object-cover mix-blend-multiply rounded-lg" />
             </div>
             <div className="flex items-center justify-between">
-              <h4 className="text-base font-extrabold text-[#20201D] group-hover:text-[#4F8A68] transition-colors">
+              <h4 className="text-md font-bold text-text-primary group-hover:text-success transition-colors">
                 Knowledge Graph
               </h4>
               {liveGraphContext.entities.length > 0 && (
-                <span className="text-[10px] font-extrabold bg-[#E3F0E5] text-[#35654B] px-2 py-0.5 rounded-full border border-[#4F8A68]/30">
+                <span className="text-xs font-bold bg-success-soft text-success px-2 py-0.5 rounded-full border border-success/30">
                   {liveGraphContext.entities.length} Nodes
                 </span>
               )}
             </div>
-            <p className="text-xs text-[#6F6B63] mt-1.5 leading-relaxed font-medium">
+            <p className="text-sm text-text-secondary mt-2 leading-relaxed">
               Explore 3D visual entity maps and document relationship connections.
             </p>
-            <div className="mt-4 flex items-center gap-1.5 text-xs font-extrabold text-[#4F8A68] group-hover:translate-x-1 transition-transform">
-              <span>Explore 3D Graph</span> <ArrowRight size={14} />
+            <div className="mt-4 flex items-center gap-1.5 text-sm font-bold text-success group-hover:translate-x-1 transition-transform">
+              <span>Explore 3D Graph</span> <ArrowRight size={16} />
             </div>
           </motion.div>
         </div>
 
-        <div className="pt-4 border-t border-[#E7E1D8] text-center">
-          <p className="text-xs font-bold text-[#969188]">
+        <div className="pt-4 border-t border-border text-center">
+          <p className="text-xs font-semibold text-text-muted">
             🧠 GraphRAG + Ollama AI Tutor Engine
           </p>
         </div>
@@ -1392,22 +1382,29 @@ function SessionItem({ session, activeId, onSelect, onDelete }: {
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
-      className={`group w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all cursor-pointer ${
-        isActive
-          ? 'bg-[#FFF0E4] text-[#F28A45] font-extrabold shadow-2xs border border-[#F28A45]/30'
-          : 'text-[#6F6B63] hover:bg-[#F4EFE7] hover:text-[#20201D] font-medium'
-      }`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect()
+        }
+      }}
+      className={`group w-full flex items-center justify-between px-3 py-2.5 rounded-[1.25rem] transition-all cursor-pointer ${isActive
+          ? 'bg-[#DDF4FF] text-[#1CB0F6] font-extrabold elevation-1 border border-[#1CB0F6]/30'
+          : 'text-[#777777] hover:bg-[#E5E5E5] hover:text-[#3C3C3C] font-medium'
+        }`}
     >
       <div className="flex items-center gap-2.5 min-w-0 pr-1">
-        <MessageSquare size={15} className={isActive ? 'text-[#F28A45]' : 'text-[#969188]'} />
+        <MessageSquare size={15} className={isActive ? 'text-[#1CB0F6]' : 'text-[#AFAFAF]'} />
         <span className="truncate text-xs">{session.session_title}</span>
       </div>
       <button
+        aria-label="Delete session"
         onClick={onDelete}
-        className={`opacity-0 group-hover:opacity-100 p-1 rounded-lg transition-all ${
-          isActive ? 'text-[#F28A45] hover:text-[#C85C52] hover:bg-[#FFF0E4]' : 'text-[#969188] hover:text-[#C85C52] hover:bg-[#FBE7E4]'
-        }`}
+        className={`opacity-0 group-hover:opacity-100 p-1 rounded-lg transition-all ${isActive ? 'text-[#1CB0F6] hover:text-[#FF4B4B] hover:bg-[#DDF4FF]' : 'text-[#AFAFAF] hover:text-[#FF4B4B] hover:bg-[#FFD1D1]'
+          }`}
         title="Delete session"
       >
         <Trash2 size={14} />
@@ -1424,12 +1421,20 @@ function SuggestionCard({ icon, title, description, onClick }: {
 }) {
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className="p-4 sm:p-5 rounded-3xl bg-white border border-[#E7E1D8] hover:border-[#F28A45]/40 hover:bg-[#FFF9F2] transition-all cursor-pointer text-left group shadow-2xs hover:shadow-xs"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+      className="p-4 sm:p-5 rounded-[2rem] bg-white border border-[#E2E8F0] hover:border-[#1CB0F6]/40 hover:bg-[#FFFFFF] transition-all cursor-pointer text-left group elevation-1 hover:elevation-2 hover:scale-[1.02] active:scale-[0.98]"
     >
       <div className="mb-2 sm:mb-3">{icon}</div>
-      <h3 className="font-extrabold text-sm sm:text-base text-[#20201D] group-hover:text-[#F28A45] mb-1">{title}</h3>
-      <p className="text-xs text-[#6F6B63] leading-relaxed font-medium">{description}</p>
+      <h3 className="font-extrabold text-sm sm:text-base text-[#3C3C3C] group-hover:text-[#1CB0F6] mb-1">{title}</h3>
+      <p className="text-xs text-[#777777] leading-relaxed font-medium">{description}</p>
     </div>
   )
 }

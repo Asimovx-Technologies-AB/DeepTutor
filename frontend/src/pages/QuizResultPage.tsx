@@ -14,7 +14,7 @@ const OPTION_LABELS = ['A', 'B', 'C', 'D']
 
 function ScoreRing({ pct }: { pct: number }) {
   const data = [{ name: 'Score', value: pct }, { name: 'Remaining', value: 100 - pct }]
-  const color = pct >= 80 ? '#4F8A68' : pct >= 60 ? '#D99A32' : '#C85C52'
+  const color = pct >= 80 ? '#58CC02' : pct >= 60 ? '#FFC800' : '#FF4B4B'
 
   return (
     <div className="relative w-40 h-40 mx-auto">
@@ -22,24 +22,24 @@ function ScoreRing({ pct }: { pct: number }) {
         <PieChart>
           <Pie data={data} cx="50%" cy="50%" innerRadius={52} outerRadius={68} startAngle={90} endAngle={-270} dataKey="value" strokeWidth={0}>
             <Cell fill={color} />
-            <Cell fill="#F4EFE7" />
+            <Cell fill="#E5E5E5" />
           </Pie>
         </PieChart>
       </ResponsiveContainer>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-black text-[#20201D]">{pct}%</span>
-        <span className="text-xs text-[#6F6B63] font-bold mt-0.5">Score</span>
+        <span className="text-3xl font-black text-[#3C3C3C]">{pct}%</span>
+        <span className="text-xs text-[#777777] font-bold mt-0.5">Score</span>
       </div>
     </div>
   )
 }
 
 function getGrade(pct: number) {
-  if (pct >= 90) return { label: 'Excellent!', color: 'text-[#4F8A68]', emoji: '🏆' }
-  if (pct >= 75) return { label: 'Great Job!', color: 'text-[#4F8A68]', emoji: '🎉' }
-  if (pct >= 60) return { label: 'Good Effort', color: 'text-[#D99A32]', emoji: '👍' }
-  if (pct >= 40) return { label: 'Keep Practicing', color: 'text-[#F28A45]', emoji: '📚' }
-  return { label: 'Need More Study', color: 'text-[#C85C52]', emoji: '💪' }
+  if (pct >= 90) return { label: 'Excellent!', color: 'text-[#58CC02]', emoji: '🏆' }
+  if (pct >= 75) return { label: 'Great Job!', color: 'text-[#58CC02]', emoji: '🎉' }
+  if (pct >= 60) return { label: 'Good Effort', color: 'text-[#FFC800]', emoji: '👍' }
+  if (pct >= 40) return { label: 'Keep Practicing', color: 'text-[#1CB0F6]', emoji: '📚' }
+  return { label: 'Need More Study', color: 'text-[#FF4B4B]', emoji: '💪' }
 }
 
 export default function QuizResultPage() {
@@ -106,188 +106,186 @@ export default function QuizResultPage() {
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto bg-[#FAF8F3]">
+    <div className="p-6 max-w-3xl mx-auto bg-[#F7F7F7]">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <motion.button
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          onClick={() => {
-            if (isSubjectQuiz && detectedSubjectId && topicId) {
-              navigate(`/subjects/${detectedSubjectId}/chat/${topicId}`)
-            } else {
-              navigate(-1)
-            }
-          }}
-          className="flex items-center gap-2 text-[#6F6B63] hover:text-[#F28A45] transition-colors text-sm font-bold cursor-pointer"
-        >
-          <ArrowLeft size={16} /> Back to Chat
-        </motion.button>
-
-        {isSubjectQuiz && detectedSubjectId && (
-          <button
-            onClick={() => navigate(`/subjects/${detectedSubjectId}`)}
-            className="text-xs font-extrabold text-[#F28A45] hover:text-[#D97706] bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-xl flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
-          >
-            <span>{activeSubject?.name || 'Subject'} Page</span> →
-          </button>
-        )}
-      </div>
-
-      {/* Score Card */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3 }}
-        className="glass-card p-8 mb-6 border border-[#E7E1D8] shadow-sm text-center bg-white rounded-3xl"
+      <motion.button
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        onClick={() => {
+          if (isSubjectQuiz && detectedSubjectId) {
+            navigate(`/subjects/${detectedSubjectId}`)
+          } else {
+            navigate(-1)
+          }
+        }}
+        className="flex items-center gap-2 text-[#777777] hover:text-[#1CB0F6] transition-colors mb-6 text-sm font-bold cursor-pointer"
       >
-        <div className="max-w-md mx-auto">
-          <div className="text-5xl mb-2">{grade.emoji}</div>
-          <h1 className={`text-2xl font-black mb-1 ${grade.color}`}>{grade.label}</h1>
-          <p className="text-[#6F6B63] text-sm font-medium mb-6">
-            {quiz?.title ?? 'Practice Quiz'} • {new Date().toLocaleDateString()}
-          </p>
+        <ArrowLeft size={16} /> Back to {isSubjectQuiz ? (activeSubject?.name || 'Subject') : 'Topic'}
+      </motion.button>
 
-          <ScoreRing pct={pct} />
-
-          <div className="flex items-center justify-center gap-8 mt-6">
-            <div className="text-center">
-              <p className="text-2xl font-black text-[#4F8A68]">{score}</p>
-              <p className="text-xs text-[#6F6B63] font-bold">Correct</p>
-            </div>
-            <div className="w-px h-10 bg-[#E7E1D8]" />
-            <div className="text-center">
-              <p className="text-2xl font-black text-[#20201D]">{total}</p>
-              <p className="text-xs text-[#6F6B63] font-bold">Total</p>
-            </div>
-            <div className="w-px h-10 bg-[#E7E1D8]" />
-            <div className="text-center">
-              <p className="text-2xl font-black text-[#C85C52]">{total - score}</p>
-              <p className="text-xs text-[#6F6B63] font-bold">Wrong</p>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Action buttons */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
-        {isSubjectQuiz && detectedSubjectId ? (
-          <button
-            onClick={() => navigate(`/subjects/${detectedSubjectId}`)}
-            className="btn-ghost flex items-center justify-center gap-2 cursor-pointer font-extrabold border-[#E7E1D8] bg-white text-[#20201D] hover:bg-orange-50/50 shadow-2xs py-3 px-4 rounded-2xl text-xs"
-          >
-            🏛️ Subject Overview
-          </button>
-        ) : (
-          <button
-            onClick={() => navigate(-1)}
-            className="btn-ghost flex items-center justify-center gap-2 cursor-pointer font-bold border-[#E7E1D8] bg-white text-[#20201D] hover:bg-[#FFF9F2] shadow-2xs py-3 px-4 rounded-2xl text-xs"
-          >
-            <ArrowLeft size={15} /> Back
-          </button>
-        )}
+      {isSubjectQuiz && detectedSubjectId && (
         <button
-          onClick={() => navigate(`/quiz/${topicId}`)}
-          className="btn-ghost flex items-center justify-center gap-2 cursor-pointer font-bold border-[#E7E1D8] bg-white text-[#20201D] hover:bg-[#FFF9F2] shadow-2xs py-3 px-4 rounded-2xl text-xs"
+          onClick={() => navigate(`/subjects/${detectedSubjectId}`)}
+          className="text-xs font-extrabold text-[#F28A45] hover:text-[#D97706] bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-xl flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
         >
-          <RotateCcw size={15} /> Retry Quiz
+          <span>{activeSubject?.name || 'Subject'} Page</span> →
         </button>
-        <button
-          onClick={() => handleAskAITutor()}
-          className="btn-primary flex items-center justify-center gap-2 cursor-pointer font-black shadow-2xs py-3 px-4 rounded-2xl text-xs"
-        >
-          <MessageSquare size={15} /> Ask Tutor
-        </button>
-      </div>
-
-      {/* Answer review */}
-      {questions.length > 0 && (
-        <div>
-          <h2 className="text-lg font-black text-[#20201D] mb-4 flex items-center gap-2">
-            <Star size={18} className="text-[#D99A32]" /> Answer Review
-          </h2>
-          <div className="space-y-4">
-            {questions.map((q: any, i: number) => {
-              const userAnswer = answers[q.id]
-              const isCorrect = userAnswer === q.correct_answer
-              return (
-                <motion.div
-                  key={q.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.07 }}
-                  className={`glass-card p-5 border rounded-2xl bg-white ${
-                    isCorrect ? 'border-[#4F8A68]/30 bg-[#E3F0E5]/20' : 'border-[#C85C52]/30 bg-[#FBE7E4]/20'
-                  }`}
-                >
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                      isCorrect ? 'bg-[#E3F0E5] text-[#4F8A68]' : 'bg-[#FBE7E4] text-[#C85C52]'
-                    }`}>
-                      {isCorrect
-                        ? <CheckCircle size={14} className="text-[#4F8A68]" />
-                        : <XCircle size={14} className="text-[#C85C52]" />}
-                    </div>
-                    <p className="text-sm font-extrabold text-[#20201D] leading-relaxed">
-                      <span className="text-[#969188] mr-2">Q{i + 1}.</span>
-                      {q.question_text}
-                    </p>
-                  </div>
-
-                  <div className="ml-9 space-y-1.5">
-                    {(q.options ?? []).map((opt: string, idx: number) => {
-                      const label = OPTION_LABELS[idx]
-                      const isUser = label === userAnswer
-                      const isCorrectOpt = label === q.correct_answer
-                      return (
-                        <div
-                          key={label}
-                          className={`text-xs px-3 py-2 rounded-xl flex items-center gap-2 font-bold transition-all ${
-                            isCorrectOpt
-                              ? 'bg-[#E3F0E5] text-[#35654B] border border-[#4F8A68]/30'
-                              : isUser && !isCorrect
-                              ? 'bg-[#FBE7E4] text-[#C85C52] border border-[#C85C52]/30'
-                              : 'bg-[#FAF8F3] border border-[#E7E1D8] text-[#6F6B63]'
-                          }`}
-                        >
-                          <span className="font-black">{label}.</span>
-                          <span>{opt}</span>
-                          {isCorrectOpt && <span className="ml-auto text-[10px] font-black text-[#4F8A68]">✓ Correct</span>}
-                          {isUser && !isCorrect && <span className="ml-auto text-[10px] font-black text-[#C85C52]">Your answer</span>}
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  {q.explanation && (
-                    <div className="ml-9 mt-3 p-3 rounded-xl bg-[#FFF0E4] border border-[#F28A45]/20 text-xs text-[#20201D] flex items-start gap-2">
-                      <Sparkles size={14} className="text-[#F28A45] flex-shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-black text-[#F28A45]">Explanation: </span>
-                        <span>{q.explanation}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {!isCorrect && (
-                    <div className="ml-9 mt-2 flex justify-end">
-                      <button
-                        onClick={() => {
-                          const specificPrompt = `In the ${topicName || 'subject'} quiz, I missed Question ${i + 1}: "${q.question_text}". Can you explain why the correct answer is "${q.correct_answer}" and guide me through the concept?`
-                          handleAskAITutor(specificPrompt)
-                        }}
-                        className="text-xs font-bold text-[#F28A45] hover:text-[#D97706] flex items-center gap-1.5 py-1 px-2.5 rounded-lg hover:bg-[#FFF0E4] transition-colors cursor-pointer"
-                      >
-                        <MessageSquare size={13} /> Ask Tutor About This Question
-                      </button>
-                    </div>
-                  )}
-                </motion.div>
-              )
-            })}
-          </div>
-        </div>
       )}
     </div>
+
+      {/* Score Card */ }
+  <motion.div
+    initial={{ opacity: 0, scale: 0.96 }}
+    animate={{ opacity: 1, scale: 1 }}
+    transition={{ duration: 0.4 }}
+    className="glass-card p-8 text-center mb-6 relative overflow-hidden border border-[#E2E8F0] elevation-1 bg-white rounded-[2rem]"
+  >
+    <div className="max-w-md mx-auto">
+      <div className="text-5xl mb-2">{grade.emoji}</div>
+      <h1 className={`text-2xl font-black mb-1 ${grade.color}`}>{grade.label}</h1>
+      <p className="text-[#777777] text-sm font-medium mb-6">
+        {quiz?.title ?? 'Practice Quiz'} • {new Date().toLocaleDateString()}
+      </p>
+
+      <ScoreRing pct={pct} />
+
+      <div className="flex items-center justify-center gap-8 mt-6">
+        <div className="text-center">
+          <p className="text-2xl font-black text-[#58CC02]">{score}</p>
+          <p className="text-xs text-[#777777] font-bold">Correct</p>
+        </div>
+        <div className="w-px h-10 bg-[#E2E8F0]" />
+        <div className="text-center">
+          <p className="text-2xl font-black text-[#3C3C3C]">{total}</p>
+          <p className="text-xs text-[#777777] font-bold">Total</p>
+        </div>
+        <div className="w-px h-10 bg-[#E2E8F0]" />
+        <div className="text-center">
+          <p className="text-2xl font-black text-[#FF4B4B]">{total - score}</p>
+          <p className="text-xs text-[#777777] font-bold">Wrong</p>
+        </div>
+      </div>
+    </div>
+  </motion.div>
+
+  {/* Action buttons */ }
+  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
+    {isSubjectQuiz && detectedSubjectId ? (
+      <button
+        onClick={() => navigate(`/subjects/${detectedSubjectId}`)}
+        className="btn-ghost flex items-center justify-center gap-2 cursor-pointer font-extrabold border-[#E7E1D8] bg-white text-[#20201D] hover:bg-orange-50/50 shadow-2xs py-3 px-4 rounded-2xl text-xs"
+      >
+        🏛️ Subject Overview
+      </button>
+    ) : (
+      <button
+        onClick={() => navigate(-1)}
+        className="btn-ghost flex items-center justify-center gap-2 cursor-pointer font-bold border-[#E7E1D8] bg-white text-[#20201D] hover:bg-[#FFF9F2] shadow-2xs py-3 px-4 rounded-2xl text-xs"
+      >
+        <ArrowLeft size={15} /> Back
+      </button>
+    )}
+    <button
+      onClick={() => navigate(`/quiz/${topicId}`)}
+      className="btn-ghost flex-1 flex items-center justify-center gap-2 cursor-pointer font-bold border-[#E2E8F0] bg-white text-[#3C3C3C] hover:bg-[#FFFFFF] elevation-1 py-3 px-4 rounded-[1.5rem]"
+    >
+      <RotateCcw size={15} /> Retry Quiz
+    </button>
+    <button
+      onClick={() => handleAskAITutor()}
+      className="btn-primary flex-1 flex items-center justify-center gap-2 cursor-pointer font-black elevation-1 py-3 px-4 rounded-[1.5rem]"
+    >
+      <MessageSquare size={15} /> Ask Tutor
+    </button>
+  </div>
+
+  {/* Answer review */ }
+  {
+    questions.length > 0 && (
+      <div>
+        <h2 className="text-lg font-black text-[#3C3C3C] mb-4 flex items-center gap-2">
+          <Star size={18} className="text-[#FFC800]" /> Answer Review
+        </h2>
+        <div className="space-y-4">
+          {questions.map((q: any, i: number) => {
+            const userAnswer = answers[q.id]
+            const isCorrect = userAnswer === q.correct_answer
+            return (
+              <motion.div
+                key={q.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.07 }}
+                className={`glass-card p-5 border rounded-[1.5rem] bg-white ${isCorrect ? 'border-[#58CC02]/30 bg-[#D7FFB8]/20' : 'border-[#FF4B4B]/30 bg-[#FFD1D1]/20'
+                  }`}
+              >
+                <div className="flex items-start gap-3 mb-3">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${isCorrect ? 'bg-[#D7FFB8] text-[#58CC02]' : 'bg-[#FFD1D1] text-[#FF4B4B]'
+                    }`}>
+                    {isCorrect
+                      ? <CheckCircle size={14} className="text-[#58CC02]" />
+                      : <XCircle size={14} className="text-[#FF4B4B]" />}
+                  </div>
+                  <p className="text-sm font-extrabold text-[#3C3C3C] leading-relaxed">
+                    <span className="text-[#AFAFAF] mr-2">Q{i + 1}.</span>
+                    {q.question_text}
+                  </p>
+                </div>
+
+                <div className="ml-9 space-y-1.5">
+                  {(q.options ?? []).map((opt: string, idx: number) => {
+                    const label = OPTION_LABELS[idx]
+                    const isUser = label === userAnswer
+                    const isCorrectOpt = label === q.correct_answer
+                    return (
+                      <div
+                        key={label}
+                        className={`text-xs px-3 py-2 rounded-[1.25rem] flex items-center gap-2 font-bold transition-all ${isCorrectOpt
+                            ? 'bg-[#D7FFB8] text-[#46A302] border border-[#58CC02]/30'
+                            : isUser && !isCorrect
+                              ? 'bg-[#FFD1D1] text-[#FF4B4B] border border-[#FF4B4B]/30'
+                              : 'bg-[#F7F7F7] border border-[#E2E8F0] text-[#777777]'
+                          }`}
+                      >
+                        <span className="font-black">{label}.</span>
+                        <span>{opt}</span>
+                        {isCorrectOpt && <span className="ml-auto text-[10px] font-black text-[#58CC02]">✓ Correct</span>}
+                        {isUser && !isCorrect && <span className="ml-auto text-[10px] font-black text-[#FF4B4B]">Your answer</span>}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {q.explanation && (
+                  <div className="ml-9 mt-3 p-3 rounded-[1.25rem] bg-[#DDF4FF] border border-[#1CB0F6]/20 text-xs text-[#3C3C3C] flex items-start gap-2">
+                    <Sparkles size={14} className="text-[#1CB0F6] flex-shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-black text-[#1CB0F6]">Explanation: </span>
+                      <span>{q.explanation}</span>
+                    </div>
+                  </div>
+                )}
+
+                {!isCorrect && (
+                  <div className="ml-9 mt-2 flex justify-end">
+                    <button
+                      onClick={() => {
+                        const specificPrompt = `In the ${topicName || 'subject'} quiz, I missed Question ${i + 1}: "${q.question_text}". Can you explain why the correct answer is "${q.correct_answer}" and guide me through the concept?`
+                        handleAskAITutor(specificPrompt)
+                      }}
+                      className="text-xs font-bold text-[#1CB0F6] hover:text-[#D97706] flex items-center gap-1.5 py-1 px-2.5 rounded-lg hover:bg-[#DDF4FF] transition-colors cursor-pointer"
+                    >
+                      <MessageSquare size={13} /> Ask Tutor About This Question
+                    </button>
+                  </div>
+                )}
+              </motion.div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+    </div >
   )
 }

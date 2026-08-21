@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { dashboardApi } from '../services/api'
 
 export type SubjectStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'INACTIVE'
 export type TopicStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'REVIEW'
@@ -186,6 +187,13 @@ export const useSubjectStore = create<SubjectState>()(
           const updatedSubjects = state.subjects.map((s) =>
             s.id === subjectId ? { ...s, lastStudiedAt: new Date().toISOString() } : s
           )
+          
+          // Fire-and-forget sync to backend
+          dashboardApi.updateProgress({
+            subject_id: subjectId,
+            topic_id: topicId,
+            progress_percentage: progressVal
+          }).catch(console.error)
 
           return {
             topics: { ...state.topics, [subjectId]: updatedTopics },
@@ -211,6 +219,14 @@ export const useSubjectStore = create<SubjectState>()(
           const updatedSubjects = state.subjects.map((s) =>
             s.id === subjectId ? { ...s, isEnrolled: true, lastStudiedAt: now } : s
           )
+          
+          // Fire-and-forget record activity to backend
+          dashboardApi.recordActivity({
+            activity_type: 'topic_started',
+            title: `Started studying topic`,
+            subject_id: subjectId,
+            topic_id: topicId
+          }).catch(console.error)
 
           return {
             topics: { ...state.topics, [subjectId]: updatedTopics },
@@ -288,6 +304,6 @@ export const useSubjectStore = create<SubjectState>()(
         return null
       },
     }),
-    { name: 'deep-tutor-sslc-fresh-v3' }
+    { name: 'indie-tutor-sslc-fresh-v3' }
   )
 )

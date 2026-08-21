@@ -43,28 +43,28 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF8F3] flex items-center justify-center p-4 sm:p-8 font-sans">
+    <div className="min-h-screen bg-[#F7F7F7] flex items-center justify-center p-4 sm:p-8 font-sans">
       
       {/* Outer Card Frame (Matching Reference Design) */}
-      <div className="w-full max-w-5xl bg-[#F4EFE7] rounded-[36px] border border-[#E7E1D8] shadow-2xs p-6 sm:p-10 flex flex-col justify-between min-h-[640px] relative overflow-hidden">
+      <div className="w-full max-w-5xl bg-[#E5E5E5] rounded-[36px] border border-[#E2E8F0] elevation-1 p-6 sm:p-10 flex flex-col justify-between min-h-[640px] relative overflow-hidden">
         
         {/* Top Header Navigation */}
         <header className="flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] border border-[#F28A45]/30 flex items-center justify-center text-[#F28A45] shadow-2xs">
+            <div className="w-10 h-10 rounded-[1.5rem] bg-[#DDF4FF] border border-[#1CB0F6]/30 flex items-center justify-center text-[#1CB0F6] elevation-1">
               <Brain size={22} />
             </div>
             <div>
-              <span className="font-black text-[#20201D] text-xl tracking-tight">DeepTutor</span>
-              <span className="block text-[10px] font-black text-[#F28A45] uppercase tracking-widest">AI Learning Engine</span>
+              <span className="font-black text-[#3C3C3C] text-xl tracking-tight">Indie-Tutor</span>
+              <span className="block text-[10px] font-black text-[#1CB0F6] uppercase tracking-widest">AI Learning Engine</span>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <button className="w-10 h-10 rounded-full border border-[#E7E1D8] bg-white text-[#6F6B63] hover:text-[#F28A45] hover:border-[#F28A45]/30 flex items-center justify-center transition-all shadow-2xs cursor-pointer">
+            <button className="w-10 h-10 rounded-full border border-[#E2E8F0] bg-white text-[#777777] hover:text-[#1CB0F6] hover:border-[#1CB0F6]/30 flex items-center justify-center transition-all elevation-1 cursor-pointer">
               <Globe size={18} />
             </button>
-            <button className="w-10 h-10 rounded-full bg-[#20201D] text-white hover:bg-black flex items-center justify-center transition-all shadow-2xs cursor-pointer">
+            <button className="w-10 h-10 rounded-full bg-[#3C3C3C] text-white hover:bg-black flex items-center justify-center transition-all elevation-1 cursor-pointer">
               <Send size={16} />
             </button>
           </div>
@@ -78,18 +78,18 @@ export default function LoginPage() {
             <div className="relative">
               <svg width="220" height="180" viewBox="0 0 220 180" fill="none" xmlns="http://www.w3.org/2000/svg">
                 {/* Simplified Vector Study Blocks */}
-                <rect x="20" y="100" width="45" height="70" rx="6" fill="#FFFFFF" stroke="#20201D" strokeWidth="2.5" />
-                <path d="M32 135L42 120" stroke="#20201D" strokeWidth="2.5" strokeLinecap="round" />
-                <rect x="70" y="70" width="55" height="100" rx="6" fill="#FFF0E4" stroke="#F28A45" strokeWidth="2.5" />
-                <rect x="150" y="90" width="50" height="80" rx="6" fill="#FFFFFF" stroke="#20201D" strokeWidth="2.5" />
-                <rect x="180" y="45" width="35" height="125" rx="6" fill="#FFF0E4" stroke="#F28A45" strokeWidth="2.5" />
+                <rect x="20" y="100" width="45" height="70" rx="6" fill="#FFFFFF" stroke="#3C3C3C" strokeWidth="2.5" />
+                <path d="M32 135L42 120" stroke="#3C3C3C" strokeWidth="2.5" strokeLinecap="round" />
+                <rect x="70" y="70" width="55" height="100" rx="6" fill="#DDF4FF" stroke="#1CB0F6" strokeWidth="2.5" />
+                <rect x="150" y="90" width="50" height="80" rx="6" fill="#FFFFFF" stroke="#3C3C3C" strokeWidth="2.5" />
+                <rect x="180" y="45" width="35" height="125" rx="6" fill="#DDF4FF" stroke="#1CB0F6" strokeWidth="2.5" />
                 
                 {/* Sitting Student Character */}
-                <circle cx="82" cy="40" r="12" fill="#20201D" />
-                <path d="M72 58C72 52 92 52 92 58L95 82H69L72 58Z" fill="#20201D" />
-                <path d="M69 82L62 105L85 105L88 82" fill="#20201D" />
+                <circle cx="82" cy="40" r="12" fill="#3C3C3C" />
+                <path d="M72 58C72 52 92 52 92 58L95 82H69L72 58Z" fill="#3C3C3C" />
+                <path d="M69 82L62 105L85 105L88 82" fill="#3C3C3C" />
                 {/* Laptop */}
-                <path d="M92 72L108 62" stroke="#F28A45" strokeWidth="4" strokeLinecap="round" />
+                <path d="M92 72L108 62" stroke="#1CB0F6" strokeWidth="4" strokeLinecap="round" />
               </svg>
             </div>
           </div>
@@ -99,22 +99,22 @@ export default function LoginPage() {
             initial={{ opacity: 0, y: 20, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.4 }}
-            className="w-full max-w-md bg-white rounded-3xl p-8 sm:p-10 border border-[#E7E1D8] shadow-xs relative"
+            className="w-full max-w-md bg-white rounded-[2rem] p-8 sm:p-10 border border-[#E2E8F0] elevation-2 relative"
           >
             <div className="text-left mb-6">
-              <h1 className="text-2xl sm:text-3xl font-black text-[#20201D] tracking-tight mb-1.5 leading-tight">
+              <h1 className="text-2xl sm:text-3xl font-black text-[#3C3C3C] tracking-tight mb-1.5 leading-tight">
                 Let's<br />Start Learning
               </h1>
-              <p className="text-xs font-semibold text-[#969188]">
+              <p className="text-xs font-semibold text-[#AFAFAF]">
                 Please login or sign up to continue
               </p>
             </div>
 
             {/* Demo Hint */}
-            <div className="mb-5 p-3 rounded-2xl bg-[#FFF0E4] border border-[#F28A45]/30 flex items-center gap-2.5">
-              <Sparkles size={16} className="text-[#F28A45] flex-shrink-0" />
-              <p className="text-xs text-[#20201D] font-medium">
-                <span className="font-bold text-[#F28A45]">Demo Mode:</span> Enter any credentials to sign in.
+            <div className="mb-5 p-3 rounded-[1.5rem] bg-[#DDF4FF] border border-[#1CB0F6]/30 flex items-center gap-2.5">
+              <Sparkles size={16} className="text-[#1CB0F6] flex-shrink-0" />
+              <p className="text-xs text-[#3C3C3C] font-medium">
+                <span className="font-bold text-[#1CB0F6]">Demo Mode:</span> Enter any credentials to sign in.
               </p>
             </div>
 
@@ -122,7 +122,7 @@ export default function LoginPage() {
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
-                className="mb-4 p-3 rounded-2xl bg-[#FBE7E4] border border-[#C85C52]/30 text-[#C85C52] text-xs font-bold"
+                className="mb-4 p-3 rounded-[1.5rem] bg-[#FFD1D1] border border-[#FF4B4B]/30 text-[#FF4B4B] text-xs font-bold"
               >
                 {error}
               </motion.div>
@@ -132,13 +132,13 @@ export default function LoginPage() {
               
               {/* Email Input */}
               <div className="relative">
-                <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#969188]" />
+                <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#AFAFAF]" />
                 <input
                   id="login-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-[#FAF8F3] border border-[#E7E1D8] rounded-2xl pl-12 pr-4 py-3.5 text-sm font-semibold text-[#20201D] placeholder-[#969188] outline-none focus:bg-white focus:border-[#F28A45] focus:ring-4 focus:ring-[#F28A45]/20 transition-all"
+                  className="w-full bg-[#F7F7F7] border border-[#E2E8F0] rounded-[1.5rem] pl-12 pr-4 py-3.5 text-sm font-semibold text-[#3C3C3C] placeholder-[#AFAFAF] outline-none focus:bg-white focus:border-[#1CB0F6] focus:ring-4 focus:ring-[#1CB0F6]/20 transition-all"
                   placeholder="Your Email"
                   required
                 />
@@ -146,20 +146,20 @@ export default function LoginPage() {
 
               {/* Password Input */}
               <div className="relative">
-                <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#969188]" />
+                <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#AFAFAF]" />
                 <input
                   id="login-password"
                   type={showPass ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-[#FAF8F3] border border-[#E7E1D8] rounded-2xl pl-12 pr-11 py-3.5 text-sm font-semibold text-[#20201D] placeholder-[#969188] outline-none focus:bg-white focus:border-[#F28A45] focus:ring-4 focus:ring-[#F28A45]/20 transition-all"
+                  className="w-full bg-[#F7F7F7] border border-[#E2E8F0] rounded-[1.5rem] pl-12 pr-11 py-3.5 text-sm font-semibold text-[#3C3C3C] placeholder-[#AFAFAF] outline-none focus:bg-white focus:border-[#1CB0F6] focus:ring-4 focus:ring-[#1CB0F6]/20 transition-all"
                   placeholder="Your Password"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#969188] hover:text-[#20201D] transition-colors"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#AFAFAF] hover:text-[#3C3C3C] transition-colors"
                 >
                   {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -170,7 +170,7 @@ export default function LoginPage() {
                 type="submit"
                 id="login-submit"
                 disabled={loading}
-                className="btn-primary w-full py-3.5 px-4 text-base font-black shadow-xs flex items-center justify-center gap-2 mt-2 cursor-pointer disabled:opacity-50"
+                className="btn-primary w-full py-3.5 px-4 text-base font-black elevation-2 flex items-center justify-center gap-2 mt-2 cursor-pointer disabled:opacity-50"
               >
                 {loading ? (
                   <span className="flex gap-1">
@@ -191,7 +191,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={handleGoogleLogin}
-                className="w-full bg-white border border-[#E7E1D8] hover:bg-[#FAF8F3] text-[#20201D] font-bold py-3 px-4 rounded-2xl text-sm flex items-center justify-center gap-2.5 transition-all shadow-2xs cursor-pointer"
+                className="w-full bg-white border border-[#E2E8F0] hover:bg-[#F7F7F7] text-[#3C3C3C] font-bold py-3 px-4 rounded-[1.5rem] text-sm flex items-center justify-center gap-2.5 transition-all elevation-1 cursor-pointer"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -204,9 +204,9 @@ export default function LoginPage() {
             </div>
 
             {/* Switch to Register */}
-            <p className="text-center text-xs font-semibold text-[#6F6B63] mt-5">
+            <p className="text-center text-xs font-semibold text-[#777777] mt-5">
               Don't have an account?{' '}
-              <Link to="/register" className="text-[#F28A45] hover:text-[#DF7635] font-black transition-colors">
+              <Link to="/register" className="text-[#1CB0F6] hover:text-[#1899D6] font-black transition-colors">
                 Sign Up
               </Link>
             </p>
@@ -215,12 +215,12 @@ export default function LoginPage() {
         </div>
 
         {/* Footer info */}
-        <footer className="flex items-center justify-between text-xs text-[#969188] font-semibold z-10 pt-2 border-t border-[#E7E1D8]">
-          <div className="flex items-center gap-1.5 text-[#6F6B63]">
-            <Brain size={16} className="text-[#F28A45]" />
-            <span>Powered by Local DeepTutor AI</span>
+        <footer className="flex items-center justify-between text-xs text-[#AFAFAF] font-semibold z-10 pt-2 border-t border-[#E2E8F0]">
+          <div className="flex items-center gap-1.5 text-[#777777]">
+            <Brain size={16} className="text-[#1CB0F6]" />
+            <span>Powered by Local Indie-Tutor</span>
           </div>
-          <span>© 2026 DeepTutor Inc.</span>
+          <span>© 2026 Indie-Tutor Inc.</span>
         </footer>
 
       </div>

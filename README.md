@@ -1,4 +1,4 @@
-# 🎓 DeepTutor — Next-Gen AI GraphRAG Learning Platform
+# 🎓 Indie-Tutor — Next-Gen AI GraphRAG Learning Platform
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110.0-009688.svg?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-19.0.0-61DAFB.svg?style=flat&logo=react)](https://react.dev/)
@@ -8,7 +8,7 @@
 [![Ollama](https://img.shields.io/badge/Ollama-llama3.2-000000.svg?style=flat)](https://ollama.ai/)
 [![Netlify Ready](https://img.shields.io/badge/Netlify-Deployed-00C7B7.svg?style=flat&logo=netlify)](https://www.netlify.com/)
 
-**DeepTutor** is a state-of-the-art, privacy-focused AI learning and tutoring platform powered by a hybrid **GraphRAG architecture** (Dense Vector Search + Sparse BM25 + Knowledge Graph Subgraphs), high-speed **IBM Docling & PyPDFium2 document parsing**, **NVIDIA CUDA GPU acceleration**, and interactive study tools (AI Quizzes, 3D Flashcards, Study Roadmaps, and Graph Visualizers).
+**Indie-Tutor** is a state-of-the-art, privacy-focused AI learning and tutoring platform powered by a hybrid **GraphRAG architecture** (Dense Vector Search + Sparse BM25 + Knowledge Graph Subgraphs), high-speed **IBM Docling & PyPDFium2 document parsing**, **NVIDIA CUDA GPU acceleration**, and interactive study tools (AI Quizzes, 3D Flashcards, Study Roadmaps, and Graph Visualizers).
 
 ---
 
@@ -177,5 +177,5 @@ Generated reports are saved directly to:
 
 ## 📜 License
 
-Distributed under the MIT License. Built with ❤️ by the DeepTutor Team.
+Distributed under the MIT License. Built with ❤️ by the Indie-Tutor Team.
 #
