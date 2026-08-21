@@ -1,0 +1,62 @@
+{
+  "support_vector_machines___PART_OF___machine_learning": {
+    "id": "support_vector_machines___PART_OF___machine_learning",
+    "source_entity": "Support Vector Machines",
+    "target_entity": "Machine Learning",
+    "type": "PART_OF",
+    "description": "Support Vector Machines are a class of algorithms within machine learning.",
+    "sources": [
+      "Support Vector Machines"
+    ]
+  },
+  "decision_trees___PART_OF___machine_learning": {
+    "id": "decision_trees___PART_OF___machine_learning",
+    "source_entity": "Decision Trees",
+    "target_entity": "Machine Learning",
+    "type": "PART_OF",
+    "description": "Decision Trees constitute a category of classical machine learning algorithms.",
+    "sources": [
+      "Decision Trees"
+    ]
+  },
+  "random_forests___USES___decision_trees": {
+    "id": "random_forests___USES___decision_trees",
+    "source_entity": "Random Forests",
+    "target_entity": "Decision Trees",
+    "type": "USES",
+    "description": "Random Forests utilize multiple decision trees for ensemble learning.",
+    "sources": [
+      "Random Forests"
+    ]
+  },
+  "science_citation_index_expanded___APPLIES_TO___machine_learning": {
+    "id": "science_citation_index_expanded___APPLIES_TO___machine_learning",
+    "source_entity": "Science Citation Index Expanded",
+    "target_entity": "Machine Learning",
+    "type": "APPLIES_TO",
+    "description": "Used to search and filter publications related to machine learning.",
+    "sources": [
+      "Science Citation Index Expanded"
+    ]
+  },
+  "roc_curves___PART_OF___roc_space": {
+    "id": "roc_curves___PART_OF___roc_space",
+    "source_entity": "ROC Curves",
+    "target_entity": "ROC Space",
+    "type": "PART_OF",
+    "description": "ROC curves are visualized and analyzed within ROC space.",
+    "sources": [
+      "ROC Curves"
+    ]
+  },
+  "roc_convex_hull___APPLIES_TO___roc_curves": {
+    "id": "roc_convex_hull___APPLIES_TO___roc_curves",
+    "source_entity": "ROC Convex Hull",
+    "target_entity": "ROC Curves",
+    "type": "APPLIES_TO",
+    "description": "The convex hull is applied to ROC curves to identify optimal classifiers.",
+    "sources": [
+      "ROC Convex Hull"
+    ]
+  }
+}

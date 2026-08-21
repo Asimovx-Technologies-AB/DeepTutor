@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pathlib import Path
 from app.core.config import get_settings
-from app.api import auth, chat, documents, quiz, flashcards, progress, study_plan, leaderboard, mcp, notes
+from app.api import auth, chat, documents, quiz, flashcards, progress, study_plan, leaderboard, mcp, notes, dashboard
 
 settings = get_settings()
 
@@ -70,6 +70,7 @@ all_routers = [
     study_plan.router,
     leaderboard.router,
     notes.router,
+    dashboard.router,
 ]
 for r in all_routers:
     app.include_router(r, prefix="/api")
