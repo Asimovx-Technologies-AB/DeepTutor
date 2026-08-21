@@ -121,13 +121,13 @@ export default function Layout() {
 
           {/* Top Logo */}
           <div className="flex items-center justify-center cursor-pointer mb-8" onClick={() => navigate('/dashboard')}>
-            <div className="w-12 h-12 rounded-2xl bg-brand-primary text-white flex items-center justify-center elevation-2">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/30 hover:bg-indigo-700 transition-colors">
               <GraduationCap size={24} />
             </div>
           </div>
 
           {/* Navigation Items */}
-          <nav className="flex-1 flex flex-col items-center gap-6 overflow-y-auto no-scrollbar w-full">
+          <nav className="flex-1 flex flex-col items-center gap-5 overflow-y-auto no-scrollbar w-full">
             {NAV_ITEMS.map(({ to, icon: Icon, label }) => {
               const isActive = location.pathname.startsWith(to)
               return (
@@ -136,13 +136,13 @@ export default function Layout() {
                   to={to}
                   title={label}
                   className={`flex items-center justify-center w-12 h-12 rounded-2xl transition-all group ${isActive
-                    ? 'bg-white elevation-1 text-brand-primary'
-                    : 'text-text-muted hover:text-brand-primary hover:bg-white/50'
+                    ? 'bg-indigo-50 border border-indigo-200 text-indigo-600 shadow-xs'
+                    : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50/50'
                     }`}
                 >
                   <Icon
                     size={22}
-                    className={isActive ? 'text-brand-primary' : 'text-text-muted group-hover:text-brand-primary transition-colors'}
+                    className={isActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-indigo-600 transition-colors'}
                   />
                 </NavLink>
               )
@@ -150,17 +150,17 @@ export default function Layout() {
           </nav>
 
           {/* Footer User Profile */}
-          <div className="pt-6 border-t border-border w-full flex flex-col items-center gap-4">
+          <div className="pt-6 border-t border-slate-200 w-full flex flex-col items-center gap-4">
             <div
               onClick={() => setIsProfileOpen(true)}
-              className="w-10 h-10 rounded-full bg-brand-primary text-white flex items-center justify-center font-bold text-sm cursor-pointer elevation-1 hover:opacity-90 transition-opacity"
+              className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-sm cursor-pointer shadow-md shadow-indigo-600/20 hover:bg-indigo-700 transition-all"
               title="View & Edit Profile"
             >
               {user?.username?.charAt(0).toUpperCase() || 'U'}
             </div>
             <button
               onClick={() => logout()}
-              className="text-text-muted hover:text-error transition-colors p-2 rounded-full hover:bg-error-soft cursor-pointer"
+              className="text-slate-400 hover:text-rose-600 transition-colors p-2 rounded-full hover:bg-rose-50 cursor-pointer"
               title="Logout"
             >
               <LogOut size={18} />
@@ -170,14 +170,14 @@ export default function Layout() {
       </aside>
 
       {/* ─── MOBILE SIDEBAR (Drawer) ─── */}
-      <div className={`fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden transition-opacity ${mobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setMobileOpen(false)} />
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-border transform transition-transform duration-300 lg:hidden flex flex-col ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-6 flex items-center justify-between border-b border-border">
-          <div className="flex items-center gap-3 text-brand-primary">
+      <div className={`fixed inset-0 bg-black/30 backdrop-blur-sm z-40 lg:hidden transition-opacity ${mobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setMobileOpen(false)} />
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transform transition-transform duration-300 lg:hidden flex flex-col ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 flex items-center justify-between border-b border-slate-200">
+          <div className="flex items-center gap-3 text-indigo-600">
             <GraduationCap size={24} />
-            <span className="font-bold text-lg">Indie-Tutor</span>
+            <span className="font-black text-lg text-slate-800">DeepTutor</span>
           </div>
-          <button onClick={() => setMobileOpen(false)} className="p-2 text-text-muted hover:bg-bg-secondary rounded-lg">
+          <button onClick={() => setMobileOpen(false)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg">
             <X size={20} />
           </button>
         </div>
@@ -189,10 +189,10 @@ export default function Layout() {
                 key={to}
                 to={to}
                 onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${isActive ? 'bg-bg-secondary text-brand-primary' : 'text-text-secondary hover:bg-bg-primary hover:text-brand-primary'
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${isActive ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-indigo-50/50 hover:text-indigo-600'
                   }`}
               >
-                <Icon size={20} className={isActive ? 'text-brand-primary' : 'text-text-muted'} />
+                <Icon size={20} className={isActive ? 'text-indigo-600' : 'text-slate-400'} />
                 {label}
               </NavLink>
             )
@@ -203,21 +203,21 @@ export default function Layout() {
       {/* ─── MAIN CONTENT CONTAINER ─── */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
         {/* Mobile Top Navbar */}
-        <div className="lg:hidden px-4 h-16 bg-white border-b border-border flex items-center justify-between sticky top-0 z-30 elevation-1 shrink-0">
+        <div className="lg:hidden px-4 h-16 bg-white border-b border-slate-200 flex items-center justify-between sticky top-0 z-30 shadow-xs shrink-0">
           <button
             onClick={() => setMobileOpen(true)}
-            className="p-2 rounded-lg border border-border text-text-primary hover:bg-bg-secondary"
+            className="p-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
           >
             <Menu size={20} />
           </button>
-          <div className="flex items-center gap-2 cursor-pointer font-bold text-brand-primary text-lg" onClick={() => navigate('/dashboard')}>
-            Indie-Tutor
+          <div className="flex items-center gap-2 cursor-pointer font-black text-indigo-600 text-lg" onClick={() => navigate('/dashboard')}>
+            DeepTutor
           </div>
           <div className="flex items-center gap-3">
-            <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-success' : 'bg-error animate-ping'}`} title={isOnline ? 'API Connected' : 'API Offline'} />
+            <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-rose-500 animate-ping'}`} title={isOnline ? 'API Connected' : 'API Offline'} />
             <button
               onClick={() => setIsProfileOpen(true)}
-              className="w-8 h-8 rounded-full bg-brand-primary text-white flex items-center justify-center font-bold text-sm elevation-1"
+              className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xs"
             >
               {user?.username?.[0]?.toUpperCase() ?? 'U'}
             </button>
@@ -226,12 +226,12 @@ export default function Layout() {
 
         {/* Network Warning Banner */}
         {!isOnline && (
-          <div className="bg-warning-soft text-warning border-b border-warning/20 px-4 py-3 text-sm font-semibold flex items-center justify-between shrink-0">
+          <div className="bg-amber-50 text-amber-800 border-b border-amber-200 px-4 py-3 text-sm font-bold flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <WifiOff size={16} />
               <span>Backend server offline. Please check your connection.</span>
             </div>
-            <button onClick={() => window.location.reload()} className="bg-warning text-white px-3 py-1.5 rounded-lg text-xs font-bold">
+            <button onClick={() => window.location.reload()} className="bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold">
               Retry
             </button>
           </div>
@@ -242,19 +242,19 @@ export default function Layout() {
           <Outlet />
         </main>
 
-        {/* Mobile Bottom Navigation (Optional/Fallback) */}
-        <nav className="lg:hidden absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-border px-4 py-2 flex items-center justify-around z-40 elevation-2 pb-safe">
+        {/* Mobile Bottom Navigation */}
+        <nav className="lg:hidden absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-2 flex items-center justify-around z-40 shadow-lg pb-safe">
           {NAV_ITEMS.map(({ to, icon: Icon, label }) => {
             const isActive = location.pathname.startsWith(to)
             return (
               <NavLink
                 key={to}
                 to={to}
-                className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive ? 'text-brand-primary scale-105' : 'text-text-muted hover:text-text-primary'
+                className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive ? 'text-indigo-600 scale-105' : 'text-slate-400 hover:text-slate-700'
                   }`}
               >
                 <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
-                <span className={`text-[10px] font-medium ${isActive ? 'font-bold' : ''}`}>{label}</span>
+                <span className={`text-[10px] font-bold ${isActive ? 'text-indigo-600' : ''}`}>{label}</span>
               </NavLink>
             )
           })}

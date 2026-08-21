@@ -146,9 +146,13 @@ async def indexing_status(doc_id: str, user: dict = Depends(get_current_user)):
 
 
 from pydantic import BaseModel
+import json
+import re
 from app.rag.topic_sanitizer import is_valid_academic_topic, clean_and_format_topic
 from app.rag.ollama_client import ollama
-from app.rag.entity_extractor import _extract_json
+from app.rag.gemini_client import gemini_client
+
+_concept_cache: dict = {}
 
 
 class ConceptExplainRequest(BaseModel):
@@ -162,6 +166,10 @@ async def explain_concept(req: ConceptExplainRequest, user: dict = Depends(get_c
     concept = req.concept.strip()
     if not concept:
         raise HTTPException(status_code=400, detail="Concept name required.")
+
+    cache_key = f"{concept.lower()}_{req.topic_id or 'general'}"
+    if cache_key in _concept_cache:
+        return _concept_cache[cache_key]
 
     # 1. Search vector store for grounded context from user's document
     grounding_text = ""
@@ -189,31 +197,66 @@ Return ONLY valid JSON in this exact structure:
 
 JSON:"""
 
-    try:
-        messages = [
-            {"role": "system", "content": "You are a precise academic assistant. Respond with valid JSON only."},
-            {"role": "user", "content": prompt}
-        ]
-        resp = await ollama.chat(messages, temperature=0.1)
-        data = _extract_json(resp)
-        if data and data.get("definition"):
-            return {
-                "concept": concept,
-                "definition": data.get("definition", ""),
-                "key_takeaway": data.get("key_takeaway", ""),
-                "application": data.get("application", ""),
-                "exam_tip": data.get("exam_tip", ""),
-            }
-    except Exception as e:
-        print(f"[EXPLAIN CONCEPT ERROR] {e}")
+    messages = [
+        {"role": "system", "content": "You are a precise academic assistant. Respond with valid JSON only."},
+        {"role": "user", "content": prompt}
+    ]
 
-    return {
+    # 1. Ultra-fast Generation with Gemini API (<400ms)
+    if await gemini_client.is_available():
+        try:
+            resp = await gemini_client.chat(messages, temperature=0.1)
+            json_str = resp.strip()
+            json_str = re.sub(r'```(?:json)?\s*', '', json_str, flags=re.IGNORECASE)
+            json_str = re.sub(r'```', '', json_str).strip()
+            match = re.search(r'\{.*\}', json_str, re.DOTALL)
+            if match:
+                data = json.loads(match.group())
+                if data and data.get("definition"):
+                    result = {
+                        "concept": concept,
+                        "definition": data.get("definition", ""),
+                        "key_takeaway": data.get("key_takeaway", ""),
+                        "application": data.get("application", ""),
+                        "exam_tip": data.get("exam_tip", ""),
+                    }
+                    _concept_cache[cache_key] = result
+                    return result
+        except Exception as e:
+            print(f"[EXPLAIN CONCEPT GEMINI ERROR] {e}")
+
+    # 2. Local Generation with Ollama (with strict 4s timeout)
+    try:
+        resp = await asyncio.wait_for(ollama.chat(messages, temperature=0.1), timeout=4.0)
+        json_str = resp.strip()
+        json_str = re.sub(r'```(?:json)?\s*', '', json_str, flags=re.IGNORECASE)
+        json_str = re.sub(r'```', '', json_str).strip()
+        match = re.search(r'\{.*\}', json_str, re.DOTALL)
+        if match:
+            data = json.loads(match.group())
+            if data and data.get("definition"):
+                result = {
+                    "concept": concept,
+                    "definition": data.get("definition", ""),
+                    "key_takeaway": data.get("key_takeaway", ""),
+                    "application": data.get("application", ""),
+                    "exam_tip": data.get("exam_tip", ""),
+                }
+                _concept_cache[cache_key] = result
+                return result
+    except Exception as e:
+        print(f"[EXPLAIN CONCEPT OLLAMA ERROR] {e}")
+
+    # 3. Contextual Fallback
+    fallback = {
         "concept": concept,
         "definition": f"{concept} is a fundamental concept in this chapter, essential for theoretical understanding and problem-solving.",
         "key_takeaway": f"Review key definitions and core formulas relating to {concept}.",
         "application": "Used extensively across standard exercises and real-world systems.",
         "exam_tip": "Focus on step-by-step derivations and standard problem patterns."
     }
+    _concept_cache[cache_key] = fallback
+    return fallback
 
 
 @router.get("/topic/{topic_id}/graph")

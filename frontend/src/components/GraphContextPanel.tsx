@@ -107,7 +107,25 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
     const name = selectedNode.name
     if (detailsCacheRef.current.has(name)) {
       setConceptDetails(detailsCacheRef.current.get(name))
+      setLoadingDetails(false)
       return
+    }
+
+    // Instant local preview from node description or default definition
+    if (selectedNode.description && selectedNode.description.trim()) {
+      setConceptDetails({
+        definition: selectedNode.description.trim(),
+        key_takeaway: '',
+        application: '',
+        exam_tip: '',
+      })
+    } else {
+      setConceptDetails({
+        definition: `${name} is a key entity in this subject context.`,
+        key_takeaway: '',
+        application: '',
+        exam_tip: '',
+      })
     }
 
     setLoadingDetails(true)
@@ -550,22 +568,50 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
     return () => cancelAnimationFrame(animRef.current)
   }, [isOpen, entities, simulate, render])
 
-  /* ─── High DPI Canvas Resize Handler ───────────────────────────── */
+  /* ─── High DPI Canvas Resize Handler with ResizeObserver ──────── */
   useEffect(() => {
     if (!isOpen) return
+
     const resize = () => {
       const canvas = canvasRef.current
       const container = containerRef.current
       if (!canvas || !container) return
       const dpr = window.devicePixelRatio || 1
-      canvas.width = container.clientWidth * dpr
-      canvas.height = container.clientHeight * dpr
-      canvas.style.width = `${container.clientWidth}px`
-      canvas.style.height = `${container.clientHeight}px`
+      const rect = container.getBoundingClientRect()
+      const w = Math.floor(rect.width || container.clientWidth || 1000)
+      const h = Math.floor(rect.height || container.clientHeight || 650)
+      if (w <= 0 || h <= 0) return
+
+      if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+        canvas.width = w * dpr
+        canvas.height = h * dpr
+        canvas.style.width = `${w}px`
+        canvas.style.height = `${h}px`
+      }
     }
+
     resize()
+
+    let ro: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+      ro = new ResizeObserver(() => {
+        resize()
+      })
+      ro.observe(containerRef.current)
+    }
+
+    const t1 = setTimeout(resize, 60)
+    const t2 = setTimeout(resize, 200)
+    const t3 = setTimeout(resize, 450)
+
     window.addEventListener('resize', resize)
-    return () => window.removeEventListener('resize', resize)
+    return () => {
+      if (ro) ro.disconnect()
+      clearTimeout(t1)
+      clearTimeout(t2)
+      clearTimeout(t3)
+      window.removeEventListener('resize', resize)
+    }
   }, [isOpen, isFullscreen])
 
   /* ─── Hit Testing for Interactive Selection ────────────────────── */
@@ -895,17 +941,17 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
                       <h4 className="text-xl font-black leading-snug tracking-tight">
                         {selectedNode.name}
                       </h4>
-                      {selectedNode.description ? (
+                      {loadingDetails && !conceptDetails?.definition && !selectedNode.description ? (
                         <div className={`text-xs mt-3 leading-relaxed font-medium p-4 rounded-[1.5rem] border ${darkMode
                             ? 'bg-slate-800/60 border-slate-700/60 text-slate-300'
                             : 'bg-slate-50 border-slate-200/80 text-slate-700'
                           }`}>
-                          <div className="flex items-center gap-2 text-indigo-500 font-bold">
+                          <div className="flex items-center gap-2 text-indigo-500 font-bold mb-2">
                             <Sparkles size={14} className="animate-spin" />
                             <span>DeepTutor is analyzing textbook context...</span>
                           </div>
-                          <div className="h-2 bg-slate-300 dark:bg-slate-700 rounded-full w-full" />
-                          <div className="h-2 bg-slate-300 dark:bg-slate-700 rounded-full w-4/5" />
+                          <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full w-full mb-1.5 animate-pulse" />
+                          <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full w-4/5 animate-pulse" />
                         </div>
                       ) : (
                         <div className="space-y-2.5 mt-3">
@@ -918,11 +964,11 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
                               <BookOpen size={13} />
                               <span>Core Meaning</span>
                             </div>
-                            <p>{conceptDetails?.definition || selectedNode.description || 'Core concept extracted from study material.'}</p>
+                            <p>{conceptDetails?.definition || selectedNode.description || `${selectedNode.name} is a key concept extracted from study material.`}</p>
                           </div>
 
                           {/* Key Takeaway / Formula */}
-                          {conceptDetails?.key_takeaway && (
+                          {(conceptDetails?.key_takeaway || (loadingDetails && !conceptDetails?.key_takeaway)) && (
                             <div className={`text-xs leading-relaxed font-medium p-3 rounded-2xl border ${darkMode
                                 ? 'bg-amber-950/30 border-amber-800/50 text-amber-200'
                                 : 'bg-amber-50/70 border-amber-200/80 text-amber-950'
@@ -931,7 +977,7 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
                                 <Lightbulb size={13} />
                                 <span>Key Rule / Formula</span>
                               </div>
-                              <p>{conceptDetails.key_takeaway}</p>
+                              <p>{conceptDetails?.key_takeaway || 'Analyzing key rule & formulas...'}</p>
                             </div>
                           )}
 

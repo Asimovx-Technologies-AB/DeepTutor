@@ -46,7 +46,6 @@ export interface ActiveUpload {
 }
 
 // ─── Aesthetic Document Indexing Status Card ─────────────────────────────────────
-// ─── Aesthetic Document Indexing Status Card with Continuous 1-100% Animation ────
 function UploadStatusCard({
   upload,
   onDone,
@@ -65,10 +64,15 @@ function UploadStatusCard({
   const smoothRef = useRef(1)
   const hasTriggeredDoneRef = useRef(false)
 
-  // ─── Natural, Realistically Paced 1-100% Smooth Animation Loop ───
+  // ─── Continuous 1-100% Smooth Low-Speed Animation Loop ───
   useEffect(() => {
     let animFrame: number
-    const tick = () => {
+    let lastTime = performance.now()
+
+    const tick = (now: number) => {
+      const dt = Math.min(0.1, (now - lastTime) / 1000) // delta time in seconds
+      lastTime = now
+
       const current = smoothRef.current
       const isDone = statusRef.current.status === 'done'
       const isError = statusRef.current.status === 'error'
@@ -79,12 +83,11 @@ function UploadStatusCard({
 
       if (isDone) {
         if (current < 100) {
-          // Calm, satisfying glide to 100%
-          const diff = 100 - current
-          const step = Math.max(0.25, diff * 0.06)
-          const next = Math.min(100, current + step)
+          // Accelerate smoothly to 100% when backend is complete
+          const speed = Math.max(30, (100 - current) * 4.0)
+          const next = Math.min(100, current + speed * dt)
           smoothRef.current = next
-          setSmoothProgress(Math.round(next))
+          setSmoothProgress(Math.floor(next))
           animFrame = requestAnimationFrame(tick)
         } else {
           setSmoothProgress(100)
@@ -92,27 +95,20 @@ function UploadStatusCard({
         return
       }
 
-      // In-progress: Target from backend status
-      const backendTarget = typeof statusRef.current.progress === 'number' ? statusRef.current.progress : 10
-
-      let next: number
+      // Continuous low-speed steady progress:
+      // Smooth continuous crawl from 1% to 98% without halting or jumping
+      const backendTarget = typeof statusRef.current.progress === 'number' ? statusRef.current.progress : 15
+      
+      let baseRate = 3.2 // ~3.2% per second steady continuous low-speed climb
+      if (current > 70) baseRate = 1.8 // gradual smooth easing
+      if (current > 90) baseRate = 0.8 // calm waiting crawl near completion
       if (current < backendTarget) {
-        // Smoothly catch up to backend stage with gentle damping
-        const diff = backendTarget - current
-        const step = Math.max(0.04, diff * 0.025)
-        next = Math.min(backendTarget, current + step)
-      } else {
-        // Natural micro-creep while backend computes (approx 0.4% to 0.8% per second at 60fps)
-        const ceiling = Math.min(94, backendTarget + 8)
-        if (current < ceiling) {
-          next = current + 0.008
-        } else {
-          next = current
-        }
+        baseRate = Math.max(baseRate, (backendTarget - current) * 1.8)
       }
 
+      const next = Math.min(98, current + baseRate * dt)
       smoothRef.current = next
-      setSmoothProgress(Math.round(next))
+      setSmoothProgress(Math.max(1, Math.floor(next)))
 
       animFrame = requestAnimationFrame(tick)
     }
@@ -121,7 +117,7 @@ function UploadStatusCard({
     return () => cancelAnimationFrame(animFrame)
   }, [])
 
-  // ─── Polling Backend Indexing Status ────────────────────────
+  // ─── Polling Backend Indexing Status (Fast 400ms cadence) ────────────────────────
   useEffect(() => {
     let doneTimer: any = null
     const interval = setInterval(async () => {
@@ -145,7 +141,7 @@ function UploadStatusCard({
       } catch {
         // network polling retry
       }
-    }, 1200)
+    }, 400)
 
     return () => {
       clearInterval(interval)
@@ -161,7 +157,7 @@ function UploadStatusCard({
       return {
         label: 'Knowledge Base Ready',
         step: 'Complete',
-        badgeColor: 'bg-[#D7FFB8] text-[#58CC02] border-[#58CC02]/30',
+        badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
         description: 'All chunks, vector embeddings & GraphRAG nodes indexed successfully',
       }
     }
@@ -169,7 +165,7 @@ function UploadStatusCard({
       return {
         label: 'Processing Failed',
         step: 'Error',
-        badgeColor: 'bg-[#FFD1D1] text-[#FF4B4B] border-[#FF4B4B]/30',
+        badgeColor: 'bg-rose-50 text-rose-600 border-rose-200',
         description: status.error || 'Could not parse document. Please verify the file.',
       }
     }
@@ -177,7 +173,7 @@ function UploadStatusCard({
       return {
         label: 'Parsing Document Structure',
         step: 'Stage 1/4',
-        badgeColor: 'bg-[#DDF4FF] text-[#1CB0F6] border-[#1CB0F6]/30',
+        badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
         description: 'Extracting text, formulas & table layouts via Docling / PyMuPDF cascade...',
       }
     }
@@ -185,7 +181,7 @@ function UploadStatusCard({
       return {
         label: 'Semantic Chunking',
         step: 'Stage 2/4',
-        badgeColor: 'bg-[#FFF0B3] text-[#FFC800] border-[#FFC800]/30',
+        badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
         description: 'Building section tree & context-preserving semantic study chunks...',
       }
     }
@@ -193,14 +189,14 @@ function UploadStatusCard({
       return {
         label: 'Generating Vector Embeddings',
         step: 'Stage 3/4',
-        badgeColor: 'bg-[#F0ECF7] text-[#8C76B2] border-[#8C76B2]/30',
+        badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
         description: 'Indexing high-dimensional semantic embeddings into vector store...',
       }
     }
     return {
       label: 'Constructing GraphRAG',
       step: 'Stage 4/4',
-      badgeColor: 'bg-[#D7FFB8] text-[#58CC02] border-[#58CC02]/30',
+      badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
       description: 'Extracting key concepts & entity relationship triplets for deep reasoning...',
     }
   }, [isDone, isError, smoothProgress, status.error])
@@ -211,16 +207,16 @@ function UploadStatusCard({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -8, scale: 0.96 }}
       transition={{ duration: 0.35, ease: 'easeOut' }}
-      className={`relative overflow-hidden rounded-[1.5rem] border p-4 sm:p-5 elevation-2 transition-all ${isDone
-        ? 'bg-gradient-to-r from-[#F4FAF5] via-white to-[#F4FAF5] border-[#58CC02]/40'
+      className={`relative overflow-hidden rounded-[1.5rem] border p-4 sm:p-5 shadow-xs transition-all ${isDone
+        ? 'bg-gradient-to-r from-emerald-50/50 via-white to-emerald-50/30 border-emerald-300'
         : isError
-          ? 'bg-gradient-to-r from-[#FFF5F4] via-white to-[#FFF5F4] border-[#FF4B4B]/40'
-          : 'bg-gradient-to-r from-[#FFFDF9] via-white to-[#FFFFFF] border-[#1CB0F6]/35'
+          ? 'bg-gradient-to-r from-rose-50/50 via-white to-rose-50/30 border-rose-300'
+          : 'bg-gradient-to-r from-indigo-50/30 via-white to-slate-50 border-indigo-200'
         }`}
     >
       {/* Background glowing ambient light while processing */}
       {!isDone && !isError && (
-        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-44 h-44 bg-[#1CB0F6]/10 rounded-full blur-2xl pointer-events-none animate-pulse" />
+        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-44 h-44 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none animate-pulse" />
       )}
 
       <div className="flex items-start justify-between gap-3 relative z-10">
@@ -229,52 +225,52 @@ function UploadStatusCard({
         <div className="flex items-center gap-3.5 flex-1 min-w-0">
           <div className="relative flex-shrink-0">
             <div
-              className={`w-12 h-12 rounded-[1.5rem] flex items-center justify-center border elevation-1 transition-transform ${isDone
-                ? 'bg-[#D7FFB8] text-[#58CC02] border-[#58CC02]/30 scale-105'
+              className={`w-12 h-12 rounded-[1.5rem] flex items-center justify-center border shadow-xs transition-transform ${isDone
+                ? 'bg-emerald-50 text-emerald-600 border-emerald-200 scale-105'
                 : isError
-                  ? 'bg-[#FFD1D1] text-[#FF4B4B] border-[#FF4B4B]/30'
-                  : 'bg-[#DDF4FF] text-[#1CB0F6] border-[#1CB0F6]/30'
+                  ? 'bg-rose-50 text-rose-600 border-rose-200'
+                  : 'bg-indigo-50 text-indigo-600 border-indigo-200'
                 }`}
             >
               {isDone ? (
                 <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }}>
-                  <CheckCircle size={24} className="text-[#58CC02]" />
+                  <CheckCircle size={24} className="text-emerald-600" />
                 </motion.div>
               ) : isError ? (
-                <AlertCircle size={22} className="text-[#FF4B4B]" />
+                <AlertCircle size={22} className="text-rose-600" />
               ) : (
                 <motion.div
                   animate={{ rotate: 360 }}
                   transition={{ repeat: Infinity, duration: 3.5, ease: 'linear' }}
                 >
-                  <Sparkles size={22} className="text-[#1CB0F6]" />
+                  <Sparkles size={22} className="text-indigo-600" />
                 </motion.div>
               )}
             </div>
 
             {/* Orbital ring while indexing */}
             {!isDone && !isError && (
-              <div className="absolute -inset-1 rounded-[1.5rem] border-2 border-[#1CB0F6]/40 border-t-[#1CB0F6] animate-spin pointer-events-none" />
+              <div className="absolute -inset-1 rounded-[1.5rem] border-2 border-indigo-400/40 border-t-indigo-600 animate-spin pointer-events-none" />
             )}
           </div>
 
           {/* Title & Live Stage */}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-extrabold text-sm text-[#3C3C3C] truncate max-w-[220px] sm:max-w-md">
+              <span className="font-extrabold text-sm text-slate-800 truncate max-w-[220px] sm:max-w-md">
                 {upload.fileName}
               </span>
               {upload.sizeMb !== undefined && (
-                <span className="text-[10px] font-bold text-[#777777] bg-[#E5E5E5] px-2 py-0.5 rounded-md border border-[#E2E8F0]">
+                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
                   {upload.sizeMb.toFixed(1)} MB
                 </span>
               )}
-              <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border ${stageInfo.badgeColor}`}>
+              <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${stageInfo.badgeColor}`}>
                 {stageInfo.step} • {stageInfo.label}
               </span>
             </div>
 
-            <p className="text-xs text-[#777777] font-medium mt-1 truncate">
+            <p className="text-xs text-slate-500 font-medium mt-1 truncate">
               {stageInfo.description}
             </p>
           </div>
@@ -283,14 +279,14 @@ function UploadStatusCard({
         {/* Right Percentage & Close Button */}
         <div className="flex items-center gap-3 flex-shrink-0">
           <div className="text-right">
-            <span className={`text-xl sm:text-2xl font-black tracking-tight ${isDone ? 'text-[#58CC02]' : isError ? 'text-[#FF4B4B]' : 'text-[#1CB0F6]'}`}>
+            <span className={`text-xl sm:text-2xl font-black tracking-tight ${isDone ? 'text-emerald-600' : isError ? 'text-rose-600' : 'text-indigo-600'}`}>
               {smoothProgress}%
             </span>
           </div>
 
           <button
             onClick={() => onDismiss(upload.docId)}
-            className="text-[#AFAFAF] hover:text-[#3C3C3C] p-1.5 rounded-[1.25rem] hover:bg-[#E5E5E5] transition-colors cursor-pointer"
+            className="text-slate-400 hover:text-slate-700 p-1.5 rounded-[1.25rem] hover:bg-slate-100 transition-colors cursor-pointer"
             title="Dismiss notification"
           >
             <X size={16} />
@@ -300,15 +296,15 @@ function UploadStatusCard({
       </div>
 
       {/* Animated Gradient Progress Bar with Shimmer */}
-      <div className="mt-3.5 w-full bg-[#E5E5E5] h-2.5 rounded-full overflow-hidden p-0.5 border border-[#E2E8F0] relative">
+      <div className="mt-3.5 w-full bg-slate-100 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-200/80 relative">
         <motion.div
           className={`h-full rounded-full transition-all relative ${isDone
-            ? 'bg-[#58CC02]'
+            ? 'bg-emerald-500'
             : isError
-              ? 'bg-[#FF4B4B]'
-              : 'bg-info'
+              ? 'bg-rose-500'
+              : 'bg-indigo-600'
             }`}
-          style={{ width: `${smoothProgress}%`, transition: 'width 75ms ease-out' }}
+          style={{ width: `${smoothProgress}%`, transition: 'width 60ms linear' }}
         >
           {/* Shimmer sweep */}
           {!isDone && !isError && (
@@ -386,6 +382,23 @@ const StreamingMessageBubble = memo(function StreamingMessageBubble({ liveSource
   )
 })
 
+const isSubjectCurriculumTopic = (topicId?: string): boolean => {
+  if (!topicId) return false
+  const tid = topicId.toLowerCase()
+  return (
+    tid.startsWith('sslc-') ||
+    tid.startsWith('math-') ||
+    tid.startsWith('phys-') ||
+    tid.startsWith('chem-') ||
+    tid.startsWith('bio-') ||
+    tid.startsWith('soc-') ||
+    tid.startsWith('eng-') ||
+    tid.startsWith('cbse-') ||
+    tid.startsWith('kerala-') ||
+    tid.startsWith('textbook-')
+  )
+}
+
 // ─── Main Component ─────────────────────────────────────────────────────────────
 export default function ChatPage() {
   const { sessionId } = useParams<{ sessionId?: string }>()
@@ -419,7 +432,7 @@ export default function ChatPage() {
 
   const [liveSources, setLiveSources] = useState<Source[]>([])
   const [extMessages, setExtMessages] = useState<ExtendedMessage[]>([])
-  const [selectedModel, setSelectedModel] = useState('Indie-Tutor (Llama 3.1)')
+  const [selectedModel, setSelectedModel] = useState('DeepTutor (Gemini Flash)')
 
   // Mobile Drawers State
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false)
@@ -494,24 +507,27 @@ export default function ChatPage() {
   }, [activeSession])
 
   useEffect(() => {
-    if (showGraphPanel) {
+    if (activeSession?.id || showGraphPanel) {
       fetchKnowledgeGraph()
     }
-  }, [showGraphPanel, fetchKnowledgeGraph])
+  }, [activeSession?.id, showGraphPanel, fetchKnowledgeGraph])
 
-  // Fetch sessions (cached for 30s for fast sidebar navigation)
+  // Fetch Learn-scoped sessions fresh on mount and window focus (excludes subject chapter chats)
   const { refetch: refetchSessions } = useQuery({
-    queryKey: ['chat-sessions'],
+    queryKey: ['chat-sessions-learn'],
     queryFn: async () => {
-      const res = await chatApi.sessions()
-      setSessions(res.data)
+      const res = await chatApi.sessions('learn')
+      const data = (res.data || []).filter((s: any) => !isSubjectCurriculumTopic(s.topic_id))
+      setSessions(data)
       if (sessionId) {
-        const found = res.data.find((s: any) => s.id === sessionId)
+        const found = data.find((s: any) => s.id === sessionId)
         if (found) setActiveSession(found)
       }
-      return res.data
+      return data
     },
-    staleTime: 30000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   })
 
   const handleSend = useCallback(async (text?: string) => {
@@ -667,14 +683,16 @@ export default function ChatPage() {
       })
   }, [sessionId, sessions, user?.id, navigate, setActiveSession, setMessages])
 
-  // Automatically submit initial prompt if navigated from Dashboard Quick Ask
+  // Automatically submit initial prompt on first prompt only (if session is fresh)
   useEffect(() => {
     const initialPrompt = (location.state as any)?.initialPrompt
     if (initialPrompt && typeof initialPrompt === 'string') {
-      handleSend(initialPrompt)
+      if (extMessages.length === 0) {
+        handleSend(initialPrompt)
+      }
       navigate(location.pathname, { replace: true, state: {} })
     }
-  }, [location.state, handleSend, location.pathname, navigate])
+  }, [location.state, handleSend, location.pathname, navigate, extMessages.length])
 
   // Group sessions by date (Only show custom document learning sessions)
   const groupedSessions = useMemo(() => {
@@ -904,31 +922,34 @@ export default function ChatPage() {
           </button>
 
           <div className="space-y-1.5 max-h-[65vh] overflow-y-auto">
-            {sessions.map((s) => {
-              const isSelected = activeSession?.id === s.id
-              return (
-                <div
-                  key={s.id}
-                  onClick={() => {
-                    navigate(`/chat/${s.id}`)
-                    setMobileLeftOpen(false)
-                  }}
-                  className={`group flex items-center justify-between px-3 py-2.5 rounded-[1.25rem] text-xs cursor-pointer transition-all ${isSelected
-                    ? 'bg-white text-[#20201D] font-extrabold border border-border shadow-sm'
-                    : 'text-[#6F6B63] hover:text-[#20201D] hover:bg-white/50 font-medium border border-transparent'
-                    }`}
-                >
-                  <span className="truncate pr-2">{s.session_title || 'Untitled Chat'}</span>
-                  <button
-                    onClick={(e) => handleDeleteSession(e, s.id)}
-                    className="text-[#AFAFAF] hover:text-[#FF4B4B] hover:bg-[#FFD1D1] p-1.5 rounded-lg transition-colors"
-                    title="Delete session"
+            {sessions
+              .filter((s) => !isSubjectCurriculumTopic(s.topic_id))
+              .map((s) => {
+                const isSelected = activeSession?.id === s.id || sessionId === s.id
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => {
+                      setActiveSession(s)
+                      navigate(`/chat/${s.id}`)
+                      setMobileLeftOpen(false)
+                    }}
+                    className={`group flex items-center justify-between px-3 py-2.5 rounded-[1.25rem] text-xs cursor-pointer transition-all ${isSelected
+                      ? 'bg-indigo-50 text-indigo-900 font-extrabold border border-indigo-200 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium border border-transparent'
+                      }`}
                   >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              )
-            })}
+                    <span className="truncate pr-2">{s.session_title || 'Untitled Chat'}</span>
+                    <button
+                      onClick={(e) => handleDeleteSession(e, s.id)}
+                      className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition-colors"
+                      title="Delete session"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )
+              })}
           </div>
         </div>
       </aside>
@@ -1046,7 +1067,7 @@ export default function ChatPage() {
                       handleSend(`Give me 5 minute cheatcode for ${topic}`)
                     }}
                     disabled={isStreaming}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FFF0E4] hover:bg-[#F28A45] border border-[#F28A45]/30 hover:border-[#F28A45] text-[#F28A45] hover:text-white text-xs font-black transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 hover:bg-indigo-600 border border-indigo-200 hover:border-indigo-600 text-indigo-600 hover:text-white text-xs font-black transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
                     title="Generate 5-minute structured revision cheat sheet"
                   >
                     <Zap size={13} />
@@ -1149,21 +1170,21 @@ export default function ChatPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 w-full mt-6 sm:mt-8">
 
                 <SuggestionCard
-                  icon={<div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] text-[#F28A45] flex items-center justify-center border border-[#F28A45]/20"><Zap className="w-5 h-5" /></div>}
+                  icon={<div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-200"><Zap className="w-5 h-5" /></div>}
                   title="5-Min Cheatcode"
                   description="Get a structured 6-section 5-minute revision cheat sheet with analogies, tables & visual flowchart."
                   onClick={() => handleSend("Give me 5 minute cheatcode for this topic.")}
                 />
 
                 <SuggestionCard
-                  icon={<div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] text-[#F28A45] flex items-center justify-center border border-[#F28A45]/20"><Clock className="w-5 h-5" /></div>}
+                  icon={<div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-200"><Clock className="w-5 h-5" /></div>}
                   title="Synthesize Notes"
                   description="Turn my uploaded PDF notes into 5 key bullet points for quick review."
                   onClick={() => handleSend("Turn my uploaded PDF notes into 5 key bullet points for quick review.")}
                 />
 
                 <SuggestionCard
-                  icon={<div className="w-10 h-10 rounded-[1.5rem] bg-[#FFF0B3] text-[#FFC800] flex items-center justify-center border border-[#FFC800]/20"><Trophy className="w-5 h-5" /></div>}
+                  icon={<div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-200"><Trophy className="w-5 h-5" /></div>}
                   title="Practice Quiz"
                   description="Generate a 5-question multiple choice practice quiz from my material."
                   onClick={() => handleSend("Generate a 5-question multiple choice practice quiz from my material.")}

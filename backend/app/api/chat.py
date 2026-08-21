@@ -54,8 +54,20 @@ async def create_session(
 
 
 @router.get("/sessions")
-async def list_sessions(user: dict = Depends(get_current_user)):
+async def list_sessions(
+    scope: Optional[str] = Query(None),
+    user: dict = Depends(get_current_user)
+):
     sessions = db.get_sessions_for_user(user["id"])
+    curriculum_prefixes = ("sslc-", "math-", "phys-", "chem-", "bio-", "soc-", "eng-", "cbse-", "kerala-", "textbook-")
+    
+    if scope == "learn":
+        # Only general / uploaded PDF sessions
+        sessions = [s for s in sessions if not (s.get("topic_id") and s["topic_id"].lower().startswith(curriculum_prefixes))]
+    elif scope == "subjects":
+        # Only curriculum subject chapter sessions
+        sessions = [s for s in sessions if s.get("topic_id") and s["topic_id"].lower().startswith(curriculum_prefixes)]
+        
     return sorted(sessions, key=lambda s: s["started_at"], reverse=True)
 
 

@@ -1,0 +1,110 @@
+{
+  "atlantic_sea": {
+    "id": "atlantic_sea",
+    "name": "Atlantic SEA",
+    "type": "concept",
+    "description": "Key concept in sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_2a560c6d-1cb7-4855-95ae-87d5d5f8de93",
+    "sources": [],
+    "mentions": 1
+  },
+  "baltic_sea": {
+    "id": "baltic_sea",
+    "name": "Baltic SEA",
+    "type": "concept",
+    "description": "Key concept in sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_2a560c6d-1cb7-4855-95ae-87d5d5f8de93",
+    "sources": [],
+    "mentions": 1
+  },
+  "lombardy_venetia": {
+    "id": "lombardy_venetia",
+    "name": "Lombardy Venetia",
+    "type": "concept",
+    "description": "Key concept in sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_2a560c6d-1cb7-4855-95ae-87d5d5f8de93",
+    "sources": [],
+    "mentions": 1
+  },
+  "write_a_note_on_": {
+    "id": "write_a_note_on_",
+    "name": "Write a note on:",
+    "type": "concept",
+    "description": "Key concept in sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_2a560c6d-1cb7-4855-95ae-87d5d5f8de93",
+    "sources": [],
+    "mentions": 1
+  },
+  "vietnam_exported_two_thirds_of_its_rice_production_and_by": {
+    "id": "vietnam_exported_two_thirds_of_its_rice_production_and_by",
+    "name": "Vietnam exported two-thirds of its rice production and by",
+    "type": "concept",
+    "description": "Key concept in sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_2a560c6d-1cb7-4855-95ae-87d5d5f8de93",
+    "sources": [],
+    "mentions": 1
+  },
+  "explain_": {
+    "id": "explain_",
+    "name": "Explain:",
+    "type": "concept",
+    "description": "Key concept in sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_2a560c6d-1cb7-4855-95ae-87d5d5f8de93",
+    "sources": [],
+    "mentions": 1
+  },
+  "gold_british": {
+    "id": "gold_british",
+    "name": "GOLD British",
+    "type": "concept",
+    "description": "Key concept in sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_2a560c6d-1cb7-4855-95ae-87d5d5f8de93",
+    "sources": [],
+    "mentions": 1
+  },
+  "what_is_meant_by_the_bretton_woods_agreement_": {
+    "id": "what_is_meant_by_the_bretton_woods_agreement_",
+    "name": "What is meant by the Bretton Woods Agreement?",
+    "type": "concept",
+    "description": "Key concept in sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_2a560c6d-1cb7-4855-95ae-87d5d5f8de93",
+    "sources": [],
+    "mentions": 1
+  },
+  "explain_the_following_": {
+    "id": "explain_the_following_",
+    "name": "Explain the following:",
+    "type": "concept",
+    "description": "Key concept in sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_2a560c6d-1cb7-4855-95ae-87d5d5f8de93",
+    "sources": [],
+    "mentions": 1
+  },
+  "give_explanations_for_the_following_": {
+    "id": "give_explanations_for_the_following_",
+    "name": "Give explanations for the following:",
+    "type": "concept",
+    "description": "Key concept in sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_2a560c6d-1cb7-4855-95ae-87d5d5f8de93",
+    "sources": [],
+    "mentions": 1
+  },
+  "give_reasons_for_the_following_": {
+    "id": "give_reasons_for_the_following_",
+    "name": "Give reasons for the following:",
+    "type": "concept",
+    "description": "Key concept in sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_2a560c6d-1cb7-4855-95ae-87d5d5f8de93",
+    "sources": [],
+    "mentions": 1
+  },
+  "disobedience_movement": {
+    "id": "disobedience_movement",
+    "name": "Disobedience Movement",
+    "type": "concept",
+    "description": "A major mass movement launched in India involving various social groups, workers, and women.",
+    "sources": [
+      "NCERT-Class-10-History.pdf p.67"
+    ],
+    "mentions": 1
+  },
+  "swaraj": {
+    "id": "swaraj",
+    "name": "Swaraj",
+    "type": "concept",
+    "description": "An abstract concept of self-rule and independence pursued during the Indian national movement.",
+    "sources": [
+      "NCERT-Class-10-History.pdf p.67"
+    ],
+    "mentions": 1
+  }
+}

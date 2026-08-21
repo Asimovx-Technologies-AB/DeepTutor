@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Bell, User, ChevronDown, Sparkles, Trophy, Download, PlayCircle, MoreHorizontal } from 'lucide-react'
+import { Search, ChevronDown, MoreHorizontal, BookOpen, Sparkles, Target, ArrowRight } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import { useSubjectStore } from '../stores/subjectStore'
 
@@ -21,21 +21,25 @@ export default function DashboardPage() {
 
   const [isProfileOpen, setIsProfileOpen] = useState(false)
 
-  // Fetch Dynamic Data
+  // Fetch Dynamic Data with immediate invalidation
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: async () => {
       const res = await dashboardApi.stats()
       return res.data
-    }
+    },
+    staleTime: 2000,
+    refetchOnMount: 'always'
   })
 
   const { data: recentActivity, isLoading: activityLoading } = useQuery({
     queryKey: ['dashboard-activity'],
     queryFn: async () => {
-      const res = await dashboardApi.activity(5)
+      const res = await dashboardApi.activity(8)
       return res.data
-    }
+    },
+    staleTime: 2000,
+    refetchOnMount: 'always'
   })
 
   const { data: continueData, isLoading: continueLoading } = useQuery({
@@ -43,7 +47,9 @@ export default function DashboardPage() {
     queryFn: async () => {
       const res = await dashboardApi.continue()
       return res.data
-    }
+    },
+    staleTime: 2000,
+    refetchOnMount: 'always'
   })
 
   const { getSubject, getTopics } = useSubjectStore()
@@ -51,9 +57,11 @@ export default function DashboardPage() {
   // Resolve continue learning meta
   let continueSubject = null
   let continueTopic = null
+  let resolvedTopicTitle = 'Active Curriculum Topic'
   if (continueData) {
     continueSubject = getSubject(continueData.subject_id)
     continueTopic = getTopics(continueData.subject_id)?.find(t => t.id === continueData.topic_id)
+    resolvedTopicTitle = continueData.topic_title || continueTopic?.title || continueData.topic_id || 'Textbook Preparation'
   }
 
   return (
@@ -63,25 +71,25 @@ export default function DashboardPage() {
 
       {/* TOP HEADER: "Dashboard overview" + Top Right Nav */}
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-xl font-semibold text-text-primary">Dashboard overview</h1>
+        <h1 className="text-xl font-bold text-slate-800 tracking-tight">Dashboard Overview</h1>
         <div className="flex items-center gap-4">
-          <button className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-text-secondary hover:text-text-primary shadow-[0_4px_15px_rgba(0,0,0,0.02)] transition-colors">
+          <button className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-slate-500 hover:text-slate-800 shadow-xs border border-slate-200 transition-colors">
             <Search size={18} />
           </button>
           <NotificationPopup />
 
           <div
             onClick={() => setIsProfileOpen(true)}
-            className="flex items-center gap-3 bg-white rounded-full py-1.5 px-2 pr-4 cursor-pointer shadow-[0_4px_15px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.05)] transition-all"
+            className="flex items-center gap-3 bg-white rounded-full py-1.5 px-2 pr-4 cursor-pointer shadow-xs border border-slate-200 hover:shadow-sm transition-all"
           >
-            <div className="w-8 h-8 rounded-full bg-brand-primary flex items-center justify-center text-white font-bold text-xs">
-              {user?.username?.[0]?.toUpperCase() ?? 'M'}
+            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-2xs">
+              {user?.username?.[0]?.toUpperCase() ?? 'U'}
             </div>
-            <div className="flex flex-col">
-              <span className="text-[13px] font-semibold text-text-primary leading-none">{user?.username || 'Miquella strife'}</span>
-              <span className="text-[10px] text-text-secondary mt-0.5 leading-none">{user?.email || 'miquella@gmail.com'}</span>
+            <div className="flex flex-col text-left">
+              <span className="text-[13px] font-bold text-slate-800 leading-none">{user?.username || 'Learner'}</span>
+              <span className="text-[10px] text-slate-400 mt-0.5 leading-none">{user?.email || 'student@deeptutor.ai'}</span>
             </div>
-            <ChevronDown size={14} className="text-text-muted ml-2" />
+            <ChevronDown size={14} className="text-slate-400 ml-1" />
           </div>
         </div>
       </div>
@@ -95,24 +103,34 @@ export default function DashboardPage() {
           {/* Left Hero */}
           <div className="xl:col-span-6 flex flex-col justify-center">
             <div className="flex items-start gap-4 mb-4">
-              {/* Hero Mascot Illustration */}
-              <div className="w-20 h-20 opacity-90 pointer-events-none flex-shrink-0">
-                <img src="/assets/illustrations/hero_mascot.jpg" alt="Friendly Robot Mascot" className="w-full h-full object-contain mix-blend-multiply rounded-full" />
+              {/* Mascot Badge */}
+              <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-3xl shadow-xs flex-shrink-0">
+                🚀
               </div>
-              <h2 className="text-4xl sm:text-5xl font-extrabold leading-[1.1] tracking-tight text-text-primary">
-                Hi, {user?.username || 'Miquella'} 👋 <br className="hidden sm:block" />
-                what do you want to learn today?
-              </h2>
+              <div>
+                <h2 className="text-3xl sm:text-4xl font-black leading-tight tracking-tight text-slate-800">
+                  Welcome back, {user?.username || 'Learner'}! 👋
+                </h2>
+                <p className="text-slate-500 text-sm mt-1.5 font-medium">
+                  {stats?.current_streak && stats.current_streak > 0
+                    ? `You're on a ${stats.current_streak}-day learning streak! Keep up the great momentum.`
+                    : 'Track your textbook mastery, take practice quizzes, and study with DeepTutor AI.'}
+                </p>
+              </div>
             </div>
-            <p className="text-text-secondary text-base mb-6 max-w-md ml-24">
-              Discover courses, track progress, and achieve your learning goals seamlessly.
-            </p>
-            <div className="ml-24">
+            <div className="flex items-center gap-3 mt-2">
+              <button
+                onClick={() => navigate('/chat')}
+                className="btn-primary px-6 py-2.5 text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-xs hover:shadow-md transition-all flex items-center gap-2"
+              >
+                <Sparkles size={16} />
+                Open AI Tutor Chat
+              </button>
               <button
                 onClick={() => navigate('/subjects')}
-                className="btn-primary px-8 py-3 text-sm font-bold shadow-md hover:shadow-lg transition-all"
+                className="px-5 py-2.5 text-xs sm:text-sm font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl transition-colors"
               >
-                Explore courses
+                Curriculum
               </button>
             </div>
           </div>
@@ -131,25 +149,31 @@ export default function DashboardPage() {
 
             {/* Middle Row (Cards) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-auto">
-              {continueData && continueSubject && continueTopic ? (
-                <div className="col-span-1 h-[140px] xl:h-[160px]">
+              {continueData ? (
+                <div className="col-span-1 h-auto min-h-[140px]">
                   <ContinueLearningCard
-                    subjectId={continueData.subject_id}
-                    topicId={continueData.topic_id}
-                    topicTitle={continueTopic.title}
-                    progress={continueData.progress_percentage}
+                    subjectId={continueData.subject_id || 'general'}
+                    topicId={continueData.topic_id || 'history'}
+                    topicTitle={resolvedTopicTitle}
+                    progress={continueData.progress_percentage || 40}
                     lastStudied={continueData.last_studied_at}
                   />
                 </div>
               ) : (
-                <div className="col-span-1 card p-6 flex flex-col justify-center items-center gap-3 bg-black/5 border border-dashed border-border">
+                <div className="col-span-1 p-6 rounded-3xl flex flex-col justify-center items-center gap-2.5 bg-indigo-50/40 border border-dashed border-indigo-200/80 text-center min-h-[140px]">
                   <span className="text-2xl">📚</span>
-                  <p className="text-sm font-medium text-text-primary">Ready to start learning?</p>
-                  <button onClick={() => navigate('/subjects')} className="btn-primary px-4 py-1.5 text-xs">Explore Curriculum</button>
+                  <p className="text-xs font-bold text-slate-800">Ready to Start Learning?</p>
+                  <p className="text-[11px] text-slate-500 font-medium max-w-xs">Upload a textbook or explore the curriculum to begin AI tutoring.</p>
+                  <button 
+                    onClick={() => navigate('/chat')} 
+                    className="mt-1 px-4 py-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-2xs transition-all"
+                  >
+                    Start AI Session
+                  </button>
                 </div>
               )}
 
-              <div className="col-span-1 h-[140px] xl:h-[160px]">
+              <div className="col-span-1 h-auto min-h-[140px]">
                 <LearningStreak
                   currentStreak={stats?.current_streak || 0}
                   longestStreak={stats?.longest_streak || 0}
@@ -163,57 +187,59 @@ export default function DashboardPage() {
           </div>
 
           {/* Right Sidebar: Performance report (4 Columns) */}
-          <div className="xl:col-span-4 card p-6 xl:p-8 flex flex-col justify-between">
+          <div className="xl:col-span-4 rounded-3xl bg-white border border-slate-200/80 p-6 xl:p-8 flex flex-col justify-between shadow-xs">
             <div>
-              <div className="flex items-center justify-between mb-6 xl:mb-8">
-                <h3 className="font-semibold text-lg xl:text-xl text-text-primary">Performance report</h3>
-                <MoreHorizontal className="text-text-muted cursor-pointer" size={20} />
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-black text-lg text-slate-800 tracking-tight">Performance Report</h3>
+                <MoreHorizontal className="text-slate-400 cursor-pointer" size={20} />
               </div>
 
-              <div className="flex flex-col items-center mb-6 xl:mb-8">
-                <div className="w-20 h-20 xl:w-24 xl:h-24 rounded-full border-[3px] border-success p-1 mb-4 relative shadow-[0_10px_30px_rgba(16,185,129,0.2)]">
-                  <div className="w-full h-full bg-brand-primary rounded-full flex items-center justify-center text-3xl xl:text-4xl text-white font-bold">
-                    {user?.username?.[0]?.toUpperCase() ?? 'M'}
+              <div className="flex flex-col items-center mb-6 text-center">
+                <div className="w-20 h-20 rounded-full border-2 border-indigo-100 p-1 mb-3 relative shadow-xs bg-indigo-50/50 flex items-center justify-center">
+                  <div className="w-full h-full bg-indigo-600 rounded-full flex items-center justify-center text-3xl text-white font-black shadow-2xs">
+                    {user?.username?.[0]?.toUpperCase() ?? 'U'}
                   </div>
                 </div>
-                <h4 className="text-base xl:text-lg font-semibold text-text-primary">{user?.username || 'Miquella strife'}</h4>
-                <p className="text-text-secondary text-[12px] xl:text-[13px]">{user?.email}</p>
+                <h4 className="text-base font-black text-slate-800">{user?.username || 'Learner'}</h4>
+                <p className="text-slate-500 text-xs font-medium">{user?.email}</p>
               </div>
 
-              <div className="grid grid-cols-3 gap-3 xl:gap-4 border-t border-b border-border py-5 xl:py-6 mb-6 xl:mb-8">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="w-9 h-9 xl:w-10 xl:h-10 rounded-xl bg-success-soft text-success flex items-center justify-center text-base xl:text-lg">📚</div>
-                  <div className="text-center">
-                    <p className="text-[10px] xl:text-[11px] text-text-secondary font-medium">Courses</p>
-                    <p className="text-[12px] xl:text-[13px] font-semibold text-text-primary">{stats?.courses_completed || 0}</p>
-                  </div>
+              <div className="grid grid-cols-3 gap-2 border-t border-b border-slate-100 py-4 mb-6">
+                <div className="flex flex-col items-center p-2 rounded-2xl bg-slate-50/70 border border-slate-100">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center text-sm mb-1.5 shadow-2xs">📚</div>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Courses</p>
+                  <p className="text-sm font-black text-slate-800 mt-0.5">{stats?.courses_in_progress ?? stats?.courses_completed ?? 0}</p>
                 </div>
-                <div className="flex flex-col items-center gap-2">
-                  <div className="w-9 h-9 xl:w-10 xl:h-10 rounded-xl bg-brand-primary-soft text-brand-primary flex items-center justify-center text-base xl:text-lg">✨</div>
-                  <div className="text-center">
-                    <p className="text-[10px] xl:text-[11px] text-text-secondary font-medium">Lessons</p>
-                    <p className="text-[12px] xl:text-[13px] font-semibold text-text-primary">{stats?.lessons_completed || 0}</p>
-                  </div>
+                <div className="flex flex-col items-center p-2 rounded-2xl bg-slate-50/70 border border-slate-100">
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center text-sm mb-1.5 shadow-2xs">✨</div>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Lessons</p>
+                  <p className="text-sm font-black text-slate-800 mt-0.5">{stats?.lessons_completed || 0}</p>
                 </div>
-                <div className="flex flex-col items-center gap-2">
-                  <div className="w-9 h-9 xl:w-10 xl:h-10 rounded-xl bg-brand-primary-soft text-brand-primary flex items-center justify-center text-base xl:text-lg">🏆</div>
-                  <div className="text-center">
-                    <p className="text-[10px] xl:text-[11px] text-text-secondary font-medium">Top Streak</p>
-                    <p className="text-[12px] xl:text-[13px] font-semibold text-text-primary">{stats?.longest_streak || 0}d</p>
-                  </div>
+                <div className="flex flex-col items-center p-2 rounded-2xl bg-slate-50/70 border border-slate-100">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center text-sm mb-1.5 shadow-2xs">🏆</div>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Streak</p>
+                  <p className="text-sm font-black text-slate-800 mt-0.5">{stats?.longest_streak || 0}d</p>
                 </div>
               </div>
             </div>
 
             <div>
-              <h3 className="font-semibold text-[14px] xl:text-[15px] text-text-primary mb-3 xl:mb-4">Upcoming assignment</h3>
-              <div className="bg-[#E3FDF5] rounded-2xl p-3 xl:p-4 flex items-center gap-3 xl:gap-4 cursor-pointer hover:bg-[#D1F9EA] transition-colors">
-                <div className="w-9 h-9 xl:w-10 xl:h-10 bg-white rounded-full flex items-center justify-center text-base xl:text-lg flex-shrink-0 shadow-sm">
-                  🐼
+              <h3 className="font-bold text-xs text-slate-700 uppercase tracking-wider mb-2.5">Recommended Study Focus</h3>
+              <div 
+                onClick={() => navigate('/chat')}
+                className="bg-indigo-50/70 border border-indigo-200/80 rounded-2xl p-3.5 flex items-center gap-3 cursor-pointer hover:bg-indigo-100/70 hover:border-indigo-300 transition-all shadow-2xs group"
+              >
+                <div className="w-9 h-9 bg-indigo-600 text-white rounded-xl flex items-center justify-center text-base flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                  🎯
                 </div>
-                <div>
-                  <h4 className="text-[12px] xl:text-[13px] font-semibold text-text-primary">Create a cute red panda mascot</h4>
-                  <p className="text-[10px] xl:text-[11px] text-text-secondary mt-0.5 xl:mt-1">Due 12 august 2024 - 12:00 AM</p>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-xs font-bold text-slate-800 truncate">
+                    {stats?.latest_doc ? `Review ${stats.latest_doc}` : 'Daily Kerala SCERT Exam Practice'}
+                  </h4>
+                  <p className="text-[11px] text-indigo-600 font-semibold mt-0.5 flex items-center gap-1">
+                    <span>Ask AI Tutor</span>
+                    <ArrowRight size={12} />
+                  </p>
                 </div>
               </div>
             </div>
@@ -222,7 +248,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ROW 3: DeepTutor Exam Prep Architecture Flow */}
-        <div className="card p-6 sm:p-8 bg-white border border-[#E7E1D8] shadow-2xs rounded-3xl">
+        <div className="card p-6 sm:p-8 bg-white border border-slate-200/80 shadow-xs rounded-3xl">
           <ExamPrepArchitectureFlow showHeading={true} />
         </div>
 

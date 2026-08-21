@@ -384,7 +384,7 @@ export default function StudentRecordsPage() {
               <p className="text-xs text-text-secondary mt-0.5">Chronological progression across test attempts</p>
             </div>
             <div className="flex items-center gap-2 text-xs">
-              <span className="inline-block w-3 h-3 rounded-full bg-[#F28A45]" />
+              <span className="inline-block w-3 h-3 rounded-full bg-indigo-600" />
               <span className="font-bold text-text-secondary">Accuracy %</span>
             </div>
           </div>
@@ -394,15 +394,15 @@ export default function StudentRecordsPage() {
               <AreaChart data={scoreTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#1E293B" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#1E293B" stopOpacity={0.0} />
+                    <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#4F46E5" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E7E1D8" vertical={false} />
-                <XAxis dataKey="date" tick={{ fill: '#969188', fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} />
-                <YAxis domain={[0, 100]} tick={{ fill: '#969188', fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                <XAxis dataKey="date" tick={{ fill: '#64748B', fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, 100]} tick={{ fill: '#64748B', fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CUSTOM_TOOLTIP />} />
-                <Area type="monotone" dataKey="score" stroke="#1E293B" strokeWidth={3} fillOpacity={1} fill="url(#scoreGradient)" name="Accuracy" />
+                <Area type="monotone" dataKey="score" stroke="#4F46E5" strokeWidth={3} fillOpacity={1} fill="url(#scoreGradient)" name="Accuracy" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -421,7 +421,7 @@ export default function StudentRecordsPage() {
               {subjectCompetencies.map((sc: any) => {
                 const isWeak = sc.score > 0 && sc.score < 70
                 const isStrong = sc.score >= 75
-                const colorClass = isWeak ? 'from-error to-brand-primary-hover' : isStrong ? 'from-success to-success' : 'from-brand-primary to-[#D99A32]'
+                const colorClass = isWeak ? 'from-error to-indigo-600' : isStrong ? 'from-success to-success' : 'from-indigo-600 to-indigo-400'
 
                 return (
                   <div key={sc.subject} className="space-y-1.5">
@@ -451,7 +451,7 @@ export default function StudentRecordsPage() {
           <div className="mt-6 pt-4 border-t border-border/60">
             <button
               onClick={() => navigate('/notes')}
-              className="w-full py-2.5 px-3 rounded-xl bg-brand-primary-soft text-brand-primary hover:bg-[#F28A45] hover:text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+              className="w-full py-2.5 px-3 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
             >
               <FileText size={14} />
               <span>Generate Subject Smart Notes</span>

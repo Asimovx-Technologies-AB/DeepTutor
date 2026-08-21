@@ -117,6 +117,7 @@ export default function SubjectChatPage() {
         )
 
         let activeSid = ''
+        let messageCount = 0
 
         if (existingSession) {
           activeSid = existingSession.id
@@ -130,6 +131,7 @@ export default function SubjectChatPage() {
             sources: m.metadata?.sources ?? [],
             graph_context: m.metadata?.graph_context ?? null,
           }))
+          messageCount = loadedMsgs.length
           if (isMounted) {
             setMessages(loadedMsgs)
           }
@@ -143,10 +145,13 @@ export default function SubjectChatPage() {
           }
         }
 
-        // If navigated with an initial prompt in state and session is fresh/empty
+        // Only send the inbuilt intro prompt on FIRST visit (when conversation history is empty)
         const state = location.state as any
-        if (state?.initialPrompt && isMounted) {
+        if (state?.initialPrompt && isMounted && messageCount === 0) {
           sendMessage(state.initialPrompt, activeSid)
+          navigate(location.pathname, { replace: true, state: {} })
+        } else if (state?.initialPrompt && isMounted) {
+          // Conversation already exists — directly show chat history without repeating inbuilt prompt
           navigate(location.pathname, { replace: true, state: {} })
         }
       } catch (err) {

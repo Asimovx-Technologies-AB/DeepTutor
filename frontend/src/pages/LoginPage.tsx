@@ -53,20 +53,20 @@ export default function LoginPage() {
         {/* Top Header Navigation */}
         <header className="flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[1.5rem] bg-info-soft border border-info/30 flex items-center justify-center text-info shadow-sm">
+            <div className="w-10 h-10 rounded-[1.5rem] bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-sm">
               <Brain size={22} />
             </div>
             <div>
-              <span className="font-black text-text-primary text-xl tracking-tight">Indie-Tutor</span>
-              <span className="block text-[10px] font-black text-info uppercase tracking-widest">AI Learning Engine</span>
+              <span className="font-black text-slate-800 text-xl tracking-tight">DeepTutor</span>
+              <span className="block text-[10px] font-black text-indigo-600 uppercase tracking-widest">AI Learning Engine</span>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <button aria-label="Language" className="w-10 h-10 rounded-full border border-border bg-white text-text-secondary hover:text-info hover:border-info/30 flex items-center justify-center transition-all shadow-sm cursor-pointer">
+            <button aria-label="Language" className="w-10 h-10 rounded-full border border-slate-200 bg-white text-slate-500 hover:text-indigo-600 hover:border-indigo-200 flex items-center justify-center transition-all shadow-sm cursor-pointer">
               <Globe size={18} />
             </button>
-            <button aria-label="Contact" className="w-10 h-10 rounded-full bg-text-primary text-white hover:bg-black flex items-center justify-center transition-all shadow-sm cursor-pointer">
+            <button aria-label="Contact" className="w-10 h-10 rounded-full bg-slate-900 text-white hover:bg-slate-800 flex items-center justify-center transition-all shadow-sm cursor-pointer">
               <Send size={16} />
             </button>
           </div>
@@ -80,18 +80,18 @@ export default function LoginPage() {
             <div className="relative">
               <svg width="220" height="180" viewBox="0 0 220 180" fill="none" xmlns="http://www.w3.org/2000/svg">
                 {/* Simplified Vector Study Blocks */}
-                <rect x="20" y="100" width="45" height="70" rx="6" fill="#FFFFFF" stroke="currentColor" className="text-text-primary" strokeWidth="2.5" />
-                <path d="M32 135L42 120" stroke="currentColor" className="text-text-primary" strokeWidth="2.5" strokeLinecap="round" />
-                <rect x="70" y="70" width="55" height="100" rx="6" fill="#EFF6FF" stroke="#3B82F6" strokeWidth="2.5" />
-                <rect x="150" y="90" width="50" height="80" rx="6" fill="#FFFFFF" stroke="currentColor" className="text-text-primary" strokeWidth="2.5" />
-                <rect x="180" y="45" width="35" height="125" rx="6" fill="#EFF6FF" stroke="#3B82F6" strokeWidth="2.5" />
+                <rect x="20" y="100" width="45" height="70" rx="6" fill="#FFFFFF" stroke="currentColor" className="text-slate-800" strokeWidth="2.5" />
+                <path d="M32 135L42 120" stroke="currentColor" className="text-slate-800" strokeWidth="2.5" strokeLinecap="round" />
+                <rect x="70" y="70" width="55" height="100" rx="6" fill="#EEF2FF" stroke="#4F46E5" strokeWidth="2.5" />
+                <rect x="150" y="90" width="50" height="80" rx="6" fill="#FFFFFF" stroke="currentColor" className="text-slate-800" strokeWidth="2.5" />
+                <rect x="180" y="45" width="35" height="125" rx="6" fill="#EEF2FF" stroke="#4F46E5" strokeWidth="2.5" />
                 
                 {/* Sitting Student Character */}
-                <circle cx="82" cy="40" r="12" fill="currentColor" className="text-text-primary" />
-                <path d="M72 58C72 52 92 52 92 58L95 82H69L72 58Z" fill="currentColor" className="text-text-primary" />
-                <path d="M69 82L62 105L85 105L88 82" fill="currentColor" className="text-text-primary" />
+                <circle cx="82" cy="40" r="12" fill="currentColor" className="text-slate-800" />
+                <path d="M72 58C72 52 92 52 92 58L95 82H69L72 58Z" fill="currentColor" className="text-slate-800" />
+                <path d="M69 82L62 105L85 105L88 82" fill="currentColor" className="text-slate-800" />
                 {/* Laptop */}
-                <path d="M92 72L108 62" stroke="#3B82F6" strokeWidth="4" strokeLinecap="round" />
+                <path d="M92 72L108 62" stroke="#4F46E5" strokeWidth="4" strokeLinecap="round" />
               </svg>
             </div>
           </div>
@@ -101,22 +101,22 @@ export default function LoginPage() {
             initial={{ opacity: 0, y: 20, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.4 }}
-            className="w-full max-w-md bg-white rounded-[2rem] p-8 sm:p-10 border border-border shadow-md relative"
+            className="w-full max-w-md bg-white rounded-[2rem] p-8 sm:p-10 border border-slate-200 shadow-md relative"
           >
             <div className="text-left mb-6">
-              <h1 className="text-2xl sm:text-3xl font-black text-text-primary tracking-tight mb-1.5 leading-tight">
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight mb-1.5 leading-tight">
                 Let's<br />Start Learning
               </h1>
-              <p className="text-xs font-semibold text-text-muted">
+              <p className="text-xs font-semibold text-slate-400">
                 Please login or sign up to continue
               </p>
             </div>
 
             {/* Demo Hint */}
-            <div className="mb-5 p-3 rounded-[1.5rem] bg-info-soft border border-info/30 flex items-center gap-2.5">
-              <Sparkles size={16} className="text-info flex-shrink-0" />
-              <p className="text-xs text-text-primary font-medium">
-                <span className="font-bold text-info">Demo Mode:</span> Enter any credentials to sign in.
+            <div className="mb-5 p-3 rounded-[1.5rem] bg-indigo-50 border border-indigo-200 flex items-center gap-2.5">
+              <Sparkles size={16} className="text-indigo-600 flex-shrink-0" />
+              <p className="text-xs text-slate-700 font-medium">
+                <span className="font-bold text-indigo-600">Demo Mode:</span> Enter any credentials to sign in.
               </p>
             </div>
 
@@ -124,17 +124,19 @@ export default function LoginPage() {
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
-                className="mb-4 p-3 rounded-[1.5rem] bg-error-soft border border-error/30 text-error text-xs font-bold"
+                className="mb-4 p-3 rounded-[1.5rem] bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold"
               >
                 {error}
               </motion.div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
               
               <TextInput
                 id="login-email"
+                name="email"
                 type="email"
+                autoComplete="off"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Your Email"
@@ -144,7 +146,9 @@ export default function LoginPage() {
 
               <TextInput
                 id="login-password"
+                name="current-password"
                 type={showPass ? 'text' : 'password'}
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Your Password"
@@ -154,7 +158,7 @@ export default function LoginPage() {
                     type="button"
                     aria-label="Toggle password visibility"
                     onClick={() => setShowPass(!showPass)}
-                    className="hover:text-text-primary transition-colors cursor-pointer"
+                    className="hover:text-slate-800 text-slate-400 transition-colors cursor-pointer"
                   >
                     {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
@@ -167,7 +171,7 @@ export default function LoginPage() {
                 type="submit"
                 id="login-submit"
                 variant="primary"
-                className="w-full mt-2"
+                className="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 text-white"
                 isLoading={loading}
                 rightIcon={<ArrowRight size={18} />}
               >
@@ -180,7 +184,7 @@ export default function LoginPage() {
               <Button
                 type="button"
                 variant="ghost"
-                className="w-full border border-border bg-white"
+                className="w-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
                 onClick={handleGoogleLogin}
                 leftIcon={
                   <svg width="18" height="18" viewBox="0 0 24 24">
@@ -196,9 +200,9 @@ export default function LoginPage() {
             </div>
 
             {/* Switch to Register */}
-            <p className="text-center text-xs font-semibold text-text-secondary mt-5">
+            <p className="text-center text-xs font-semibold text-slate-500 mt-5">
               Don't have an account?{' '}
-              <Link to="/register" className="text-info hover:text-[#1899D6] font-black transition-colors">
+              <Link to="/register" className="text-indigo-600 hover:text-indigo-700 font-black transition-colors">
                 Sign Up
               </Link>
             </p>
@@ -207,12 +211,12 @@ export default function LoginPage() {
         </div>
 
         {/* Footer info */}
-        <footer className="flex items-center justify-between text-xs text-text-muted font-semibold z-10 pt-2 border-t border-border/60">
-          <div className="flex items-center gap-1.5 text-text-secondary">
-            <Brain size={16} className="text-info" />
-            <span>Powered by Local Indie-Tutor</span>
+        <footer className="flex items-center justify-between text-xs text-slate-400 font-semibold z-10 pt-2 border-t border-slate-200/60">
+          <div className="flex items-center gap-1.5 text-slate-500">
+            <Brain size={16} className="text-indigo-600" />
+            <span>Powered by DeepTutor AI Engine</span>
           </div>
-          <span>© 2026 Indie-Tutor Inc.</span>
+          <span>© 2026 DeepTutor Inc.</span>
         </footer>
 
       </div>

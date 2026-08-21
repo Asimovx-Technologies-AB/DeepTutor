@@ -255,23 +255,23 @@ export default function ExamPrepPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF8F3] text-[#20201D] font-sans pb-20">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-20">
       
       {/* ─── TOAST NOTIFICATIONS ─── */}
       <ExamToast toasts={toasts} onDismiss={dismissToast} />
 
       {/* ─── HEADER ─── */}
-      <div className="bg-white border-b border-[#E7E1D8] px-4 sm:px-8 py-6 shadow-2xs">
+      <div className="bg-white border-b border-slate-200 px-4 sm:px-8 py-6 shadow-xs">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FFF0E4] border border-[#F28A45]/30 text-[#F28A45] text-xs font-black uppercase tracking-wider">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-600 text-xs font-black uppercase tracking-wider">
               <Sparkles size={13} />
               Exam Preparation Hub
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-[#20201D] tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">
               3-Step Exam Readiness Engine
             </h1>
-            <p className="text-xs sm:text-sm text-[#6F6B63] font-medium">
+            <p className="text-xs sm:text-sm text-slate-500 font-medium">
               Upload syllabus & past papers $\rightarrow$ DeepTutor analyzes $\rightarrow$ Get instant notes, cheat sheets & quizzes.
             </p>
           </div>
@@ -281,7 +281,7 @@ export default function ExamPrepPage() {
             disabled={isGenerating}
             whileTap={shouldReduceMotion ? undefined : buttonPress.tap}
             whileHover={shouldReduceMotion ? undefined : buttonPress.hover}
-            className="btn-primary py-3 px-6 rounded-2xl font-black text-sm flex items-center justify-center gap-2 elevation-1 cursor-pointer disabled:opacity-50"
+            className="btn-primary py-3.5 px-7 rounded-2xl font-black text-sm flex items-center justify-center gap-2.5 shadow-md shadow-indigo-600/25 cursor-pointer disabled:opacity-50"
           >
             {isGenerating ? (
               <>
@@ -304,63 +304,63 @@ export default function ExamPrepPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <motion.div
             whileHover={shouldReduceMotion ? undefined : { y: -2 }}
-            className="p-4 rounded-2xl bg-[#F0F7FF] border border-[#BAE0FF] flex items-center gap-3.5 shadow-2xs"
+            className="p-4 rounded-2xl bg-white border border-indigo-100 flex items-center gap-3.5 shadow-xs"
           >
-            <div className="w-10 h-10 rounded-xl bg-[#0284C7] text-white flex items-center justify-center font-black text-sm flex-shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-sm flex-shrink-0 shadow-xs">
               1
             </div>
             <div>
-              <h4 className="text-xs font-black text-[#0369A1] uppercase tracking-wider">Step 1: Upload Material</h4>
-              <p className="text-xs text-[#64748B] font-medium">Textbook PDF, PYQ papers & notes</p>
+              <h4 className="text-xs font-black text-indigo-600 uppercase tracking-wider">Step 1: Upload Material</h4>
+              <p className="text-xs text-slate-500 font-medium">Textbook PDF, PYQ papers & notes</p>
             </div>
           </motion.div>
 
           <motion.div
             whileHover={shouldReduceMotion ? undefined : { y: -2 }}
-            className="p-4 rounded-2xl bg-[#FFF7ED] border border-[#FED7AA] flex items-center gap-3.5 shadow-2xs"
+            className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200 flex items-center gap-3.5 shadow-xs"
           >
-            <div className="w-10 h-10 rounded-xl bg-[#F97316] text-white flex items-center justify-center font-black text-sm flex-shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-sm flex-shrink-0 shadow-xs">
               2
             </div>
             <div>
-              <h4 className="text-xs font-black text-[#C2410C] uppercase tracking-wider">Step 2: DeepTutor AI</h4>
-              <p className="text-xs text-[#64748B] font-medium">Extracts concepts & repeated questions</p>
+              <h4 className="text-xs font-black text-indigo-700 uppercase tracking-wider">Step 2: DeepTutor AI</h4>
+              <p className="text-xs text-slate-500 font-medium">Extracts concepts & repeated questions</p>
             </div>
           </motion.div>
 
           <motion.div
             whileHover={shouldReduceMotion ? undefined : { y: -2 }}
-            className="p-4 rounded-2xl bg-[#ECFDF5] border border-[#A7F3D0] flex items-center gap-3.5 shadow-2xs"
+            className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 flex items-center gap-3.5 shadow-xs"
           >
-            <div className="w-10 h-10 rounded-xl bg-[#10B981] text-white flex items-center justify-center font-black text-sm flex-shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-sm flex-shrink-0 shadow-xs">
               3
             </div>
             <div>
-              <h4 className="text-xs font-black text-[#047857] uppercase tracking-wider">Step 3: Exam Resources</h4>
-              <p className="text-xs text-[#64748B] font-medium">Notes, cheat sheet, Q&A & quiz</p>
+              <h4 className="text-xs font-black text-emerald-700 uppercase tracking-wider">Step 3: Exam Resources</h4>
+              <p className="text-xs text-slate-500 font-medium">Notes, cheat sheet, Q&A & quiz</p>
             </div>
           </motion.div>
         </div>
 
         {/* ─── STEP 1: MATERIAL SELECTION / UPLOAD CONTAINER ─── */}
-        <div className="bg-white rounded-3xl border border-[#E7E1D8] p-6 sm:p-8 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#E7E1D8]">
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
             <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-lg bg-[#0284C7] text-white font-black text-xs flex items-center justify-center">
+              <span className="w-7 h-7 rounded-lg bg-indigo-600 text-white font-black text-xs flex items-center justify-center">
                 1
               </span>
-              <h2 className="text-lg font-black text-[#20201D]">Select or Upload Your Study Material</h2>
+              <h2 className="text-lg font-black text-slate-800">Select or Upload Your Study Material</h2>
             </div>
 
             {/* Input Mode Toggle */}
-            <div className="flex items-center p-1 rounded-xl bg-[#FAF8F3] border border-[#E7E1D8] gap-1">
+            <div className="flex items-center p-1 rounded-xl bg-slate-100 border border-slate-200 gap-1">
               <motion.button
                 onClick={() => setInputMode('curriculum')}
                 whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   inputMode === 'curriculum'
-                    ? 'bg-white text-[#20201D] shadow-2xs'
-                    : 'text-[#6F6B63] hover:text-[#20201D]'
+                    ? 'bg-white text-indigo-600 shadow-xs font-black'
+                    : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 📚 Official Curriculum
@@ -370,8 +370,8 @@ export default function ExamPrepPage() {
                 whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   inputMode === 'custom'
-                    ? 'bg-white text-[#20201D] shadow-2xs'
-                    : 'text-[#6F6B63] hover:text-[#20201D]'
+                    ? 'bg-white text-indigo-600 shadow-xs font-black'
+                    : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 📄 Upload PDF & PYQs
@@ -383,7 +383,7 @@ export default function ExamPrepPage() {
             /* Curriculum Mode: Select Subject & Chapter */
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-xs font-bold text-[#6F6B63] uppercase tracking-wider mb-2">
+                <label className="block text-xs font-black text-slate-600 uppercase tracking-wider mb-2">
                   Choose Subject
                 </label>
                 <div className="grid grid-cols-3 gap-2.5">
@@ -395,8 +395,8 @@ export default function ExamPrepPage() {
                       whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
                       className={`p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
                         selectedSubjectId === s.id
-                          ? 'border-[#F28A45] bg-[#FFF0E4] text-[#F28A45] font-black shadow-2xs'
-                          : 'border-[#E7E1D8] bg-white text-[#6F6B63] hover:bg-[#FAF8F3] font-bold'
+                          ? 'border-2 border-indigo-600 bg-indigo-50 text-indigo-600 font-black shadow-xs'
+                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-bold'
                       }`}
                     >
                       <span className="text-xl">
@@ -409,13 +409,13 @@ export default function ExamPrepPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#6F6B63] uppercase tracking-wider mb-2">
+                <label className="block text-xs font-black text-slate-600 uppercase tracking-wider mb-2">
                   Choose Chapter / Topic
                 </label>
                 <select
                   value={selectedTopicId}
                   onChange={(e) => setSelectedTopicId(e.target.value)}
-                  className="w-full p-3.5 rounded-2xl border border-[#E7E1D8] bg-[#FAF8F3] text-xs sm:text-sm font-bold text-[#20201D] focus:border-[#F28A45] outline-none shadow-2xs"
+                  className="w-full p-3.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs sm:text-sm font-bold text-slate-800 focus:border-indigo-600 focus:bg-white outline-none shadow-2xs"
                 >
                   {topics.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -423,7 +423,7 @@ export default function ExamPrepPage() {
                     </option>
                   ))}
                 </select>
-                <p className="text-[11px] text-[#969188] font-medium mt-2">
+                <p className="text-[11px] text-slate-400 font-medium mt-2">
                   Connected to official Kerala SCERT Class 10 Textbook Index.
                 </p>
               </div>
@@ -453,7 +453,7 @@ export default function ExamPrepPage() {
 
           {/* Optional Custom Instructions */}
           <div>
-            <label className="block text-xs font-bold text-[#6F6B63] uppercase tracking-wider mb-2">
+            <label className="block text-xs font-black text-slate-600 uppercase tracking-wider mb-2">
               Custom Exam Focus (Optional)
             </label>
             <input
@@ -461,31 +461,31 @@ export default function ExamPrepPage() {
               value={customPrompt}
               onChange={(e) => setCustomPrompt(e.target.value)}
               placeholder="e.g. Focus on 4-mark numericals, proof of theorems, or specific treaties..."
-              className="w-full p-3.5 rounded-2xl border border-[#E7E1D8] bg-[#FAF8F3] text-xs sm:text-sm font-medium text-[#20201D] focus:border-[#F28A45] outline-none shadow-2xs placeholder-[#969188]"
+              className="w-full p-3.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs sm:text-sm font-medium text-slate-800 focus:border-indigo-600 focus:bg-white outline-none shadow-xs placeholder-slate-400"
             />
           </div>
         </div>
 
         {/* ─── STEP 2: WHAT DEEPTUTOR DOES (ACTIVE GENERATOR ACTION BAR) ─── */}
-        <div className="bg-gradient-to-r from-[#FFF7ED] via-[#FFF0E4] to-[#F0F7FF] rounded-3xl border-2 border-[#FED7AA] p-6 sm:p-8 shadow-sm space-y-6">
+        <div className="bg-gradient-to-r from-indigo-50/80 via-indigo-50/40 to-slate-50 rounded-3xl border-2 border-indigo-200 p-6 sm:p-8 shadow-xs space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-start gap-3.5">
-              <div className="w-10 h-10 rounded-2xl bg-[#F97316] text-white flex items-center justify-center font-black text-sm flex-shrink-0 shadow-xs">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-sm flex-shrink-0 shadow-xs">
                 2
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-black uppercase tracking-wider text-[#C2410C]">
+                  <span className="text-xs font-black uppercase tracking-wider text-indigo-600">
                     DeepTutor AI Processing Engine
                   </span>
-                  <span className="px-2 py-0.5 rounded-full bg-white text-[#EA580C] text-[10px] font-black border border-[#FED7AA]">
+                  <span className="px-2.5 py-0.5 rounded-full bg-white text-indigo-600 text-[10px] font-black border border-indigo-200">
                     Ready
                   </span>
                 </div>
-                <h3 className="text-lg sm:text-xl font-black text-[#20201D]">
+                <h3 className="text-lg sm:text-xl font-black text-slate-800">
                   Transform Study Material into Exam-Ready Kit
                 </h3>
-                <p className="text-xs sm:text-sm text-[#6F6B63] font-medium max-w-xl">
+                <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-xl">
                   DeepTutor reads your uploaded notes/curriculum, identifies recurring exam patterns, and synthesizes 5-minute cheat notes, formula tables & practice questions.
                 </p>
               </div>
@@ -497,7 +497,7 @@ export default function ExamPrepPage() {
               disabled={isGenerating}
               whileTap={shouldReduceMotion ? undefined : buttonPress.tap}
               whileHover={shouldReduceMotion ? undefined : buttonPress.hover}
-              className="btn-primary py-4 px-8 rounded-2xl font-black text-sm sm:text-base flex items-center justify-center gap-3 shadow-md hover:shadow-lg transition-all cursor-pointer disabled:opacity-50 flex-shrink-0"
+              className="btn-primary py-4 px-8 rounded-2xl font-black text-sm sm:text-base flex items-center justify-center gap-3 shadow-md shadow-indigo-600/30 hover:shadow-lg transition-all cursor-pointer disabled:opacity-50 flex-shrink-0"
             >
               {isGenerating ? (
                 <>
@@ -514,7 +514,7 @@ export default function ExamPrepPage() {
           </div>
 
           {/* Quick Target Resource Selectors */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-[#FED7AA]/60">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-indigo-200/60">
             <motion.button
               onClick={() => {
                 setActiveTab('smart_notes')
@@ -522,13 +522,13 @@ export default function ExamPrepPage() {
               }}
               whileHover={shouldReduceMotion ? undefined : { y: -2 }}
               whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
-              className="p-3 rounded-2xl bg-white border border-[#FED7AA] hover:border-[#F28A45] hover:bg-[#FFF0E4] transition-all text-left flex flex-col gap-1 cursor-pointer group shadow-2xs"
+              className="p-3 rounded-2xl bg-white border border-indigo-100 hover:border-indigo-600 hover:bg-indigo-50/50 transition-all text-left flex flex-col gap-1 cursor-pointer group shadow-2xs"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-[#9A3412]">⚡ Smart Notes</span>
-                <ArrowRight size={13} className="text-[#9A3412] opacity-0 group-hover:opacity-100 transition-opacity" />
+                <span className="text-xs font-black text-indigo-700">⚡ Smart Notes</span>
+                <ArrowRight size={13} className="text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
-              <p className="text-[10px] text-[#64748B] font-medium leading-tight">5-min topic breakdown</p>
+              <p className="text-[10px] text-slate-500 font-medium leading-tight">5-min topic breakdown</p>
             </motion.button>
 
             <motion.button
@@ -538,13 +538,13 @@ export default function ExamPrepPage() {
               }}
               whileHover={shouldReduceMotion ? undefined : { y: -2 }}
               whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
-              className="p-3 rounded-2xl bg-white border border-[#FED7AA] hover:border-[#F28A45] hover:bg-[#FFF0E4] transition-all text-left flex flex-col gap-1 cursor-pointer group shadow-2xs"
+              className="p-3 rounded-2xl bg-white border border-indigo-100 hover:border-indigo-600 hover:bg-indigo-50/50 transition-all text-left flex flex-col gap-1 cursor-pointer group shadow-2xs"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-[#9A3412]">📐 Cheat Sheet</span>
-                <ArrowRight size={13} className="text-[#9A3412] opacity-0 group-hover:opacity-100 transition-opacity" />
+                <span className="text-xs font-black text-indigo-700">📐 Cheat Sheet</span>
+                <ArrowRight size={13} className="text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
-              <p className="text-[10px] text-[#64748B] font-medium leading-tight">Formulas & key facts</p>
+              <p className="text-[10px] text-slate-500 font-medium leading-tight">Formulas & key facts</p>
             </motion.button>
 
             <motion.button
@@ -554,13 +554,13 @@ export default function ExamPrepPage() {
               }}
               whileHover={shouldReduceMotion ? undefined : { y: -2 }}
               whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
-              className="p-3 rounded-2xl bg-white border border-[#FED7AA] hover:border-[#F28A45] hover:bg-[#FFF0E4] transition-all text-left flex flex-col gap-1 cursor-pointer group shadow-2xs"
+              className="p-3 rounded-2xl bg-white border border-indigo-100 hover:border-indigo-600 hover:bg-indigo-50/50 transition-all text-left flex flex-col gap-1 cursor-pointer group shadow-2xs"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-[#9A3412]">❓ Important Q&A</span>
-                <ArrowRight size={13} className="text-[#9A3412] opacity-0 group-hover:opacity-100 transition-opacity" />
+                <span className="text-xs font-black text-indigo-700">❓ Important Q&A</span>
+                <ArrowRight size={13} className="text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
-              <p className="text-[10px] text-[#64748B] font-medium leading-tight">Solved from past papers</p>
+              <p className="text-[10px] text-slate-500 font-medium leading-tight">Solved from past papers</p>
             </motion.button>
 
             <motion.button
@@ -570,13 +570,13 @@ export default function ExamPrepPage() {
               }}
               whileHover={shouldReduceMotion ? undefined : { y: -2 }}
               whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
-              className="p-3 rounded-2xl bg-white border border-[#FED7AA] hover:border-[#F28A45] hover:bg-[#FFF0E4] transition-all text-left flex flex-col gap-1 cursor-pointer group shadow-2xs"
+              className="p-3 rounded-2xl bg-white border border-indigo-100 hover:border-indigo-600 hover:bg-indigo-50/50 transition-all text-left flex flex-col gap-1 cursor-pointer group shadow-2xs"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-[#9A3412]">🏆 Practice Quiz</span>
-                <ArrowRight size={13} className="text-[#9A3412] opacity-0 group-hover:opacity-100 transition-opacity" />
+                <span className="text-xs font-black text-indigo-700">🏆 Practice Quiz</span>
+                <ArrowRight size={13} className="text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
-              <p className="text-[10px] text-[#64748B] font-medium leading-tight">Instant self-test</p>
+              <p className="text-[10px] text-slate-500 font-medium leading-tight">Instant self-test</p>
             </motion.button>
           </div>
         </div>
@@ -595,13 +595,13 @@ export default function ExamPrepPage() {
         )}
 
         {/* ─── STEP 3: OUTPUT TABS & RESOURCES ─── */}
-        <div className="bg-white rounded-3xl border border-[#E7E1D8] p-6 sm:p-8 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E7E1D8]">
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
             <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-lg bg-[#10B981] text-white font-black text-xs flex items-center justify-center">
+              <span className="w-7 h-7 rounded-lg bg-emerald-600 text-white font-black text-xs flex items-center justify-center">
                 3
               </span>
-              <h2 className="text-lg font-black text-[#20201D]">
+              <h2 className="text-lg font-black text-slate-800">
                 {generatedNote ? generatedNote.title : 'Exam-Ready Resources'}
               </h2>
             </div>
@@ -614,13 +614,13 @@ export default function ExamPrepPage() {
           {isGenerating ? (
             <LoadingState />
           ) : !generatedNote ? (
-            <div className="py-16 flex flex-col items-center justify-center text-center space-y-4 text-[#969188]">
-              <div className="w-16 h-16 rounded-3xl bg-[#FAF8F3] border border-[#E7E1D8] flex items-center justify-center text-2xl shadow-2xs">
+            <div className="py-16 flex flex-col items-center justify-center text-center space-y-4 text-slate-400">
+              <div className="w-16 h-16 rounded-3xl bg-slate-50 border border-slate-200 flex items-center justify-center text-2xl shadow-xs text-indigo-600">
                 🚀
               </div>
               <div className="max-w-md space-y-1">
-                <h3 className="text-base font-bold text-[#20201D]">Ready to Prepare for Your Exam?</h3>
-                <p className="text-xs text-[#6F6B63]">
+                <h3 className="text-base font-black text-slate-800">Ready to Prepare for Your Exam?</h3>
+                <p className="text-xs text-slate-500 font-medium">
                   Select your subject or upload your PDF material above, then click <strong>"Generate Exam Resources"</strong>.
                 </p>
               </div>
@@ -629,7 +629,7 @@ export default function ExamPrepPage() {
                 disabled={isGenerating}
                 whileTap={shouldReduceMotion ? undefined : buttonPress.tap}
                 whileHover={shouldReduceMotion ? undefined : buttonPress.hover}
-                className="btn-primary py-3 px-7 rounded-2xl font-black text-xs sm:text-sm flex items-center gap-2 shadow-xs cursor-pointer active:scale-95 transition-all mt-2"
+                className="btn-primary py-3 px-7 rounded-2xl font-black text-xs sm:text-sm flex items-center gap-2 shadow-md shadow-indigo-600/25 cursor-pointer active:scale-95 transition-all mt-2"
               >
                 <Zap size={16} />
                 <span>⚡ Click Here to Generate Exam Resources</span>
@@ -651,15 +651,15 @@ export default function ExamPrepPage() {
                   {generatedNote.high_yield_topics?.length > 0 && (
                     <motion.div
                       variants={staggerItem}
-                      className="flex flex-wrap items-center gap-2 p-3.5 rounded-2xl bg-[#FFF0E4] border border-[#F28A45]/20"
+                      className="flex flex-wrap items-center gap-2 p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200"
                     >
-                      <span className="text-xs font-black uppercase text-[#F28A45] flex items-center gap-1 mr-1">
+                      <span className="text-xs font-black uppercase text-indigo-600 flex items-center gap-1 mr-1">
                         <Sparkles size={13} /> High-Yield Topics:
                       </span>
                       {generatedNote.high_yield_topics.map((t, idx) => (
                         <span
                           key={idx}
-                          className="px-2.5 py-1 rounded-lg bg-white border border-[#F28A45]/30 text-xs font-bold text-[#20201D]"
+                          className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-xs font-bold text-slate-800 shadow-2xs"
                         >
                           {t}
                         </span>
@@ -668,7 +668,7 @@ export default function ExamPrepPage() {
                   )}
 
                   {/* Markdown Notes Render */}
-                  <motion.div variants={staggerItem} className="prose prose-sm max-w-none text-[#20201D]">
+                  <motion.div variants={staggerItem} className="prose prose-sm max-w-none text-slate-800">
                     <ChatMessage
                       role="assistant"
                       content={generatedNote.content_markdown}
@@ -688,11 +688,11 @@ export default function ExamPrepPage() {
                   className="space-y-6"
                 >
                   <div className="space-y-3">
-                    <h3 className="text-base font-black text-[#20201D] flex items-center gap-2">
-                      <Table size={18} className="text-[#F28A45]" />
+                    <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
+                      <Table size={18} className="text-indigo-600" />
                       <span>Must-Know Formulas, Dates & Key Facts</span>
                     </h3>
-                    <p className="text-xs text-[#6F6B63]">
+                    <p className="text-xs text-slate-500 font-medium">
                       Click any formula or term to copy it to your clipboard.
                     </p>
 
@@ -701,20 +701,20 @@ export default function ExamPrepPage() {
                         <motion.div
                           key={idx}
                           variants={staggerItem}
-                          whileHover={shouldReduceMotion ? undefined : { y: -3, boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.06)' }}
+                          whileHover={shouldReduceMotion ? undefined : { y: -3, boxShadow: '0 10px 25px -5px rgba(79, 70, 229, 0.1)' }}
                           whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
                           onClick={() => handleCopyFormula(formula)}
-                          className="p-4 rounded-2xl bg-[#FAF8F3] border border-[#E7E1D8] hover:border-[#F28A45] transition-colors cursor-pointer flex items-center justify-between group shadow-2xs"
+                          className="p-4 rounded-2xl bg-slate-50 border border-slate-200 hover:border-indigo-600 hover:bg-indigo-50/30 transition-all cursor-pointer flex items-center justify-between group shadow-xs"
                         >
-                          <span className="text-xs font-bold text-[#20201D] font-mono">
+                          <span className="text-xs font-bold text-slate-800 font-mono">
                             {formula}
                           </span>
                           <button
-                            className="p-1.5 rounded-lg bg-white text-[#6F6B63] group-hover:text-[#F28A45] shadow-2xs transition-colors"
+                            className="p-1.5 rounded-lg bg-white text-slate-500 group-hover:text-indigo-600 shadow-xs transition-colors border border-slate-100"
                             title="Copy to clipboard"
                           >
                             {copiedFormula === formula ? (
-                              <Check size={14} className="text-[#10B981]" />
+                              <Check size={14} className="text-emerald-500" />
                             ) : (
                               <Copy size={14} />
                             )}
@@ -733,9 +733,9 @@ export default function ExamPrepPage() {
                       collapsible={true}
                       defaultExpanded={true}
                     >
-                      <ul className="space-y-2 text-xs text-[#065F46] font-medium">
+                      <ul className="space-y-2 text-xs text-emerald-800 font-medium">
                         {generatedNote.exam_tips.map((tip, idx) => (
-                          <li key={idx} className="flex items-start gap-2 bg-[#ECFDF5] p-2.5 rounded-xl border border-[#A7F3D0]">
+                          <li key={idx} className="flex items-start gap-2 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
                             <span>•</span>
                             <span>{tip}</span>
                           </li>
@@ -757,18 +757,17 @@ export default function ExamPrepPage() {
                   className="space-y-4"
                 >
                   <div className="space-y-1">
-                    <h3 className="text-base font-black text-[#20201D] flex items-center gap-2">
-                      <FileText size={18} className="text-[#F28A45]" />
+                    <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
+                      <FileText size={18} className="text-indigo-600" />
                       <span>5 High-Yield Exam Practice Questions & Solutions</span>
                     </h3>
-                    <p className="text-xs text-[#6F6B63]">
+                    <p className="text-xs text-slate-500 font-medium">
                       Categorized by marks weightage with step-by-step breakdown.
                     </p>
                   </div>
 
                   <div className="space-y-3">
                     {generatedNote.solved_questions?.map((sq, idx) => {
-                      const isExpanded = expandedQuestionIdx === idx
                       return (
                         <OutputCard
                           key={idx}
@@ -779,18 +778,18 @@ export default function ExamPrepPage() {
                           defaultExpanded={idx === 0}
                         >
                           <div className="space-y-3">
-                            <div className="p-3.5 rounded-xl bg-[#FAF8F3] border border-[#E7E1D8] space-y-2">
-                              <p className="text-xs font-black uppercase text-[#F28A45]">
+                            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                              <p className="text-xs font-black uppercase text-indigo-600">
                                 Step-by-Step Model Solution:
                               </p>
-                              <div className="text-xs text-[#20201D] whitespace-pre-line leading-relaxed font-medium">
+                              <div className="text-xs text-slate-800 whitespace-pre-line leading-relaxed font-medium">
                                 {sq.step_by_step_solution}
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2 text-[11px] text-[#6F6B63]">
+                            <div className="flex items-center gap-2 text-[11px] text-slate-500">
                               <span className="font-bold">Core Concept:</span>
-                              <span className="px-2 py-0.5 rounded-md bg-[#FAF8F3] border border-[#E7E1D8] text-[#20201D] font-medium">
+                              <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-800 font-bold">
                                 {sq.key_concept}
                               </span>
                             </div>
@@ -814,11 +813,11 @@ export default function ExamPrepPage() {
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-base font-black text-[#20201D] flex items-center gap-2">
-                        <Trophy size={18} className="text-[#F28A45]" />
+                      <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
+                        <Trophy size={18} className="text-indigo-600" />
                         <span>Interactive Self-Test Quiz</span>
                       </h3>
-                      <p className="text-xs text-[#6F6B63]">
+                      <p className="text-xs text-slate-500 font-medium">
                         Test your understanding before stepping into the exam hall.
                       </p>
                     </div>
@@ -828,7 +827,7 @@ export default function ExamPrepPage() {
                         variants={scaleIn}
                         initial="initial"
                         animate="animate"
-                        className="px-4 py-2 rounded-2xl bg-[#ECFDF5] border border-[#A7F3D0] text-[#065F46] font-black text-sm shadow-xs"
+                        className="px-4 py-2 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-black text-sm shadow-xs"
                       >
                         Score: {calculateQuizScore()} / {quizQuestions.length}
                       </motion.div>
@@ -846,17 +845,17 @@ export default function ExamPrepPage() {
                           icon={<Trophy size={14} />}
                         >
                           <div className="space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                               {q.options.map((opt, optIdx) => {
                                 const isSelected = selectedOpt === optIdx
                                 const isCorrect = q.correct_index === optIdx
-                                let btnStyle = 'border-[#E7E1D8] bg-white text-[#20201D] hover:bg-[#F4EFE7]'
+                                let btnStyle = 'border-slate-200 bg-white text-slate-800 hover:bg-slate-50'
 
                                 if (quizSubmitted) {
-                                  if (isCorrect) btnStyle = 'border-[#10B981] bg-[#ECFDF5] text-[#065F46] font-bold shadow-xs'
-                                  else if (isSelected && !isCorrect) btnStyle = 'border-[#C85C52] bg-[#FBE7E4] text-[#C85C52]'
+                                  if (isCorrect) btnStyle = 'border-2 border-emerald-500 bg-emerald-50 text-emerald-900 font-bold shadow-xs'
+                                  else if (isSelected && !isCorrect) btnStyle = 'border-2 border-rose-400 bg-rose-50 text-rose-900 font-bold'
                                 } else if (isSelected) {
-                                  btnStyle = 'border-[#F28A45] bg-[#FFF0E4] text-[#F28A45] font-bold shadow-2xs'
+                                  btnStyle = 'border-2 border-indigo-600 bg-indigo-50 text-indigo-900 font-bold shadow-xs'
                                 }
 
                                 return (
@@ -882,7 +881,7 @@ export default function ExamPrepPage() {
                                 variants={fadeInUp}
                                 initial="initial"
                                 animate="animate"
-                                className="text-[11px] text-[#065F46] bg-[#ECFDF5] p-3 rounded-xl border border-[#A7F3D0] mt-2 leading-relaxed"
+                                className="text-[11px] text-emerald-800 bg-emerald-50 p-3 rounded-xl border border-emerald-200 mt-2 leading-relaxed"
                               >
                                 💡 <strong>Explanation:</strong> {q.explanation}
                               </motion.p>
@@ -913,7 +912,7 @@ export default function ExamPrepPage() {
                         }}
                         whileTap={shouldReduceMotion ? undefined : buttonPress.tap}
                         whileHover={shouldReduceMotion ? undefined : buttonPress.hover}
-                        className="p-2.5 px-6 rounded-xl border border-[#E7E1D8] bg-white hover:bg-[#FAF8F3] font-bold text-xs text-[#20201D] flex items-center gap-2 cursor-pointer shadow-2xs"
+                        className="p-2.5 px-6 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 font-bold text-xs text-slate-800 flex items-center gap-2 cursor-pointer shadow-xs"
                       >
                         <RefreshCw size={14} />
                         <span>Retake Quiz</span>

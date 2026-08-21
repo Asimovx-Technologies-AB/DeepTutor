@@ -6,7 +6,7 @@ export function triggerConfettiBurst() {
       particleCount: 55,
       spread: 65,
       origin: { y: 0.65 },
-      colors: ['#F28A45', '#0284C7', '#10B981', '#FFD166', '#EF476F'],
+      colors: ['#4F46E5', '#818CF8', '#10B981', '#F59E0B', '#6366F1'],
       disableForReducedMotion: true,
     })
   } catch {
@@ -17,7 +17,7 @@ export function triggerConfettiBurst() {
 export function triggerQuizSuccessConfetti() {
   try {
     const end = Date.now() + 1000
-    const colors = ['#10B981', '#F28A45', '#0284C7']
+    const colors = ['#4F46E5', '#10B981', '#818CF8']
 
     ;(function frame() {
       confetti({

@@ -102,10 +102,10 @@ export default function UploadZone({
       whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }}
       className={`relative p-6 rounded-3xl border-2 transition-all cursor-pointer select-none overflow-hidden ${
         isDragging
-          ? 'border-[#0284C7] bg-[#E0F2FE] shadow-[0_0_20px_rgba(2,132,199,0.25)]'
+          ? 'border-indigo-600 bg-indigo-100/80 shadow-[0_0_25px_rgba(79,70,229,0.25)]'
           : selectedFile
-          ? 'border-[#10B981] bg-[#ECFDF5] shadow-2xs'
-          : 'border-dashed border-[#BAE0FF] bg-[#F0F7FF] hover:border-[#0284C7] hover:bg-[#E8F4FF] shadow-2xs'
+          ? 'border-emerald-500 bg-emerald-50/80 shadow-xs'
+          : 'border-dashed border-indigo-200 bg-indigo-50/40 hover:border-indigo-500 hover:bg-indigo-50/80 shadow-xs'
       } ${className}`}
     >
       <input
@@ -125,10 +125,8 @@ export default function UploadZone({
           animate="animate"
           className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-xs transition-colors ${
             selectedFile
-              ? 'bg-[#10B981] text-white'
-              : icon === 'pyq'
-              ? 'bg-white text-[#F28A45]'
-              : 'bg-white text-[#0284C7]'
+              ? 'bg-emerald-500 text-white'
+              : 'bg-white text-indigo-600 border border-indigo-100'
           }`}
         >
           {selectedFile ? (
@@ -150,10 +148,10 @@ export default function UploadZone({
 
         {/* Text Details */}
         <div className="space-y-1 max-w-full px-2">
-          <h4 className="text-sm font-bold text-[#0C4A6E] truncate">
+          <h4 className="text-sm font-black text-slate-800 truncate">
             {selectedFile ? selectedFile.name : label}
           </h4>
-          <p className="text-xs text-[#64748B] font-medium leading-tight">
+          <p className="text-xs text-slate-500 font-medium leading-tight">
             {selectedFile
               ? `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • Uploaded & Ready`
               : isDragging

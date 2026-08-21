@@ -27,7 +27,7 @@ export default function TabSwitcher({ activeTab, onSelectTab, className = '' }: 
   const shouldReduceMotion = useReducedMotion()
 
   return (
-    <div className={`flex flex-wrap items-center gap-1.5 p-1.5 bg-[#FAF8F3] rounded-2xl border border-[#E7E1D8] shadow-2xs ${className}`}>
+    <div className={`flex flex-wrap items-center gap-1.5 p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200 shadow-xs ${className}`}>
       {TAB_OPTIONS.map((tab) => {
         const isActive = activeTab === tab.key
 
@@ -35,9 +35,9 @@ export default function TabSwitcher({ activeTab, onSelectTab, className = '' }: 
           <motion.button
             key={tab.key}
             onClick={() => onSelectTab(tab.key)}
-            whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
-            className={`relative px-4 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer select-none flex items-center gap-2 z-10 ${
-              isActive ? 'text-white' : 'text-[#6F6B63] hover:text-[#20201D]'
+            whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
+            className={`relative px-4 py-2.5 rounded-xl text-xs font-black transition-colors cursor-pointer select-none flex items-center gap-2 z-10 ${
+              isActive ? 'text-white' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
             {/* Sliding Pill Background with layoutId */}
@@ -49,7 +49,7 @@ export default function TabSwitcher({ activeTab, onSelectTab, className = '' }: 
                     ? { duration: 0 }
                     : { type: 'spring', stiffness: 450, damping: 32 }
                 }
-                className="absolute inset-0 bg-[#F28A45] rounded-xl shadow-xs -z-10"
+                className="absolute inset-0 bg-indigo-600 rounded-xl shadow-md shadow-indigo-600/30 -z-10"
               />
             )}
 

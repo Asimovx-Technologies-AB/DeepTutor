@@ -55,83 +55,36 @@ function cleanMarkdownText(text: string): string {
     .trim()
 }
 
+function formatMarkdownBullets(rawText: string): string {
+  if (!rawText) return ''
+  let text = rawText.trim()
+  
+  // Normalize inline bullet symbols (•, ●) and glued emoji markers to linebreaks
+  text = text.replace(/\s*[•●]\s*/g, '\n\n- ')
+  text = text.replace(/([^\n])\s*(📌|💡|📐|⚠️|🎯|🔹|🔸|⚡|✅|⭐)/g, '$1\n\n- $2')
+  
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+  const formatted = lines.map(line => {
+    let cleaned = line.replace(/^[•●]\s*/, '').trim()
+    if (!cleaned.startsWith('-') && !cleaned.startsWith('*')) {
+      return `- ${cleaned}`
+    }
+    return cleaned
+  })
+  
+  return formatted.join('\n\n')
+}
+
 /**
- * Parses and renders the 3-part structured card back with dedicated aesthetic boxes.
+ * Parses and renders the point-by-point structured card back in clean, natural markdown.
  */
 function CardBackView({ rawContent }: { rawContent: string }) {
   if (!rawContent) return null
 
-  // Normalize markers
-  let text = rawContent
-    .replace(/([^\n])\s*(🎯|💡|🔑)/g, '$1\n\n$2')
-    .replace(/\*\*\s*Core Meaning:\s*\*\*/gi, '🎯 Core Meaning:')
-    .replace(/\*\*\s*Analogy:\s*\*\*/gi, '💡 Analogy:')
-    .replace(/\*\*\s*Exam Tip[^:]*:\s*\*\*/gi, '🔑 Exam Tip / Formula:')
-
-  // Match 3 parts
-  const coreMatch = text.match(/🎯\s*(?:Core Meaning|Meaning|Definition)?\s*:?\s*([\s\S]*?)(?=(?:💡|🔑|$))/i)
-  const analogyMatch = text.match(/💡\s*(?:Analogy|Mental Model|Example)?\s*:?\s*([\s\S]*?)(?=(?:🔑|$))/i)
-  const tipMatch = text.match(/🔑\s*(?:Exam Tip|Exam Rule|Formula|Key Rule)?\s*:?\s*([\s\S]*?)$/i)
-
-  const core = coreMatch ? cleanMarkdownText(coreMatch[1]) : ''
-  const analogy = analogyMatch ? cleanMarkdownText(analogyMatch[1]) : ''
-  const tip = tipMatch ? cleanMarkdownText(tipMatch[1]) : ''
-
-  const isStructured = Boolean(core || analogy || tip)
-
-  if (isStructured) {
-    return (
-      <div className="space-y-3 text-left w-full">
-        {/* Core Meaning Card */}
-        {core && (
-          <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-3.5 space-y-1 shadow-2xs">
-            <div className="flex items-center gap-1.5 text-xs font-black text-emerald-800 uppercase tracking-wide">
-              <span>🎯 Core Meaning</span>
-            </div>
-            <div className="text-xs sm:text-sm text-gray-800 leading-relaxed font-medium markdown-content">
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-                {core}
-              </ReactMarkdown>
-            </div>
-          </div>
-        )}
-
-        {/* Real-Life Analogy Card */}
-        {analogy && (
-          <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3.5 space-y-1 shadow-2xs">
-            <div className="flex items-center gap-1.5 text-xs font-black text-amber-800 uppercase tracking-wide">
-              <span>💡 Real-Life Analogy</span>
-            </div>
-            <div className="text-xs sm:text-sm text-gray-800 leading-relaxed font-medium markdown-content">
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-                {analogy}
-              </ReactMarkdown>
-            </div>
-          </div>
-        )}
-
-        {/* Exam Tip & Formula Card */}
-        {tip && (
-          <div className="bg-orange-50/70 border border-orange-200/80 rounded-2xl p-3.5 space-y-1 shadow-2xs">
-            <div className="flex items-center gap-1.5 text-xs font-black text-orange-800 uppercase tracking-wide">
-              <span>🔑 Exam Tip & Formula</span>
-            </div>
-            <div className="text-xs sm:text-sm text-gray-800 leading-relaxed font-semibold markdown-content">
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-                {tip}
-              </ReactMarkdown>
-            </div>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  // Fallback for unstructured single text
   return (
-    <div className="text-left py-2 text-xs sm:text-sm text-gray-800 leading-relaxed font-medium markdown-content">
+    <div className="text-sm sm:text-[15px] text-slate-800 leading-relaxed font-medium markdown-content space-y-3 px-2 sm:px-4 py-2 w-full text-left">
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-        {cleanMarkdownText(rawContent)}
+        {formatMarkdownBullets(rawContent)}
       </ReactMarkdown>
     </div>
   )
@@ -375,7 +328,7 @@ export default function FlashcardsPage() {
                 onClick={() => generateMutation.mutate()}
                 disabled={generating}
                 className="btn-primary flex items-center gap-2 font-black py-4 px-8 rounded-2xl cursor-pointer shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all text-sm"
-                style={{ background: theme.primary || '#F28A45', color: 'white' }}
+                style={{ background: theme.primary || '#4F46E5', color: 'white' }}
               >
                 <Sparkles size={16} /> Generate AI Deck
               </button>
@@ -514,34 +467,32 @@ export default function FlashcardsPage() {
                 </div>
               </div>
 
-              {/* ─── Back Side (Structured 3-Part Answer) ─── */}
+              {/* ─── Back Side (Structured Point-by-Point Answer) ─── */}
               <div
-                className="absolute inset-0 w-full h-full backface-hidden bg-white border border-[#E2E8F0] border-t-4 border-t-[#58CC02] rounded-[2rem] p-8 flex flex-col justify-between elevation-2"
+                className="absolute inset-0 w-full h-full backface-hidden bg-white border border-slate-200 border-t-4 border-t-emerald-500 rounded-[2rem] p-6 sm:p-8 flex flex-col justify-between shadow-xl overflow-y-auto"
                 style={{ transform: 'rotateY(180deg)' }}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs text-[#58CC02] font-black uppercase tracking-wider">
-                    <CheckCircle2 size={14} /> Answer / Explanation
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-1.5 text-xs text-emerald-700 font-black uppercase tracking-wider bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full shadow-2xs">
+                    <CheckCircle2 size={14} /> Point-by-Point Solution
                   </div>
 
                   <button
                     type="button"
                     onClick={(e) => speakText(currentCard?.back || '', e)}
-                    className="p-2 rounded-[1.25rem] text-[#AFAFAF] hover:text-[#58CC02] hover:bg-[#D7FFB8] transition-colors cursor-pointer"
+                    className="p-2 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
                     title="Listen to answer audio"
                   >
                     <Volume2 size={18} />
                   </button>
                 </div>
 
-                <div className="flex-1 flex items-center justify-center text-center">
-                  <p className="text-base text-[#3C3C3C] leading-relaxed px-4 font-bold">
-                    {currentCard?.back}
-                  </p>
+                <div className="flex-1 flex items-center justify-center my-3 w-full">
+                  <CardBackView rawContent={currentCard?.back || ''} />
                 </div>
 
-                <div className="flex items-center justify-end pt-3 border-t border-[#E2E8F0]/60">
-                  <p className="text-xs text-[#AFAFAF] font-semibold">Click Card to Flip Back 🔄</p>
+                <div className="flex items-center justify-end pt-3 border-t border-slate-100">
+                  <p className="text-xs text-slate-400 font-semibold">Click Card to Flip Back 🔄</p>
                 </div>
               </div>
             </motion.div>

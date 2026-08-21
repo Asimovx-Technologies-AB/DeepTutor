@@ -28,8 +28,8 @@ export default function OutputCard({
   return (
     <motion.div
       variants={shouldReduceMotion ? undefined : staggerItem}
-      whileHover={shouldReduceMotion ? undefined : { y: -4, boxShadow: '0 12px 30px -8px rgba(0, 0, 0, 0.08)' }}
-      className={`rounded-3xl border border-[#E7E1D8] bg-white p-5 sm:p-6 shadow-xs transition-shadow ${className}`}
+      whileHover={shouldReduceMotion ? undefined : { y: -4, boxShadow: '0 12px 30px -8px rgba(79, 70, 229, 0.12)' }}
+      className={`rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs transition-shadow ${className}`}
     >
       <div
         onClick={() => collapsible && setIsExpanded(!isExpanded)}
@@ -39,15 +39,15 @@ export default function OutputCard({
       >
         <div className="flex items-center gap-3 pr-2">
           {icon && (
-            <div className="w-8 h-8 rounded-xl bg-[#FFF0E4] text-[#F28A45] flex items-center justify-center flex-shrink-0 shadow-2xs">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0 shadow-xs border border-indigo-100">
               {icon}
             </div>
           )}
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-base font-black text-[#20201D]">{title}</h3>
+              <h3 className="text-base font-black text-slate-800">{title}</h3>
               {badge && (
-                <span className="px-2 py-0.5 rounded-full bg-[#FFF0E4] text-[#F28A45] text-[10px] font-black uppercase tracking-wider border border-[#FED7AA]">
+                <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-wider border border-indigo-200">
                   {badge}
                 </span>
               )}
@@ -59,7 +59,7 @@ export default function OutputCard({
           <motion.div
             animate={{ rotate: isExpanded ? 180 : 0 }}
             transition={{ duration: 0.25 }}
-            className="w-7 h-7 rounded-xl bg-[#FAF8F3] text-[#6F6B63] flex items-center justify-center flex-shrink-0"
+            className="w-7 h-7 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center flex-shrink-0"
           >
             <ChevronDown size={16} />
           </motion.div>
@@ -75,7 +75,7 @@ export default function OutputCard({
               animate="open"
               exit="collapsed"
             >
-              <div className="pt-4 mt-2 border-t border-[#E7E1D8]/70">{children}</div>
+              <div className="pt-4 mt-2 border-t border-slate-200/80">{children}</div>
             </motion.div>
           )}
         </AnimatePresence>
