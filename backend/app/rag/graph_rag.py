@@ -104,9 +104,15 @@ CLEAN OUTPUT & FORMATTING STANDARDS
 4. PRISTINE LATEX FORMULAS:
    - Use single `$...$` for inline math and variables (e.g., $a_n = a + (n-1)d$, $1/f = 1/v - 1/u$, $\\text{CO}_2$).
    - Use double `$$...$$` on separate lines for multi-step derivations and central formulas.
-5. PROPER TABLES:
-   - Always include header rows and alignment dashes (`| :--- | :--- |`).
-   - Never use raw unescaped vertical bars `|` inside table cells (use `\\mid` or `P(A given B)` so columns render without breaking).
+5. PROPER MARKDOWN TABLES (MANDATORY SYNTAX):
+   - Every table MUST be formatted strictly using valid GitHub-flavored Markdown table syntax with outer pipes `|`.
+   - You MUST ALWAYS include the mandatory second header-delimiter row (`| :--- | :--- | :--- |`) immediately after the header row. Without this row, tables cannot render in the UI.
+   - NEVER output tab-separated, space-separated, or unbordered text for tables.
+   - Required table format:
+     | # | Concept / Term | Simple Explanation |
+     | :--- | :--- | :--- |
+     | 1 | Example Item | Clear explanation text |
+   - Never use raw unescaped vertical bars `|` inside table cell text (use `\\mid` or `P(A given B)` so columns render without breaking).
 6. AESTHETIC MERMAID FLOWCHARTS:
    - When generating flowcharts, enclose them in clean ````mermaid flowchart TD```` blocks.
    - Keep node text concise and structured: use `<br/>` to separate the step title from its description (e.g. `A["1️⃣ Early Foundation<br/>Checkers-playing programs"] --> B["2️⃣ Linear Classifier<br/>Perceptron algorithm"]`).
@@ -358,15 +364,21 @@ def classify_learning_response_instruction(
             "> [2 simple, friendly sentences explaining what this topic is and why it matters in plain English]\n"
             "- **Why it matters for exams:** [1 short, direct line on where marks are scored]\n\n"
             "### Section 2 — 🍕 Think of It Like This (1-minute analogy)\n"
-            "[A fun, relatable everyday comparison (like cooking, gaming, smartphones, or daily life) with a clear 3-row table that makes the concept click instantly]\n\n"
+            "[A fun, relatable everyday comparison in 1-2 sentences, followed immediately by this exact Markdown table structure]:\n\n"
             "| Step / Approach | What You Do | How It Works |\n"
-            "|:---|:---|:---|\n"
+            "| :--- | :--- | :--- |\n"
             "| 1. ... | ... | ... |\n"
             "| 2. ... | ... | ... |\n"
             "| 3. ... | ... | ... |\n\n"
             "### Section 3 — 💡 Core Concepts (Plain English)\n"
-            "A Markdown table with columns: | # | Concept / Term | What It Means in Simple Words |\n"
-            "Listing 5-7 core concepts with zero complicated jargon.\n\n"
+            "Present the core concepts strictly in this Markdown table (do not use plain lists or unformatted text):\n\n"
+            "| # | Concept / Term | What It Means in Simple Words |\n"
+            "| :--- | :--- | :--- |\n"
+            "| 1 | ... | ... |\n"
+            "| 2 | ... | ... |\n"
+            "| 3 | ... | ... |\n"
+            "| 4 | ... | ... |\n"
+            "| 5 | ... | ... |\n\n"
             "### Section 4 — 🗺️ How It All Connects (Visual Map)\n"
             "```mermaid\n"
             "flowchart TD\n"
@@ -377,12 +389,20 @@ def classify_learning_response_instruction(
             "    C --> E\n"
             "    D --> E\n"
             "```\n\n"
-            "### Section 5 — 📐 Key Formulas & Equations (or 📅 Landmark Events, Treaties & Key Chronology for History/Humanities)\n"
-            "A Markdown table with columns: | # | Formula / Event | What It Does / Period | Quick Example / Significance |\n"
-            "(Use LaTeX math $...$ for STEM, or historical dates and events for History/Theory)\n\n"
+            "### Section 5 — 📐 Key Formulas & Equations (or 📅 Key Events/Chronology)\n"
+            "Present formulas or key facts strictly in this Markdown table:\n\n"
+            "| # | Formula / Concept | What It Does / Definition | Quick Example / Note |\n"
+            "| :--- | :--- | :--- | :--- |\n"
+            "| 1 | ... | ... | ... |\n"
+            "| 2 | ... | ... | ... |\n"
+            "| 3 | ... | ... | ... |\n\n"
             "### Section 6 — ⚠️ Common Exam Traps (Easy Mistakes to Avoid)\n"
-            "A Markdown table with columns: | # | Common Mistake | Why Students Get Confused | How to Get It Right |\n"
-            "Highlighting the top 3-4 easiest mistakes to avoid for full marks.\n"
+            "Present common traps strictly in this Markdown table:\n\n"
+            "| # | Common Mistake | Why Students Get Confused | How to Get It Right |\n"
+            "| :--- | :--- | :--- | :--- |\n"
+            "| 1 | ... | ... | ... |\n"
+            "| 2 | ... | ... | ... |\n"
+            "| 3 | ... | ... | ... |\n"
         )
 
     # 1. Page Specific Explanation

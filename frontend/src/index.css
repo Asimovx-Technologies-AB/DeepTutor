@@ -426,6 +426,52 @@ h6 {
   margin-bottom: 0.5em;
 }
 
+/* ─── Markdown Tables (Clean, Bordered, Responsive) ─── */
+.markdown-content table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1.25rem 0;
+  border-radius: 1rem;
+  overflow: hidden;
+  border: 1px solid #E2E8F0;
+  font-size: 0.875rem;
+  background-color: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.markdown-content th {
+  background-color: #F8FAFC;
+  color: #1E293B;
+  font-weight: 700;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid #E2E8F0;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.markdown-content td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #F1F5F9;
+  color: #334155;
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+.markdown-content tr:last-child td {
+  border-bottom: none;
+}
+
+.markdown-content tbody tr:nth-child(even) td {
+  background-color: #F8FAFC;
+}
+
+.markdown-content tbody tr:hover td {
+  background-color: #EEF2FF;
+}
+
 .markdown-content code {
   background-color: rgba(255, 255, 255, 0.6);
   color: #1E293B;

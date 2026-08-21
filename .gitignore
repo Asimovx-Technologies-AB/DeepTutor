@@ -26,12 +26,24 @@ vlm_cache/
 **/vlm_cache/
 image_search_cache/
 **/image_search_cache/
+faiss_data/
+**/faiss_data/
+lightrag_data/
+**/lightrag_data/
+vlm_cache/
+**/vlm_cache/
+image_search_cache/
+**/image_search_cache/
 uploads/
 **/uploads/
 !**/uploads/.gitkeep
-entities.json
-relations.json
-triplets.json
+scratch/
+**/scratch/
+backend/raw_gemini_resp.txt
+backend/raw_resp_dump.txt
+backend/parsed_result.json
+backend/test.pdf
+backend/test.txt
 
 # Python Cache & Build
 __pycache__/
