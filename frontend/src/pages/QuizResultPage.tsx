@@ -132,6 +132,7 @@ export default function QuizResultPage() {
           <span>{activeSubject?.name || 'Subject'} Page</span> →
         </button>
       )}
+      </div>
 
       {/* Score Card */ }
   <motion.div

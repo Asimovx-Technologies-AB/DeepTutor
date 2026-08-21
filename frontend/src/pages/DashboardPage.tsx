@@ -56,7 +56,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <PageContainer maxWidth="7xl">
+    <PageContainer maxWidth="full">
 
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
 

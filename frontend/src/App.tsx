@@ -18,7 +18,6 @@ const StudyPlanPage = lazy(() => import('./pages/StudyPlanPage'))
 const ChatPage = lazy(() => import('./pages/ChatPage'))
 const QuizPage = lazy(() => import('./pages/QuizPage'))
 const QuizResultPage = lazy(() => import('./pages/QuizResultPage'))
-
 const FlashcardsPage = lazy(() => import('./pages/FlashcardsPage'))
 const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'))
 const SubjectsPage = lazy(() => import('./pages/SubjectsPage'))
@@ -26,7 +25,6 @@ const TopicsPage = lazy(() => import('./pages/TopicsPage'))
 const SubjectWorkspacePage = lazy(() => import('./pages/SubjectWorkspacePage'))
 const SubjectChatPage = lazy(() => import('./pages/SubjectChatPage'))
 const StudentRecordsPage = lazy(() => import('./pages/StudentRecordsPage'))
-const SmartNotesPage = lazy(() => import('./pages/SmartNotesPage'))
 
 
 function PageFallback() {
@@ -82,7 +80,7 @@ function GlobalSessionLoader() {
     // Fetch this user's sessions
     chatApi.sessions()
       .then((res) => setSessions(res.data))
-      .catch(() => {/* page-level queries will retry */})
+      .catch(() => {/* page-level queries will retry */ })
   }, [isAuthenticated, user?.id])
 
   return null
@@ -124,13 +122,12 @@ export default function App() {
               <Route path="subjects/:subjectId/chat/:topicId?" element={<SubjectChatPage />} />
               <Route path="subjects/:subjectId/topics" element={<TopicsPage />} />
               <Route path="topics" element={<TopicsPage />} />
-              <Route path="notes" element={<SmartNotesPage />} />
               <Route path="records" element={<StudentRecordsPage />} />
               <Route path="student-records" element={<StudentRecordsPage />} />
               <Route path="study-plan" element={<StudyPlanPage />} />
               <Route path="chat/:sessionId?" element={<ChatPage />} />
-              <Route path="leaderboard" element={<Navigate to="/app/progress" replace />} />
-              <Route path="quiz/:topicId" element={<QuizPage />} />
+              <Route path="leaderboard" element={<Navigate to="/app/dashboard" replace />} />
+              <Route path="quiz/:topicId?" element={<QuizPage />} />
               <Route path="quiz/:topicId/result" element={<QuizResultPage />} />
               <Route path="flashcards/:topicId" element={<FlashcardsPage />} />
             </Route>
@@ -139,9 +136,9 @@ export default function App() {
             <Route path="/dashboard" element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route index element={<DashboardPage />} />
             </Route>
-            <Route path="/notes" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<SmartNotesPage />} />
-            </Route>
+            <Route path="/exam-prep" element={<Navigate to="/app/chat" replace />} />
+            <Route path="/notes" element={<Navigate to="/app/chat" replace />} />
+            <Route path="/progress" element={<Navigate to="/dashboard" replace />} />
             <Route path="/records" element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route index element={<StudentRecordsPage />} />
             </Route>
@@ -169,7 +166,7 @@ export default function App() {
             <Route path="/chat/:sessionId?" element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route index element={<ChatPage />} />
             </Route>
-            <Route path="/quiz/:topicId" element={<PrivateRoute><Layout /></PrivateRoute>}>
+            <Route path="/quiz/:topicId?" element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route index element={<QuizPage />} />
             </Route>
             <Route path="/quiz/:topicId/result" element={<PrivateRoute><Layout /></PrivateRoute>}>
@@ -188,6 +185,7 @@ export default function App() {
             <Route path="/flashcards/:topicId" element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route index element={<FlashcardsPage />} />
             </Route>
+            <Route path="/leaderboard" element={<Navigate to="/dashboard" replace />} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

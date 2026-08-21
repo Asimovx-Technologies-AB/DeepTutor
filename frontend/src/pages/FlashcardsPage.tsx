@@ -435,7 +435,7 @@ export default function FlashcardsPage() {
             <CheckCircle2 size={14} /> {completionPercentage}% Mastered ({masteredCount}/{cards.length})
           </span>
         </div>
-        
+
         <div className="w-full h-4 bg-gray-100 rounded-full overflow-hidden shadow-inner border border-gray-200/60">
           <motion.div
             className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full relative"
@@ -502,216 +502,206 @@ export default function FlashcardsPage() {
                       💡 Think about the concept carefully...
                     </motion.p>
                   )}
-                    {currentCard?.mastered && (
+                  {currentCard?.mastered && (
                     <span className="text-[11px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1">
                       <Check size={12} /> Mastered
                     </span>
                   )}
                 </div>
 
-              <div className="flex items-center justify-between pt-3 border-t border-[#E2E8F0]/60">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setShowHint(!showHint)
-                  }}
-                  className="text-xs font-black text-[#FFC800] hover:text-[#B57C20] flex items-center gap-1 cursor-pointer"
-                >
-                  <Lightbulb size={14} /> {showHint ? 'Hide Hint' : 'Reveal Hint'}
-                </button>
-                <p className="text-xs text-[#AFAFAF] font-semibold">Click Card to Flip 🔄</p>
-              </div>
-          </div>
-
-          {/* ─── Back Side (Structured 3-Part Answer) ─── */}
-          <div
-            className="absolute inset-0 w-full h-full backface-hidden bg-white border border-[#E2E8F0] border-t-4 border-t-[#58CC02] rounded-[2rem] p-8 flex flex-col justify-between elevation-2"
-            style={{ transform: 'rotateY(180deg)' }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-xs text-[#58CC02] font-black uppercase tracking-wider">
-                <CheckCircle2 size={14} /> Answer / Explanation
+                <div className="flex items-center justify-center pt-3 border-t border-[#E2E8F0]/60">
+                  <p className="text-xs text-[#AFAFAF] font-semibold">Click Card to Flip 🔄</p>
+                </div>
               </div>
 
-              <button
-                type="button"
-                onClick={(e) => speakText(currentCard?.back || '', e)}
-                className="p-2 rounded-[1.25rem] text-[#AFAFAF] hover:text-[#58CC02] hover:bg-[#D7FFB8] transition-colors cursor-pointer"
-                title="Listen to answer audio"
+              {/* ─── Back Side (Structured 3-Part Answer) ─── */}
+              <div
+                className="absolute inset-0 w-full h-full backface-hidden bg-white border border-[#E2E8F0] border-t-4 border-t-[#58CC02] rounded-[2rem] p-8 flex flex-col justify-between elevation-2"
+                style={{ transform: 'rotateY(180deg)' }}
               >
-                <Volume2 size={18} />
-              </button>
-            </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs text-[#58CC02] font-black uppercase tracking-wider">
+                    <CheckCircle2 size={14} /> Answer / Explanation
+                  </div>
 
-            <div className="flex-1 flex items-center justify-center text-center">
-              <p className="text-base text-[#3C3C3C] leading-relaxed px-4 font-bold">
-                {currentCard?.back}
-              </p>
-            </div>
+                  <button
+                    type="button"
+                    onClick={(e) => speakText(currentCard?.back || '', e)}
+                    className="p-2 rounded-[1.25rem] text-[#AFAFAF] hover:text-[#58CC02] hover:bg-[#D7FFB8] transition-colors cursor-pointer"
+                    title="Listen to answer audio"
+                  >
+                    <Volume2 size={18} />
+                  </button>
+                </div>
 
-            <div className="flex items-center justify-end pt-3 border-t border-[#E2E8F0]/60">
-              <p className="text-xs text-[#AFAFAF] font-semibold">Click Card to Flip Back 🔄</p>
-            </div>
-          </div>
-        </motion.div>
-          </div>
+                <div className="flex-1 flex items-center justify-center text-center">
+                  <p className="text-base text-[#3C3C3C] leading-relaxed px-4 font-bold">
+                    {currentCard?.back}
+                  </p>
+                </div>
 
-          {/* ─── Review Confidence Buttons (3-Tier Spaced Repetition) ─── */ }
-  <div className="grid grid-cols-2 gap-4 pt-3">
-    <button
-      onClick={() => handleReview(false)}
-      className="flex items-center justify-center gap-2 py-4 bg-white border-2 border-border text-text-secondary hover:border-red-400 hover:bg-red-50 hover:text-red-600 font-black rounded-[1.5rem] cursor-pointer transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5"
-    >
-      <AlertCircle size={18} />
-      <span>Needs Practice (←)</span>
-    </button>
-    <button
-      onClick={() => handleReview(true)}
-      className="flex items-center justify-center gap-2 py-4 font-black rounded-[1.5rem] cursor-pointer shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all bg-gradient-to-br from-emerald-400 to-emerald-500 text-white border-none"
-    >
-      <CheckCircle2 size={18} />
-      <span>Mastered! (→)</span>
-    </button>
-  </div>
-
-  {/* Navigation */ }
-  <div className="flex items-center justify-between text-sm px-2 text-[#777777]">
-    <button
-      onClick={handlePrev}
-      className="hover:text-[#1CB0F6] font-black transition-colors flex items-center gap-1 cursor-pointer"
-    >
-      <ChevronLeft size={16} /> Previous Card
-    </button>
-    <span className="text-xs text-[#AFAFAF]">Shortcuts: Space / Arrow Keys</span>
-    <button
-      onClick={handleNext}
-      className="hover:text-[#1CB0F6] font-black transition-colors flex items-center gap-1 cursor-pointer"
-    >
-      Next Card <ChevronRight size={16} />
-    </button>
-  </div>
-</div>
-      ) : (
-    /* ─── INTERACTIVE CHEAT-SHEET GRID VIEW ─── */
-    <div className="space-y-6">
-      <div className="flex items-center gap-3 bg-white p-2.5 rounded-[1.5rem] border border-border shadow-sm w-fit mx-auto md:mx-0">
-        {(['all', 'unmastered', 'mastered'] as const).map((filter) => (
-          <button
-            key={filter}
-            onClick={() => setGridFilter(filter)}
-            className={`text-xs px-5 py-2 rounded-xl capitalize font-black transition-all cursor-pointer ${gridFilter === filter
-                ? 'bg-[#20201D] text-white shadow-md'
-                : 'bg-transparent text-text-secondary hover:bg-gray-100 hover:text-text-primary'
-              }`}
-          >
-            {filter}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-        {filteredCards.map((card, idx) => (
-          <motion.div
-            key={card.id}
-            onClick={() => {
-              setCurrentIndex(cards.findIndex((c) => c.id === card.id))
-              setViewMode('single')
-              setIsFlipped(false)
-            }}
-            className={`p-6 rounded-[1.75rem] border-2 transition-all text-left cursor-pointer flex flex-col justify-between space-y-4 hover:-translate-y-1 hover:shadow-lg ${card.mastered
-                ? 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-400'
-                : 'bg-white border-border hover:border-brand-primary'
-              }`}
-          >
-            <div>
-              <span className={`text-[10px] font-black uppercase tracking-wider block mb-3 px-2.5 py-1 rounded-md w-fit ${card.mastered ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
-                {card.mastered ? 'Mastered' : 'Needs Review'}
-              </span>
-              <p className="text-[15px] font-black text-text-primary leading-snug">{card.front}</p>
-            </div>
-            <div className="pt-4 border-t border-border flex items-center justify-between">
-              <span className="text-[12px] text-text-secondary line-clamp-2 font-medium max-w-[65%]">{card.back}</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleReview(!card.mastered, card.id)
-                }}
-                className={`p-2 rounded-xl border-2 flex-shrink-0 cursor-pointer ml-3 transition-colors ${card.mastered
-                    ? 'bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600'
-                    : 'bg-white text-text-secondary border-border hover:border-emerald-400 hover:text-emerald-500'
-                  }`}
-              >
-                <CheckCircle2 size={16} />
-              </button>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  )}
-
-{/* ─── Celebration Completion Modal ─── */ }
-<AnimatePresence>
-  {showCompletionModal && (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0, y: 20 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.9, opacity: 0, y: -20 }}
-        className="bg-white rounded-[2rem] p-10 max-w-md w-full text-center border border-border shadow-2xl relative overflow-hidden"
-      >
-        <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-b from-amber-50 to-transparent pointer-events-none" />
-        <div className="relative z-10 space-y-6">
-          <img src="/images/flashcards_trophy.jpg" alt="Completed" className="w-44 h-44 mx-auto rounded-[2rem] shadow-xl object-cover border-4 border-white mb-2" />
-          
-          <div>
-            <h2 className="text-2xl font-black text-text-primary">Deck Mastered! 🎉</h2>
-            <p className="text-sm text-text-secondary mt-2 font-medium">
-              You reviewed all {cards.length} cards for <span className="font-bold text-text-primary">{topicTitle}</span>.
-            </p>
+                <div className="flex items-center justify-end pt-3 border-t border-[#E2E8F0]/60">
+                  <p className="text-xs text-[#AFAFAF] font-semibold">Click Card to Flip Back 🔄</p>
+                </div>
+              </div>
+            </motion.div>
           </div>
 
-          <div className="bg-transparent p-5 rounded-[1.5rem] border border-border flex items-center justify-around shadow-inner">
-            <div className="text-center">
-              <p className="text-3xl font-black text-emerald-500">{masteredCount}</p>
-              <p className="text-[10px] uppercase font-black text-emerald-800 tracking-wider mt-1">Mastered</p>
-            </div>
-            <div className="w-px h-12 bg-[#E7E1D8]" />
-            <div className="text-center">
-              <p className="text-3xl font-black text-amber-500">{cards.length - masteredCount}</p>
-              <p className="text-[10px] uppercase font-black text-amber-800 tracking-wider mt-1">Needs Study</p>
-            </div>
-            <div className="w-px h-12 bg-[#E7E1D8]" />
-            <div className="text-center">
-              <p className="text-3xl font-black text-orange-500">+{cards.length * 5}</p>
-              <p className="text-[10px] uppercase font-black text-orange-800 tracking-wider mt-1">XP Earned</p>
-            </div>
-          </div>
-
-          <div className="flex gap-4 pt-3">
+          {/* ─── Review Confidence Buttons (3-Tier Spaced Repetition) ─── */}
+          <div className="grid grid-cols-2 gap-4 pt-3">
             <button
-              onClick={() => {
-                setShowCompletionModal(false)
-                setCurrentIndex(0)
-                setIsFlipped(false)
-              }}
-              className="flex-1 py-4 px-4 rounded-2xl border-2 border-border bg-white font-black text-sm text-text-secondary hover:border-[#20201D] hover:text-text-primary flex items-center justify-center gap-2 cursor-pointer shadow-sm hover:shadow-md transition-all"
+              onClick={() => handleReview(false)}
+              className="flex items-center justify-center gap-2 py-4 bg-white border-2 border-border text-text-secondary hover:border-red-400 hover:bg-red-50 hover:text-red-600 font-black rounded-[1.5rem] cursor-pointer transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5"
             >
-              <RotateCcw size={16} /> Review Again
+              <AlertCircle size={18} />
+              <span>Needs Practice (←)</span>
             </button>
             <button
-              onClick={handleBackToChat}
-              className="flex-1 py-4 px-4 rounded-2xl bg-[#20201D] hover:bg-black text-white font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all"
+              onClick={() => handleReview(true)}
+              className="flex items-center justify-center gap-2 py-4 font-black rounded-[1.5rem] cursor-pointer shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all bg-gradient-to-br from-emerald-400 to-emerald-500 text-white border-none"
             >
-              <ArrowLeft size={16} /> Back to Chat
+              <CheckCircle2 size={18} />
+              <span>Mastered! (→)</span>
+            </button>
+          </div>
+
+          {/* Navigation */}
+          <div className="flex items-center justify-between text-sm px-2 text-[#777777]">
+            <button
+              onClick={handlePrev}
+              className="hover:text-[#1CB0F6] font-black transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <ChevronLeft size={16} /> Previous Card
+            </button>
+            <span className="text-xs text-[#AFAFAF]">Shortcuts: Space / Arrow Keys</span>
+            <button
+              onClick={handleNext}
+              className="hover:text-[#1CB0F6] font-black transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              Next Card <ChevronRight size={16} />
             </button>
           </div>
         </div>
-      </motion.div>
-    </div>
-  )}
-</AnimatePresence>
+      ) : (
+        /* ─── INTERACTIVE CHEAT-SHEET GRID VIEW ─── */
+        <div className="space-y-6">
+          <div className="flex items-center gap-3 bg-white p-2.5 rounded-[1.5rem] border border-border shadow-sm w-fit mx-auto md:mx-0">
+            {(['all', 'unmastered', 'mastered'] as const).map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setGridFilter(filter)}
+                className={`text-xs px-5 py-2 rounded-xl capitalize font-black transition-all cursor-pointer ${gridFilter === filter
+                  ? 'bg-[#20201D] text-white shadow-md'
+                  : 'bg-transparent text-text-secondary hover:bg-gray-100 hover:text-text-primary'
+                  }`}
+              >
+                {filter}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+            {filteredCards.map((card, idx) => (
+              <motion.div
+                key={card.id}
+                onClick={() => {
+                  setCurrentIndex(cards.findIndex((c) => c.id === card.id))
+                  setViewMode('single')
+                  setIsFlipped(false)
+                }}
+                className={`p-6 rounded-[1.75rem] border-2 transition-all text-left cursor-pointer flex flex-col justify-between space-y-4 hover:-translate-y-1 hover:shadow-lg ${card.mastered
+                  ? 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-400'
+                  : 'bg-white border-border hover:border-brand-primary'
+                  }`}
+              >
+                <div>
+                  <span className={`text-[10px] font-black uppercase tracking-wider block mb-3 px-2.5 py-1 rounded-md w-fit ${card.mastered ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                    {card.mastered ? 'Mastered' : 'Needs Review'}
+                  </span>
+                  <p className="text-[15px] font-black text-text-primary leading-snug">{card.front}</p>
+                </div>
+                <div className="pt-4 border-t border-border flex items-center justify-between">
+                  <span className="text-[12px] text-text-secondary line-clamp-2 font-medium max-w-[65%]">{card.back}</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleReview(!card.mastered, card.id)
+                    }}
+                    className={`p-2 rounded-xl border-2 flex-shrink-0 cursor-pointer ml-3 transition-colors ${card.mastered
+                      ? 'bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600'
+                      : 'bg-white text-text-secondary border-border hover:border-emerald-400 hover:text-emerald-500'
+                      }`}
+                  >
+                    <CheckCircle2 size={16} />
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Celebration Completion Modal ─── */}
+      <AnimatePresence>
+        {showCompletionModal && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: -20 }}
+              className="bg-white rounded-[2rem] p-10 max-w-md w-full text-center border border-border shadow-2xl relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-b from-amber-50 to-transparent pointer-events-none" />
+              <div className="relative z-10 space-y-6">
+                <img src="/images/flashcards_trophy.jpg" alt="Completed" className="w-44 h-44 mx-auto rounded-[2rem] shadow-xl object-cover border-4 border-white mb-2" />
+
+                <div>
+                  <h2 className="text-2xl font-black text-text-primary">Deck Mastered! 🎉</h2>
+                  <p className="text-sm text-text-secondary mt-2 font-medium">
+                    You reviewed all {cards.length} cards for <span className="font-bold text-text-primary">{topicTitle}</span>.
+                  </p>
+                </div>
+
+                <div className="bg-transparent p-5 rounded-[1.5rem] border border-border flex items-center justify-around shadow-inner">
+                  <div className="text-center">
+                    <p className="text-3xl font-black text-emerald-500">{masteredCount}</p>
+                    <p className="text-[10px] uppercase font-black text-emerald-800 tracking-wider mt-1">Mastered</p>
+                  </div>
+                  <div className="w-px h-12 bg-[#E7E1D8]" />
+                  <div className="text-center">
+                    <p className="text-3xl font-black text-amber-500">{cards.length - masteredCount}</p>
+                    <p className="text-[10px] uppercase font-black text-amber-800 tracking-wider mt-1">Needs Study</p>
+                  </div>
+                  <div className="w-px h-12 bg-[#E7E1D8]" />
+                  <div className="text-center">
+                    <p className="text-3xl font-black text-orange-500">+{cards.length * 5}</p>
+                    <p className="text-[10px] uppercase font-black text-orange-800 tracking-wider mt-1">XP Earned</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 pt-3">
+                  <button
+                    onClick={() => {
+                      setShowCompletionModal(false)
+                      setCurrentIndex(0)
+                      setIsFlipped(false)
+                    }}
+                    className="flex-1 py-4 px-4 rounded-2xl border-2 border-border bg-white font-black text-sm text-text-secondary hover:border-[#20201D] hover:text-text-primary flex items-center justify-center gap-2 cursor-pointer shadow-sm hover:shadow-md transition-all"
+                  >
+                    <RotateCcw size={16} /> Review Again
+                  </button>
+                  <button
+                    onClick={handleBackToChat}
+                    className="flex-1 py-4 px-4 rounded-2xl bg-[#20201D] hover:bg-black text-white font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all"
+                  >
+                    <ArrowLeft size={16} /> Back to Chat
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div >
   )
 }

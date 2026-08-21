@@ -212,10 +212,10 @@ function UploadStatusCard({
       exit={{ opacity: 0, y: -8, scale: 0.96 }}
       transition={{ duration: 0.35, ease: 'easeOut' }}
       className={`relative overflow-hidden rounded-[1.5rem] border p-4 sm:p-5 elevation-2 transition-all ${isDone
-          ? 'bg-gradient-to-r from-[#F4FAF5] via-white to-[#F4FAF5] border-[#58CC02]/40'
-          : isError
-            ? 'bg-gradient-to-r from-[#FFF5F4] via-white to-[#FFF5F4] border-[#FF4B4B]/40'
-            : 'bg-gradient-to-r from-[#FFFDF9] via-white to-[#FFFFFF] border-[#1CB0F6]/35'
+        ? 'bg-gradient-to-r from-[#F4FAF5] via-white to-[#F4FAF5] border-[#58CC02]/40'
+        : isError
+          ? 'bg-gradient-to-r from-[#FFF5F4] via-white to-[#FFF5F4] border-[#FF4B4B]/40'
+          : 'bg-gradient-to-r from-[#FFFDF9] via-white to-[#FFFFFF] border-[#1CB0F6]/35'
         }`}
     >
       {/* Background glowing ambient light while processing */}
@@ -230,10 +230,10 @@ function UploadStatusCard({
           <div className="relative flex-shrink-0">
             <div
               className={`w-12 h-12 rounded-[1.5rem] flex items-center justify-center border elevation-1 transition-transform ${isDone
-                  ? 'bg-[#D7FFB8] text-[#58CC02] border-[#58CC02]/30 scale-105'
-                  : isError
-                    ? 'bg-[#FFD1D1] text-[#FF4B4B] border-[#FF4B4B]/30'
-                    : 'bg-[#DDF4FF] text-[#1CB0F6] border-[#1CB0F6]/30'
+                ? 'bg-[#D7FFB8] text-[#58CC02] border-[#58CC02]/30 scale-105'
+                : isError
+                  ? 'bg-[#FFD1D1] text-[#FF4B4B] border-[#FF4B4B]/30'
+                  : 'bg-[#DDF4FF] text-[#1CB0F6] border-[#1CB0F6]/30'
                 }`}
             >
               {isDone ? (
@@ -303,10 +303,10 @@ function UploadStatusCard({
       <div className="mt-3.5 w-full bg-[#E5E5E5] h-2.5 rounded-full overflow-hidden p-0.5 border border-[#E2E8F0] relative">
         <motion.div
           className={`h-full rounded-full transition-all relative ${isDone
-              ? 'bg-[#58CC02]'
-              : isError
-                ? 'bg-[#FF4B4B]'
-                : 'bg-info'
+            ? 'bg-[#58CC02]'
+            : isError
+              ? 'bg-[#FF4B4B]'
+              : 'bg-info'
             }`}
           style={{ width: `${smoothProgress}%`, transition: 'width 75ms ease-out' }}
         >
@@ -321,31 +321,31 @@ function UploadStatusCard({
         </motion.div>
       </div>
 
-      {/* Done Stats Pill */ }
-  {
-    isDone && status.stats && (
-      <motion.div
-        initial={{ opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mt-3 pt-2.5 border-t border-[#E2E8F0]/60 flex items-center justify-between text-xs font-bold text-[#58CC02]"
-      >
-        <div className="flex items-center gap-3 flex-wrap">
-          <span>✨ {status.stats.chunks_indexed || 0} Chunks Indexed</span>
-          <span>•</span>
-          <span>🧠 {status.stats.entities_extracted || 0} Graph Entities</span>
-          {status.stats.extracted_topics?.length > 0 && (
-            <>
+      {/* Done Stats Pill */}
+      {
+        isDone && status.stats && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-3 pt-2.5 border-t border-[#E2E8F0]/60 flex items-center justify-between text-xs font-bold text-[#58CC02]"
+          >
+            <div className="flex items-center gap-3 flex-wrap">
+              <span>✨ {status.stats.chunks_indexed || 0} Chunks Indexed</span>
               <span>•</span>
-              <span className="text-[#777777]">Topics: {status.stats.extracted_topics.slice(0, 3).join(', ')}</span>
-            </>
-          )}
-        </div>
-        <span className="text-[11px] font-extrabold uppercase bg-[#D7FFB8] px-2.5 py-0.5 rounded-full">
-          Ready to study
-        </span>
-      </motion.div>
-    )
-  }
+              <span>🧠 {status.stats.entities_extracted || 0} Graph Entities</span>
+              {status.stats.extracted_topics?.length > 0 && (
+                <>
+                  <span>•</span>
+                  <span className="text-[#777777]">Topics: {status.stats.extracted_topics.slice(0, 3).join(', ')}</span>
+                </>
+              )}
+            </div>
+            <span className="text-[11px] font-extrabold uppercase bg-[#D7FFB8] px-2.5 py-0.5 rounded-full">
+              Ready to study
+            </span>
+          </motion.div>
+        )
+      }
 
     </motion.div >
   )
@@ -772,8 +772,8 @@ export default function ChatPage() {
         id: Date.now().toString(),
         role: 'assistant',
         content: `📄 **${fileName}** is fully processed and indexed!\n\n${stats?.chunks_indexed
-            ? `📊 **Knowledge Breakdown:**\n- **Chunks Indexed:** ${stats.chunks_indexed}\n- **Graph Entities:** ${stats.entities_extracted || 0}\n`
-            : ''
+          ? `📊 **Knowledge Breakdown:**\n- **Chunks Indexed:** ${stats.chunks_indexed}\n- **Graph Entities:** ${stats.entities_extracted || 0}\n`
+          : ''
           }${stats?.extracted_topics?.length ? `- **Key Topics:** ${stats.extracted_topics.slice(0, 5).join(', ')}\n` : ''}\n💡 *You can now ask questions, generate practice quizzes, or study flashcards for this material.*`,
         created_at: new Date().toISOString(),
       }
@@ -914,8 +914,8 @@ export default function ChatPage() {
                     setMobileLeftOpen(false)
                   }}
                   className={`group flex items-center justify-between px-3 py-2.5 rounded-[1.25rem] text-xs cursor-pointer transition-all ${isSelected
-                      ? 'bg-white text-[#20201D] font-extrabold border border-border shadow-sm'
-                      : 'text-[#6F6B63] hover:text-[#20201D] hover:bg-white/50 font-medium border border-transparent'
+                    ? 'bg-white text-[#20201D] font-extrabold border border-border shadow-sm'
+                    : 'text-[#6F6B63] hover:text-[#20201D] hover:bg-white/50 font-medium border border-transparent'
                     }`}
                 >
                   <span className="truncate pr-2">{s.session_title || 'Untitled Chat'}</span>
@@ -1042,6 +1042,20 @@ export default function ChatPage() {
                   <button
                     type="button"
                     onClick={() => {
+                      const topic = input.trim() || 'this topic'
+                      handleSend(`Give me 5 minute cheatcode for ${topic}`)
+                    }}
+                    disabled={isStreaming}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FFF0E4] hover:bg-[#F28A45] border border-[#F28A45]/30 hover:border-[#F28A45] text-[#F28A45] hover:text-white text-xs font-black transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-40"
+                    title="Generate 5-minute structured revision cheat sheet"
+                  >
+                    <Zap size={13} />
+                    <span>⚡ 5-Min Cheatcode</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
                       const topic = input.trim() || 'the main topic in my study material'
                       handleSend(`Summarize ${topic} into 5-7 clear, high-yield bullet points for quick revision.`)
                     }}
@@ -1087,9 +1101,13 @@ export default function ChatPage() {
                   value={input}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
+                  placeholder={
+                    selectedModel.includes('Vision')
+                      ? 'Ask a question or describe an image/diagram...'
+                      : 'Ask anything about your study material, or click ⚡ 5-Min Cheatcode...'
+                  }
                   rows={2}
-                  className="w-full bg-transparent resize-none outline-none text-[#3C3C3C] font-medium text-sm sm:text-base placeholder-[#AFAFAF] leading-relaxed px-1"
-                  placeholder="What are you working on today?"
+                  className="w-full bg-transparent resize-none outline-none text-[#20201D] font-medium text-sm sm:text-base placeholder-[#969188] leading-relaxed px-1"
                 />
 
                 {/* Sub Action Toolbar */}
@@ -1107,8 +1125,8 @@ export default function ChatPage() {
                     <button
                       onClick={toggleVoiceInput}
                       className={`p-2.5 sm:p-3 rounded-full text-white transition-all elevation-2 cursor-pointer ${isListening
-                          ? 'bg-[#FF4B4B] animate-bounce ring-4 ring-[#FFD1D1]'
-                          : 'bg-[#1CB0F6] hover:bg-[#1899D6]'
+                        ? 'bg-[#FF4B4B] animate-bounce ring-4 ring-[#FFD1D1]'
+                        : 'bg-[#1CB0F6] hover:bg-[#1899D6]'
                         }`}
                       title={isListening ? 'Stop Recording' : 'Voice Input'}
                     >
@@ -1131,7 +1149,14 @@ export default function ChatPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 w-full mt-6 sm:mt-8">
 
                 <SuggestionCard
-                  icon={<div className="w-10 h-10 rounded-[1.5rem] bg-[#DDF4FF] text-[#1CB0F6] flex items-center justify-center border border-[#1CB0F6]/20"><Clock className="w-5 h-5" /></div>}
+                  icon={<div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] text-[#F28A45] flex items-center justify-center border border-[#F28A45]/20"><Zap className="w-5 h-5" /></div>}
+                  title="5-Min Cheatcode"
+                  description="Get a structured 6-section 5-minute revision cheat sheet with analogies, tables & visual flowchart."
+                  onClick={() => handleSend("Give me 5 minute cheatcode for this topic.")}
+                />
+
+                <SuggestionCard
+                  icon={<div className="w-10 h-10 rounded-2xl bg-[#FFF0E4] text-[#F28A45] flex items-center justify-center border border-[#F28A45]/20"><Clock className="w-5 h-5" /></div>}
                   title="Synthesize Notes"
                   description="Turn my uploaded PDF notes into 5 key bullet points for quick review."
                   onClick={() => handleSend("Turn my uploaded PDF notes into 5 key bullet points for quick review.")}
@@ -1393,8 +1418,8 @@ function SessionItem({ session, activeId, onSelect, onDelete }: {
         }
       }}
       className={`group w-full flex items-center justify-between px-3 py-2.5 rounded-[1.25rem] transition-all cursor-pointer ${isActive
-          ? 'bg-[#DDF4FF] text-[#1CB0F6] font-extrabold elevation-1 border border-[#1CB0F6]/30'
-          : 'text-[#777777] hover:bg-[#E5E5E5] hover:text-[#3C3C3C] font-medium'
+        ? 'bg-[#DDF4FF] text-[#1CB0F6] font-extrabold elevation-1 border border-[#1CB0F6]/30'
+        : 'text-[#777777] hover:bg-[#E5E5E5] hover:text-[#3C3C3C] font-medium'
         }`}
     >
       <div className="flex items-center gap-2.5 min-w-0 pr-1">
