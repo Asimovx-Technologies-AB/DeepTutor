@@ -1334,7 +1334,7 @@ class GraphRAGPipeline:
         # Step 7: Wait for image search to finish if requested, and stream images
         if image_search_task:
             try:
-                verified_images = await image_search_task
+                verified_images = await asyncio.wait_for(image_search_task, timeout=2.5)
                 if verified_images:
                     img_markdown = "\n\n### 🖼️ Relevant Diagrams\n"
                     for img in verified_images:
@@ -1343,6 +1343,8 @@ class GraphRAGPipeline:
                     for char in img_markdown:
                         yield f"data: {json.dumps({'type': 'token', 'data': char})}\n\n"
                         accumulated_text += char
+            except asyncio.TimeoutError:
+                pass
             except Exception as e:
                 print(f"[IMAGE SEARCH INJECTION ERROR] {e}")
 
