@@ -296,8 +296,8 @@ export default function StudyPlanPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Calendar size={18} className="text-[#1CB0F6]" />
-            <span className="text-xs font-black text-[#1CB0F6] uppercase tracking-widest bg-[#DDF4FF] px-2.5 py-0.5 rounded-full border border-[#1CB0F6]/20">
+            <Calendar size={18} className="text-[#4F46E5]" />
+            <span className="text-xs font-black text-[#4F46E5] uppercase tracking-widest bg-[#EEF2FF] px-2.5 py-0.5 rounded-full border border-[#4F46E5]/20">
               AI Study Plan Engine
             </span>
           </div>
@@ -317,7 +317,7 @@ export default function StudyPlanPage() {
 
       {isLoading ? (
         <div className="p-12 text-center">
-          <RefreshCw size={28} className="animate-spin text-[#1CB0F6] mx-auto mb-3" />
+          <RefreshCw size={28} className="animate-spin text-[#4F46E5] mx-auto mb-3" />
           <p className="text-xs font-bold text-[#777777]">Loading study plans...</p>
         </div>
       ) : plans.length === 0 ? (
@@ -362,17 +362,17 @@ export default function StudyPlanPage() {
                     onClick={() => setActivePlanId(p.id)}
                     className={`w-full text-left p-3.5 rounded-[1.5rem] border transition-all cursor-pointer flex flex-col gap-2 hover:scale-[1.02] active:scale-[0.98] ${
                       isSel
-                        ? 'bg-[#DDF4FF] text-[#1CB0F6] border-[#1CB0F6]/40 elevation-2'
-                        : 'bg-white text-[#3C3C3C] border-[#E2E8F0] hover:border-[#1CB0F6]/40 hover:bg-[#FFFFFF]'
+                        ? 'bg-[#EEF2FF] text-[#4F46E5] border-[#4F46E5]/40 elevation-2'
+                        : 'bg-white text-[#3C3C3C] border-[#E2E8F0] hover:border-[#4F46E5]/40 hover:bg-[#FFFFFF]'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
-                        isSel ? 'bg-[#1CB0F6] text-white' : 'bg-[#E5E5E5] text-[#777777]'
+                        isSel ? 'bg-[#4F46E5] text-white' : 'bg-[#E5E5E5] text-[#777777]'
                       }`}>
                         Target: {p.target_date}
                       </span>
-                      <span className={`text-xs font-black ${isSel ? 'text-[#1CB0F6]' : 'text-[#777777]'}`}>
+                      <span className={`text-xs font-black ${isSel ? 'text-[#4F46E5]' : 'text-[#777777]'}`}>
                         {pct}%
                       </span>
                     </div>
@@ -400,11 +400,11 @@ export default function StudyPlanPage() {
                   className={`p-4 rounded-[1.5rem] border flex items-center justify-between text-xs font-extrabold elevation-1 ${
                     quizVerificationMessage.passed
                       ? 'bg-[#D7FFB8] text-[#46A302] border-[#58CC02]/40'
-                      : 'bg-[#DDF4FF] text-[#FF4B4B] border-[#1CB0F6]/40'
+                      : 'bg-[#EEF2FF] text-[#FF4B4B] border-[#4F46E5]/40'
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Sparkles size={16} className={quizVerificationMessage.passed ? 'text-[#58CC02]' : 'text-[#1CB0F6]'} />
+                    <Sparkles size={16} className={quizVerificationMessage.passed ? 'text-[#58CC02]' : 'text-[#4F46E5]'} />
                     <span>{quizVerificationMessage.message}</span>
                   </div>
                   <button
@@ -417,7 +417,7 @@ export default function StudyPlanPage() {
               )}
 
               {/* Plan Overview Card */}
-              <div className="glass-card p-6 border border-[#E2E8F0] bg-gradient-to-r from-[#FFFFFF] via-white to-[#DDF4FF] space-y-4 elevation-2">
+              <div className="glass-card p-6 border border-[#E2E8F0] bg-gradient-to-r from-[#FFFFFF] via-white to-[#EEF2FF] space-y-4 elevation-2">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     {(() => {
@@ -430,7 +430,7 @@ export default function StudyPlanPage() {
                           className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md border ${
                             isOverdue
                               ? 'bg-[#FFD1D1] text-[#FF4B4B] border-[#FF4B4B]/30 animate-pulse'
-                              : 'bg-[#DDF4FF] text-[#1CB0F6] border-[#1CB0F6]/20'
+                              : 'bg-[#EEF2FF] text-[#4F46E5] border-[#4F46E5]/20'
                           }`}
                         >
                           {isOverdue ? `⚠️ Target Overdue: ${currentPlan.target_date}` : `Target Finish Date: ${currentPlan.target_date}`}
@@ -470,7 +470,7 @@ export default function StudyPlanPage() {
               {/* Day-by-Day Timeline Schedule */}
               <div className="space-y-4">
                 <h3 className="text-sm font-black text-[#3C3C3C] flex items-center gap-2">
-                  <Clock size={16} className="text-[#1CB0F6]" />
+                  <Clock size={16} className="text-[#4F46E5]" />
                   Day-by-Day Study Schedule ({currentPlan.schedule?.length ?? 0} Days)
                 </h3>
 
@@ -485,7 +485,7 @@ export default function StudyPlanPage() {
                         {isNewPhase && (
                           <div className="pt-3 pb-1">
                             <div className="flex items-center gap-2.5">
-                              <span className="text-xs font-black text-[#1CB0F6] bg-[#DDF4FF] border border-[#1CB0F6]/30 px-3 py-1 rounded-[1.25rem] uppercase tracking-wider elevation-1">
+                              <span className="text-xs font-black text-[#4F46E5] bg-[#EEF2FF] border border-[#4F46E5]/30 px-3 py-1 rounded-[1.25rem] uppercase tracking-wider elevation-1">
                                 {dayItem.phase}
                               </span>
                               <div className="flex-1 h-[1px] bg-[#E2E8F0]" />
@@ -499,7 +499,7 @@ export default function StudyPlanPage() {
                           className={`p-5 rounded-[1.5rem] border transition-all ${
                             isDone
                               ? 'bg-[#D7FFB8]/50 border-[#58CC02]/30 elevation-1'
-                              : 'bg-white border-[#E2E8F0] elevation-1 hover:border-[#1CB0F6]/40'
+                              : 'bg-white border-[#E2E8F0] elevation-1 hover:border-[#4F46E5]/40'
                           }`}
                         >
                           <div className="flex items-start justify-between gap-4">
@@ -518,7 +518,7 @@ export default function StudyPlanPage() {
 
                               <div>
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-xs font-black text-[#1CB0F6] bg-[#DDF4FF] px-2 py-0.5 rounded-md border border-[#1CB0F6]/20">
+                                  <span className="text-xs font-black text-[#4F46E5] bg-[#EEF2FF] px-2 py-0.5 rounded-md border border-[#4F46E5]/20">
                                     Day {dayItem.day}
                                   </span>
                                   {dayItem.phase && (
@@ -542,8 +542,8 @@ export default function StudyPlanPage() {
                                 {/* Recommended Action */}
                                 {dayItem.recommended_action && (
                                   <div className="mt-3 p-2.5 bg-[#FFFFFF] border border-[#E2E8F0] rounded-[1.25rem] text-xs text-[#3C3C3C] flex items-center gap-2">
-                                    <Brain size={13} className="text-[#1CB0F6] flex-shrink-0" />
-                                    <span><strong className="text-[#1CB0F6]">Action:</strong> {dayItem.recommended_action}</span>
+                                    <Brain size={13} className="text-[#4F46E5] flex-shrink-0" />
+                                    <span><strong className="text-[#4F46E5]">Action:</strong> {dayItem.recommended_action}</span>
                                   </div>
                                 )}
 
@@ -582,7 +582,7 @@ export default function StudyPlanPage() {
                                     className={`py-2 px-3.5 text-xs font-extrabold rounded-[1.25rem] border flex items-center gap-1.5 transition-all cursor-pointer elevation-1 active:scale-95 ${
                                       isDone
                                         ? 'bg-[#D7FFB8] text-[#46A302] border-[#58CC02]/30 hover:bg-[#d5e8d8]'
-                                        : 'bg-[#DDF4FF] text-[#1CB0F6] border-[#1CB0F6]/40 hover:bg-[#ffe3ce]'
+                                        : 'bg-[#EEF2FF] text-[#4F46E5] border-[#4F46E5]/40 hover:bg-[#E0E7FF]'
                                     }`}
                                   >
                                     <Target size={14} />

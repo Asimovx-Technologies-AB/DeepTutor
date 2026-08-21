@@ -42,22 +42,22 @@ export default function SubjectsPage() {
       {/* ─── 1. HERO BANNER ─── */}
       <div className="relative bg-white border-b border-[#E2E8F0] pt-8 pb-12 overflow-hidden shadow-sm">
         <div className="absolute right-0 top-0 w-1/3 h-full pointer-events-none opacity-40">
-          <div className="w-full h-full bg-gradient-to-l from-[#1CB0F6]/20 via-[#1CB0F6]/5 to-transparent blur-3xl"></div>
+          <div className="w-full h-full bg-gradient-to-l from-[#4F46E5]/20 via-[#4F46E5]/5 to-transparent blur-3xl"></div>
         </div>
         
         <div className="max-w-7xl mx-auto px-6 sm:px-8 relative z-10">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-xl bg-[#DDF4FF] flex items-center justify-center text-[#1CB0F6] border border-[#1CB0F6]/20">
+              <div className="w-8 h-8 rounded-xl bg-[#EEF2FF] flex items-center justify-center text-[#4F46E5] border border-[#4F46E5]/20">
                 <Sparkles size={16} />
               </div>
-              <span className="text-xs font-black text-[#1CB0F6] uppercase tracking-widest">
+              <span className="text-xs font-black text-[#4F46E5] uppercase tracking-widest">
                 Curriculum Hub
               </span>
             </div>
             <h1 className="text-4xl sm:text-5xl font-black text-[#3C3C3C] tracking-tight mb-3 leading-[1.1]">
               Master your <br />
-              <span className="text-[#1CB0F6]">learning journey.</span>
+              <span className="text-[#4F46E5]">learning journey.</span>
             </h1>
             <p className="text-[#777777] text-sm sm:text-base font-medium max-w-md leading-relaxed">
               Track your progress across enrolled subjects, continue active lessons, or explore our complete catalog of topics.
@@ -83,7 +83,7 @@ export default function SubjectsPage() {
                 onClick={() => setActiveTab(tab.key as any)}
                 className={`px-4 py-2.5 rounded-[1.25rem] text-xs font-extrabold transition-all whitespace-nowrap cursor-pointer ${
                   activeTab === tab.key
-                    ? 'bg-[#1CB0F6] text-white shadow-md shadow-[#1CB0F6]/20 scale-100'
+                    ? 'bg-[#4F46E5] text-white shadow-md shadow-[#4F46E5]/20 scale-100'
                     : 'text-[#777777] hover:text-[#3C3C3C] hover:bg-[#F7F7F7] active:scale-95'
                 }`}
               >
@@ -94,12 +94,12 @@ export default function SubjectsPage() {
 
           {/* Search Input */}
           <div className="relative w-full md:w-80 group">
-            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#AFAFAF] group-focus-within:text-[#1CB0F6] transition-colors" />
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#AFAFAF] group-focus-within:text-[#4F46E5] transition-colors" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-12 pr-4 py-3.5 text-sm font-bold rounded-[1.5rem] bg-white border border-[#E2E8F0] text-[#3C3C3C] placeholder-[#AFAFAF] focus:outline-none focus:border-[#1CB0F6] focus:ring-4 focus:ring-[#1CB0F6]/10 shadow-sm transition-all"
+              className="w-full pl-12 pr-4 py-3.5 text-sm font-bold rounded-[1.5rem] bg-white border border-[#E2E8F0] text-[#3C3C3C] placeholder-[#AFAFAF] focus:outline-none focus:border-[#4F46E5] focus:ring-4 focus:ring-[#4F46E5]/10 shadow-sm transition-all"
               placeholder="Search subjects or topics..."
             />
           </div>
@@ -130,10 +130,10 @@ export default function SubjectsPage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                   onClick={() => navigate(`/subjects/${subject.id}`)}
-                  className="group relative bg-white border border-[#E2E8F0] rounded-[2rem] p-6 flex flex-col justify-between shadow-sm hover:shadow-xl hover:shadow-[#1CB0F6]/10 hover:border-[#1CB0F6]/40 transition-all duration-300 cursor-pointer overflow-hidden min-h-[320px]"
+                  className="group relative bg-white border border-[#E2E8F0] rounded-[2rem] p-6 flex flex-col justify-between shadow-sm hover:shadow-xl hover:shadow-[#4F46E5]/10 hover:border-[#4F46E5]/40 transition-all duration-300 cursor-pointer overflow-hidden min-h-[320px]"
                 >
                   {/* Decorative glow on hover */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-[#1CB0F6]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#4F46E5]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
                   <div className="relative z-10 space-y-5">
                     {/* Header Row: Illustration & Category Badge */}
@@ -156,7 +156,7 @@ export default function SubjectsPage() {
 
                     {/* Title & Description */}
                     <div>
-                      <h3 className="font-black text-[#3C3C3C] text-xl group-hover:text-[#1CB0F6] transition-colors leading-tight">
+                      <h3 className="font-black text-[#3C3C3C] text-xl group-hover:text-[#4F46E5] transition-colors leading-tight">
                         {subject.name}
                       </h3>
                       <p className="text-[#777777] text-xs leading-relaxed line-clamp-2 font-medium mt-2">
@@ -166,10 +166,10 @@ export default function SubjectsPage() {
 
                     {/* Currently Learning Highlight */}
                     {currentTopic && status !== 'COMPLETED' && (
-                      <div className="bg-[#FAF8F3] border border-[#E7E1D8] rounded-[1.25rem] p-3 text-xs space-y-1 group-hover:bg-white group-hover:border-[#1CB0F6]/20 transition-colors">
+                      <div className="bg-[#FAF8F3] border border-[#E7E1D8] rounded-[1.25rem] p-3 text-xs space-y-1 group-hover:bg-white group-hover:border-[#4F46E5]/20 transition-colors">
                         <div className="flex items-center gap-1.5 mb-1">
-                          <Play size={12} className="text-[#1CB0F6] fill-[#1CB0F6]" />
-                          <span className="text-[10px] font-black text-[#1CB0F6] uppercase tracking-wider">Up Next</span>
+                          <Play size={12} className="text-[#4F46E5] fill-[#4F46E5]" />
+                          <span className="text-[10px] font-black text-[#4F46E5] uppercase tracking-wider">Up Next</span>
                         </div>
                         <p className="font-bold text-[#3C3C3C] truncate pr-2">{currentTopic.title}</p>
                       </div>
@@ -185,11 +185,11 @@ export default function SubjectsPage() {
                           <span className="text-[#777777]">
                             {completedCount} / {subjectTopics.length} topics
                           </span>
-                          <span className="text-[#1CB0F6] font-black">{progressVal}%</span>
+                          <span className="text-[#4F46E5] font-black">{progressVal}%</span>
                         </div>
                         <div className="w-full bg-[#E5E5E5] rounded-full h-2.5 overflow-hidden border border-[#E2E8F0]">
                           <div
-                            className="bg-gradient-to-r from-[#1CB0F6] to-[#58CC02] h-full rounded-full transition-all duration-700 ease-out"
+                            className="bg-gradient-to-r from-[#4F46E5] to-[#10B981] h-full rounded-full transition-all duration-700 ease-out"
                             style={{ width: `${progressVal}%` }}
                           />
                         </div>
@@ -202,7 +202,7 @@ export default function SubjectsPage() {
                               e.stopPropagation()
                               enrollSubject(subject.id)
                             }}
-                            className="w-10 h-10 rounded-[1.25rem] bg-white border-2 border-[#E2E8F0] text-[#777777] hover:border-[#1CB0F6] hover:text-[#1CB0F6] flex items-center justify-center transition-colors cursor-pointer group-hover:bg-[#1CB0F6] group-hover:border-[#1CB0F6] group-hover:text-white"
+                            className="w-10 h-10 rounded-[1.25rem] bg-white border-2 border-[#E2E8F0] text-[#777777] hover:border-[#4F46E5] hover:text-[#4F46E5] flex items-center justify-center transition-colors cursor-pointer group-hover:bg-[#4F46E5] group-hover:border-[#4F46E5] group-hover:text-white"
                           >
                             <Plus size={18} strokeWidth={3} />
                           </button>
@@ -212,7 +212,7 @@ export default function SubjectsPage() {
                               e.stopPropagation()
                               navigate(`/subjects/${subject.id}`)
                             }}
-                            className="w-10 h-10 rounded-[1.25rem] bg-[#1CB0F6] text-white flex items-center justify-center shadow-md shadow-[#1CB0F6]/20 transition-transform active:scale-95 cursor-pointer group-hover:scale-110"
+                            className="w-10 h-10 rounded-[1.25rem] bg-[#4F46E5] text-white flex items-center justify-center shadow-md shadow-[#4F46E5]/20 transition-transform active:scale-95 cursor-pointer group-hover:scale-110"
                           >
                             <ChevronRight size={18} strokeWidth={3} />
                           </button>

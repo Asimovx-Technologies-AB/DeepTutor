@@ -71,7 +71,7 @@ export default function SubjectWorkspacePage() {
         initial={{ opacity: 0, x: -8 }}
         animate={{ opacity: 1, x: 0 }}
         onClick={() => navigate('/subjects')}
-        className="flex items-center gap-2 text-[#777777] hover:text-[#1CB0F6] transition-colors text-xs font-extrabold cursor-pointer"
+        className="flex items-center gap-2 text-[#777777] hover:text-[#4F46E5] transition-colors text-xs font-extrabold cursor-pointer"
       >
         <ArrowLeft size={16} /> Back to My Subjects
       </motion.button>
@@ -97,7 +97,7 @@ export default function SubjectWorkspacePage() {
 
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-[11px] font-black uppercase tracking-wider bg-[#DDF4FF] text-[#1CB0F6] px-2.5 py-0.5 rounded-full border border-[#1CB0F6]/20">
+                <span className="text-[11px] font-black uppercase tracking-wider bg-[#EEF2FF] text-[#4F46E5] px-2.5 py-0.5 rounded-full border border-[#4F46E5]/20">
                   {subject.category}
                 </span>
 
@@ -150,7 +150,7 @@ export default function SubjectWorkspacePage() {
           </div>
           <div className="w-full bg-[#E5E5E5] rounded-full h-2.5 overflow-hidden">
             <motion.div
-              className="bg-[#1CB0F6] h-full rounded-full"
+              className="bg-[#4F46E5] h-full rounded-full"
               animate={{ width: `${overallProgress}%` }}
               transition={{ duration: 0.5 }}
             />
@@ -163,14 +163,14 @@ export default function SubjectWorkspacePage() {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-[#FFF5EB] via-[#FFFFFF] to-[#FFF5EB] border border-[#1CB0F6]/40 rounded-[2rem] p-6 elevation-1 space-y-4 relative overflow-hidden"
+          className="bg-gradient-to-r from-[#EEF2FF] via-[#FFFFFF] to-[#EEF2FF] border border-[#4F46E5]/40 rounded-[2rem] p-6 elevation-1 space-y-4 relative overflow-hidden"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Sparkles size={16} className="text-[#1CB0F6]" />
+              <Sparkles size={16} className="text-[#4F46E5]" />
               <h3 className="text-xs font-black text-[#3C3C3C] uppercase tracking-wider">Currently Learning</h3>
             </div>
-            <span className="text-xs font-bold text-[#1CB0F6]">{currentTopic.progress}% complete</span>
+            <span className="text-xs font-bold text-[#4F46E5]">{currentTopic.progress}% complete</span>
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -219,14 +219,14 @@ export default function SubjectWorkspacePage() {
                     className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-1 elevation-3 transition-colors ${isCompleted
                         ? 'bg-[#58CC02] border-[#58CC02] text-white'
                         : isInProgress
-                          ? 'bg-[#1CB0F6] border-[#1CB0F6] text-white'
+                          ? 'bg-[#4F46E5] border-[#4F46E5] text-white'
                           : 'bg-white border-[#E2E8F0] text-[#AFAFAF]'
                       }`}
                   >
                     {isCompleted ? <Check size={14} /> : topic.order}
                   </div>
 
-                  <div className={`flex-1 bg-white border rounded-[1.5rem] p-5 elevation-3 transition-all hover:elevation-4 ${isInProgress ? 'border-[#1CB0F6]/40 ring-1 ring-[#1CB0F6]/10' : 'border-[#E2E8F0] hover:border-[#CBD5E1]'
+                  <div className={`flex-1 bg-white border rounded-[1.5rem] p-5 elevation-3 transition-all hover:elevation-4 ${isInProgress ? 'border-[#4F46E5]/40 ring-1 ring-[#4F46E5]/10' : 'border-[#E2E8F0] hover:border-[#CBD5E1]'
                     }`}>
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                       <div className="space-y-1.5 min-w-0 flex-1">
@@ -246,7 +246,7 @@ export default function SubjectWorkspacePage() {
                             </span>
                           )}
                           {isInProgress && (
-                            <span className="text-[10px] font-black bg-[#DDF4FF] text-[#1CB0F6] px-2 py-0.5 rounded-full">
+                            <span className="text-[10px] font-black bg-[#EEF2FF] text-[#4F46E5] px-2 py-0.5 rounded-full">
                               {topic.status === 'REVIEW' ? 'Review Needed' : 'In Progress'}
                             </span>
                           )}
@@ -269,7 +269,7 @@ export default function SubjectWorkspacePage() {
                         <div className="flex items-center gap-3 pt-1 max-w-md">
                           <div className="flex-1 bg-[#E5E5E5] rounded-full h-1.5 overflow-hidden">
                             <div
-                              className={`h-full rounded-full ${isCompleted ? 'bg-[#58CC02]' : 'bg-[#1CB0F6]'
+                              className={`h-full rounded-full ${isCompleted ? 'bg-[#58CC02]' : 'bg-[#4F46E5]'
                                 }`}
                               style={{ width: `${topic.progress}%` }}
                             />

@@ -87,7 +87,7 @@ export default function LeaderboardPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-[#E2E8F0]">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="w-11 h-11 rounded-[1.5rem] bg-[#DDF4FF] border border-[#1CB0F6]/30 flex items-center justify-center p-2 elevation-1">
+            <div className="w-11 h-11 rounded-[1.5rem] bg-[#EEF2FF] border border-[#4F46E5]/30 flex items-center justify-center p-2 elevation-1">
               <img src="/assets/illustrations/gold_medal.png" alt="Leaderboard" className="w-full h-full object-contain" />
             </div>
             <div>
@@ -105,7 +105,7 @@ export default function LeaderboardPage() {
         {currentUserRank && (
           <div className="bg-white border border-[#E2E8F0] p-3 px-5 rounded-[1.5rem] elevation-1 flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <Sparkles className="text-[#1CB0F6]" size={18} />
+              <Sparkles className="text-[#4F46E5]" size={18} />
               <div>
                 <p className="text-[10px] font-black uppercase text-[#AFAFAF]">Your Rank</p>
                 <p className="text-lg font-black text-[#3C3C3C]">#{currentUserRank.rank}</p>
@@ -114,7 +114,7 @@ export default function LeaderboardPage() {
             <div className="h-8 w-px bg-[#E2E8F0]" />
             <div>
               <p className="text-[10px] font-black uppercase text-[#AFAFAF]">Total Score</p>
-              <p className="text-lg font-black text-[#1CB0F6]">{currentUserRank.total_xp} XP</p>
+              <p className="text-lg font-black text-[#4F46E5]">{currentUserRank.total_xp} XP</p>
             </div>
           </div>
         )}
@@ -124,10 +124,10 @@ export default function LeaderboardPage() {
       {top3.length > 0 && (
         <div className="bg-gradient-to-b from-[#3C3C3C] to-[#353531] rounded-[2rem] p-6 md:p-10 border border-[#E2E8F0]/20 text-white elevation-2 relative overflow-hidden">
           {/* Subtle background glow */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-48 bg-[#1CB0F6]/15 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-48 bg-[#4F46E5]/15 rounded-full blur-3xl pointer-events-none" />
 
           <div className="text-center mb-8">
-            <span className="text-xs font-black uppercase tracking-widest text-[#1CB0F6] bg-[#DDF4FF]/10 px-3 py-1 rounded-full border border-[#1CB0F6]/30">
+            <span className="text-xs font-black uppercase tracking-widest text-[#4F46E5] bg-[#EEF2FF]/10 px-3 py-1 rounded-full border border-[#4F46E5]/30">
               Hall of Fame
             </span>
             <h2 className="text-xl font-black text-white mt-2">Top 3 Scholars</h2>
@@ -170,19 +170,19 @@ export default function LeaderboardPage() {
                 className="flex flex-col items-center"
               >
                 <div className="relative mb-3 flex flex-col items-center">
-                  <Crown size={32} className="text-[#1CB0F6] absolute -top-8" />
-                  <div className="w-16 h-16 md:w-20 md:h-20 rounded-[1.5rem] bg-[#1CB0F6] border-2 border-[#DDF4FF] flex items-center justify-center font-black text-2xl text-white elevation-2">
+                  <Crown size={32} className="text-[#4F46E5] absolute -top-8" />
+                  <div className="w-16 h-16 md:w-20 md:h-20 rounded-[1.5rem] bg-[#4F46E5] border-2 border-[#EEF2FF] flex items-center justify-center font-black text-2xl text-white elevation-2">
                     {first.username[0]?.toUpperCase()}
                   </div>
                   <span className="text-sm font-black text-white mt-2 truncate max-w-[100px] md:max-w-[140px]">
                     {first.username}
                   </span>
-                  <span className="text-xs font-black text-[#1CB0F6]">{first.total_xp} XP</span>
+                  <span className="text-xs font-black text-[#4F46E5]">{first.total_xp} XP</span>
                 </div>
 
-                <div className="w-full bg-[#1CB0F6]/20 border border-[#1CB0F6]/40 rounded-t-2xl h-44 md:h-52 flex flex-col items-center justify-center p-2">
-                  <span className="text-3xl md:text-4xl font-black text-[#1CB0F6]">1</span>
-                  <span className="text-[10px] font-black text-[#DDF4FF] uppercase tracking-wider">Gold Champion</span>
+                <div className="w-full bg-[#4F46E5]/20 border border-[#4F46E5]/40 rounded-t-2xl h-44 md:h-52 flex flex-col items-center justify-center p-2">
+                  <span className="text-3xl md:text-4xl font-black text-[#4F46E5]">1</span>
+                  <span className="text-[10px] font-black text-[#EEF2FF] uppercase tracking-wider">Gold Champion</span>
                 </div>
               </motion.div>
             ) : <div />}
@@ -225,7 +225,7 @@ export default function LeaderboardPage() {
           <button
             onClick={() => setActiveTab('all')}
             className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex-1 sm:flex-none cursor-pointer ${
-              activeTab === 'all' ? 'bg-[#1CB0F6] text-white elevation-1' : 'text-[#777777] hover:text-[#3C3C3C]'
+              activeTab === 'all' ? 'bg-[#4F46E5] text-white elevation-1' : 'text-[#777777] hover:text-[#3C3C3C]'
             }`}
           >
             All Students ({rankings.length})
@@ -233,7 +233,7 @@ export default function LeaderboardPage() {
           <button
             onClick={() => setActiveTab('top')}
             className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex-1 sm:flex-none cursor-pointer ${
-              activeTab === 'top' ? 'bg-[#1CB0F6] text-white elevation-1' : 'text-[#777777] hover:text-[#3C3C3C]'
+              activeTab === 'top' ? 'bg-[#4F46E5] text-white elevation-1' : 'text-[#777777] hover:text-[#3C3C3C]'
             }`}
           >
             Top 5
@@ -241,7 +241,7 @@ export default function LeaderboardPage() {
           <button
             onClick={() => setActiveTab('mine')}
             className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex-1 sm:flex-none cursor-pointer ${
-              activeTab === 'mine' ? 'bg-[#1CB0F6] text-white elevation-1' : 'text-[#777777] hover:text-[#3C3C3C]'
+              activeTab === 'mine' ? 'bg-[#4F46E5] text-white elevation-1' : 'text-[#777777] hover:text-[#3C3C3C]'
             }`}
           >
             My Rank
@@ -256,7 +256,7 @@ export default function LeaderboardPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search student name..."
-            className="w-full pl-10 pr-4 py-1.5 text-xs font-bold rounded-[1.25rem] bg-white border border-[#E2E8F0] text-[#3C3C3C] placeholder-[#AFAFAF] focus:outline-none focus:border-[#1CB0F6] focus:ring-2 focus:ring-[#1CB0F6]/20"
+            className="w-full pl-10 pr-4 py-1.5 text-xs font-bold rounded-[1.25rem] bg-white border border-[#E2E8F0] text-[#3C3C3C] placeholder-[#AFAFAF] focus:outline-none focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/20"
           />
         </div>
 
@@ -292,7 +292,7 @@ export default function LeaderboardPage() {
                       key={student.user_id}
                       className={`transition-colors ${
                         isCurrent
-                          ? 'bg-[#DDF4FF]/60 border-l-4 border-l-[#1CB0F6] font-extrabold'
+                          ? 'bg-[#EEF2FF]/60 border-l-4 border-l-[#4F46E5] font-extrabold'
                           : 'hover:bg-[#FFFFFF]'
                       }`}
                     >
@@ -300,7 +300,7 @@ export default function LeaderboardPage() {
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
                           {student.rank === 1 ? (
-                            <span className="w-7 h-7 rounded-lg bg-[#1CB0F6] text-white flex items-center justify-center font-black text-xs elevation-1">
+                            <span className="w-7 h-7 rounded-lg bg-[#4F46E5] text-white flex items-center justify-center font-black text-xs elevation-1">
                               🥇
                             </span>
                           ) : student.rank === 2 ? (
@@ -324,7 +324,7 @@ export default function LeaderboardPage() {
                         <div className="flex items-center gap-3">
                           <div
                             className={`w-9 h-9 rounded-[1.25rem] flex items-center justify-center font-black text-xs text-white ${
-                              isCurrent ? 'bg-[#1CB0F6]' : 'bg-[#3C3C3C]'
+                              isCurrent ? 'bg-[#4F46E5]' : 'bg-[#3C3C3C]'
                             }`}
                           >
                             {student.username[0]?.toUpperCase()}
@@ -333,7 +333,7 @@ export default function LeaderboardPage() {
                             <div className="flex items-center gap-2">
                               <span className="font-extrabold text-[#3C3C3C]">{student.username}</span>
                               {isCurrent && (
-                                <span className="text-[10px] font-black uppercase bg-[#1CB0F6] text-white px-2 py-0.5 rounded-full">
+                                <span className="text-[10px] font-black uppercase bg-[#4F46E5] text-white px-2 py-0.5 rounded-full">
                                   You
                                 </span>
                               )}
@@ -344,7 +344,7 @@ export default function LeaderboardPage() {
                       </td>
 
                       {/* Total XP */}
-                      <td className="py-4 px-6 font-black text-[#1CB0F6]">
+                      <td className="py-4 px-6 font-black text-[#4F46E5]">
                         {student.total_xp} XP
                       </td>
 
@@ -383,7 +383,7 @@ export default function LeaderboardPage() {
                           {student.badges.map((b, i) => (
                             <span
                               key={i}
-                              className="text-[10px] font-extrabold bg-[#DDF4FF] text-[#1CB0F6] px-2 py-0.5 rounded-md border border-[#1CB0F6]/30"
+                              className="text-[10px] font-extrabold bg-[#EEF2FF] text-[#4F46E5] px-2 py-0.5 rounded-md border border-[#4F46E5]/30"
                             >
                               {b}
                             </span>

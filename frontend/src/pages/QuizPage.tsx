@@ -265,7 +265,7 @@ export default function QuizPage() {
       <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-4 mb-6">
         <button
           onClick={() => navigate(-1)}
-          className="w-10 h-10 rounded-[1.25rem] bg-white border border-[#E2E8F0] flex items-center justify-center text-[#777777] hover:text-[#1CB0F6] hover:border-[#1CB0F6]/40 transition-all cursor-pointer elevation-1"
+          className="w-10 h-10 rounded-[1.25rem] bg-white border border-[#E2E8F0] flex items-center justify-center text-[#777777] hover:text-[#4F46E5] hover:border-[#4F46E5]/40 transition-all cursor-pointer elevation-1"
           title="Go Back"
         >
           <ArrowLeft size={15} />
@@ -287,16 +287,16 @@ export default function QuizPage() {
         <button
           onClick={generateQuiz}
           disabled={generating}
-          className="text-xs font-bold text-[#777777] hover:text-[#1CB0F6] flex items-center gap-1.5 px-3 py-2 bg-white border border-[#E2E8F0] rounded-[1.25rem] cursor-pointer elevation-1 hover:border-[#1CB0F6]/40 transition-all disabled:opacity-50"
+          className="text-xs font-bold text-[#777777] hover:text-[#4F46E5] flex items-center gap-1.5 px-3 py-2 bg-white border border-[#E2E8F0] rounded-[1.25rem] cursor-pointer elevation-1 hover:border-[#4F46E5]/40 transition-all disabled:opacity-50"
           title="Generate fresh questions"
         >
-          <RefreshCw size={13} className={generating ? 'animate-spin text-[#1CB0F6]' : ''} />
+          <RefreshCw size={13} className={generating ? 'animate-spin text-[#4F46E5]' : ''} />
           <span className="hidden sm:inline">New Questions</span>
         </button>
 
         {/* Timer */}
         <div className={`flex items-center gap-2 bg-white border px-3.5 py-2 rounded-[1.25rem] text-sm font-mono font-black elevation-1 ${timeWarning ? 'text-[#FF4B4B] border-[#FF4B4B]/40 bg-[#FFD1D1]' : 'text-[#3C3C3C] border-[#E2E8F0]'}`}>
-          <Clock size={15} className={timeWarning ? 'text-[#FF4B4B] animate-pulse' : 'text-[#1CB0F6]'} />
+          <Clock size={15} className={timeWarning ? 'text-[#FF4B4B] animate-pulse' : 'text-[#4F46E5]'} />
           {formatTime(timeLeft)}
         </div>
       </motion.div>
@@ -304,7 +304,7 @@ export default function QuizPage() {
       {/* Progress bar */}
       <div className="w-full bg-[#E2E8F0] h-2 rounded-full mb-6 overflow-hidden">
         <motion.div
-          className="h-full bg-[#1CB0F6] rounded-full"
+          className="h-full bg-[#4F46E5] rounded-full"
           animate={{ width: `${progress}%` }}
           transition={{ duration: 0.4, ease: 'easeOut' }}
         />
@@ -322,7 +322,7 @@ export default function QuizPage() {
         >
           {/* Badge */}
           <div className="flex items-center justify-between gap-2 mb-4">
-            <span className="badge badge-medium text-xs font-bold px-2.5 py-1 rounded-lg bg-[#DDF4FF] text-[#D97706] border border-[#1CB0F6]/20">
+            <span className="badge badge-medium text-xs font-bold px-2.5 py-1 rounded-lg bg-[#EEF2FF] text-[#4F46E5] border border-[#4F46E5]/20">
               Kerala SSLC Standard
             </span>
             <span className="text-xs text-[#AFAFAF] font-bold font-mono">Q{currentQ + 1} / {totalQ}</span>
@@ -342,16 +342,16 @@ export default function QuizPage() {
                   key={label}
                   onClick={() => selectAnswer(label)}
                   className={`w-full text-left p-4 rounded-[1.5rem] border transition-all flex items-center gap-3.5 cursor-pointer ${selected
-                    ? 'bg-[#DDF4FF] border-[#1CB0F6] text-[#3C3C3C] font-bold elevation-1'
-                    : 'bg-white border-[#E2E8F0] text-[#3C3C3C] hover:border-[#1CB0F6]/50 hover:bg-[#FFFFFF]'
+                    ? 'bg-[#EEF2FF] border-[#4F46E5] text-[#3C3C3C] font-bold elevation-1'
+                    : 'bg-white border-[#E2E8F0] text-[#3C3C3C] hover:border-[#4F46E5]/50 hover:bg-[#FFFFFF]'
                     }`}
                 >
-                  <span className={`w-8 h-8 rounded-[1.25rem] flex items-center justify-center text-xs font-black flex-shrink-0 transition-all ${selected ? 'bg-[#1CB0F6] text-white elevation-1' : 'bg-[#E5E5E5] text-[#777777]'
+                  <span className={`w-8 h-8 rounded-[1.25rem] flex items-center justify-center text-xs font-black flex-shrink-0 transition-all ${selected ? 'bg-[#4F46E5] text-white elevation-1' : 'bg-[#E5E5E5] text-[#777777]'
                     }`}>
                     {label}
                   </span>
                   <span className="text-sm font-semibold flex-1 leading-relaxed">{option}</span>
-                  {selected && <CheckCircle2 size={18} className="text-[#1CB0F6] flex-shrink-0" />}
+                  {selected && <CheckCircle2 size={18} className="text-[#4F46E5] flex-shrink-0" />}
                 </button>
               )
             })}
@@ -375,7 +375,7 @@ export default function QuizPage() {
               key={i}
               onClick={() => setCurrentQ(i)}
               className={`rounded-full transition-all cursor-pointer ${i === currentQ
-                ? 'bg-[#1CB0F6] w-6 h-2.5'
+                ? 'bg-[#4F46E5] w-6 h-2.5'
                 : answers[questions[i].id]
                   ? 'bg-[#58CC02] w-2.5 h-2.5'
                   : 'bg-[#E2E8F0] w-2.5 h-2.5 hover:bg-[#AFAFAF]'
