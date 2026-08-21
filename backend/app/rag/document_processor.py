@@ -412,9 +412,37 @@ def _get_easyocr_reader():
 
 
 
+def _try_gemini_vlm(file_path_or_img, prompt: Optional[str] = None) -> str:
+    """Run Google Gemini 2.0 / 1.5 Flash VLM to transcribe an image or document page."""
+    if not getattr(settings, "ENABLE_VLM_PARSER", True):
+        return ""
+    try:
+        from app.rag.gemini_client import gemini_client
+        api_key = os.environ.get("GEMINI_API_KEY") or getattr(settings, "GEMINI_API_KEY", "")
+        if not api_key or len(api_key.strip()) < 5:
+            return ""
+
+        target_vlm_model = getattr(settings, "GEMINI_VLM_MODEL", "gemini-2.0-flash") or "gemini-2.0-flash"
+        text = gemini_client.sync_transcribe_image_vlm(
+            file_path_or_img,
+            prompt=prompt,
+            model=target_vlm_model
+        )
+        if text and len(text.strip()) >= 10:
+            return text.strip()
+    except Exception as e:
+        print(f"[VLM WARN] Gemini VLM transcription error: {e}")
+    return ""
+
+
 def _ocr_extract_text(file_path_or_img) -> str:
-    """Run EasyOCR -> PyTesseract OCR fallback chain on an image file or PIL image."""
-    # 1. EasyOCR
+    """Run Gemini Flash VLM -> EasyOCR -> PyTesseract OCR fallback chain on an image file or PIL image."""
+    # 1. Primary: Gemini Flash VLM
+    vlm_text = _try_gemini_vlm(file_path_or_img)
+    if vlm_text:
+        return vlm_text
+
+    # 2. EasyOCR
     reader = _get_easyocr_reader()
     if reader is not None:
         try:
@@ -425,7 +453,7 @@ def _ocr_extract_text(file_path_or_img) -> str:
         except Exception as e:
             print(f"[OCR WARN] EasyOCR extraction error: {e}")
 
-    # 2. PyTesseract
+    # 3. PyTesseract
     try:
         import pytesseract
         from PIL import Image
@@ -443,22 +471,26 @@ def _ocr_extract_text(file_path_or_img) -> str:
 
 
 def _ocr_scanned_pdf(file_path: str) -> List[Dict]:
-    """Render scanned PDF pages as images and extract text using OCR."""
+    """Render scanned PDF pages as images and extract text using Gemini Flash VLM / OCR."""
     chunks = []
     source_name = Path(file_path).name
+    max_pages = getattr(settings, "VLM_MAX_PAGES_PER_DOC", 50) or 50
     try:
         import pypdfium2 as pdfium
         pdf = pdfium.PdfDocument(file_path)
+        total_pages = min(len(pdf), max_pages)
 
-        for page_num, page in enumerate(pdf, 1):
+        for page_num in range(1, total_pages + 1):
+            page = pdf[page_num - 1]
             pil_image = page.render(scale=2.0).to_pil()
             text = _ocr_extract_text(pil_image)
             if text and len(text) >= 15:
                 page_chunks = _chunk_page_text(text, page_num, file_path)
                 chunks.extend(page_chunks)
     except Exception as e:
-        print(f"[OCR WARN] Scanned PDF OCR error for {file_path}: {e}")
+        print(f"[OCR WARN] Scanned PDF VLM/OCR error for {file_path}: {e}")
     return chunks
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -784,17 +816,18 @@ def process_image(file_path: str) -> List[Dict]:
             "section_title": f"Image Diagram: {source_name}",
             "file_path": file_path,
         }
-        formatted_text = f"# Image Document / Diagram: {source_name}\n\n[Extracted OCR Content & Diagram Labels]:\n{text}"
+        formatted_text = text if text.startswith("#") else f"# Image Document / Diagram: {source_name}\n\n{text}"
         return _chunk_page_text(formatted_text, 1, file_path) or [{
             "text": formatted_text,
             "metadata": {
                 **meta,
                 "chunk_index": 0,
-                "chunk_type": "image_ocr",
+                "chunk_type": "vlm_image" if getattr(settings, "ENABLE_VLM_PARSER", True) else "image_ocr",
                 "estimated_tokens": len(formatted_text) // 4,
                 "char_count": len(formatted_text),
             }
         }]
+
 
     meta = {"source": source_name, "page": 1, "file_path": file_path}
     img_text = f"[Image Document: {source_name}]\nImage uploaded. No clear text labels found by OCR."

@@ -4,12 +4,17 @@ Supports: Gemini 1.5 Flash, Gemini 2.0 Flash, Gemini 1.5 Pro, text-embedding-004
 Uses async HTTPX for high-throughput non-blocking execution.
 """
 import json
+import base64
+import io
+import mimetypes
 import asyncio
 import httpx
-from typing import AsyncGenerator, List, Dict, Optional
+from pathlib import Path
+from typing import AsyncGenerator, List, Dict, Optional, Union, Any
 from app.core.config import get_settings
 
 settings = get_settings()
+
 
 
 class GeminiClient:
@@ -334,8 +339,205 @@ class GeminiClient:
         final_list = [cached_results[i] for i in range(len(texts))]
         return final_list
 
+    def _prepare_image_part(
+        self,
+        image_input: Union[bytes, str, Path, Any],
+        mime_type: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Convert bytes, file path, or PIL Image into Gemini inline_data payload."""
+        img_bytes = b""
+        detected_mime = mime_type or "image/png"
+
+        # 1. PIL Image
+        if hasattr(image_input, "save") and callable(getattr(image_input, "save")):
+            buf = io.BytesIO()
+            image_input.save(buf, format="PNG")
+            img_bytes = buf.getvalue()
+            detected_mime = "image/png"
+
+        # 2. File path (str or Path)
+        elif isinstance(image_input, (str, Path)):
+            path_obj = Path(image_input)
+            if not path_obj.exists():
+                raise FileNotFoundError(f"Image file not found: {image_input}")
+            img_bytes = path_obj.read_bytes()
+            guess, _ = mimetypes.guess_type(str(path_obj))
+            if guess:
+                detected_mime = guess
+
+        # 3. Raw bytes
+        elif isinstance(image_input, bytes):
+            img_bytes = image_input
+
+        else:
+            raise ValueError(f"Unsupported image input type: {type(image_input)}")
+
+        b64_data = base64.b64encode(img_bytes).decode("utf-8")
+        return {
+            "inline_data": {
+                "mime_type": detected_mime,
+                "data": b64_data,
+            }
+        }
+
+    async def transcribe_image_vlm(
+        self,
+        image_input: Union[bytes, str, Path, Any],
+        prompt: Optional[str] = None,
+        mime_type: Optional[str] = None,
+        model: Optional[str] = None,
+        use_cache: bool = True,
+    ) -> str:
+        """
+        Transcribe document page or diagram using Google Gemini Flash VLM.
+        Extracts structured Markdown, LaTeX formulas ($...$, $$...$$), tables, and diagram descriptions.
+        Caches per-page results on disk to prevent duplicate API calls.
+        """
+        # 1. Check disk & memory cache
+        if use_cache:
+            try:
+                from app.rag.vlm_cache import vlm_cache
+                cached_text = vlm_cache.get(image_input)
+                if cached_text:
+                    return cached_text
+            except Exception as e:
+                print(f"[VLM CACHE] Lookup error: {e}")
+
+        if not await self.is_available():
+            raise RuntimeError("Gemini API key is not configured or invalid.")
+
+        image_part = self._prepare_image_part(image_input, mime_type)
+
+        vlm_prompt = prompt or (
+            "You are an expert AI document and textbook transcriber for an academic tutoring platform.\n"
+            "Your task is to transcribe and extract all content from this document page / diagram with highest academic fidelity:\n"
+            "1. Text & Headings: Transcribe all text faithfully. Use clean Markdown hierarchy (# for major titles, ## for sections, ### for sub-sections, bullet points, bold).\n"
+            "2. Mathematical & Scientificx Formulas: Accurately format all formulas, equations, chemical equations, and symbols in LaTeX notation ($...$ for inline math, $$...$$ for display equations).\n"
+            "3. Tables: Transcribe all tabular data into clean Markdown tables with header rows.\n"
+            "4. Diagrams & Figures: Provide an in-depth, pedagogical description of every diagram, chart, flowchart, anatomical structure, or graph. Detail the components, labels, axes, relationships, and key takeaways.\n"
+            "5. Strict output: Do NOT include conversational preambles (such as 'Here is the transcribed text:'). Return only the transcribed and formatted Markdown content."
+        )
+
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        image_part,
+                        {"text": vlm_prompt},
+                    ],
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.1,
+                "maxOutputTokens": 4096,
+                "topP": 0.95,
+            },
+        }
+
+        headers = self._get_headers()
+        client = self._get_client()
+
+        target_model = model or getattr(settings, "GEMINI_VLM_MODEL", "gemini-2.5-flash") or "gemini-2.5-flash"
+        if target_model.startswith("models/"):
+            target_model = target_model[7:]
+
+        models_to_try = [target_model]
+        for fallback in ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-3.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"]:
+            if fallback not in models_to_try:
+                models_to_try.append(fallback)
+
+        last_error = None
+        for attempt, mod in enumerate(models_to_try):
+            url = f"{self.base_url}/models/{mod}:generateContent"
+            try:
+                response = await client.post(url, headers=headers, json=payload, timeout=getattr(settings, "GEMINI_TIMEOUT", 30) or 30)
+                if response.status_code == 200:
+                    data = response.json()
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            extracted_text = "".join(p.get("text", "") for p in parts).strip()
+                            if extracted_text and use_cache:
+                                try:
+                                    from app.rag.vlm_cache import vlm_cache
+                                    vlm_cache.set(image_input, extracted_text)
+                                except Exception:
+                                    pass
+                            return extracted_text
+                    return ""
+                elif response.status_code in (429, 503, 500):
+                    last_error = f"Gemini VLM error ({response.status_code}): {response.text}"
+                    await asyncio.sleep(0.6 * (attempt + 1))
+                    continue
+                else:
+                    response.raise_for_status()
+            except Exception as e:
+                last_error = str(e)
+                if attempt < len(models_to_try) - 1:
+                    await asyncio.sleep(0.5)
+                    continue
+
+        raise RuntimeError(last_error or "Gemini VLM image transcription failed across candidate models.")
+
+
+    async def transcribe_images_batch(
+        self,
+        images_list: List[Union[bytes, str, Path, Any]],
+        prompt: Optional[str] = None,
+        model: Optional[str] = None,
+        max_concurrency: int = 4,
+    ) -> List[str]:
+        """Transcribe a batch of images concurrently with a semaphore concurrency limit."""
+        if not images_list:
+            return []
+
+        semaphore = asyncio.Semaphore(max_concurrency)
+
+        async def _transcribe_safe(idx: int, img: Any) -> tuple[int, str]:
+            async with semaphore:
+                try:
+                    res = await self.transcribe_image_vlm(img, prompt=prompt, model=model)
+                    return idx, res
+                except Exception as e:
+                    print(f"[GEMINI VLM ERROR] Page {idx+1} transcription failed: {e}")
+                    return idx, ""
+
+        tasks = [_transcribe_safe(i, img) for i, img in enumerate(images_list)]
+        results_tuples = await asyncio.gather(*tasks)
+        sorted_results = sorted(results_tuples, key=lambda x: x[0])
+        return [text for _, text in sorted_results]
+
+    def sync_transcribe_image_vlm(
+        self,
+        image_input: Union[bytes, str, Path, Any],
+        prompt: Optional[str] = None,
+        mime_type: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> str:
+        """Synchronous wrapper for transcribe_image_vlm (safe for threadpool execution)."""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    return pool.submit(
+                        asyncio.run,
+                        self.transcribe_image_vlm(image_input, prompt, mime_type, model)
+                    ).result(timeout=getattr(settings, "GEMINI_TIMEOUT", 30) or 30)
+            else:
+                return loop.run_until_complete(
+                    self.transcribe_image_vlm(image_input, prompt, mime_type, model)
+                )
+        except RuntimeError:
+            return asyncio.run(
+                self.transcribe_image_vlm(image_input, prompt, mime_type, model)
+            )
+
 
 # Singleton
 gemini = GeminiClient()
 gemini_client = gemini
+
 

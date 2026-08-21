@@ -1,0 +1,62 @@
+{
+  "storage_virtualization___IMPLEMENTED_THROUGH___storage_area_network": {
+    "id": "storage_virtualization___IMPLEMENTED_THROUGH___storage_area_network",
+    "source_entity": "Storage Virtualization",
+    "target_entity": "Storage Area Network",
+    "type": "IMPLEMENTED_THROUGH",
+    "description": "Storage virtualization is typically implemented through a Storage Area Network.",
+    "sources": [
+      "Storage Virtualization"
+    ]
+  },
+  "virtualized_environment___PART_OF___storage_virtualization": {
+    "id": "virtualized_environment___PART_OF___storage_virtualization",
+    "source_entity": "Virtualized Environment",
+    "target_entity": "Storage Virtualization",
+    "type": "PART_OF",
+    "description": "Storage virtualization is a component of broader virtualization technologies.",
+    "sources": [
+      "Virtualized Environment"
+    ]
+  },
+  "hypervisor___USES___dynamic_cached_translation": {
+    "id": "hypervisor___USES___dynamic_cached_translation",
+    "source_entity": "Hypervisor",
+    "target_entity": "Dynamic Cached Translation",
+    "type": "USES",
+    "description": "Hypervisor uses dynamic cached translation to process non-virtualizable instructions.",
+    "sources": [
+      "Hypervisor"
+    ]
+  },
+  "para_virtualization___REQUIRES___modified_guest_os": {
+    "id": "para_virtualization___REQUIRES___modified_guest_os",
+    "source_entity": "Para-virtualization",
+    "target_entity": "Modified Guest OS",
+    "type": "REQUIRES",
+    "description": "Para-virtualization requires a modified guest operating system.",
+    "sources": [
+      "Para-virtualization"
+    ]
+  },
+  "type_1_hypervisor___PART_OF___virtualization": {
+    "id": "type_1_hypervisor___PART_OF___virtualization",
+    "source_entity": "Type 1 Hypervisor",
+    "target_entity": "Virtualization",
+    "type": "PART_OF",
+    "description": "Type 1 hypervisor is a core component of hardware virtualization architectures.",
+    "sources": [
+      "Type 1 Hypervisor"
+    ]
+  },
+  "hypercalls___APPLIES_TO___type_1_hypervisor": {
+    "id": "hypercalls___APPLIES_TO___type_1_hypervisor",
+    "source_entity": "Hypercalls",
+    "target_entity": "Type 1 Hypervisor",
+    "type": "APPLIES_TO",
+    "description": "Hypercalls facilitate communication between guest systems and the hypervisor.",
+    "sources": [
+      "Hypercalls"
+    ]
+  }
+}

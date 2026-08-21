@@ -1,0 +1,50 @@
+{
+  "vmware__it_is_a_virtualization_software_": {
+    "id": "vmware__it_is_a_virtualization_software_",
+    "name": "VMware (It is a virtualization software)",
+    "type": "concept",
+    "description": "Key concept in sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_07e0aa6f-ff9b-4e25-898b-56c40825cbc7",
+    "sources": [],
+    "mentions": 1
+  },
+  "vmware": {
+    "id": "vmware",
+    "name": "VMware",
+    "type": "system",
+    "description": "Virtualization software utilizing full virtualization technology.",
+    "sources": [
+      "Screenshot 2026-08-21 120736.png p.1 §VMware (It is a virtualization software)"
+    ],
+    "mentions": 1
+  },
+  "hypervisor": {
+    "id": "hypervisor",
+    "name": "Hypervisor",
+    "type": "system",
+    "description": "Virtual Machine Monitor operating at Ring 0 to manage hardware and guest operating systems.",
+    "sources": [
+      "Screenshot 2026-08-21 120736.png p.1 §VMware (It is a virtualization software)"
+    ],
+    "mentions": 1
+  },
+  "binary_translation": {
+    "id": "binary_translation",
+    "name": "Binary Translation",
+    "type": "algorithm",
+    "description": "Technique used to manage and translate CPU instructions for x86 architecture.",
+    "sources": [
+      "Screenshot 2026-08-21 120736.png p.1 §VMware (It is a virtualization software)"
+    ],
+    "mentions": 1
+  },
+  "privilege_rings": {
+    "id": "privilege_rings",
+    "name": "Privilege Rings",
+    "type": "concept",
+    "description": "x86 protection rings dividing hardware architecture into concentric privilege levels.",
+    "sources": [
+      "Screenshot 2026-08-21 120736.png p.1 §VMware (It is a virtualization software)"
+    ],
+    "mentions": 1
+  }
+}
