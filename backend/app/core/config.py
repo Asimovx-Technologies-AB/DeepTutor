@@ -3,12 +3,14 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
-_backend_env = Path(__file__).resolve().parent.parent.parent / ".env"
+_backend_dir = Path(__file__).resolve().parent.parent.parent
+_backend_env = _backend_dir / ".env"
+_backend_env_nodot = _backend_dir / "env"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(_backend_env, ".env", "backend/.env"),
+        env_file=(_backend_env, _backend_env_nodot, ".env", "env", "backend/.env", "backend/env"),
         extra="ignore"
     )
 
