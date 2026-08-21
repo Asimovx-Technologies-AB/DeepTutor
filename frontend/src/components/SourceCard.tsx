@@ -38,7 +38,7 @@ export default function SourceCard({ sources }: Props) {
     >
       {/* Header */}
       <div className="flex items-center gap-2 mb-2">
-        <div className="w-5 h-5 rounded-md bg-[#DDF4FF] text-[#1CB0F6] flex items-center justify-center border border-[#1CB0F6]/30">
+        <div className="w-5 h-5 rounded-md bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center border border-[#4F46E5]/30">
           <FileText size={12} />
         </div>
         <span className="text-xs font-black text-[#3C3C3C]">
@@ -51,7 +51,7 @@ export default function SourceCard({ sources }: Props) {
         {displayed.map((src, i) => (
           <div
             key={i}
-            className="rounded-[1.5rem] border border-[#E2E8F0] bg-white elevation-1 overflow-hidden transition-all hover:border-[#1CB0F6]/40"
+            className="rounded-[1.5rem] border border-[#E2E8F0] bg-white elevation-1 overflow-hidden transition-all hover:border-[#4F46E5]/40"
           >
             {/* Source header */}
             <button
@@ -99,7 +99,7 @@ export default function SourceCard({ sources }: Props) {
       {sources.length > 3 && (
         <button
           onClick={() => setShowAll(!showAll)}
-          className="text-xs font-black text-[#1CB0F6] hover:text-[#1899D6] transition-colors flex items-center gap-1.5 pt-1 px-1 cursor-pointer"
+          className="text-xs font-black text-[#4F46E5] hover:text-[#4338CA] transition-colors flex items-center gap-1.5 pt-1 px-1 cursor-pointer"
         >
           {showAll ? (
             <><Minus size={13} /> Show less</>
