@@ -35,7 +35,6 @@ import ConfirmModal from './ConfirmModal'
 const NAV_ITEMS = [
   { to: '/dashboard', icon: Home, label: 'Home', badge: null },
   { to: '/chat', icon: BookOpen, label: 'Learn', badge: 'Live' },
-  { to: '/exam-prep', icon: GraduationCap, label: 'Exam Prep', badge: '3-Step' },
   { to: '/subjects', icon: Layers, label: 'My Subjects', badge: null },
   { to: '/records', icon: Award, label: 'Student Records', badge: 'Live' },
   { to: '/study-plan', icon: CalendarCheck, label: 'Study Plan', badge: 'AI' },

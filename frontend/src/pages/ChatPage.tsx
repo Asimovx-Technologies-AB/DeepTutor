@@ -528,8 +528,7 @@ export default function ChatPage() {
       }
       return data
     },
-    staleTime: 0,
-    refetchOnMount: 'always',
+    staleTime: 30_000,
     refetchOnWindowFocus: true,
   })
 
@@ -981,15 +980,6 @@ export default function ChatPage() {
             >
               <Menu size={20} />
             </button>
-
-            {/* Model Switcher Pill */}
-            <div className="flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-[1.5rem] border border-border bg-white hover:bg-gray-50 hover:border-[#20201D]/40 cursor-pointer transition-all shadow-sm">
-              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-[1.25rem] bg-info-soft text-info flex items-center justify-center border border-info/20">
-                <Sparkles size={13} />
-              </div>
-              <span className="text-xs font-black text-[#3C3C3C] truncate max-w-[140px] sm:max-w-none">{selectedModel}</span>
-              <ChevronDown size={14} className="text-[#AFAFAF] flex-shrink-0" />
-            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -1364,12 +1354,6 @@ export default function ChatPage() {
               <span>Explore 3D Graph</span> <ArrowRight size={16} />
             </div>
           </motion.div>
-        </div>
-
-        <div className="pt-4 border-t border-border text-center">
-          <p className="text-xs font-semibold text-text-muted">
-            🧠 GraphRAG + Ollama AI Tutor Engine
-          </p>
         </div>
       </aside>
 

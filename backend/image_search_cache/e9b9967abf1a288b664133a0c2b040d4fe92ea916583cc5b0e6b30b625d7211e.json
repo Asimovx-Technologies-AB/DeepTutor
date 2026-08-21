@@ -1,0 +1,18 @@
+[
+  {
+    "url": "https://media.geeksforgeeks.org/wp-content/uploads/20250512162457630554/Finding_Neighbor_Voting_for_Labels.webp",
+    "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSy_z45j76fEm9qK0OgP-FgWEIBxnzpyNpdwpXTxc22Pg&s=10",
+    "source_page": "https://www.geeksforgeeks.org/machine-learning/k-nearest-neighbours/",
+    "title": "K-Nearest Neighbor(KNN) Algorithm - GeeksforGeeks",
+    "relevance_reason": "The image clearly illustrates the K-Nearest Neighbors algorithm by showing a query point with a radius encompassing $K=3$ nearest neighbors for classification voting.",
+    "quality": "good"
+  },
+  {
+    "url": "https://intuitivetutorial.com/wp-content/uploads/2023/04/knn-1.png",
+    "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRkyBlfLvO5sT0t-2cdof-5Fg-A21Bbsrzec9ajdiDlgw&s=10",
+    "source_page": "https://intuitivetutorial.com/2023/04/07/k-nearest-neighbors-algorithm/",
+    "title": "K-Nearest Neighbors Algorithm - Intuitive Tutorials",
+    "relevance_reason": "The image clearly illustrates the K-Nearest Neighbors (KNN) classification process, showing a query datapoint before and after classification based on neighboring data points.",
+    "quality": "good"
+  }
+]

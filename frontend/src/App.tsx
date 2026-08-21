@@ -9,29 +9,31 @@ import Layout from './components/Layout'
 import MouseSpotlight from './components/MouseSpotlight'
 import ServerWarmupNotice from './components/ServerWarmupNotice'
 
-// Lazy-loaded pages for fast code splitting
+// Directly import core primary pages for 0ms instant snappy navigation
+import DashboardPage from './pages/DashboardPage'
+import ChatPage from './pages/ChatPage'
+import SubjectsPage from './pages/SubjectsPage'
+import StudentRecordsPage from './pages/StudentRecordsPage'
+import StudyPlanPage from './pages/StudyPlanPage'
+import SubjectWorkspacePage from './pages/SubjectWorkspacePage'
+import SubjectChatPage from './pages/SubjectChatPage'
+import TopicsPage from './pages/TopicsPage'
+import QuizPage from './pages/QuizPage'
+import QuizResultPage from './pages/QuizResultPage'
+import FlashcardsPage from './pages/FlashcardsPage'
+
+// Code-split auxiliary public & auth pages
 const LandingPage = lazy(() => import('./pages/LandingPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
-const DashboardPage = lazy(() => import('./pages/DashboardPage'))
-const StudyPlanPage = lazy(() => import('./pages/StudyPlanPage'))
-const ChatPage = lazy(() => import('./pages/ChatPage'))
-const QuizPage = lazy(() => import('./pages/QuizPage'))
-const QuizResultPage = lazy(() => import('./pages/QuizResultPage'))
-const FlashcardsPage = lazy(() => import('./pages/FlashcardsPage'))
-const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'))
-const SubjectsPage = lazy(() => import('./pages/SubjectsPage'))
-const TopicsPage = lazy(() => import('./pages/TopicsPage'))
-const SubjectWorkspacePage = lazy(() => import('./pages/SubjectWorkspacePage'))
-const SubjectChatPage = lazy(() => import('./pages/SubjectChatPage'))
-const StudentRecordsPage = lazy(() => import('./pages/StudentRecordsPage'))
-const ExamPrepPage = lazy(() => import('./pages/ExamPrepPage'))
-
 
 function PageFallback() {
   return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="w-8 h-8 border-3 border-[#1CB0F6] border-t-transparent rounded-full animate-spin" />
+    <div className="flex items-center justify-center min-h-[50vh] w-full">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs font-semibold text-slate-400">Loading...</span>
+      </div>
     </div>
   )
 }
@@ -40,7 +42,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      staleTime: 5 * 60 * 1000,    // 5 minutes instant cached navigation
+      staleTime: 60 * 1000,         // 1 minute instant cached navigation
       gcTime: 10 * 60 * 1000,       // 10 minutes garbage collection
       refetchOnWindowFocus: false,  // Avoid repeated network calls on tab switch
     },
@@ -78,9 +80,9 @@ function GlobalSessionLoader() {
     }
     prevUserIdRef.current = currentUserId
 
-    // Fetch this user's sessions
-    chatApi.sessions()
-      .then((res) => setSessions(res.data))
+    // Fetch this user's sessions in background
+    chatApi.sessions('learn')
+      .then((res) => setSessions(res.data || []))
       .catch(() => {/* page-level queries will retry */ })
   }, [isAuthenticated, user?.id])
 
@@ -97,104 +99,72 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return !isAuthenticated ? <>{children}</> : <Navigate to="/dashboard" replace />
 }
 
-
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ServerWarmupNotice />
         <GlobalSessionLoader />
-        <Suspense fallback={<PageFallback />}>
-          <Routes>
-            {/* Public Hero Landing Page */}
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/hero" element={<LandingPage />} />
+        <Routes>
+          {/* Public Hero Landing Page */}
+          <Route path="/" element={<Suspense fallback={<PageFallback />}><LandingPage /></Suspense>} />
+          <Route path="/hero" element={<Suspense fallback={<PageFallback />}><LandingPage /></Suspense>} />
 
-            {/* Auth */}
-            <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-            <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+          {/* Auth */}
+          <Route path="/login" element={<Suspense fallback={<PageFallback />}><PublicRoute><LoginPage /></PublicRoute></Suspense>} />
+          <Route path="/register" element={<Suspense fallback={<PageFallback />}><PublicRoute><RegisterPage /></PublicRoute></Suspense>} />
 
-            {/* Protected Application Routes */}
-            <Route path="/app" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<Navigate to="/app/dashboard" replace />} />
+          {/* Authenticated Application Shell (Persistent Layout - Never Unmounts) */}
+          <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
+            {/* Root-level routes */}
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="chat" element={<ChatPage />} />
+            <Route path="chat/:sessionId" element={<ChatPage />} />
+            <Route path="subjects" element={<SubjectsPage />} />
+            <Route path="subjects/:subjectId" element={<SubjectWorkspacePage />} />
+            <Route path="subjects/:subjectId/chat" element={<SubjectChatPage />} />
+            <Route path="subjects/:subjectId/chat/:topicId" element={<SubjectChatPage />} />
+            <Route path="subjects/:subjectId/topics" element={<TopicsPage />} />
+            <Route path="topics" element={<TopicsPage />} />
+            <Route path="records" element={<StudentRecordsPage />} />
+            <Route path="student-records" element={<StudentRecordsPage />} />
+            <Route path="study-plan" element={<StudyPlanPage />} />
+            <Route path="quiz" element={<QuizPage />} />
+            <Route path="quiz/:topicId" element={<QuizPage />} />
+            <Route path="quiz/:topicId/result" element={<QuizResultPage />} />
+            <Route path="flashcards/:topicId" element={<FlashcardsPage />} />
+
+            {/* Nested /app/* prefix routes for complete backward compatibility */}
+            <Route path="app">
+              <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="subjects" element={<SubjectsPage />} />
               <Route path="subjects/:subjectId" element={<SubjectWorkspacePage />} />
-              <Route path="subjects/:subjectId/chat/:topicId?" element={<SubjectChatPage />} />
+              <Route path="subjects/:subjectId/chat" element={<SubjectChatPage />} />
+              <Route path="subjects/:subjectId/chat/:topicId" element={<SubjectChatPage />} />
               <Route path="subjects/:subjectId/topics" element={<TopicsPage />} />
               <Route path="topics" element={<TopicsPage />} />
               <Route path="records" element={<StudentRecordsPage />} />
               <Route path="student-records" element={<StudentRecordsPage />} />
-              <Route path="exam-prep" element={<ExamPrepPage />} />
               <Route path="study-plan" element={<StudyPlanPage />} />
-              <Route path="chat/:sessionId?" element={<ChatPage />} />
-              <Route path="leaderboard" element={<Navigate to="/app/dashboard" replace />} />
-              <Route path="quiz/:topicId?" element={<QuizPage />} />
+              <Route path="chat" element={<ChatPage />} />
+              <Route path="chat/:sessionId" element={<ChatPage />} />
+              <Route path="leaderboard" element={<Navigate to="/dashboard" replace />} />
+              <Route path="quiz" element={<QuizPage />} />
+              <Route path="quiz/:topicId" element={<QuizPage />} />
               <Route path="quiz/:topicId/result" element={<QuizResultPage />} />
               <Route path="flashcards/:topicId" element={<FlashcardsPage />} />
             </Route>
 
-            {/* Root-level redirects for convenience */}
-            <Route path="/dashboard" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<DashboardPage />} />
-            </Route>
-            <Route path="/exam-prep" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<ExamPrepPage />} />
-            </Route>
-            <Route path="/notes" element={<Navigate to="/exam-prep" replace />} />
-            <Route path="/progress" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/records" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<StudentRecordsPage />} />
-            </Route>
-            <Route path="/student-records" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<StudentRecordsPage />} />
-            </Route>
-            <Route path="/subjects" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<SubjectsPage />} />
-            </Route>
-            <Route path="/subjects/:subjectId" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<SubjectWorkspacePage />} />
-            </Route>
-            <Route path="/subjects/:subjectId/chat/:topicId?" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<SubjectChatPage />} />
-            </Route>
-            <Route path="/subjects/:subjectId/topics" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<TopicsPage />} />
-            </Route>
-            <Route path="/topics" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<TopicsPage />} />
-            </Route>
-            <Route path="/study-plan" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<StudyPlanPage />} />
-            </Route>
-            <Route path="/chat/:sessionId?" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<ChatPage />} />
-            </Route>
-            <Route path="/quiz/:topicId?" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<QuizPage />} />
-            </Route>
-            <Route path="/quiz/:topicId/result" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<QuizResultPage />} />
-            </Route>
-            <Route path="/flashcards/:topicId" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<FlashcardsPage />} />
-            </Route>
-            <Route path="/leaderboard" element={<Navigate to="/records" replace />} />
-            <Route path="/quiz/:topicId" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<QuizPage />} />
-            </Route>
-            <Route path="/quiz/:topicId/result" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<QuizResultPage />} />
-            </Route>
-            <Route path="/flashcards/:topicId" element={<PrivateRoute><Layout /></PrivateRoute>}>
-              <Route index element={<FlashcardsPage />} />
-            </Route>
-            <Route path="/leaderboard" element={<Navigate to="/dashboard" replace />} />
+            {/* Aliases */}
+            <Route path="exam-prep" element={<Navigate to="/dashboard" replace />} />
+            <Route path="notes" element={<Navigate to="/dashboard" replace />} />
+            <Route path="progress" element={<Navigate to="/dashboard" replace />} />
+            <Route path="leaderboard" element={<Navigate to="/dashboard" replace />} />
+          </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </BrowserRouter>
     </QueryClientProvider>
   )
