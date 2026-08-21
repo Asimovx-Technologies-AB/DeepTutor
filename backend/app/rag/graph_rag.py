@@ -1092,6 +1092,16 @@ class GraphRAGPipeline:
         vector_context_text = ""
         effective_topic_id = topic_id or ""
 
+        # ── Step 0: Kickoff background image search if requested ───────────────
+        wants_image = any(w in question.lower() for w in ["figure", "diagram", "image", "picture"])
+        image_search_task = None
+        if wants_image:
+            try:
+                from app.services.image_search import image_search_service
+                image_search_task = asyncio.create_task(image_search_service.get_verified_images(question))
+            except Exception:
+                pass
+
         # ── Step 1: Retrieval ──────────────────────────────────────────────────
         requested_pages = extract_requested_pages(question)
 
@@ -1301,7 +1311,22 @@ class GraphRAGPipeline:
             accumulated_text += token
             yield f"data: {json.dumps({'type': 'token', 'data': token})}\n\n"
 
-        # Step 7: Self-RAG Hallucination Guard verification (non-blocking async thread)
+        # Step 7: Wait for image search to finish if requested, and stream images
+        if image_search_task:
+            try:
+                verified_images = await image_search_task
+                if verified_images:
+                    img_markdown = "\n\n### 🖼️ Relevant Diagrams\n"
+                    for img in verified_images:
+                        img_markdown += f"![{img.title}]({img.url})\n*{img.title}* — [Source]({img.source_page})\n\n"
+                    
+                    for char in img_markdown:
+                        yield f"data: {json.dumps({'type': 'token', 'data': char})}\n\n"
+                        accumulated_text += char
+            except Exception as e:
+                print(f"[IMAGE SEARCH INJECTION ERROR] {e}")
+
+        # Step 8: Self-RAG Hallucination Guard verification (non-blocking async thread)
         grounding = await asyncio.to_thread(verify_response_grounding, accumulated_text, vector_chunks)
         yield f"data: {json.dumps({'type': 'grounding', 'data': grounding})}\n\n"
 

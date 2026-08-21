@@ -1,0 +1,50 @@
+[
+  {
+    "head": "Support Vector Machines",
+    "relation": "PART_OF",
+    "tail": "Machine Learning",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_87ce10b5-7c32-4c08-a801-4e001c66d19d_2544377",
+    "source_doc": "ml algorithams.pdf p.1"
+  },
+  {
+    "head": "Decision Trees",
+    "relation": "PART_OF",
+    "tail": "Machine Learning",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_87ce10b5-7c32-4c08-a801-4e001c66d19d_2544377",
+    "source_doc": "ml algorithams.pdf p.1"
+  },
+  {
+    "head": "Random Forests",
+    "relation": "EXTENDS",
+    "tail": "Decision Trees",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_87ce10b5-7c32-4c08-a801-4e001c66d19d_2544377",
+    "source_doc": "ml algorithams.pdf p.1"
+  },
+  {
+    "head": "TCyear",
+    "relation": "APPLIES_TO",
+    "tail": "Machine Learning",
+    "confidence": 0.85,
+    "source_chunk_id": "sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_87ce10b5-7c32-4c08-a801-4e001c66d19d_79455167",
+    "source_doc": "ml algorithams.pdf p.14"
+  },
+  {
+    "head": "SciPy",
+    "relation": "PROVIDES",
+    "tail": "Python",
+    "confidence": 0.9,
+    "source_chunk_id": "sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_87ce10b5-7c32-4c08-a801-4e001c66d19d_6907318",
+    "source_doc": "ml algorithams.pdf p.28"
+  },
+  {
+    "head": "Dropout",
+    "relation": "IMPROVES",
+    "tail": "Neural Networks",
+    "confidence": 0.95,
+    "source_chunk_id": "sec_fb20b3ea-fcb5-47f8-9720-163c7edc5aa6_87ce10b5-7c32-4c08-a801-4e001c66d19d_6907318",
+    "source_doc": "ml algorithams.pdf p.28"
+  }
+]

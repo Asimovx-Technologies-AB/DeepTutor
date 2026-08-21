@@ -1,0 +1,62 @@
+{
+  "support_vector_machines___PART_OF___machine_learning": {
+    "id": "support_vector_machines___PART_OF___machine_learning",
+    "source_entity": "Support Vector Machines",
+    "target_entity": "Machine Learning",
+    "type": "PART_OF",
+    "description": "Support Vector Machines are a class of algorithms within machine learning.",
+    "sources": [
+      "Support Vector Machines"
+    ]
+  },
+  "decision_trees___PART_OF___machine_learning": {
+    "id": "decision_trees___PART_OF___machine_learning",
+    "source_entity": "Decision Trees",
+    "target_entity": "Machine Learning",
+    "type": "PART_OF",
+    "description": "Decision Trees belong to traditional machine learning algorithms.",
+    "sources": [
+      "Decision Trees"
+    ]
+  },
+  "random_forests___EXTENDS___decision_trees": {
+    "id": "random_forests___EXTENDS___decision_trees",
+    "source_entity": "Random Forests",
+    "target_entity": "Decision Trees",
+    "type": "EXTENDS",
+    "description": "Random forests build upon multiple decision trees to improve performance.",
+    "sources": [
+      "Random Forests"
+    ]
+  },
+  "tcyear___APPLIES_TO___machine_learning": {
+    "id": "tcyear___APPLIES_TO___machine_learning",
+    "source_entity": "TCyear",
+    "target_entity": "Machine Learning",
+    "type": "APPLIES_TO",
+    "description": "Applied to evaluate classic documents in research fields like machine learning.",
+    "sources": [
+      "TCyear"
+    ]
+  },
+  "scipy___APPLIES_TO___python": {
+    "id": "scipy___APPLIES_TO___python",
+    "source_entity": "SciPy",
+    "target_entity": "Python",
+    "type": "APPLIES_TO",
+    "description": "SciPy provides scientific computing routines for the Python ecosystem.",
+    "sources": [
+      "SciPy"
+    ]
+  },
+  "dropout___APPLIES_TO___neural_networks": {
+    "id": "dropout___APPLIES_TO___neural_networks",
+    "source_entity": "Dropout",
+    "target_entity": "Neural Networks",
+    "type": "APPLIES_TO",
+    "description": "Dropout is a regularization technique applied to neural networks during training.",
+    "sources": [
+      "Dropout"
+    ]
+  }
+}
