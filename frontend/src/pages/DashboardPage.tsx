@@ -13,6 +13,7 @@ import LearningStatsRow from '../components/dashboard/LearningStatsRow'
 import RecentActivityTimeline from '../components/dashboard/RecentActivityTimeline'
 import LearningStreak from '../components/dashboard/LearningStreak'
 import PageContainer from '../components/PageContainer'
+import ExamPrepArchitectureFlow from '../components/ExamPrepArchitectureFlow'
 
 export default function DashboardPage() {
   const { user } = useAuthStore()
@@ -219,6 +220,12 @@ export default function DashboardPage() {
           </div>
 
         </div>
+
+        {/* ROW 3: DeepTutor Exam Prep Architecture Flow */}
+        <div className="card p-6 sm:p-8 bg-white border border-[#E7E1D8] shadow-2xs rounded-3xl">
+          <ExamPrepArchitectureFlow showHeading={true} />
+        </div>
+
       </div>
     </PageContainer>
   )

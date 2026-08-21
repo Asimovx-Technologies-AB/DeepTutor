@@ -29,7 +29,7 @@ export default function LearningStatsRow({ stats }: LearningStatsRowProps) {
     },
     { 
       label: 'Learning Hours', 
-      value: stats.total_learning_hours.toFixed(1), 
+      value: (stats.total_learning_hours || 0).toFixed(1), 
       icon: <Clock size={18} className="text-brand-primary" />,
       color: 'bg-brand-primary-soft text-brand-primary'
     },

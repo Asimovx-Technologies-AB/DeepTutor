@@ -25,6 +25,7 @@ const TopicsPage = lazy(() => import('./pages/TopicsPage'))
 const SubjectWorkspacePage = lazy(() => import('./pages/SubjectWorkspacePage'))
 const SubjectChatPage = lazy(() => import('./pages/SubjectChatPage'))
 const StudentRecordsPage = lazy(() => import('./pages/StudentRecordsPage'))
+const ExamPrepPage = lazy(() => import('./pages/ExamPrepPage'))
 
 
 function PageFallback() {
@@ -124,6 +125,7 @@ export default function App() {
               <Route path="topics" element={<TopicsPage />} />
               <Route path="records" element={<StudentRecordsPage />} />
               <Route path="student-records" element={<StudentRecordsPage />} />
+              <Route path="exam-prep" element={<ExamPrepPage />} />
               <Route path="study-plan" element={<StudyPlanPage />} />
               <Route path="chat/:sessionId?" element={<ChatPage />} />
               <Route path="leaderboard" element={<Navigate to="/app/dashboard" replace />} />
@@ -136,8 +138,10 @@ export default function App() {
             <Route path="/dashboard" element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route index element={<DashboardPage />} />
             </Route>
-            <Route path="/exam-prep" element={<Navigate to="/app/chat" replace />} />
-            <Route path="/notes" element={<Navigate to="/app/chat" replace />} />
+            <Route path="/exam-prep" element={<PrivateRoute><Layout /></PrivateRoute>}>
+              <Route index element={<ExamPrepPage />} />
+            </Route>
+            <Route path="/notes" element={<Navigate to="/exam-prep" replace />} />
             <Route path="/progress" element={<Navigate to="/dashboard" replace />} />
             <Route path="/records" element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route index element={<StudentRecordsPage />} />

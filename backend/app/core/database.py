@@ -46,21 +46,20 @@ except Exception as e:
 
 # Auto-migrate missing columns for existing SQLite database
 with engine.connect() as conn:
-    try:
-        conn.execute(text("ALTER TABLE documents ADD COLUMN key_topics TEXT DEFAULT '[]'"))
-        conn.commit()
-    except Exception:
-        pass
-    try:
-        conn.execute(text("ALTER TABLE users ADD COLUMN is_premium BOOLEAN DEFAULT 0"))
-        conn.commit()
-    except Exception:
-        pass
-    try:
-        conn.execute(text("ALTER TABLE users ADD COLUMN plan VARCHAR DEFAULT 'free'"))
-        conn.commit()
-    except Exception:
-        pass
+    for sql in [
+        "ALTER TABLE documents ADD COLUMN key_topics TEXT DEFAULT '[]'",
+        "ALTER TABLE users ADD COLUMN is_premium BOOLEAN DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN plan VARCHAR DEFAULT 'free'",
+        "ALTER TABLE users ADD COLUMN current_streak INTEGER DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN longest_streak INTEGER DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN total_learning_hours REAL DEFAULT 0.0",
+        "ALTER TABLE users ADD COLUMN last_active_date TEXT",
+    ]:
+        try:
+            conn.execute(text(sql))
+            conn.commit()
+        except Exception:
+            pass
 
 
 CHAPTER_TITLES = {

@@ -25,9 +25,51 @@ class User(Base):
     last_active_date = Column(String, nullable=True)
 
     sessions = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
-    # activities = relationship("UserActivity", back_populates="user", cascade="all, delete-orphan")
-    # progress = relationship("UserProgress", back_populates="user", cascade="all, delete-orphan")
-    # learning_goals = relationship("LearningGoal", back_populates="user", cascade="all, delete-orphan")
+    activities = relationship("UserActivity", back_populates="user", cascade="all, delete-orphan")
+    progress = relationship("UserProgress", back_populates="user", cascade="all, delete-orphan")
+    learning_goals = relationship("LearningGoal", back_populates="user", cascade="all, delete-orphan")
+
+
+class UserActivity(Base):
+    __tablename__ = 'user_activities'
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey('users.id'), nullable=False)
+    activity_type = Column(String, nullable=False)  # 'quiz', 'chat', 'note', 'flashcard', 'study_plan'
+    title = Column(String, nullable=False)
+    subject_id = Column(String, nullable=True)
+    topic_id = Column(String, nullable=True)
+    timestamp = Column(String, default=lambda: datetime.utcnow().isoformat())
+
+    user = relationship("User", back_populates="activities")
+
+
+class UserProgress(Base):
+    __tablename__ = 'user_progress'
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey('users.id'), nullable=False)
+    subject_id = Column(String, nullable=False)
+    topic_id = Column(String, nullable=False)
+    progress_percentage = Column(Integer, default=0)
+    status = Column(String, default='NOT_STARTED')  # 'NOT_STARTED', 'IN_PROGRESS', 'COMPLETED'
+    last_studied_at = Column(String, default=lambda: datetime.utcnow().isoformat())
+
+    user = relationship("User", back_populates="progress")
+
+
+class LearningGoal(Base):
+    __tablename__ = 'learning_goals'
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey('users.id'), nullable=False)
+    title = Column(String, nullable=False)
+    target = Column(String, nullable=True)
+    deadline = Column(String, nullable=True)
+    progress_percentage = Column(Integer, default=0)
+    created_at = Column(String, default=lambda: datetime.utcnow().isoformat())
+
+    user = relationship("User", back_populates="learning_goals")
 
 
 class ChatSession(Base):

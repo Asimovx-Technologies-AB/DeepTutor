@@ -24,7 +24,7 @@ export default function ContinueLearningCard({ subjectId, topicId, topicTitle, p
   return (
     <div 
       className="card p-6 flex flex-col justify-between gap-5 cursor-pointer relative overflow-hidden h-full group hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all bg-white"
-      onClick={() => navigate(`/subjects/${subjectId}/workspace`)}
+      onClick={() => navigate(topicId ? `/subjects/${subjectId}/chat/${topicId}` : `/subjects/${subjectId}`)}
     >
       <div className="flex items-start justify-between z-10">
         <div className="flex items-center gap-4">

@@ -81,7 +81,7 @@ export default function RecentActivityTimeline({ activities, isLoading }: Recent
             
             <div 
               className={`ml-4 p-3 rounded-xl bg-black/5 border border-border/50 flex-1 hover:shadow-sm transition-shadow cursor-pointer ${act.subject_id ? 'hover:border-border' : ''}`}
-              onClick={() => act.subject_id && navigate(`/subjects/${act.subject_id}/workspace`)}
+              onClick={() => act.subject_id && navigate(`/subjects/${act.subject_id}`)}
             >
               <h4 className="text-[13px] font-medium text-text-primary">{act.title}</h4>
               <p className="text-[11px] text-text-secondary mt-0.5">{getRelativeTime(act.timestamp)}</p>

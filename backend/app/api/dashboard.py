@@ -28,15 +28,15 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
         if not user_record:
             raise HTTPException(status_code=404, detail="User not found")
             
-        completed_subjects = db.query(UserProgress).filter(
+        completed_subjects = db.query(UserProgress.subject_id).filter(
             UserProgress.user_id == user["id"],
             UserProgress.status == 'COMPLETED'
-        ).group_by(UserProgress.subject_id).count()
+        ).distinct().count()
 
-        in_progress_subjects = db.query(UserProgress).filter(
+        in_progress_subjects = db.query(UserProgress.subject_id).filter(
             UserProgress.user_id == user["id"],
             UserProgress.status == 'IN_PROGRESS'
-        ).group_by(UserProgress.subject_id).count()
+        ).distinct().count()
         
         completed_lessons = db.query(UserProgress).filter(
             UserProgress.user_id == user["id"],
@@ -46,10 +46,10 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
         return {
             "courses_completed": completed_subjects,
             "courses_in_progress": in_progress_subjects,
-            "total_learning_hours": user_record.total_learning_hours,
+            "total_learning_hours": user_record.total_learning_hours or 0.0,
             "lessons_completed": completed_lessons,
-            "current_streak": user_record.current_streak,
-            "longest_streak": user_record.longest_streak,
+            "current_streak": user_record.current_streak or 0,
+            "longest_streak": user_record.longest_streak or 0,
             "last_active_date": user_record.last_active_date
         }
 

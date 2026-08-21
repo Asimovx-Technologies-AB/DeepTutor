@@ -12,6 +12,7 @@ import {
   LayoutDashboard
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
+import ExamPrepArchitectureFlow from '../components/ExamPrepArchitectureFlow'
 
 const PRODUCT_SHOWCASES = [
   {
@@ -231,46 +232,9 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── HOW IT WORKS ─── */}
-      <section id="how-it-works" className="py-20 px-6 max-w-5xl mx-auto border-t border-[#E2E8F0]">
-        <div className="text-center max-w-2xl mx-auto space-y-3 mb-14">
-          <span className="text-xs font-black text-[#1CB0F6] uppercase tracking-wider bg-[#DDF4FF] border border-[#1CB0F6]/20 px-3.5 py-1 rounded-full">
-            3-Step Process
-          </span>
-          <h2 className="text-4xl font-black text-[#3C3C3C]">How It Works</h2>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-6">
-          <div className="bg-white p-8 rounded-[2rem] border border-[#E2E8F0] elevation-1 space-y-4">
-            <div className="w-10 h-10 rounded-full bg-[#DDF4FF] text-[#1CB0F6] border border-[#1CB0F6]/30 font-black text-sm flex items-center justify-center">
-              01
-            </div>
-            <h3 className="text-xl font-black text-[#3C3C3C]">Upload PDF Materials</h3>
-            <p className="text-[#777777] text-sm font-medium leading-relaxed">
-              Upload textbook chapters or course materials into Indie-Tutor to start indexing.
-            </p>
-          </div>
-
-          <div className="bg-white p-8 rounded-[2rem] border border-[#E2E8F0] elevation-1 space-y-4">
-            <div className="w-10 h-10 rounded-full bg-[#DDF4FF] text-[#1CB0F6] border border-[#1CB0F6]/30 font-black text-sm flex items-center justify-center">
-              02
-            </div>
-            <h3 className="text-xl font-black text-[#3C3C3C]">Generate Study Roadmap</h3>
-            <p className="text-[#777777] text-sm font-medium leading-relaxed">
-              Set your target finish date to automatically generate a day-by-day study schedule.
-            </p>
-          </div>
-
-          <div className="bg-white p-8 rounded-[2rem] border border-[#E2E8F0] elevation-1 space-y-4">
-            <div className="w-10 h-10 rounded-full bg-[#DDF4FF] text-[#1CB0F6] border border-[#1CB0F6]/30 font-black text-sm flex items-center justify-center">
-              03
-            </div>
-            <h3 className="text-xl font-black text-[#3C3C3C]">Study & Track Mastery</h3>
-            <p className="text-[#777777] text-sm font-medium leading-relaxed">
-              Ask AI tutor questions, review flashcards, take quizzes, and track your activity streak.
-            </p>
-          </div>
-        </div>
+      {/* ─── HOW IT WORKS (EXAM PREP ARCHITECTURE) ─── */}
+      <section id="how-it-works" className="py-20 px-6 max-w-6xl mx-auto border-t border-[#E2E8F0]">
+        <ExamPrepArchitectureFlow showHeading={true} />
       </section>
 
       {/* ─── FOOTER ─── */}
