@@ -113,17 +113,21 @@ CLEAN OUTPUT & FORMATTING STANDARDS
      | :--- | :--- | :--- |
      | 1 | Example Item | Clear explanation text |
    - Never use raw unescaped vertical bars `|` inside table cell text (use `\\mid` or `P(A given B)` so columns render without breaking).
-6. AESTHETIC MERMAID FLOWCHARTS:
-   - When generating flowcharts, enclose them in clean ````mermaid flowchart TD```` blocks.
-   - Keep node text concise and structured: use `<br/>` to separate the step title from its description (e.g. `A["1️⃣ Early Foundation<br/>Checkers-playing programs"] --> B["2️⃣ Linear Classifier<br/>Perceptron algorithm"]`).
-   - Always enclose node labels in double quotes `["..."]` to prevent special characters or parentheses from breaking the diagram.
+6. VISUAL FIGURES & MERMAID DIAGRAMS (MANDATORY WHEN REQUESTED):
+   - Whenever the student asks for a "figure", "diagram", "chart", "flowchart", "visualize", or "draw" (e.g., "explain with a figure", "show me a diagram"):
+     - You MUST ALWAYS include an interactive Mermaid visual block (````mermaid ... ````) illustrating the concept, structure, architecture, or workflow.
+     - For concepts like SVM, Neural Networks, Ray Optics, or Cycles: use Mermaid graphs with clear node labels, decision boundaries, subgraphs, or flowcharts.
+     - Keep node text concise and structured: use `<br/>` to separate titles from descriptions (e.g. `A["Class A (+1)<br/>Support Vectors"] --- H["Optimal Hyperplane<br/>w·x - b = 0"] --- B["Class B (-1)<br/>Support Vectors"]`).
+     - Always enclose node labels in double quotes `["..."]` to prevent special characters or parentheses from breaking the diagram.
+     - If the context contains a `[Figure: ...]` description from the textbook, explain its visual parts directly in the text.
 7. ISOLATED ANALOGIES:
    - Wrap intuitive real-world analogies in a dedicated blockquote (`> **Intuitive Analogy:** ...`) so students never confuse the analogy with literal source material.
 
 ═══════════════════════════════
 OUTPUT MODE SELECTION
 ═══════════════════════════════
-Detect the mode requested in the student's query. If unspecified, default to Mode 1 (Clear Explanation). You may seamlessly combine two modes if requested (e.g., "explain and give a flowchart").
+Detect the mode requested in the student's query. If unspecified, default to Mode 1 (Clear Explanation). You may seamlessly combine two modes if requested (e.g., "explain and give a flowchart" or "explain with a figure").
+- When the query asks for a "figure", "diagram", or "chart", automatically combine Mode 1 (Clear Explanation) + Mode 5 (Visual Mermaid Diagram).
 
 1. CLEAR EXPLANATION — Structured, conceptual prose explanation with bold key terms. (Default Mode)
 2. BULLET SUMMARY — High-yield, concise bullet points (one core idea per bullet).
@@ -198,10 +202,18 @@ Your goal is to make learning simple, exciting, and easy to understand for 10th 
    - Never hallucinate fake formulas or ungrounded facts.
    - Do NOT include bracketed file citation tags like `[file.pdf p.4]` in your text. The UI displays sources separately.
 
-4. PRACTICE QUESTIONS & QUESTION BANK GENERATION:
+4. SOLVING TEXTBOOK TABLES, ACTIVITIES & NUMERICAL EXERCISES:
+   - When the student asks to solve or complete a textbook table or activity (e.g., "solve Table 1.3", "fill in Table 2.2", "complete Activity 3.1", "solve problem 4"):
+     a) **Completed Table:** Display the complete, clean Markdown table with all missing blanks/cells accurately filled in.
+     b) **Step-by-Step Working:** Below the table, provide a clear, numbered step-by-step derivation for each value:
+        - State the **Formula & Concept used** in clean LaTeX.
+        - Show the **Step-by-step numerical substitution**.
+        - Provide the **Final Answer with units**.
+
+5. PRACTICE QUESTIONS & QUESTION BANK GENERATION:
    - When the student asks for practice questions (e.g., "give me 10 questions from this pdf", "generate 5 questions", "quiz me on this chapter"), generate structured, syllabus-focused board-exam questions directly from the textbook chapters provided with full worked solutions.
 
-5. MANDATORY OUTPUT TEMPLATE (Follow this EXACT clean structure with headers and horizontal lines):
+6. MANDATORY OUTPUT TEMPLATE (Follow this EXACT clean structure with headers and horizontal lines):
    # 📘 [Topic / Concept Name]
 
    ### 💡 Simple Definition (In Easy Words)
@@ -403,6 +415,43 @@ def classify_learning_response_instruction(
             "| 1 | ... | ... | ... |\n"
             "| 2 | ... | ... | ... |\n"
             "| 3 | ... | ... | ... |\n"
+        )
+
+    # 0. Visual Figure / Diagram / Architecture Mode (e.g. "with a figure", "show figure", "with diagram", "diagram", "figure", "visualize", "draw")
+    if any(w in q_lower for w in [
+        "with a figure", "with figure", "show figure", "figure of", "draw figure", "a figure", "with a fig",
+        "with a diagram", "with diagram", "show diagram", "diagram of", "draw diagram", "diagrammatically",
+        "visualize", "visual diagram", "architecture diagram", "schematic", "illustration", "show a diagram"
+    ]):
+        return (
+            "The student specifically asked to EXPLAIN WITH A VISUAL FIGURE / DIAGRAM.\n"
+            "You MUST provide an explanation with an interactive, beautifully structured Mermaid visual diagram block:\n\n"
+            "# 📊 Visual Concept Guide: [Topic Name]\n\n"
+            "### 💡 Core Concept (In Simple Words)\n"
+            "[2 simple sentences explaining the core concept in plain English]\n\n"
+            "> 🌟 **Intuitive Analogy:**\n"
+            "> [1 relatable real-world comparison that makes the visual concept intuitive]\n\n"
+            "### 🖼️ Interactive Visual Figure & Diagram\n"
+            "```mermaid\n"
+            "flowchart TD\n"
+            "    A[\"1️⃣ Data Points (Class A)\"] --> SV1[\"⭐ Support Vectors (Class A)\"]\n"
+            "    B[\"1️⃣ Data Points (Class B)\"] --> SV2[\"⭐ Support Vectors (Class B)\"]\n"
+            "    SV1 --> M[\"📏 Maximum Margin Corridor\"]\n"
+            "    SV2 --> M\n"
+            "    M --> H[\"⚖️ Optimal Decision Hyperplane<br/>w·x - b = 0\"]\n"
+            "    H --> Out[\"🎯 Final Class Prediction\"]\n"
+            "```\n\n"
+            "*(Adapt the Mermaid flowchart above directly to the concept requested. Always use valid flowchart node links like `A[\"...\" ] --> B[\"...\" ]` with double-quoted labels.)*\n\n"
+            "### 🔍 Detailed Visual Component Breakdown\n"
+            "- **Component 1:** [Explanation of what this part/boundary represents in the figure]\n"
+            "- **Component 2:** [Explanation]\n"
+            "- **Component 3:** [Explanation]\n\n"
+            "### 🔑 Key Formulas & Parameters\n"
+            "| Parameter / Component | Role / Formula | Exam Significance |\n"
+            "| :--- | :--- | :--- |\n"
+            "| ... | ... | ... |\n\n"
+            "### 📌 Summary Takeaway\n"
+            "[1-2 sentence core conclusion]"
         )
 
     # 1. Page Specific Explanation
@@ -1334,17 +1383,17 @@ class GraphRAGPipeline:
         # Step 7: Wait for image search to finish if requested, and stream images
         if image_search_task:
             try:
-                verified_images = await asyncio.wait_for(image_search_task, timeout=2.5)
+                verified_images = await asyncio.wait_for(image_search_task, timeout=6.0)
                 if verified_images:
-                    img_markdown = "\n\n### 🖼️ Relevant Diagrams\n"
+                    img_markdown = "\n\n### 🖼️ Relevant Educational Diagrams\n\n"
                     for img in verified_images:
-                        img_markdown += f"![{img.title}]({img.url})\n*{img.title}* — [Source]({img.source_page})\n\n"
+                        img_markdown += f"![{img.title}]({img.url})\n\n*{img.title}* — [Source]({img.source_page})\n\n"
                     
                     for char in img_markdown:
                         yield f"data: {json.dumps({'type': 'token', 'data': char})}\n\n"
                         accumulated_text += char
             except asyncio.TimeoutError:
-                pass
+                print("[IMAGE SEARCH] Timed out waiting for image search results.")
             except Exception as e:
                 print(f"[IMAGE SEARCH INJECTION ERROR] {e}")
 

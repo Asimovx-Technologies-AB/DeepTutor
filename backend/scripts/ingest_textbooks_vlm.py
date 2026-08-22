@@ -1,17 +1,19 @@
 """
-SSLC (10th Grade) Multimodal Textbook Ingestion Script (VLM + Vector Store)
-==========================================================================
+Stage 1 & 2 — VLM-Powered Multimodal Textbook Ingestion Script
+==============================================================
+Transcribes textbook PDF pages using Google Gemini 2.0 Flash Vision-Language Model (VLM).
 Extracts:
-  - High-fidelity LaTeX mathematical & chemical formulas ($$ / $) via Gemini 2.0 Flash VLM
-  - Clean Markdown tables
-  - Deep descriptions of diagrams, circuit schematics, ray diagrams & apparatuses
-  - Step-by-step solved numerical examples
+  - High-precision LaTeX mathematical and chemical equations ($...$ and $$...$$)
+  - Layout-aware structured Markdown (headings, sidebars, bullet points)
+  - Structured Markdown tables
+  - Deep descriptive annotations for figures, ray diagrams, circuit schematics, graphs
+  - Per-page disk caching to eliminate duplicate API calls
   - 3072-dimension Gemini embeddings upserted to Pinecone cloud index 'textbook'
 
 Usage:
-  python scripts/ingest_sslc_textbooks.py --all
-  python scripts/ingest_sslc_textbooks.py --subject sslc-physics
-  python scripts/ingest_sslc_textbooks.py --pdf_path <path_to_pdf> --subject sslc-physics --topic_id phys-10-3
+  python scripts/ingest_textbooks_vlm.py                  # Ingest all 3 SSLC textbooks
+  python scripts/ingest_textbooks_vlm.py --subject sslc-physics
+  python scripts/ingest_textbooks_vlm.py --topic phys-10-1
 """
 
 import os
@@ -48,10 +50,10 @@ root_dir = backend_dir.parent
 textbook_dir = root_dir / "TextBook"
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Curriculum Taxonomy & Configuration
+# Curriculum Catalog
 # ══════════════════════════════════════════════════════════════════════════════
 
-CURRICULUM_CATALOG = {
+CURRICULUM_CONFIG = {
     # ⚡ Physics Full Textbook (Part 1 - 4 Chapters)
     "sslc-physics": {
         "pdf_path": str(textbook_dir / "Hsslive-15_Physics Eng.pdf"),
@@ -95,73 +97,88 @@ CURRICULUM_CATALOG = {
     },
 }
 
-VLM_PROMPT = """You are an expert academic STEM textbook transcription engine. 
-Transcribe the provided textbook page faithfully into clean, structured Markdown:
-1. Format structure cleanly with # headings, ## subheadings, and bullet lists.
-2. Convert all mathematical equations and chemical formulas into clean LaTeX ($...$ inline, $$...$$ block).
-3. Format all tables as clean Markdown tables.
-4. For all diagrams, ray diagrams, circuit schematics, apparatuses, and graphs, insert:
-   [Figure: <detailed pedagogical description including labels, ray directions, axes, components, and concepts>]
-5. Keep solved numerical examples clear with Given, Formula, Steps, and Final Answer.
-6. Transcribe faithfully without summarizing or omitting text.
+VLM_TRANSCRIPTION_PROMPT = """You are an expert academic STEM textbook transcription engine. 
+Transcribe the provided textbook page faithfully into clean, well-structured Markdown:
+1. Format document structure cleanly:
+   - Use # for chapter titles, ## for section headings, ### for subheadings.
+   - Use bullet points and numbered lists where appropriate.
+2. Mathematical & Chemical Equations:
+   - Convert all mathematical formulas and chemical reactions into valid LaTeX syntax.
+   - Use $...$ for inline formulas and $$...$$ for block/standalone equations.
+3. Tables & Lists:
+   - Convert all tables into clean GitHub-flavored Markdown tables.
+4. Diagrams, Charts, Ray Diagrams & Schematics:
+   - For every diagram, circuit schematic, optical ray diagram, apparatus illustration, or graph, insert a descriptive block:
+     [Figure: <detailed description of the diagram including labels, components, light ray directions, axes, variables, and scientific concept illustrated>]
+5. Solved Examples & Activities:
+   - Keep solved numerical problems clearly formatted with Given, Formula, Step-by-step substitution, and Final answer.
+6. Fidelity:
+   - Transcribe all text verbatim without summarizing, skipping content, or hallucinating.
 """
 
-FORMULA_REGEX = [
+LATEX_FORMULA_REGEX = [
     re.compile(r'\$\$.+?\$\$', re.DOTALL),
     re.compile(r'\$.+?\$'),
     re.compile(r'(?:[A-Za-z_]+\s*=\s*[-+]?[0-9a-zA-Z_\s\+\-\*/\(\)\^\\\{\}\.]+)', re.MULTILINE),
 ]
 
 
-class SSLCTextbookParser:
+class VLMTextbookIngestor:
     def __init__(self, concurrency: int = 5, dpi: int = 150):
-        self.embedder = embedding_pipeline
         self.concurrency = concurrency
         self.dpi = dpi
-        self._semaphore: Optional[asyncio.Semaphore] = None
-
-    def _get_semaphore(self) -> asyncio.Semaphore:
-        if self._semaphore is None:
-            self._semaphore = asyncio.Semaphore(self.concurrency)
-        return self._semaphore
+        self.semaphore = asyncio.Semaphore(concurrency)
 
     def render_page_to_png_bytes(self, doc: fitz.Document, page_num: int) -> bytes:
-        """Render a 1-indexed PDF page to PNG bytes."""
+        """Render a 1-indexed PDF page to optimized PNG bytes."""
         page = doc.load_page(page_num - 1)
         matrix = fitz.Matrix(self.dpi / 72, self.dpi / 72)
         pix = page.get_pixmap(matrix=matrix, alpha=False)
         return pix.tobytes("png")
 
     async def transcribe_page_vlm(self, doc: fitz.Document, page_num: int, subject_name: str) -> Dict[str, Any]:
-        """Transcribe a page using Gemini 2.0 Flash VLM with persistent disk caching."""
-        async with self._get_semaphore():
+        """Transcribe a single page using Gemini 2.0 Flash VLM with caching and concurrency control."""
+        async with self.semaphore:
             img_bytes = self.render_page_to_png_bytes(doc, page_num)
             
-            # Check local disk cache first (zero cost)
+            # Check local disk cache
             cached_text = vlm_cache.get(img_bytes)
             if cached_text:
-                return {"page": page_num, "text": cached_text, "cached": True}
+                return {
+                    "page": page_num,
+                    "text": cached_text,
+                    "cached": True
+                }
 
-            # Call Gemini VLM
+            # Call Gemini VLM API
             target_model = getattr(settings, "GEMINI_VLM_MODEL", "gemini-2.0-flash") or "gemini-2.0-flash"
             try:
                 text = await gemini.transcribe_image_vlm(
                     img_bytes,
-                    prompt=VLM_PROMPT,
+                    prompt=VLM_TRANSCRIPTION_PROMPT,
                     mime_type="image/png",
                     model=target_model
                 )
                 if text and text.strip():
                     vlm_cache.set(img_bytes, text.strip(), metadata={"page": page_num, "subject": subject_name})
-                    return {"page": page_num, "text": text.strip(), "cached": False}
+                    return {
+                        "page": page_num,
+                        "text": text.strip(),
+                        "cached": False
+                    }
             except Exception as e:
-                print(f"⚠️ [VLM Note] Page {page_num} API fallback: {e}")
+                print(f"⚠️ [VLM Error] Page {page_num} transcription failed: {e}")
 
-            # PyMuPDF text fallback
+            # Fallback: PyMuPDF plain text if VLM call fails
             plain_text = doc.load_page(page_num - 1).get_text("text")
-            return {"page": page_num, "text": plain_text.strip(), "cached": False, "fallback": True}
+            return {
+                "page": page_num,
+                "text": plain_text.strip(),
+                "cached": False,
+                "fallback": True
+            }
 
-    def create_chunks_from_markdown(
+    def chunk_page_markdown(
         self,
         page_num: int,
         markdown_text: str,
@@ -170,22 +187,23 @@ class SSLCTextbookParser:
         chapter_title: str,
         source_name: str
     ) -> List[Dict]:
-        """Split VLM Markdown into structured semantic chunks with formula metadata."""
+        """Split page Markdown into high-cohesion RAG chunks preserving LaTeX and diagrams."""
         if not markdown_text or len(markdown_text.strip()) < 20:
             return []
 
-        # Find LaTeX formulas
+        # Extract formulas
         formulas = []
-        for pat in FORMULA_REGEX:
+        for pat in LATEX_FORMULA_REGEX:
             for match in pat.finditer(markdown_text):
                 f_str = match.group().strip()
                 if len(f_str) >= 3 and f_str not in formulas:
                     formulas.append(f_str)
 
-        sections = re.split(r'\n(?=#{1,4}\s)', markdown_text)
+        # Split by double newline while respecting section headers
+        raw_sections = re.split(r'\n(?=#{1,4}\s)', markdown_text)
         chunks = []
 
-        for sec in sections:
+        for sec in raw_sections:
             sec = sec.strip()
             if not sec:
                 continue
@@ -239,46 +257,49 @@ class SSLCTextbookParser:
 
         return chunks
 
-    async def ingest_subject_full(self, subject_id: str, config: Dict):
-        """Ingest all chapters of an SSLC subject using VLM."""
+    async def ingest_subject(self, subject_id: str, config: Dict):
         pdf_path = config["pdf_path"]
         if not os.path.exists(pdf_path):
             print(f"❌ PDF not found for {config['subject_name']}: {pdf_path}")
             return
 
         print(f"\n{'='*70}")
-        print(f"🚀 INGESTING SUBJECT WITH VLM: {config['subject_name']}")
-        print(f"   PDF: {pdf_path}")
+        print(f"📖 PROCESSING SUBJECT WITH GEMINI VLM: {config['subject_name']}")
+        print(f"   File: {pdf_path}")
         print(f"{'='*70}")
 
         doc = fitz.open(pdf_path)
+        total_pdf_pages = len(doc)
         pages_to_process = sorted(list(set(config["subject_pages"])))
-        print(f"📄 Target Pages: {len(pages_to_process)} (Pages {min(pages_to_process)}..{max(pages_to_process)})")
+        print(f"📄 Total PDF Pages: {total_pdf_pages} | Target Pages to Ingest: {len(pages_to_process)} (Pages {min(pages_to_process)}..{max(pages_to_process)})")
 
-        # 1. Transcribe pages concurrently
-        print(f"⚡ Transcribing pages via Gemini Flash VLM (Concurrency={self.concurrency})...", flush=True)
+        # 1. Transcribe pages concurrently with VLM
+        print(f"⚡ Transcribing {len(pages_to_process)} pages via Gemini Flash VLM (Concurrency={self.concurrency})...")
         tasks = [
             self.transcribe_page_vlm(doc, p, config["subject_name"])
             for p in pages_to_process
         ]
+        
         transcription_results = await asyncio.gather(*tasks)
         transcriptions_by_page = {r["page"]: r["text"] for r in transcription_results}
         
-        cached_n = sum(1 for r in transcription_results if r.get("cached"))
-        print(f"✓ Transcriptions complete: {cached_n} cached, {len(transcription_results) - cached_n} API processed.", flush=True)
+        cached_count = sum(1 for r in transcription_results if r.get("cached"))
+        api_count = len(transcription_results) - cached_count
+        print(f"✓ Transcriptions complete: {cached_count} from cache, {api_count} new VLM API calls.")
+
         doc.close()
 
         # 2. Ingest per chapter
         all_subject_chunks = []
         for topic_id, chapter_title, ch_pages in config["chapters"]:
-            print(f"\n📦 Chapter: {chapter_title} [{topic_id}] (Pages {min(ch_pages)}..{max(ch_pages)})", flush=True)
+            print(f"\n--- Ingesting Chapter: {chapter_title} [{topic_id}] (Pages {min(ch_pages)}..{max(ch_pages)}) ---")
             ch_chunks = []
             for p in ch_pages:
-                p_text = transcriptions_by_page.get(p, "")
-                if p_text:
-                    p_chunks = self.create_chunks_from_markdown(
+                page_text = transcriptions_by_page.get(p, "")
+                if page_text:
+                    p_chunks = self.chunk_page_markdown(
                         page_num=p,
-                        markdown_text=p_text,
+                        markdown_text=page_text,
                         subject_id=subject_id,
                         topic_id=topic_id,
                         chapter_title=chapter_title,
@@ -287,13 +308,14 @@ class SSLCTextbookParser:
                     ch_chunks.extend(p_chunks)
 
             if not ch_chunks:
-                print(f"   ⚠️ No chunks extracted for {topic_id}")
+                print(f"   ⚠️ No chunks extracted for chapter {topic_id}")
                 continue
 
-            print(f"   Computing embeddings for {len(ch_chunks)} chunks...", flush=True)
+            print(f"   Generated {len(ch_chunks)} VLM chunks. Computing 3072-dim Gemini embeddings...")
             texts = [c["text"] for c in ch_chunks]
-            embeddings = await self.embedder.embed_batch(texts)
+            embeddings = await embedding_pipeline.embed_batch(texts)
 
+            # Upsert into Pinecone chapter namespace
             try:
                 active_vector_store.delete_topic(topic_id)
             except Exception:
@@ -304,14 +326,14 @@ class SSLCTextbookParser:
                 chunks=ch_chunks,
                 embeddings=embeddings
             )
-            print(f"   ✅ Indexed {len(ch_chunks)} vectors to Pinecone namespace '{topic_id}'", flush=True)
+            print(f"   ✅ Upserted {len(ch_chunks)} vectors to Pinecone namespace '{topic_id}'")
             all_subject_chunks.extend(ch_chunks)
 
-        # 3. Whole subject index
+        # 3. Ingest overall subject namespace
         if all_subject_chunks:
-            print(f"\n🌐 Indexing whole subject collection '{subject_id}' ({len(all_subject_chunks)} chunks)...", flush=True)
+            print(f"\n🌐 Indexing whole subject collection '{subject_id}' ({len(all_subject_chunks)} total chunks)...")
             sub_texts = [c["text"] for c in all_subject_chunks]
-            sub_embeddings = await self.embedder.embed_batch(sub_texts)
+            sub_embeddings = await embedding_pipeline.embed_batch(sub_texts)
 
             try:
                 active_vector_store.delete_topic(subject_id)
@@ -323,92 +345,31 @@ class SSLCTextbookParser:
                 chunks=all_subject_chunks,
                 embeddings=sub_embeddings
             )
-            print(f"✅ Ingested {len(all_subject_chunks)} vectors to Pinecone subject namespace '{subject_id}'\n", flush=True)
+            print(f"✅ Upserted {len(all_subject_chunks)} vectors to Pinecone subject namespace '{subject_id}'\n")
 
 
-    async def ingest_single_file(self, pdf_path: str, subject_id: str, topic_id: str, page_numbers: Optional[List[int]] = None):
-        """Ingest an arbitrary PDF file using VLM into Pinecone."""
-        file_p = Path(pdf_path)
-        if not file_p.exists():
-            print(f"❌ Error: File not found: {pdf_path}")
-            return
-
-        doc = fitz.open(str(file_p))
-        total_pages = len(doc)
-        pages_to_process = page_numbers if page_numbers else list(range(1, total_pages + 1))
-
-        print(f"\n📘 Processing PDF: {file_p.name} with Gemini VLM")
-        print(f"   Subject: {subject_id} | Topic ID: {topic_id} | Pages: {len(pages_to_process)}")
-
-        tasks = [
-            self.transcribe_page_vlm(doc, p, subject_id)
-            for p in pages_to_process
-        ]
-        transcription_results = await asyncio.gather(*tasks)
-        doc.close()
-
-        all_chunks = []
-        for r in transcription_results:
-            p_chunks = self.create_chunks_from_markdown(
-                page_num=r["page"],
-                markdown_text=r["text"],
-                subject_id=subject_id,
-                topic_id=topic_id,
-                chapter_title=topic_id,
-                source_name=file_p.name
-            )
-            all_chunks.extend(p_chunks)
-
-        print(f"✓ Generated {len(all_chunks)} VLM chunks. Computing embeddings...", flush=True)
-        texts = [c["text"] for c in all_chunks]
-        embeddings = await self.embedder.embed_batch(texts)
-
-        try:
-            active_vector_store.delete_topic(topic_id)
-        except Exception:
-            pass
-
-        active_vector_store.add_chunks(
-            topic_id=topic_id,
-            chunks=all_chunks,
-            embeddings=embeddings
-        )
-        print(f"🎉 Successfully indexed {len(all_chunks)} chunks into Pinecone under topic '{topic_id}'!\n", flush=True)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# CLI Entry Point
-# ══════════════════════════════════════════════════════════════════════════════
-
-async def async_main():
-    parser = argparse.ArgumentParser(description="Ingest 10th Class SSLC Textbooks into Pinecone 'textbook' index using Gemini VLM")
-    parser.add_argument("--all", action="store_true", help="Ingest all 3 curriculum textbooks (Physics, Chemistry, Math)")
-    parser.add_argument("--subject", type=str, choices=["sslc-physics", "sslc-chemistry", "sslc-math"], help="Ingest a specific subject")
-    parser.add_argument("--pdf_path", type=str, help="Custom PDF file path")
-    parser.add_argument("--topic_id", type=str, default="sslc-general", help="Topic ID for custom PDF")
-    parser.add_argument("--concurrency", type=int, default=5, help="Concurrent Gemini VLM requests")
-
+async def main():
+    parser = argparse.ArgumentParser(description="Ingest textbook PDFs using Gemini VLM into Pinecone index 'textbook'")
+    parser.add_argument("--subject", type=str, choices=list(CURRICULUM_CONFIG.keys()) + ["all"], default="all",
+                        help="Subject to ingest (sslc-physics, sslc-chemistry, sslc-math, or all)")
+    parser.add_argument("--concurrency", type=int, default=5, help="Number of parallel Gemini VLM requests")
+    parser.add_argument("--dpi", type=int, default=150, help="DPI for rendering PDF page images")
     args = parser.parse_args()
-    parser_inst = SSLCTextbookParser(concurrency=args.concurrency)
 
-    if args.all:
-        for subj, config in CURRICULUM_CATALOG.items():
-            await parser_inst.ingest_subject_full(subj, config)
-    elif args.subject:
-        config = CURRICULUM_CATALOG[args.subject]
-        await parser_inst.ingest_subject_full(args.subject, config)
-    elif args.pdf_path:
-        subj = args.subject or "sslc-custom"
-        await parser_inst.ingest_single_file(args.pdf_path, subj, args.topic_id)
-    else:
-        print("💡 How to use ingest_sslc_textbooks.py:")
-        print("  1. Ingest all 3 textbooks:  python scripts/ingest_sslc_textbooks.py --all")
-        print("  2. Ingest Physics:          python scripts/ingest_sslc_textbooks.py --subject sslc-physics")
-        print("  3. Ingest Chemistry:        python scripts/ingest_sslc_textbooks.py --subject sslc-chemistry")
-        print("  4. Ingest Mathematics:      python scripts/ingest_sslc_textbooks.py --subject sslc-math")
-        print("  5. Ingest custom PDF:       python scripts/ingest_sslc_textbooks.py --pdf_path <file.pdf> --topic_id my-topic")
+    print("=" * 70)
+    print("DeepTutor VLM Textbook Ingestion Pipeline (Pinecone Index: 'textbook')")
+    print("=" * 70)
+
+    ingestor = VLMTextbookIngestor(concurrency=args.concurrency, dpi=args.dpi)
+
+    subjects_to_run = list(CURRICULUM_CONFIG.keys()) if args.subject == "all" else [args.subject]
+
+    for subj in subjects_to_run:
+        config = CURRICULUM_CONFIG[subj]
+        await ingestor.ingest_subject(subj, config)
+
+    print("\n🎉 ALL SELECTED TEXTBOOKS SUCCESSFULLY TRANSCRIBED WITH VLM & INDEXED INTO PINECONE!")
 
 
 if __name__ == "__main__":
-python scripts/ingest_sslc_textbooks.py --subject sslc-math --concurrency 8
-    asyncio.run(async_main())
+    asyncio.run(main())
