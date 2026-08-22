@@ -1162,16 +1162,16 @@ class GraphRAGPipeline:
         vector_context_text = ""
         effective_topic_id = topic_id or ""
 
-        # ── Step 0: Kickoff background image search ────────────────────────────
-        explicit_image_request = any(w in question.lower() for w in ["figure", "diagram", "image", "picture", "draw", "visual", "illustration"])
-        # Automatically search for verified educational diagrams for academic topics or explicit diagram requests
-        should_search_image = explicit_image_request or (
-            len(question.strip().split()) >= 2 and 
-            not question.strip().lower().startswith(("hi", "hello", "hey", "thanks", "thank you", "bye", "good morning"))
-        )
+        # ── Step 0: Kickoff background image search ONLY when explicitly requested ──
+        image_keywords = [
+            "figure", "diagram", "image", "picture", "photo", "pic", "chart",
+            "illustration", "draw", "visual", "visualize", "sketch"
+        ]
+        q_lower = question.lower()
+        wants_image = any(w in q_lower for w in image_keywords)
         
         image_search_task = None
-        if should_search_image:
+        if wants_image:
             try:
                 from app.services.image_search import image_search_service
                 image_search_task = asyncio.create_task(image_search_service.get_verified_images(question))
@@ -1417,7 +1417,7 @@ class GraphRAGPipeline:
                     for char in img_markdown:
                         yield f"data: {json.dumps({'type': 'token', 'data': char})}\n\n"
                         accumulated_text += char
-                elif explicit_image_request:
+                elif wants_image:
                     fallback_msg = (
                         "\n\n---\n\n"
                         "> ℹ️ *No verified diagram could be validated with high academic confidence for this specific topic — please refer to the step-by-step text explanation above.*\n\n"
