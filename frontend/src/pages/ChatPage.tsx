@@ -1018,6 +1018,19 @@ export default function ChatPage() {
                 <span>🇸🇪</span>
                 <span>Svenska</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setAiLanguage('arabic')}
+                className={`px-2.5 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${
+                  aiLanguage === 'arabic'
+                    ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="الرد باللغة العربية"
+              >
+                <span>🇸🇦</span>
+                <span>العربية</span>
+              </button>
             </div>
 
             {activeSession && (
@@ -1269,11 +1282,15 @@ export default function ChatPage() {
                   {/* Language Quick Toggle */}
                   <button
                     type="button"
-                    onClick={() => setAiLanguage(aiLanguage === 'english' ? 'swedish' : 'english')}
+                    onClick={() => {
+                      if (aiLanguage === 'english') setAiLanguage('swedish')
+                      else if (aiLanguage === 'swedish') setAiLanguage('arabic')
+                      else setAiLanguage('english')
+                    }}
                     className="flex items-center gap-1 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 px-2.5 py-1.5 rounded-[1.25rem] border border-slate-200 transition-colors cursor-pointer"
                     title="Switch AI response language"
                   >
-                    <span>{aiLanguage === 'english' ? '🇬🇧 EN' : '🇸🇪 SV'}</span>
+                    <span>{aiLanguage === 'english' ? '🇬🇧 EN' : aiLanguage === 'swedish' ? '🇸🇪 SV' : '🇸🇦 AR'}</span>
                   </button>
                   <button
                     onClick={() => fileInputRef.current?.click()}

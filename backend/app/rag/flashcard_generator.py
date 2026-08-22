@@ -65,6 +65,7 @@ async def generate_flashcards_for_section(
     section_id: str,
     focus_topic: Optional[str] = None,
     user_id: Optional[str] = None,
+    language: str = "english",
 ) -> List[dict]:
     """
     Generate a deck of flashcards derived strictly from textbook context or uploaded PDF document text.
@@ -99,10 +100,18 @@ async def generate_flashcards_for_section(
     context = "\n\n".join(sample_docs)[:4500]
     chapter_label = get_chapter_title(section_id)
 
+    lang_str = (language or "english").lower()
+    if lang_str in ("arabic", "ar"):
+        lang_instruction = "\n\nMANDATORY RESPONSE LANGUAGE: Formulate all card fronts and point-by-point card backs 100% in fluent, clear, academic Arabic (العربية)."
+    elif lang_str in ("swedish", "sv"):
+        lang_instruction = "\n\nMANDATORY RESPONSE LANGUAGE: Formulate all card fronts and point-by-point card backs 100% in fluent, clear, academic Swedish (Svenska)."
+    else:
+        lang_instruction = ""
+
     topic_instruction = (
-        f"FOCUS TOPIC: The flashcards MUST focus specifically on '{focus_topic}' from '{chapter_label}'."
+        f"FOCUS TOPIC: The flashcards MUST focus specifically on '{focus_topic}' from '{chapter_label}'.{lang_instruction}"
         if (focus_topic and focus_topic.lower() != "all topics (entire pdf)")
-        else f"Scope: Comprehensive flashcards covering key terms, definitions, formulas, and concepts for '{chapter_label}'."
+        else f"Scope: Comprehensive flashcards covering key terms, definitions, formulas, and concepts for '{chapter_label}'.{lang_instruction}"
     )
 
     prompt = (

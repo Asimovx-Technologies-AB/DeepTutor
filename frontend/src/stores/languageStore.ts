@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type UiLanguage = 'en' | 'sv'
-export type AiLanguage = 'english' | 'swedish'
+export type UiLanguage = 'en' | 'sv' | 'ar'
+export type AiLanguage = 'english' | 'swedish' | 'arabic'
 
 interface LanguageState {
   uiLanguage: UiLanguage

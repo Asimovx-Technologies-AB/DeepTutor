@@ -317,6 +317,19 @@ export default function SubjectChatPage() {
                 <span>🇸🇪</span>
                 <span>Svenska</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setAiLanguage('arabic')}
+                className={`px-2.5 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${
+                  aiLanguage === 'arabic'
+                    ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="الرد باللغة العربية"
+              >
+                <span>🇸🇦</span>
+                <span>العربية</span>
+              </button>
             </div>
 
             {messages.length > 0 && (
