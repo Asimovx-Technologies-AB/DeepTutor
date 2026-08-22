@@ -359,7 +359,7 @@ export default function FlashcardsPage() {
           className="flex items-center gap-2 text-[#777777] hover:text-text-primary transition-colors text-xs font-black cursor-pointer px-4 py-2 rounded-xl hover:bg-gray-50 border border-transparent hover:border-border"
         >
           <ArrowLeft size={16} />
-          <span>Back to Chat</span>
+          <span>{uiLanguage === 'sv' ? 'Tillbaka till chatten' : 'Back to Chat'}</span>
         </button>
 
         <div className="flex items-center gap-3">
@@ -369,7 +369,7 @@ export default function FlashcardsPage() {
             className={`text-[11px] px-5 py-2.5 rounded-xl font-black flex items-center gap-2 transition-all cursor-pointer ${viewMode === 'single' ? 'bg-[#20201D] text-white shadow-md' : 'bg-white border-2 border-border text-text-secondary hover:text-text-primary hover:border-[#20201D]'}`}
           >
             {viewMode === 'single' ? <Grid size={14} /> : <Layers size={14} />}
-            <span>{viewMode === 'single' ? 'Grid View' : 'Focus Mode'}</span>
+            <span>{viewMode === 'single' ? (uiLanguage === 'sv' ? 'Rutnät' : 'Grid View') : (uiLanguage === 'sv' ? 'Fokusläge' : 'Focus Mode')}</span>
           </button>
 
           <button
@@ -378,7 +378,7 @@ export default function FlashcardsPage() {
             className="text-[11px] px-5 py-2.5 rounded-xl font-black flex items-center gap-2 transition-all cursor-pointer bg-white border-2 border-border text-[#4F46E5] hover:bg-[#EEF2FF] hover:border-[#4F46E5] shadow-sm"
           >
             <RefreshCw size={13} className={generating ? 'animate-spin' : ''} />
-            <span>Regenerate</span>
+            <span>{uiLanguage === 'sv' ? 'Generera om' : 'Regenerate'}</span>
           </button>
         </div>
       </div>
@@ -387,10 +387,10 @@ export default function FlashcardsPage() {
       <div className="bg-white p-6 rounded-[1.5rem] border border-border shadow-sm space-y-5">
         <div className="flex items-center justify-between text-xs font-black text-[#777777]">
           <span className="bg-transparent border border-border px-4 py-1.5 rounded-full text-text-secondary">
-            {viewMode === 'single' ? `Card ${currentIndex + 1} of ${cards.length}` : `${cards.length} Total Cards`}
+            {viewMode === 'single' ? (uiLanguage === 'sv' ? `Kort ${currentIndex + 1} av ${cards.length}` : `Card ${currentIndex + 1} of ${cards.length}`) : (uiLanguage === 'sv' ? `${cards.length} alla kort` : `${cards.length} Total Cards`)}
           </span>
           <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-1.5 rounded-full flex items-center gap-1.5 shadow-xs">
-            <CheckCircle2 size={14} /> {completionPercentage}% Mastered ({masteredCount}/{cards.length})
+            <CheckCircle2 size={14} /> {completionPercentage}% {uiLanguage === 'sv' ? 'Bemästrade' : 'Mastered'} ({masteredCount}/{cards.length})
           </span>
         </div>
 
@@ -410,8 +410,8 @@ export default function FlashcardsPage() {
         <div className="space-y-5">
           {/* Card Counter */}
           <div className="flex items-center justify-between text-xs font-black text-gray-500 px-2">
-            <span>Card {currentIndex + 1} of {cards.length}</span>
-            <span className="text-gray-400">Press Space or Click to Flip 🔄</span>
+            <span>{uiLanguage === 'sv' ? `Kort ${currentIndex + 1} av ${cards.length}` : `Card ${currentIndex + 1} of ${cards.length}`}</span>
+            <span className="text-gray-400">{uiLanguage === 'sv' ? 'Tryck Blanksteg eller Klicka för att vända 🔄' : 'Press Space or Click to Flip 🔄'}</span>
           </div>
 
           {/* 3D Interactive Flip Container */}
@@ -433,7 +433,7 @@ export default function FlashcardsPage() {
               <div className="absolute inset-0 w-full h-full backface-hidden bg-white border border-[#E2E8F0] border-t-4 border-t-[#4F46E5] rounded-[2rem] p-8 flex flex-col justify-between elevation-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs text-[#4F46E5] font-black uppercase tracking-wider">
-                    <HelpCircle size={14} /> Concept / Question
+                    <HelpCircle size={14} /> {uiLanguage === 'sv' ? 'Begrepp / Fråga' : 'Concept / Question'}
                   </div>
 
                   <button
@@ -457,18 +457,18 @@ export default function FlashcardsPage() {
                       animate={{ opacity: 1, y: 0 }}
                       className="mt-4 text-xs text-[#FFC800] bg-[#FFF0B3] border border-[#FFC800]/30 rounded-[1.25rem] px-4 py-2 font-bold"
                     >
-                      💡 Think about the concept carefully...
+                      {uiLanguage === 'sv' ? '💡 Tänk efter noggrant på begreppet...' : '💡 Think about the concept carefully...'}
                     </motion.p>
                   )}
                   {currentCard?.mastered && (
                     <span className="text-[11px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1">
-                      <Check size={12} /> Mastered
+                      <Check size={12} /> {uiLanguage === 'sv' ? 'Bemästrad' : 'Mastered'}
                     </span>
                   )}
                 </div>
 
                 <div className="flex items-center justify-center pt-3 border-t border-[#E2E8F0]/60">
-                  <p className="text-xs text-[#AFAFAF] font-semibold">Click Card to Flip 🔄</p>
+                  <p className="text-xs text-[#AFAFAF] font-semibold">{uiLanguage === 'sv' ? 'Klicka på kortet för att vända 🔄' : 'Click Card to Flip 🔄'}</p>
                 </div>
               </div>
 
@@ -479,7 +479,7 @@ export default function FlashcardsPage() {
               >
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                   <div className="flex items-center gap-1.5 text-xs text-emerald-700 font-black uppercase tracking-wider bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full shadow-2xs">
-                    <CheckCircle2 size={14} /> Point-by-Point Solution
+                    <CheckCircle2 size={14} /> {uiLanguage === 'sv' ? 'Punkt-för-punkt lösning' : 'Point-by-Point Solution'}
                   </div>
 
                   <button
@@ -497,7 +497,7 @@ export default function FlashcardsPage() {
                 </div>
 
                 <div className="flex items-center justify-end pt-3 border-t border-slate-100">
-                  <p className="text-xs text-slate-400 font-semibold">Click Card to Flip Back 🔄</p>
+                  <p className="text-xs text-slate-400 font-semibold">{uiLanguage === 'sv' ? 'Klicka på kortet för att vända tillbaka 🔄' : 'Click Card to Flip Back 🔄'}</p>
                 </div>
               </div>
             </motion.div>
@@ -510,14 +510,14 @@ export default function FlashcardsPage() {
               className="flex items-center justify-center gap-2 py-4 bg-white border-2 border-border text-text-secondary hover:border-red-400 hover:bg-red-50 hover:text-red-600 font-black rounded-[1.5rem] cursor-pointer transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5"
             >
               <AlertCircle size={18} />
-              <span>Needs Practice (←)</span>
+              <span>{uiLanguage === 'sv' ? 'Behöver öva (←)' : 'Needs Practice (←)'}</span>
             </button>
             <button
               onClick={() => handleReview(true)}
               className="flex items-center justify-center gap-2 py-4 font-black rounded-[1.5rem] cursor-pointer shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all bg-gradient-to-br from-emerald-400 to-emerald-500 text-white border-none"
             >
               <CheckCircle2 size={18} />
-              <span>Mastered! (→)</span>
+              <span>{uiLanguage === 'sv' ? 'Bemästrad! (→)' : 'Mastered! (→)'}</span>
             </button>
           </div>
 
@@ -527,14 +527,14 @@ export default function FlashcardsPage() {
               onClick={handlePrev}
               className="hover:text-[#4F46E5] font-black transition-colors flex items-center gap-1 cursor-pointer"
             >
-              <ChevronLeft size={16} /> Previous Card
+              <ChevronLeft size={16} /> {uiLanguage === 'sv' ? 'Föregående kort' : 'Previous Card'}
             </button>
-            <span className="text-xs text-[#AFAFAF]">Shortcuts: Space / Arrow Keys</span>
+            <span className="text-xs text-[#AFAFAF]">{uiLanguage === 'sv' ? 'Kortkommandon: Blanksteg / Piltangenter' : 'Shortcuts: Space / Arrow Keys'}</span>
             <button
               onClick={handleNext}
               className="hover:text-[#4F46E5] font-black transition-colors flex items-center gap-1 cursor-pointer"
             >
-              Next Card <ChevronRight size={16} />
+              {uiLanguage === 'sv' ? 'Nästa kort' : 'Next Card'} <ChevronRight size={16} />
             </button>
           </div>
         </div>
@@ -546,12 +546,12 @@ export default function FlashcardsPage() {
               <button
                 key={filter}
                 onClick={() => setGridFilter(filter)}
-                className={`text-xs px-5 py-2 rounded-xl capitalize font-black transition-all cursor-pointer ${gridFilter === filter
+                className={`text-xs px-5 py-2 rounded-xl font-black transition-all cursor-pointer ${gridFilter === filter
                   ? 'bg-[#20201D] text-white shadow-md'
                   : 'bg-transparent text-text-secondary hover:bg-gray-100 hover:text-text-primary'
                   }`}
               >
-                {filter}
+                {filter === 'all' ? (uiLanguage === 'sv' ? 'Alla' : 'All') : filter === 'unmastered' ? (uiLanguage === 'sv' ? 'Otränade' : 'Unmastered') : (uiLanguage === 'sv' ? 'Bemästrade' : 'Mastered')}
               </button>
             ))}
           </div>
@@ -572,7 +572,7 @@ export default function FlashcardsPage() {
               >
                 <div>
                   <span className={`text-[10px] font-black uppercase tracking-wider block mb-3 px-2.5 py-1 rounded-md w-fit ${card.mastered ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
-                    {card.mastered ? 'Mastered' : 'Needs Review'}
+                    {card.mastered ? (uiLanguage === 'sv' ? 'Bemästrad' : 'Mastered') : (uiLanguage === 'sv' ? 'Behöver repeteras' : 'Needs Review')}
                   </span>
                   <p className="text-[15px] font-black text-text-primary leading-snug">{card.front}</p>
                 </div>

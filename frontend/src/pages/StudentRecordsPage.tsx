@@ -199,7 +199,7 @@ export default function StudentRecordsPage() {
             className="btn-primary font-bold text-xs sm:text-sm py-2.5 px-4 rounded-xl flex items-center gap-2 shadow-xs transition-all active:scale-[0.98] cursor-pointer"
           >
             <Printer size={16} />
-            <span>Print Academic Report Card</span>
+            <span>{t.records.printReport}</span>
           </button>
         </div>
       </div>
@@ -228,31 +228,39 @@ export default function StudentRecordsPage() {
                       {student?.username || user?.username || 'Student'}
                     </h2>
                     <span className="text-[11px] font-bold uppercase tracking-wider bg-brand-primary-soft text-brand-primary px-2.5 py-0.5 rounded-full border border-brand-primary/30">
-                      {scholarRank?.level_title || 'Scholar'}
+                      {uiLanguage === 'sv' ? (
+                        scholarRank?.level_title === 'Knowledge Explorer' ? 'Kunskapsutforskare' :
+                        scholarRank?.level_title === 'Novice Scholar' ? 'Nybörjare' :
+                        scholarRank?.level_title === 'Concept Craftsman' ? 'Begreppsbyggare' :
+                        scholarRank?.level_title === 'GraphRAG Master' ? 'GraphRAG-Mästare' :
+                        scholarRank?.level_title === 'AI Tutor Polymath' ? 'AI-Handledare Expert' :
+                        scholarRank?.level_title === 'Grand Academician' ? 'Stor Akademiker' :
+                        scholarRank?.level_title || 'Elev'
+                      ) : (scholarRank?.level_title || 'Scholar')}
                     </span>
                   </div>
                   <p className="text-xs text-text-muted font-medium mt-0.5">
-                    {student?.email || user?.email || 'student@indietutor.ai'} • Enrolled since {student?.member_since ? new Date(student.member_since).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '2026'}
+                    {student?.email || user?.email || 'student@indietutor.ai'} • {uiLanguage === 'sv' ? 'Medlem sedan' : 'Enrolled since'} {student?.member_since ? new Date(student.member_since).toLocaleDateString(uiLanguage === 'sv' ? 'sv-SE' : 'en-US', { month: 'short', year: 'numeric' }) : '2026'}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 sm:self-center">
                 <div className="bg-transparent border border-border px-3 py-2 rounded-xl text-center min-w-[70px]">
-                  <p className="text-[10px] uppercase font-bold text-text-muted">Streak</p>
+                  <p className="text-[10px] uppercase font-bold text-text-muted">{t.records.streak}</p>
                   <p className="text-base font-bold text-brand-primary flex items-center justify-center gap-1">
                     <Flame size={14} className="fill-brand-primary" />
-                    {scholarRank?.streak_days || 1}d
+                    {scholarRank?.streak_days || 1}{uiLanguage === 'sv' ? 'd' : 'd'}
                   </p>
                 </div>
                 <div className="bg-transparent border border-border px-3 py-2 rounded-xl text-center min-w-[70px]">
-                  <p className="text-[10px] uppercase font-bold text-text-muted">Level</p>
+                  <p className="text-[10px] uppercase font-bold text-text-muted">{t.records.level}</p>
                   <p className="text-base font-bold text-success">
-                    Lv. {scholarRank?.level || 1}
+                    {uiLanguage === 'sv' ? 'Niv. ' : 'Lv. '}{scholarRank?.level || 1}
                   </p>
                 </div>
                 <div className="bg-transparent border border-border px-3 py-2 rounded-xl text-center min-w-[80px]">
-                  <p className="text-[10px] uppercase font-bold text-text-muted">Total XP</p>
+                  <p className="text-[10px] uppercase font-bold text-text-muted">{t.records.totalXp}</p>
                   <p className="text-base font-bold text-text-primary">
                     {scholarRank?.total_xp?.toLocaleString() || 0}
                   </p>
@@ -265,7 +273,7 @@ export default function StudentRecordsPage() {
               <div className="flex justify-between items-center text-xs">
                 <span className="font-bold text-text-secondary flex items-center gap-1.5">
                   <Sparkles size={14} className="text-brand-primary" />
-                  <span>XP Progress to Level {(scholarRank?.level || 1) + 1}</span>
+                  <span>{t.records.xpProgress} {(scholarRank?.level || 1) + 1}</span>
                 </span>
                 <span className="font-bold text-text-primary">
                   {scholarRank?.xp_in_level || 0} / {scholarRank?.xp_for_next || 250} XP
@@ -283,24 +291,24 @@ export default function StudentRecordsPage() {
           {/* Quick Stat Pill Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 mt-4 border-t border-border/60">
             <div className="bg-white/60 backdrop-blur-md shadow-sm border border-white p-3 rounded-2xl relative overflow-hidden">
-              <p className="text-[11px] font-bold text-text-secondary">Quiz Accuracy</p>
+              <p className="text-[11px] font-bold text-text-secondary">{t.records.quizAccuracy}</p>
               <p className="text-xl font-bold text-text-primary mt-0.5">{metrics?.avg_quiz_score || 0}%</p>
-              <span className="text-[10px] text-success font-bold">Over {metrics?.total_quizzes_taken || 0} tests</span>
+              <span className="text-[10px] text-success font-bold">{uiLanguage === 'sv' ? `Över ${metrics?.total_quizzes_taken || 0} prov` : `Over ${metrics?.total_quizzes_taken || 0} tests`}</span>
             </div>
             <div className="bg-white/60 backdrop-blur-md shadow-sm border border-white p-3 rounded-2xl relative overflow-hidden">
-              <p className="text-[11px] font-bold text-text-secondary">Flashcards</p>
+              <p className="text-[11px] font-bold text-text-secondary">{t.records.flashcards}</p>
               <p className="text-xl font-bold text-text-primary mt-0.5">{metrics?.flashcards_mastered || 0}</p>
-              <span className="text-[10px] text-text-muted font-bold">Concepts Mastered</span>
+              <span className="text-[10px] text-text-muted font-bold">{t.records.conceptsMastered}</span>
             </div>
             <div className="bg-white/60 backdrop-blur-md shadow-sm border border-white p-3 rounded-2xl relative overflow-hidden">
-              <p className="text-[11px] font-bold text-text-secondary">Study Sessions</p>
+              <p className="text-[11px] font-bold text-text-secondary">{t.records.studySessions}</p>
               <p className="text-xl font-bold text-text-primary mt-0.5">{metrics?.total_sessions || 0}</p>
-              <span className="text-[10px] text-brand-primary font-bold">AI Tutor Dialogs</span>
+              <span className="text-[10px] text-brand-primary font-bold">{t.records.aiTutorDialogs}</span>
             </div>
             <div className="bg-white/60 backdrop-blur-md shadow-sm border border-white p-3 rounded-2xl relative overflow-hidden">
-              <p className="text-[11px] font-bold text-text-secondary">Smart Notes</p>
+              <p className="text-[11px] font-bold text-text-secondary">{t.records.smartNotes}</p>
               <p className="text-xl font-bold text-text-primary mt-0.5">{metrics?.notes_generated || 0}</p>
-              <span className="text-[10px] text-brand-primary font-bold">PYQ Synthesis</span>
+              <span className="text-[10px] text-brand-primary font-bold">{t.records.pyqSynthesis}</span>
             </div>
           </div>
         </div>
@@ -315,7 +323,7 @@ export default function StudentRecordsPage() {
         >
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-text-muted uppercase tracking-wider">Exam Readiness Index</span>
+              <span className="text-xs font-bold text-text-muted uppercase tracking-wider">{t.records.examReadiness}</span>
               <span className="p-1.5 rounded-xl bg-success-soft text-success">
                 <ShieldCheck size={16} />
               </span>
@@ -348,29 +356,46 @@ export default function StudentRecordsPage() {
                 </svg>
                 <div className="absolute flex flex-col items-center">
                   <span className="text-3xl font-bold text-text-primary tracking-tight">{readinessScore}%</span>
-                  <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">{readinessStatus}</span>
+                  <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">
+                    {uiLanguage === 'sv' ? (
+                      readinessStatus === 'Action Required' || readinessStatus === 'ACTION REQUIRED' ? 'ÅTGÄRD KRÄVS' :
+                      readinessStatus === 'Excellent' || readinessStatus === 'EXCELLENT' ? 'UTMÄRKT' :
+                      readinessStatus === 'Good' || readinessStatus === 'GOOD' ? 'GOD' :
+                      readinessStatus === 'Moderate' || readinessStatus === 'MODERATE' ? 'MÅTTLIG' :
+                      readinessStatus
+                    ) : readinessStatus}
+                  </span>
                 </div>
               </div>
-              <p className="text-sm font-bold text-text-primary mt-2 text-center">{readinessLabel}</p>
+              <p className="text-sm font-bold text-text-primary mt-2 text-center">
+                {uiLanguage === 'sv' ? (
+                  readinessLabel === 'Needs Systematic Revision' ? 'Behöver systematisk repetition' :
+                  readinessLabel === 'High Exam Readiness' ? 'Hög examensberedskap' :
+                  readinessLabel === 'Solid Exam Preparation' ? 'God examensförberedelse' :
+                  readinessLabel === 'Developing Foundation' ? 'Grundläggande kunskap' :
+                  readinessLabel === 'Good Standing' ? 'God status' :
+                  readinessLabel
+                ) : readinessLabel}
+              </p>
             </div>
           </div>
 
           <div className="space-y-2 bg-transparent p-3.5 rounded-2xl border border-border text-xs">
             <div className="flex justify-between text-text-secondary">
-              <span>Quiz Accuracy Factor</span>
-              <span className="font-bold text-text-primary">45% Weight</span>
+              <span>{t.records.quizAccuracyFactor}</span>
+              <span className="font-bold text-text-primary">{uiLanguage === 'sv' ? '45% vikt' : '45% Weight'}</span>
             </div>
             <div className="flex justify-between text-text-secondary">
-              <span>Study Streak & Consistency</span>
-              <span className="font-bold text-text-primary">20% Weight</span>
+              <span>{t.records.studyStreakConsistency}</span>
+              <span className="font-bold text-text-primary">{uiLanguage === 'sv' ? '20% vikt' : '20% Weight'}</span>
             </div>
             <div className="flex justify-between text-text-secondary">
-              <span>Syllabus Coverage</span>
-              <span className="font-bold text-text-primary">20% Weight</span>
+              <span>{t.records.syllabusCoverage}</span>
+              <span className="font-bold text-text-primary">{uiLanguage === 'sv' ? '20% vikt' : '20% Weight'}</span>
             </div>
             <div className="flex justify-between text-text-secondary">
-              <span>Flashcard Recall Rate</span>
-              <span className="font-bold text-text-primary">15% Weight</span>
+              <span>{t.records.flashcardRecallRate}</span>
+              <span className="font-bold text-text-primary">{uiLanguage === 'sv' ? '15% vikt' : '15% Weight'}</span>
             </div>
           </div>
         </motion.div>

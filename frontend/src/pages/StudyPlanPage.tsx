@@ -459,9 +459,9 @@ export default function StudyPlanPage() {
                 {/* Progress bar */}
                 <div className="space-y-1.5 pt-2">
                   <div className="flex items-center justify-between text-xs font-extrabold text-[#777777]">
-                    <span>Overall Study Completion</span>
+                    <span>{uiLanguage === 'sv' ? 'Total studieframgång' : 'Overall Study Completion'}</span>
                     <span className="text-[#58CC02]">
-                      {completedCount} of {currentPlan.total_days} Days Completed ({completionPct}%)
+                      {completedCount} {uiLanguage === 'sv' ? 'av' : 'of'} {currentPlan.total_days} {uiLanguage === 'sv' ? 'dagar slutförda' : 'Days Completed'} ({completionPct}%)
                     </span>
                   </div>
                   <div className="w-full bg-[#E5E5E5] rounded-full h-2 overflow-hidden">
@@ -478,7 +478,7 @@ export default function StudyPlanPage() {
               <div className="space-y-4">
                 <h3 className="text-sm font-black text-[#3C3C3C] flex items-center gap-2">
                   <Clock size={16} className="text-[#4F46E5]" />
-                  Day-by-Day Study Schedule ({currentPlan.schedule?.length ?? 0} Days)
+                  {uiLanguage === 'sv' ? `Dag-för-dag studieplanering (${currentPlan.schedule?.length ?? 0} dagar)` : `Day-by-Day Study Schedule (${currentPlan.schedule?.length ?? 0} Days)`}
                 </h3>
 
                 <div className="space-y-3">
@@ -518,7 +518,7 @@ export default function StudyPlanPage() {
                                     ? 'bg-[#58CC02] border-[#58CC02] text-white elevation-1'
                                     : 'bg-[#F7F7F7] border-[#E2E8F0] text-transparent'
                                 }`}
-                                title={isDone ? '✅ Passed Day Quiz (≥70%)' : 'Pass the Day Quiz to complete'}
+                                title={isDone ? (uiLanguage === 'sv' ? '✅ Klarade Dags-Quiz (≥70%)' : '✅ Passed Day Quiz (≥70%)') : (uiLanguage === 'sv' ? 'Gör Dags-Quiz för att slutföra' : 'Pass the Day Quiz to complete')}
                               >
                                 <CheckCircle2 size={18} />
                               </div>
@@ -526,7 +526,7 @@ export default function StudyPlanPage() {
                               <div>
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className="text-xs font-black text-[#4F46E5] bg-[#EEF2FF] px-2 py-0.5 rounded-md border border-[#4F46E5]/20">
-                                    Day {dayItem.day}
+                                    {uiLanguage === 'sv' ? 'Dag' : 'Day'} {dayItem.day}
                                   </span>
                                   {dayItem.phase && (
                                     <span className="text-[10px] font-bold text-[#58CC02] bg-[#D7FFB8] px-2 py-0.5 rounded-md border border-[#58CC02]/20">
@@ -534,7 +534,7 @@ export default function StudyPlanPage() {
                                     </span>
                                   )}
                                   <span className="text-[11px] font-semibold text-[#AFAFAF] flex items-center gap-1">
-                                    <Clock size={11} /> {dayItem.estimated_hours} hrs
+                                    <Clock size={11} /> {dayItem.estimated_hours} {uiLanguage === 'sv' ? 'tim' : 'hrs'}
                                   </span>
                                 </div>
 
@@ -550,7 +550,7 @@ export default function StudyPlanPage() {
                                 {dayItem.recommended_action && (
                                   <div className="mt-3 p-2.5 bg-[#FFFFFF] border border-[#E2E8F0] rounded-[1.25rem] text-xs text-[#3C3C3C] flex items-center gap-2">
                                     <Brain size={13} className="text-[#4F46E5] flex-shrink-0" />
-                                    <span><strong className="text-[#4F46E5]">Action:</strong> {dayItem.recommended_action}</span>
+                                    <span><strong className="text-[#4F46E5]">{uiLanguage === 'sv' ? 'Åtgärd:' : 'Action:'}</strong> {dayItem.recommended_action}</span>
                                   </div>
                                 )}
 
@@ -575,7 +575,7 @@ export default function StudyPlanPage() {
                                     onClick={() => handleOpenStudyNotes(dayItem)}
                                     className="btn-primary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer elevation-1 active:scale-95"
                                   >
-                                    <BookOpen size={14} /> View AI Study Notes
+                                    <BookOpen size={14} /> {uiLanguage === 'sv' ? 'Visa AI-Studieanteckningar' : 'View AI Study Notes'}
                                   </button>
 
                                   <button
@@ -593,7 +593,7 @@ export default function StudyPlanPage() {
                                     }`}
                                   >
                                     <Target size={14} />
-                                    {isDone ? '✓ Retake Day Quiz (Passed)' : '🎯 Take Day Quiz (Pass ≥ 70%)'}
+                                    {isDone ? (uiLanguage === 'sv' ? '✓ Gör om Dags-Quiz (Klar)' : '✓ Retake Day Quiz (Passed)') : (uiLanguage === 'sv' ? '🎯 Gör Dags-Quiz (Klar ≥ 70%)' : '🎯 Take Day Quiz (Pass ≥ 70%)')}
                                   </button>
                                 </div>
                               </div>

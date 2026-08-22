@@ -1,4 +1,5 @@
 import { BookOpen, CheckCircle, Clock, Flame, Trophy, Play } from 'lucide-react'
+import { useLanguageStore } from '../../stores/languageStore'
 
 interface LearningStatsRowProps {
   stats: {
@@ -12,30 +13,31 @@ interface LearningStatsRowProps {
 }
 
 export default function LearningStatsRow({ stats }: LearningStatsRowProps) {
+  const { uiLanguage } = useLanguageStore()
   if (!stats) return null
 
   const statItems = [
     { 
-      label: 'In Progress', 
+      label: uiLanguage === 'sv' ? 'Pågående' : 'In Progress', 
       value: stats.courses_in_progress, 
       icon: <Play size={18} className="text-info" />,
       color: 'bg-info-soft text-info'
     },
     { 
-      label: 'Completed', 
+      label: uiLanguage === 'sv' ? 'Slutförda' : 'Completed', 
       value: stats.courses_completed, 
       icon: <CheckCircle size={18} className="text-success" />,
       color: 'bg-success-soft text-success'
     },
     { 
-      label: 'Learning Hours', 
+      label: uiLanguage === 'sv' ? 'Studiestimmar' : 'Learning Hours', 
       value: (stats.total_learning_hours || 0).toFixed(1), 
       icon: <Clock size={18} className="text-brand-primary" />,
       color: 'bg-brand-primary-soft text-brand-primary'
     },
     { 
-      label: 'Current Streak', 
-      value: `${stats.current_streak} days`, 
+      label: uiLanguage === 'sv' ? 'Nuvarande svit' : 'Current Streak', 
+      value: `${stats.current_streak} ${uiLanguage === 'sv' ? 'dagar' : 'days'}`, 
       icon: <Flame size={18} className="text-brand-primary" />,
       color: 'bg-brand-primary-soft text-brand-primary'
     },
