@@ -360,6 +360,15 @@ def classify_learning_response_instruction(
     q_raw = question or ""
     q_lower = q_raw.lower().strip()
 
+    # 0. Structured Academic Question Solver & Verifier (Tables with blanks, Flowcharts, Fill-in-the-blanks, Matching)
+    try:
+        from app.services.structured_solver import detect_structure_type, get_structured_solver_instruction
+        struct_type = detect_structure_type(q_raw)
+        if struct_type:
+            return get_structured_solver_instruction(struct_type, q_raw)
+    except Exception as e:
+        print(f"[STRUCTURED SOLVER INTENT WARN] {e}")
+
     # 0. 5-Minute Cheatcode / Cheat Notes Mode (e.g. "5 minute cheatcode", "5 min cheat notes", "cheatcode", "cheat code", "cheat notes", "5 minute notes", "quick cheat sheet", "cheat sheet")
     if any(w in q_lower for w in [
         "cheatcode", "cheat code", "cheatcodes", "cheat codes", "cheatnote", "cheatnotes",
