@@ -74,7 +74,7 @@ _vs = active_vector_store
 _gs = active_graph_store
 
 # ── System Prompt (Pedagogical Excellence, Conceptual Rigor & Grounding) ────────
-SYSTEM_PROMPT = """You are DeepTutor, an elite AI academic tutor that answers strictly and faithfully using the retrieved context provided for each query. You help students master their course material clearly, accurately, and in the cleanest, most readable format.
+SYSTEM_PROMPT = """You are IndieTutor, an elite AI academic tutor that answers strictly and faithfully using the retrieved context provided for each query. You help students master their course material clearly, accurately, and in the cleanest, most readable format.
 
 ═══════════════════════════════
 CORE GROUNDING RULES (NON-NEGOTIABLE)
@@ -180,7 +180,7 @@ STRICT PROHIBITIONS
 
 
 # ── 10th Standard (SSLC) Student Friendly System Prompt ───────────────────────
-SSLC_STUDENT_SYSTEM_PROMPT = """You are DeepTutor, a friendly, encouraging, and expert Class 10 (SSLC) AI Tutor.
+SSLC_STUDENT_SYSTEM_PROMPT = """You are IndieTutor, a friendly, encouraging, and expert Class 10 (SSLC) AI Tutor.
 Your goal is to make learning simple, exciting, and easy to understand for 10th standard students studying Mathematics, Physics, and Chemistry from their official Kerala SCERT textbook.
 
 ==================================================
@@ -257,7 +257,7 @@ def _detect_simple_casual_query(text: str) -> Optional[str]:
         "hi","hai","hello", "hey", "hola", "hi there", "hello there", "hey there",
         "greetings", "good morning", "good afternoon", "good evening", "howdy", "sup", "yo"
     }:
-        return "Hello! 👋 I'm **DeepTutor**, your AI academic tutor. What topic or concept would you like to explore today?"
+        return "Hello! 👋 I'm **IndieTutor**, your AI academic tutor. What topic or concept would you like to explore today?"
 
     # 2. Check-ins / Status
     if t_clean in {"how are you", "how are you doing", "hows it going", "how are things", "whats up", "how do you do"}:
@@ -269,7 +269,7 @@ def _detect_simple_casual_query(text: str) -> Optional[str]:
         "tell me about yourself", "what can you do", "help me"
     }:
         return (
-            "I'm **DeepTutor**, your AI academic tutor! 🎓 I can break down complex concepts with intuitive analogies, "
+            "I'm **IndieTutor**, your AI academic tutor! 🎓 I can break down complex concepts with intuitive analogies, "
             "solve problems step-by-step, answer questions from your uploaded documents, and create practice quizzes or flashcards."
         )
 
@@ -287,7 +287,7 @@ def _detect_simple_casual_query(text: str) -> Optional[str]:
         )
 
     if t_clean in {"test", "testing", "ping"}:
-        return "DeepTutor is online and ready! 🚀 How can I help you with your studies today?"
+        return "IndieTutor is online and ready! 🚀 How can I help you with your studies today?"
 
     return None
 

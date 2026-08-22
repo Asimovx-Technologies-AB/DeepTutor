@@ -75,7 +75,7 @@ export default function LandingPage() {
               <GraduationCap className="w-5 h-5" />
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-black text-lg sm:text-xl text-slate-800 tracking-tight">DeepTutor</span>
+              <span className="font-black text-lg sm:text-xl text-slate-800 tracking-tight">IndieTutor</span>
               <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full border border-indigo-200">
                 AI
               </span>
@@ -129,7 +129,7 @@ export default function LandingPage() {
         </h1>
 
         <p className="text-lg md:text-xl text-slate-500 font-medium leading-relaxed max-w-2xl mx-auto">
-          DeepTutor helps you understand difficult topics, practice what you've learned, and build your own path to exam mastery.
+          IndieTutor helps you understand difficult topics, practice what you've learned, and build your own path to exam mastery.
         </p>
 
         <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
@@ -155,13 +155,13 @@ export default function LandingPage() {
             <div className="w-3 h-3 rounded-full bg-slate-300" />
             <div className="w-3 h-3 rounded-full bg-slate-300" />
             <div className="w-3 h-3 rounded-full bg-slate-300" />
-            <span className="text-xs font-bold text-slate-500 ml-2">DeepTutor — Dashboard View</span>
+            <span className="text-xs font-bold text-slate-500 ml-2">IndieTutor — Dashboard View</span>
           </div>
 
           <div className="rounded-b-2xl overflow-hidden bg-slate-50">
             <img
               src="/images/dashboard_screenshot.png"
-              alt="DeepTutor Dashboard"
+              alt="IndieTutor Dashboard"
               className="w-full h-auto object-cover rounded-b-2xl"
             />
           </div>
@@ -238,7 +238,7 @@ export default function LandingPage() {
             <div className="w-9 h-9 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-xs">
               <GraduationCap size={20} />
             </div>
-            <span className="font-black text-2xl text-slate-800">DeepTutor</span>
+            <span className="font-black text-2xl text-slate-800">IndieTutor</span>
           </div>
 
           <p className="text-slate-500 text-sm max-w-md mx-auto font-medium">
@@ -253,7 +253,7 @@ export default function LandingPage() {
           </button>
 
           <p className="text-xs text-slate-400 font-bold pt-6">
-            © {new Date().getFullYear()} DeepTutor. All rights reserved.
+            © {new Date().getFullYear()} IndieTutor. All rights reserved.
           </p>
         </div>
       </footer>

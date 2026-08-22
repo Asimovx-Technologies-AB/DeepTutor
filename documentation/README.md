@@ -1,6 +1,6 @@
-# 📚 DeepTutor — Project Documentation Index
+# 📚 IndieTutor — Project Documentation Index
 
-Welcome to the **DeepTutor** documentation directory. All technical specifications, architecture guides, evaluation reports, and setup manuals are organized below.
+Welcome to the **IndieTutor** documentation directory. All technical specifications, architecture guides, evaluation reports, and setup manuals are organized below.
 
 ---
 
@@ -10,7 +10,7 @@ Welcome to the **DeepTutor** documentation directory. All technical specificatio
 - 🛠️ [**techstack.md**](file:///d:/AI%20Projects/Indie-tutor/documentation/techstack.md): Complete tech stack breakdown, system architecture diagrams, 4-stage RAG pipeline details, database ER schema, and FastMCP integration.
 - 📋 [**PROJECT_OVERVIEW.md**](file:///d:/AI%20Projects/Indie-tutor/documentation/PROJECT_OVERVIEW.md): High-level overview of capabilities, data flow, backend configuration, and usage guide.
 - 📝 [**implementation_plan.md**](file:///d:/AI%20Projects/Indie-tutor/documentation/implementation_plan.md): Original MVP design document, sequence diagrams, scope, and technical roadmap.
-- 📖 [**README_MAIN.md**](file:///d:/AI%20Projects/Indie-tutor/documentation/README_MAIN.md): DeepTutor platform overview and setup instructions.
+- 📖 [**README_MAIN.md**](file:///d:/AI%20Projects/Indie-tutor/documentation/README_MAIN.md): IndieTutor platform overview and setup instructions.
 
 ---
 

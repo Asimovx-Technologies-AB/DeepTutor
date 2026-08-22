@@ -38,7 +38,7 @@ export default function LoginPage() {
 
   const handleGoogleLogin = () => {
     login(
-      { id: 'google-user', username: 'Google Learner', email: 'google.student@deeptutor.ai', role: 'student' },
+      { id: 'google-user', username: 'Google Learner', email: 'google.student@indietutor.ai', role: 'student' },
       'demo-google-token'
     )
     navigate('/dashboard')
@@ -57,7 +57,7 @@ export default function LoginPage() {
               <Brain size={22} />
             </div>
             <div>
-              <span className="font-black text-slate-800 text-xl tracking-tight">DeepTutor</span>
+              <span className="font-black text-slate-800 text-xl tracking-tight">IndieTutor</span>
               <span className="block text-[10px] font-black text-indigo-600 uppercase tracking-widest">AI Learning Engine</span>
             </div>
           </div>
@@ -214,9 +214,9 @@ export default function LoginPage() {
         <footer className="flex items-center justify-between text-xs text-slate-400 font-semibold z-10 pt-2 border-t border-slate-200/60">
           <div className="flex items-center gap-1.5 text-slate-500">
             <Brain size={16} className="text-indigo-600" />
-            <span>Powered by DeepTutor AI Engine</span>
+            <span>Powered by IndieTutor AI Engine</span>
           </div>
-          <span>© 2026 DeepTutor Inc.</span>
+          <span>© 2026 IndieTutor Inc.</span>
         </footer>
 
       </div>

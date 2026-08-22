@@ -680,7 +680,7 @@ export default function SmartNotesPage() {
           <div className="border-b-2 border-[#20201D] pb-3 mb-6 flex justify-between items-start">
             <div>
               <h1 className="text-2xl font-bold">{activeNote.title}</h1>
-              <p className="text-xs uppercase font-bold text-brand-primary">Subject: {activeNote.subject} • DeepTutor Exam Notes</p>
+              <p className="text-xs uppercase font-bold text-brand-primary">Subject: {activeNote.subject} • IndieTutor Exam Notes</p>
             </div>
             <div className="text-right text-xs">
               <p>Generated: {new Date(activeNote.created_at).toLocaleDateString()}</p>
