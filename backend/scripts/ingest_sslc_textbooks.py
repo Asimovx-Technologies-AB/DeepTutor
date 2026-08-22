@@ -410,5 +410,4 @@ async def async_main():
 
 
 if __name__ == "__main__":
-python scripts/ingest_sslc_textbooks.py --subject sslc-math --concurrency 8
     asyncio.run(async_main())
