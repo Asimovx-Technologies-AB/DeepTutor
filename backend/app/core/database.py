@@ -1,4 +1,5 @@
 import uuid
+import json
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 from sqlalchemy import create_engine, text
@@ -1318,7 +1319,7 @@ def get_detailed_student_record(user_id: str) -> dict:
         strong_subjects = [sc["subject"] for sc in subject_competencies if sc["score"] >= 75]
 
         if not attempts and not sessions:
-            diagnostic_summary = "Student has newly joined DeepTutor. Start by chatting with an AI Tutor or uploading a chapter PDF with Previous Year Questions (PYQs) to establish performance benchmarks."
+            diagnostic_summary = "Student has newly joined IndieTutor. Start by chatting with an AI Tutor or uploading a chapter PDF with Previous Year Questions (PYQs) to establish performance benchmarks."
             recommended_action = "Upload your study material and take your first 5-question diagnostic quiz."
         elif weak_subjects:
             diagnostic_summary = f"Student shows good engagement with {len(sessions)} study sessions. Special reinforcement needed in {', '.join(weak_subjects)} where accuracy is below 70%."

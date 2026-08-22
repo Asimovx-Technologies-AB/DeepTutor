@@ -20,7 +20,7 @@ export const useLanguageStore = create<LanguageState>()(
       setAiLanguage: (aiLanguage) => set({ aiLanguage }),
     }),
     {
-      name: 'deeptutor-language-v1',
+      name: 'indietutor-language-v1',
     }
   )
 )

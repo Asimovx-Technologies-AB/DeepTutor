@@ -232,7 +232,7 @@ export default function StudentRecordsPage() {
                     </span>
                   </div>
                   <p className="text-xs text-text-muted font-medium mt-0.5">
-                    {student?.email || user?.email || 'student@deeptutor.ai'} • Enrolled since {student?.member_since ? new Date(student.member_since).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '2026'}
+                    {student?.email || user?.email || 'student@indietutor.ai'} • Enrolled since {student?.member_since ? new Date(student.member_since).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '2026'}
                   </p>
                 </div>
               </div>
@@ -822,12 +822,12 @@ export default function StudentRecordsPage() {
       <div className="hidden print:block bg-white p-8 text-text-primary font-sans">
         <div className="border-b-2 border-[#20201D] pb-4 mb-6 flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">DeepTutor AI</h1>
+            <h1 className="text-3xl font-bold tracking-tight">IndieTutor AI</h1>
             <p className="text-xs uppercase tracking-widest text-brand-primary font-bold">Official Student Academic Performance Record</p>
           </div>
           <div className="text-right text-xs">
             <p><strong>Date of Issue:</strong> {new Date().toLocaleDateString()}</p>
-            <p><strong>Student ID:</strong> {student?.id || 'DT-2026'}</p>
+            <p><strong>Student ID:</strong> {student?.id || 'IT-2026'}</p>
           </div>
         </div>
 
@@ -873,7 +873,7 @@ export default function StudentRecordsPage() {
 
         <div className="flex justify-between items-end pt-12 text-xs border-t border-border">
           <div>
-            <p className="font-bold">DeepTutor Academic Registry</p>
+            <p className="font-bold">IndieTutor Academic Registry</p>
             <p className="text-text-muted">Digitally Verified Record</p>
           </div>
           <div className="text-right">

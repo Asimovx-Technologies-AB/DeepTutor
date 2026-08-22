@@ -170,7 +170,7 @@ export default function Layout() {
         <div className="p-6 flex items-center justify-between border-b border-slate-200">
           <div className="flex items-center gap-3 text-indigo-600">
             <GraduationCap size={24} />
-            <span className="font-black text-lg text-slate-800">DeepTutor</span>
+            <span className="font-black text-lg text-slate-800">IndieTutor</span>
           </div>
           <button onClick={() => setMobileOpen(false)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg">
             <X size={20} />
@@ -219,7 +219,7 @@ export default function Layout() {
             <Menu size={20} />
           </button>
           <div className="flex items-center gap-2 cursor-pointer font-black text-indigo-600 text-lg" onClick={() => navigate('/dashboard')}>
-            DeepTutor
+            IndieTutor
           </div>
           <div className="flex items-center gap-3">
             <button

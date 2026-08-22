@@ -85,7 +85,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex flex-col text-left">
               <span className="text-[13px] font-bold text-slate-800 leading-none">{user?.username || 'Learner'}</span>
-              <span className="text-[10px] text-slate-400 mt-0.5 leading-none">{user?.email || 'student@deeptutor.ai'}</span>
+              <span className="text-[10px] text-slate-400 mt-0.5 leading-none">{user?.email || 'student@indietutor.ai'}</span>
             </div>
             <ChevronDown size={14} className="text-slate-400 ml-1" />
           </div>

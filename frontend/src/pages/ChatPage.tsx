@@ -437,7 +437,7 @@ export default function ChatPage() {
 
   const [liveSources, setLiveSources] = useState<Source[]>([])
   const [extMessages, setExtMessages] = useState<ExtendedMessage[]>([])
-  const [selectedModel, setSelectedModel] = useState('DeepTutor (Gemini Flash)')
+  const [selectedModel, setSelectedModel] = useState('IndieTutor (Gemini Flash)')
 
   // Centralized Language Store (UI Language vs AI Response Language)
   const { uiLanguage, aiLanguage, setAiLanguage } = useLanguageStore()

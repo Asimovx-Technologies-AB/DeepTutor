@@ -1,7 +1,7 @@
 @echo off
 echo.
 echo ================================================
-echo   DeepTutor Backend - GraphRAG + Ollama
+echo   IndieTutor Backend - GraphRAG + Ollama
 echo ================================================
 echo.
 

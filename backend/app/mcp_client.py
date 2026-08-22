@@ -1,6 +1,6 @@
 """
-DeepTutor MCP Client Implementation
-Connects DeepTutor to external MCP tool servers (Python Sandbox, Math Solvers, Filesystem) over stdio or SSE.
+IndieTutor MCP Client Implementation
+Connects IndieTutor to external MCP tool servers (Python Sandbox, Math Solvers, Filesystem) over stdio or SSE.
 """
 import sys
 import asyncio

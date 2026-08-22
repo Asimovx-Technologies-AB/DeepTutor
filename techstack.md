@@ -1,12 +1,12 @@
-# 🛠️ DeepTutor — Comprehensive Tech Stack & System Architecture
+# 🛠️ IndieTutor — Comprehensive Tech Stack & System Architecture
 
-> **DeepTutor** is a privacy-first, local & multi-provider AI-powered personalized tutoring platform. It integrates a 4-Stage RAG (Retrieval-Augmented Generation) Pipeline, GraphRAG knowledge structures, dynamic quiz & flashcard generation, interactive student analytics, and Model Context Protocol (MCP) capabilities.
+> **IndieTutor** is a privacy-first, local & multi-provider AI-powered personalized tutoring platform. It integrates a 4-Stage RAG (Retrieval-Augmented Generation) Pipeline, GraphRAG knowledge structures, dynamic quiz & flashcard generation, interactive student analytics, and Model Context Protocol (MCP) capabilities.
 
 ---
 
 ## 📐 1. System Architecture Overview
 
-DeepTutor follows a decoupled client-server architecture designed for high scalability, offline capabilities, and local-first execution with fallback options for cloud-based providers.
+IndieTutor follows a decoupled client-server architecture designed for high scalability, offline capabilities, and local-first execution with fallback options for cloud-based providers.
 
 ```mermaid
 graph TB
