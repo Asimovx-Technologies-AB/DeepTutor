@@ -1,4 +1,5 @@
 import { Flame } from 'lucide-react'
+import { useLanguageStore } from '../../stores/languageStore'
 
 interface LearningStreakProps {
   currentStreak: number
@@ -6,16 +7,17 @@ interface LearningStreakProps {
 }
 
 export default function LearningStreak({ currentStreak, longestStreak }: LearningStreakProps) {
-  // Simple 7-day visualization 
-  // (In a real app, we'd fetch the last 7 days of activity to accurately highlight active days)
-  const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+  const { uiLanguage } = useLanguageStore()
+  const days = uiLanguage === 'sv' ? ['M', 'T', 'O', 'T', 'F', 'L', 'S'] : ['M', 'T', 'W', 'T', 'F', 'S', 'S']
   const activeDays = [true, true, false, true, true, false, true] // Mock pattern based on streak
 
   return (
     <div className="card p-6 flex flex-col justify-between h-full bg-gradient-to-br from-[#EFF6FF] to-white border border-[#E2E8F0]">
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-[15px] text-text-primary">Learning Streak</h3>
+          <h3 className="font-semibold text-[15px] text-text-primary">
+            {uiLanguage === 'sv' ? 'Studiesvit' : 'Learning Streak'}
+          </h3>
           <div className="w-8 h-8 rounded-full bg-info-soft text-info flex items-center justify-center border border-info/20">
             <Flame size={16} fill="currentColor" />
           </div>
@@ -23,11 +25,13 @@ export default function LearningStreak({ currentStreak, longestStreak }: Learnin
         
         <div className="flex items-end gap-2 mb-6">
           <span className="text-4xl font-bold text-text-primary leading-none">{currentStreak}</span>
-          <span className="text-sm font-medium text-text-secondary mb-1">Days</span>
+          <span className="text-sm font-medium text-text-secondary mb-1">
+            {uiLanguage === 'sv' ? 'Dagar' : 'Days'}
+          </span>
         </div>
         
         <p className="text-[12px] text-text-secondary">
-          Longest streak: <strong className="text-text-primary">{longestStreak} days</strong>
+          {uiLanguage === 'sv' ? 'Längsta svit:' : 'Longest streak:'} <strong className="text-text-primary">{longestStreak} {uiLanguage === 'sv' ? 'dagar' : 'days'}</strong>
         </p>
       </div>
 

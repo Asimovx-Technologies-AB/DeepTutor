@@ -57,7 +57,7 @@ export default function SubjectsPage() {
                 <Sparkles size={16} />
               </div>
               <span className="text-xs font-black text-[#4F46E5] uppercase tracking-widest">
-                Curriculum Hub
+                {uiLanguage === 'sv' ? 'Läroplanshubb' : 'Curriculum Hub'}
               </span>
             </div>
             <h1 className="text-4xl sm:text-5xl font-black text-[#3C3C3C] tracking-tight mb-3 leading-[1.1]">
@@ -77,10 +77,10 @@ export default function SubjectsPage() {
           {/* Tab Filters */}
           <div className="flex items-center gap-1.5 bg-white border border-[#E2E8F0] p-1.5 rounded-[1.5rem] shadow-sm overflow-x-auto">
             {[
-              { key: 'MY_SUBJECTS', label: 'My Subjects' },
-              { key: 'ALL', label: 'All Catalog' },
-              { key: 'IN_PROGRESS', label: 'In Progress' },
-              { key: 'COMPLETED', label: 'Completed' },
+              { key: 'MY_SUBJECTS', label: t.subjects.title },
+              { key: 'ALL', label: uiLanguage === 'sv' ? 'Hela katalogen' : 'All Catalog' },
+              { key: 'IN_PROGRESS', label: uiLanguage === 'sv' ? 'Pågående' : 'In Progress' },
+              { key: 'COMPLETED', label: uiLanguage === 'sv' ? 'Slutförda' : 'Completed' },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -104,7 +104,7 @@ export default function SubjectsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-12 pr-4 py-3.5 text-sm font-bold rounded-[1.5rem] bg-white border border-[#E2E8F0] text-[#3C3C3C] placeholder-[#AFAFAF] focus:outline-none focus:border-[#4F46E5] focus:ring-4 focus:ring-[#4F46E5]/10 shadow-sm transition-all"
-              placeholder="Search subjects or topics..."
+              placeholder={uiLanguage === 'sv' ? 'Sök ämnen eller kapitel...' : 'Search subjects or topics...'}
             />
           </div>
         </div>
@@ -152,7 +152,7 @@ export default function SubjectsPage() {
                         </span>
                         {status === 'COMPLETED' && (
                           <span className="text-[10px] font-bold bg-[#D7FFB8] text-[#46A302] px-2 py-0.5 rounded-full border border-[#58CC02]/30 flex items-center gap-1">
-                            <Check size={10} strokeWidth={3} /> Done
+                            <Check size={10} strokeWidth={3} /> {uiLanguage === 'sv' ? 'Klar' : 'Done'}
                           </span>
                         )}
                       </div>
@@ -173,7 +173,9 @@ export default function SubjectsPage() {
                       <div className="bg-[#FAF8F3] border border-[#E7E1D8] rounded-[1.25rem] p-3 text-xs space-y-1 group-hover:bg-white group-hover:border-[#4F46E5]/20 transition-colors">
                         <div className="flex items-center gap-1.5 mb-1">
                           <Play size={12} className="text-[#4F46E5] fill-[#4F46E5]" />
-                          <span className="text-[10px] font-black text-[#4F46E5] uppercase tracking-wider">Up Next</span>
+                          <span className="text-[10px] font-black text-[#4F46E5] uppercase tracking-wider">
+                            {uiLanguage === 'sv' ? 'Nästa kapitel' : 'Up Next'}
+                          </span>
                         </div>
                         <p className="font-bold text-[#3C3C3C] truncate pr-2">{currentTopic.title}</p>
                       </div>
@@ -187,7 +189,7 @@ export default function SubjectsPage() {
                       <div className="flex-1 pr-4">
                         <div className="flex items-center justify-between text-[11px] font-bold mb-2">
                           <span className="text-[#777777]">
-                            {completedCount} / {subjectTopics.length} topics
+                            {completedCount} / {subjectTopics.length} {uiLanguage === 'sv' ? 'ämnesområden' : 'topics'}
                           </span>
                           <span className="text-[#4F46E5] font-black">{progressVal}%</span>
                         </div>
@@ -233,8 +235,12 @@ export default function SubjectsPage() {
             <div className="w-20 h-20 bg-white rounded-[2rem] border border-[#E2E8F0] flex items-center justify-center mx-auto mb-4 shadow-sm">
               <Search size={32} className="text-[#AFAFAF]" />
             </div>
-            <h3 className="text-xl font-black text-[#3C3C3C] mb-2">No subjects found</h3>
-            <p className="text-[#777777] text-sm font-medium">Try adjusting your filters or search query.</p>
+            <h3 className="text-xl font-black text-[#3C3C3C] mb-2">
+              {uiLanguage === 'sv' ? 'Inga ämnen hittades' : 'No subjects found'}
+            </h3>
+            <p className="text-[#777777] text-sm font-medium">
+              {uiLanguage === 'sv' ? 'Försök med andra filter eller sökord.' : 'Try adjusting your filters or search query.'}
+            </p>
           </div>
         )}
       </div>

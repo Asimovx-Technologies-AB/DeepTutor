@@ -1,5 +1,6 @@
 import { PlayCircle, CheckCircle, Award } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useLanguageStore } from '../../stores/languageStore'
 
 interface Activity {
   id: string
@@ -17,14 +18,32 @@ interface RecentActivityTimelineProps {
 
 export default function RecentActivityTimeline({ activities, isLoading }: RecentActivityTimelineProps) {
   const navigate = useNavigate()
+  const { uiLanguage } = useLanguageStore()
 
   // Format relative time (e.g. "2 hours ago")
   const getRelativeTime = (dateStr: string) => {
     const diff = Math.floor((new Date().getTime() - new Date(dateStr).getTime()) / 1000)
+    if (uiLanguage === 'sv') {
+      if (diff < 60) return 'Alldeles nyss'
+      if (diff < 3600) return `${Math.floor(diff / 60)} minuter sedan`
+      if (diff < 86400) return `${Math.floor(diff / 3600)} timmar sedan`
+      return `${Math.floor(diff / 86400)} dagar sedan`
+    }
     if (diff < 60) return 'Just now'
     if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`
     if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`
     return `${Math.floor(diff / 86400)} days ago`
+  }
+
+  const getLocalizedTitle = (title: string) => {
+    if (uiLanguage !== 'sv') return title
+    if (title.startsWith('Indexed textbook')) {
+      return title.replace('Indexed textbook', 'Indexerat kursmaterial')
+    }
+    if (title.startsWith('Studied')) {
+      return title.replace('Studied', 'Studerade').replace('with AI Tutor', 'med AI-Handledare')
+    }
+    return title
   }
 
   const getIcon = (type: string) => {
@@ -53,15 +72,17 @@ export default function RecentActivityTimeline({ activities, isLoading }: Recent
         <div className="w-16 h-16 rounded-full bg-black/10 flex items-center justify-center mb-3">
           <span className="text-2xl">🌱</span>
         </div>
-        <h3 className="font-semibold text-text-primary mb-1">No recent activity</h3>
+        <h3 className="font-semibold text-text-primary mb-1">
+          {uiLanguage === 'sv' ? 'Ingen senaste aktivitet' : 'No recent activity'}
+        </h3>
         <p className="text-[12px] text-text-secondary max-w-[200px] text-center mb-4">
-          Start a course to see your learning progress here.
+          {uiLanguage === 'sv' ? 'Börja en kurs för att se dina framsteg här.' : 'Start a course to see your learning progress here.'}
         </p>
         <button 
           onClick={() => navigate('/subjects')}
           className="btn-primary px-4 py-1.5 text-[12px]"
         >
-          Explore Courses
+          {uiLanguage === 'sv' ? 'Utforska kurser' : 'Explore Courses'}
         </button>
       </div>
     )
@@ -69,7 +90,9 @@ export default function RecentActivityTimeline({ activities, isLoading }: Recent
 
   return (
     <div className="card p-6 flex-1 flex flex-col relative min-h-[250px]">
-      <h3 className="font-semibold text-lg text-text-primary mb-6">Recent Activity</h3>
+      <h3 className="font-semibold text-lg text-text-primary mb-6">
+        {uiLanguage === 'sv' ? 'Senaste aktivitet' : 'Recent Activity'}
+      </h3>
       
       <div className="relative pl-3 space-y-6 flex-1 border-l-2 border-border ml-2">
         {activities.map((act) => (
@@ -83,7 +106,7 @@ export default function RecentActivityTimeline({ activities, isLoading }: Recent
               className={`ml-4 p-3 rounded-xl bg-black/5 border border-border/50 flex-1 hover:shadow-sm transition-shadow cursor-pointer ${act.subject_id ? 'hover:border-border' : ''}`}
               onClick={() => act.subject_id && navigate(`/subjects/${act.subject_id}`)}
             >
-              <h4 className="text-[13px] font-medium text-text-primary">{act.title}</h4>
+              <h4 className="text-[13px] font-medium text-text-primary">{getLocalizedTitle(act.title)}</h4>
               <p className="text-[11px] text-text-secondary mt-0.5">{getRelativeTime(act.timestamp)}</p>
             </div>
           </div>

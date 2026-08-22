@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { PlayCircle, Clock } from 'lucide-react'
+import { useLanguageStore } from '../../stores/languageStore'
 
 interface ContinueLearningCardProps {
   subjectId: string
@@ -11,10 +12,17 @@ interface ContinueLearningCardProps {
 
 export default function ContinueLearningCard({ subjectId, topicId, topicTitle, progress, lastStudied }: ContinueLearningCardProps) {
   const navigate = useNavigate()
+  const { uiLanguage } = useLanguageStore()
 
   // Format relative time (e.g. "2 hours ago")
   const getRelativeTime = (dateStr: string) => {
     const diff = Math.floor((new Date().getTime() - new Date(dateStr).getTime()) / 1000)
+    if (uiLanguage === 'sv') {
+      if (diff < 60) return 'Alldeles nyss'
+      if (diff < 3600) return `${Math.floor(diff / 60)} minuter sedan`
+      if (diff < 86400) return `${Math.floor(diff / 3600)} timmar sedan`
+      return `${Math.floor(diff / 86400)} dagar sedan`
+    }
     if (diff < 60) return 'Just now'
     if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`
     if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`
@@ -32,7 +40,9 @@ export default function ContinueLearningCard({ subjectId, topicId, topicTitle, p
             <PlayCircle size={24} />
           </div>
           <div>
-            <p className="text-[11px] text-text-secondary font-medium uppercase tracking-wider mb-0.5">Continue Learning</p>
+            <p className="text-[11px] text-text-secondary font-medium uppercase tracking-wider mb-0.5">
+              {uiLanguage === 'sv' ? 'FORTSÄTT LÄRA' : 'CONTINUE LEARNING'}
+            </p>
             <h3 className="font-semibold text-base text-text-primary line-clamp-1">{topicTitle}</h3>
           </div>
         </div>
@@ -43,7 +53,7 @@ export default function ContinueLearningCard({ subjectId, topicId, topicTitle, p
           <span className="text-2xl font-bold text-text-primary">{progress}%</span>
           <div className="flex items-center text-[11px] text-text-secondary gap-1">
             <Clock size={12} />
-            <span>Active {getRelativeTime(lastStudied)}</span>
+            <span>{uiLanguage === 'sv' ? 'Aktiv' : 'Active'} {getRelativeTime(lastStudied)}</span>
           </div>
         </div>
         

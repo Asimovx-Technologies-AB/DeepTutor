@@ -158,13 +158,17 @@ export default function DashboardPage() {
               ) : (
                 <div className="col-span-1 p-6 rounded-3xl flex flex-col justify-center items-center gap-2.5 bg-indigo-50/40 border border-dashed border-indigo-200/80 text-center min-h-[140px]">
                   <span className="text-2xl">📚</span>
-                  <p className="text-xs font-bold text-slate-800">Ready to Start Learning?</p>
-                  <p className="text-[11px] text-slate-500 font-medium max-w-xs">Upload a textbook or explore the curriculum to begin AI tutoring.</p>
+                  <p className="text-xs font-bold text-slate-800">
+                    {uiLanguage === 'sv' ? 'Redo att börja lära dig?' : 'Ready to Start Learning?'}
+                  </p>
+                  <p className="text-[11px] text-slate-500 font-medium max-w-xs">
+                    {uiLanguage === 'sv' ? 'Ladda upp kursmaterial eller utforska läroplanen för AI-handledning.' : 'Upload a textbook or explore the curriculum to begin AI tutoring.'}
+                  </p>
                   <button 
                     onClick={() => navigate('/chat')} 
                     className="mt-1 px-4 py-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-2xs transition-all"
                   >
-                    Start AI Session
+                    {uiLanguage === 'sv' ? 'Starta AI-session' : 'Start AI Session'}
                   </button>
                 </div>
               )}
@@ -186,7 +190,9 @@ export default function DashboardPage() {
           <div className="xl:col-span-4 rounded-3xl bg-white border border-slate-200/80 p-6 xl:p-8 flex flex-col justify-between shadow-xs">
             <div>
               <div className="flex items-center justify-between mb-6">
-                <h3 className="font-black text-lg text-slate-800 tracking-tight">Performance Report</h3>
+                <h3 className="font-black text-lg text-slate-800 tracking-tight">
+                  {uiLanguage === 'sv' ? 'Prestandarapport' : 'Performance Report'}
+                </h3>
                 <MoreHorizontal className="text-slate-400 cursor-pointer" size={20} />
               </div>
 
@@ -203,24 +209,32 @@ export default function DashboardPage() {
               <div className="grid grid-cols-3 gap-2 border-t border-b border-slate-100 py-4 mb-6">
                 <div className="flex flex-col items-center p-2 rounded-2xl bg-slate-50/70 border border-slate-100">
                   <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center text-sm mb-1.5 shadow-2xs">📚</div>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Courses</p>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                    {uiLanguage === 'sv' ? 'KURSER' : 'COURSES'}
+                  </p>
                   <p className="text-sm font-black text-slate-800 mt-0.5">{stats?.courses_in_progress ?? stats?.courses_completed ?? 0}</p>
                 </div>
                 <div className="flex flex-col items-center p-2 rounded-2xl bg-slate-50/70 border border-slate-100">
                   <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center text-sm mb-1.5 shadow-2xs">✨</div>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Lessons</p>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                    {uiLanguage === 'sv' ? 'LEKTIONER' : 'LESSONS'}
+                  </p>
                   <p className="text-sm font-black text-slate-800 mt-0.5">{stats?.lessons_completed || 0}</p>
                 </div>
                 <div className="flex flex-col items-center p-2 rounded-2xl bg-slate-50/70 border border-slate-100">
                   <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center text-sm mb-1.5 shadow-2xs">🏆</div>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Streak</p>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                    {uiLanguage === 'sv' ? 'SVIT' : 'STREAK'}
+                  </p>
                   <p className="text-sm font-black text-slate-800 mt-0.5">{stats?.longest_streak || 0}d</p>
                 </div>
               </div>
             </div>
 
             <div>
-              <h3 className="font-bold text-xs text-slate-700 uppercase tracking-wider mb-2.5">Recommended Study Focus</h3>
+              <h3 className="font-bold text-xs text-slate-700 uppercase tracking-wider mb-2.5">
+                {uiLanguage === 'sv' ? 'Rekommenderat studiefokus' : 'Recommended Study Focus'}
+              </h3>
               <div 
                 onClick={() => navigate('/chat')}
                 className="bg-indigo-50/70 border border-indigo-200/80 rounded-2xl p-3.5 flex items-center gap-3 cursor-pointer hover:bg-indigo-100/70 hover:border-indigo-300 transition-all shadow-2xs group"
@@ -230,10 +244,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <h4 className="text-xs font-bold text-slate-800 truncate">
-                    {stats?.latest_doc ? `Review ${stats.latest_doc}` : 'Daily Kerala SCERT Exam Practice'}
+                    {stats?.latest_doc ? (uiLanguage === 'sv' ? `Repetera ${stats.latest_doc}` : `Review ${stats.latest_doc}`) : (uiLanguage === 'sv' ? 'Daglig examensövning' : 'Daily Kerala SCERT Exam Practice')}
                   </h4>
                   <p className="text-[11px] text-indigo-600 font-semibold mt-0.5 flex items-center gap-1">
-                    <span>Ask AI Tutor</span>
+                    <span>{uiLanguage === 'sv' ? 'Fråga AI-Handledare' : 'Ask AI Tutor'}</span>
                     <ArrowRight size={12} />
                   </p>
                 </div>

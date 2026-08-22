@@ -1152,31 +1152,28 @@ export default function ChatPage() {
                   value={input}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
-                  placeholder={
-                    selectedModel.includes('Vision')
-                      ? 'Ask a question or describe an image/diagram...'
-                      : 'Ask anything about your study material, or click ⚡ 5-Min Cheatcode...'
-                  }
                   rows={2}
-                  className="w-full bg-transparent resize-none outline-none text-[#20201D] font-medium text-sm sm:text-base placeholder-[#969188] leading-relaxed px-1"
+                  className="w-full bg-transparent resize-none outline-none text-[#3C3C3C] font-medium text-sm sm:text-base placeholder-[#AFAFAF]"
+                  placeholder={uiLanguage === 'sv' ? 'Ställ en studiefråga eller klicka på ⚡ 5-Min Fusklapp...' : 'Ask anything about your study material, or click ⚡ 5-Min Cheatcode...'}
                 />
 
-                {/* Sub Action Toolbar */}
-                <div className="flex items-center justify-between gap-2 mt-3 sm:mt-4 pt-3 border-t border-[#E2E8F0]">
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingFile}
-                    className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-[1.25rem] bg-[#F7F7F7] hover:bg-[#DDF4FF] border border-[#E2E8F0] hover:border-[#1CB0F6]/30 text-[#3C3C3C] text-xs font-bold transition-all elevation-1 disabled:opacity-40 cursor-pointer"
-                  >
-                    {uploadingFile ? <Loader2 size={14} className="animate-spin text-[#1CB0F6]" /> : <Paperclip size={14} className="text-[#1CB0F6]" />}
-                    <span>{uploadingFile ? 'Uploading...' : 'Attach PDF'}</span>
-                  </button>
+                {/* Toolbar */}
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#E2E8F0]">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-[#3C3C3C] bg-white hover:bg-[#DDF4FF] px-3.5 py-2 rounded-2xl border border-[#E2E8F0] hover:border-[#1CB0F6]/30 elevation-1 transition-all cursor-pointer"
+                    >
+                      <Paperclip size={16} className="text-[#1CB0F6]" />
+                      <span>{uiLanguage === 'sv' ? 'Bifoga PDF' : 'Attach PDF'}</span>
+                    </button>
+                  </div>
 
                   <div className="flex items-center gap-2">
                     <button
                       onClick={toggleVoiceInput}
-                      className={`p-2.5 sm:p-3 rounded-full text-white transition-all elevation-2 cursor-pointer ${isListening
-                        ? 'bg-[#FF4B4B] animate-bounce ring-4 ring-[#FFD1D1]'
+                      className={`p-2.5 sm:p-3 rounded-full transition-colors cursor-pointer ${isListening
+                        ? 'text-[#FF4B4B] bg-[#FFD1D1] animate-pulse'
                         : 'bg-[#1CB0F6] hover:bg-[#1899D6]'
                         }`}
                       title={isListening ? 'Stop Recording' : 'Voice Input'}
@@ -1201,29 +1198,29 @@ export default function ChatPage() {
 
                 <SuggestionCard
                   icon={<div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-200"><Zap className="w-5 h-5" /></div>}
-                  title="5-Min Cheatcode"
-                  description="Get a structured 6-section 5-minute revision cheat sheet with analogies, tables & visual flowchart."
+                  title={uiLanguage === 'sv' ? '5-Min Fusklapp' : '5-Min Cheatcode'}
+                  description={uiLanguage === 'sv' ? 'Få en strukturerad 5-minuters repetitionsguide med analogier, tabeller & flödesschema.' : 'Get a structured 6-section 5-minute revision cheat sheet with analogies, tables & visual flowchart.'}
                   onClick={() => handleSend("Give me 5 minute cheatcode for this topic.")}
                 />
 
                 <SuggestionCard
                   icon={<div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-200"><Clock className="w-5 h-5" /></div>}
-                  title="Synthesize Notes"
-                  description="Turn my uploaded PDF notes into 5 key bullet points for quick review."
+                  title={uiLanguage === 'sv' ? 'Sammanfatta anteckningar' : 'Synthesize Notes'}
+                  description={uiLanguage === 'sv' ? 'Omvandla mina uppladdade PDF-anteckningar till 5 viktiga punkter för snabb repetition.' : 'Turn my uploaded PDF notes into 5 key bullet points for quick review.'}
                   onClick={() => handleSend("Turn my uploaded PDF notes into 5 key bullet points for quick review.")}
                 />
 
                 <SuggestionCard
                   icon={<div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-200"><Trophy className="w-5 h-5" /></div>}
-                  title="Practice Quiz"
-                  description="Generate a 5-question multiple choice practice quiz from my material."
+                  title={uiLanguage === 'sv' ? 'Övnings-Quiz' : 'Practice Quiz'}
+                  description={uiLanguage === 'sv' ? 'Generera ett övnings-quiz med 5 flervalsfrågor från mitt kursmaterial.' : 'Generate a 5-question multiple choice practice quiz from my material.'}
                   onClick={() => handleSend("Generate a 5-question multiple choice practice quiz from my material.")}
                 />
 
                 <SuggestionCard
                   icon={<div className="w-10 h-10 rounded-[1.5rem] bg-[#D7FFB8] text-[#58CC02] flex items-center justify-center border border-[#58CC02]/20"><Brain className="w-5 h-5" /></div>}
-                  title="Concept Explanation"
-                  description="Explain complex topics step-by-step with clear real-world examples."
+                  title={uiLanguage === 'sv' ? 'Begreppsförklaring' : 'Concept Explanation'}
+                  description={uiLanguage === 'sv' ? 'Förklara svåra ämnen steg-för-steg med enkla vardagsanalogier.' : 'Explain complex topics step-by-step with clear real-world examples.'}
                   onClick={() => handleSend("Explain quantum mechanics step-by-step with clear real-world examples.")}
                 />
 
@@ -1264,7 +1261,7 @@ export default function ChatPage() {
                 onKeyDown={handleKeyDown}
                 rows={1}
                 className="w-full bg-transparent resize-none outline-none text-[#3C3C3C] font-medium text-sm sm:text-base placeholder-[#AFAFAF]"
-                placeholder="Ask follow-up question..."
+                placeholder={uiLanguage === 'sv' ? 'Ställ en följdfråga...' : 'Ask follow-up question...'}
                 style={{ minHeight: '28px', maxHeight: '160px' }}
               />
               <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-[#E2E8F0]">
@@ -1283,7 +1280,7 @@ export default function ChatPage() {
                     className="flex items-center gap-1.5 text-xs font-bold text-[#3C3C3C] bg-white hover:bg-[#DDF4FF] px-2.5 py-1.5 rounded-[1.25rem] border border-[#E2E8F0] hover:border-[#1CB0F6]/30 elevation-1 transition-colors cursor-pointer"
                   >
                     <Paperclip size={13} className="text-[#1CB0F6]" />
-                    <span>Attach PDF</span>
+                    <span>{uiLanguage === 'sv' ? 'Bifoga PDF' : 'Attach PDF'}</span>
                   </button>
                   <button
                     onClick={toggleVoiceInput}
