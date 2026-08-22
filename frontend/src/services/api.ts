@@ -81,6 +81,7 @@ export const streamChatMessage = async ({
   sessionId,
   content,
   token,
+  language = 'english',
   onToken,
   onSources,
   onGraphContext,
@@ -92,6 +93,7 @@ export const streamChatMessage = async ({
   sessionId: string
   content: string
   token: string
+  language?: string
   onToken: (token: string) => void
   onSources: (sources: any[]) => void
   onGraphContext: (graph: any) => void
@@ -101,7 +103,7 @@ export const streamChatMessage = async ({
   signal?: AbortSignal
 }) => {
   const baseUrl = getApiBaseUrl()
-  const url = `${baseUrl}/chat/sessions/${sessionId}/message/stream?content=${encodeURIComponent(content)}`
+  const url = `${baseUrl}/chat/sessions/${sessionId}/message/stream?content=${encodeURIComponent(content)}&language=${encodeURIComponent(language)}`
   const headers: Record<string, string> = { Accept: 'text/event-stream' }
   if (token) headers.Authorization = `Bearer ${token}`
 
@@ -194,8 +196,8 @@ export const streamMessage = (sessionId: string, content: string, token: string)
 }
 
 // Fallback non-streaming message
-export const sendMessage = (sessionId: string, content: string) =>
-  api.post(`/chat/sessions/${sessionId}/message`, { content })
+export const sendMessage = (sessionId: string, content: string, language: string = 'english') =>
+  api.post(`/chat/sessions/${sessionId}/message`, { content, language })
 
 
 // ─── Quiz ─────────────────────────────────────────────────────
