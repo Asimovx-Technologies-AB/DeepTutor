@@ -1136,6 +1136,7 @@ class GraphRAGPipeline:
         topic_id: Optional[str],
         question: str,
         session_messages: List[Dict],
+        language: str = "english",
     ) -> AsyncGenerator[str, None]:
         """
         Full advanced GraphRAG query with SSE streaming.
@@ -1366,6 +1367,16 @@ class GraphRAGPipeline:
             )
 
         system_prompt_to_use = SSLC_STUDENT_SYSTEM_PROMPT if is_textbook else SYSTEM_PROMPT
+        if language and language.lower() in ("swedish", "sv"):
+            system_prompt_to_use += (
+                "\n\n═══════════════════════════════\n"
+                "RESPONSE LANGUAGE INSTRUCTION (MANDATORY)\n"
+                "═══════════════════════════════\n"
+                "The user requested responses in Swedish (Svenska).\n"
+                "You MUST formulate your ENTIRE response in clear, fluent, academic Swedish.\n"
+                "Translate all section titles, explanations, blockquotes, table column headers, table contents, and conclusions into Swedish.\n"
+                "Keep LaTeX formulas, numbers, and technical terms accurate.\n"
+            )
 
         messages = [
             {"role": "system", "content": system_prompt_to_use},
@@ -1408,6 +1419,7 @@ class GraphRAGPipeline:
         topic_id: Optional[str],
         question: str,
         session_messages: List[Dict],
+        language: str = "english",
     ) -> Dict:
         """Non-streaming version — collects full response."""
         full_text = ""
@@ -1415,7 +1427,7 @@ class GraphRAGPipeline:
         graph_data = {}
         confidence = {}
 
-        async for event_str in self.query_stream(topic_id, question, session_messages):
+        async for event_str in self.query_stream(topic_id, question, session_messages, language=language):
             if not event_str.startswith("data: "):
                 continue
             try:

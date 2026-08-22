@@ -14,6 +14,7 @@ from app.rag.graph_rag import graph_rag
 from app.rag.ollama_client import ollama
 from app.rag.section_scope import get_section_collection_id
 from app.rag.storage import active_vector_store, active_graph_store
+from app.rag.vector_store import vector_store
 from app.rag.graph_store import graph_store
 from app.rag.cache import query_result_cache
 from app.rag.storage.s3_store import s3_store
@@ -29,6 +30,7 @@ class CreateSessionRequest(BaseModel):
 
 class MessageRequest(BaseModel):
     content: str
+    language: Optional[str] = "english"
 
 
 def _user_section_collection_id(user_id: str, topic_id: str, session_id: str = "") -> str:
@@ -189,6 +191,7 @@ async def send_message(
         topic_id=topic_id,
         question=body.content,
         session_messages=history[:-1],  # Exclude current message
+        language=body.language or "english",
     )
 
     msg = db.add_message(
@@ -204,6 +207,7 @@ async def stream_message(
     session_id: str,
     content: str = Query(...),
     token: str = Query(""),
+    language: str = Query("english"),
 ):
     """
     Server-Sent Events endpoint.
@@ -263,6 +267,7 @@ async def stream_message(
                 topic_id=topic_id,
                 question=content,
                 session_messages=history[:-1],
+                language=language,
             ):
                 yield event_line
                 # Parse to collect data for saving

@@ -437,6 +437,16 @@ export default function ChatPage() {
   const [extMessages, setExtMessages] = useState<ExtendedMessage[]>([])
   const [selectedModel, setSelectedModel] = useState('DeepTutor (Gemini Flash)')
 
+  // Response Language State (English 🇬🇧 vs Swedish 🇸🇪)
+  const [responseLanguage, setResponseLanguage] = useState<'english' | 'swedish'>(() => {
+    return (localStorage.getItem('deeptutor_response_lang') as 'english' | 'swedish') || 'english'
+  })
+
+  const handleLanguageChange = (lang: 'english' | 'swedish') => {
+    setResponseLanguage(lang)
+    localStorage.setItem('deeptutor_response_lang', lang)
+  }
+
   // Mobile Drawers State
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false)
   const [mobileRightOpen, setMobileRightOpen] = useState(false)
@@ -581,6 +591,7 @@ export default function ChatPage() {
       sessionId: currentSessionId,
       content,
       token: token || '',
+      language: responseLanguage,
       signal: controller.signal,
       onToken: (t) => {
         accContent += t
@@ -983,6 +994,36 @@ export default function ChatPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Language Selector Pill */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-full border border-slate-200 text-xs font-bold mr-1">
+              <button
+                type="button"
+                onClick={() => handleLanguageChange('english')}
+                className={`px-2.5 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${
+                  responseLanguage === 'english'
+                    ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Respond in English"
+              >
+                <span>🇬🇧</span>
+                <span>English</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLanguageChange('swedish')}
+                className={`px-2.5 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${
+                  responseLanguage === 'swedish'
+                    ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Svara på svenska"
+              >
+                <span>🇸🇪</span>
+                <span>Svenska</span>
+              </button>
+            </div>
+
             {activeSession && (
               <button
                 onClick={(e) => handleDeleteSession(e, activeSession.id)}
@@ -1232,6 +1273,15 @@ export default function ChatPage() {
               />
               <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-[#E2E8F0]">
                 <div className="flex items-center gap-2">
+                  {/* Language Quick Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => handleLanguageChange(responseLanguage === 'english' ? 'swedish' : 'english')}
+                    className="flex items-center gap-1 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 px-2.5 py-1.5 rounded-[1.25rem] border border-slate-200 transition-colors cursor-pointer"
+                    title="Switch response language"
+                  >
+                    <span>{responseLanguage === 'english' ? '🇬🇧 EN' : '🇸🇪 SV'}</span>
+                  </button>
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="flex items-center gap-1.5 text-xs font-bold text-[#3C3C3C] bg-white hover:bg-[#DDF4FF] px-2.5 py-1.5 rounded-[1.25rem] border border-[#E2E8F0] hover:border-[#1CB0F6]/30 elevation-1 transition-colors cursor-pointer"
