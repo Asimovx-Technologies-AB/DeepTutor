@@ -6,6 +6,8 @@ import { Trophy, Clock, ArrowLeft, ChevronRight, Sparkles, RefreshCw, AlertCircl
 import { quizApi } from '../services/api'
 import { useChatStore } from '../stores/chatStore'
 import { useSubjectStore } from '../stores/subjectStore'
+import { useLanguageStore } from '../stores/languageStore'
+import { useTranslation } from '../utils/translations'
 
 const OPTION_LABELS = ['A', 'B', 'C', 'D']
 
@@ -16,6 +18,9 @@ export default function QuizPage() {
   const locationState = (location.state || {}) as any
   const queryClient = useQueryClient()
   const activeSession = useChatStore((s) => s.activeSession)
+
+  const { uiLanguage, aiLanguage } = useLanguageStore()
+  const t = useTranslation(uiLanguage)
 
   const effectiveTopicId = (rawTopicId || locationState.topicId || 'math-10-1').trim()
   const focusTopic = locationState.focusTopic || locationState.title || ''
@@ -163,6 +168,7 @@ export default function QuizPage() {
         focus_topic: focusTopic || locationState.title || undefined,
         difficulty: 'medium',
         num_questions: 5,
+        language: aiLanguage,
       })
       if (res.data) {
         setActiveQuizData(res.data)

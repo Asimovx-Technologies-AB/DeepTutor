@@ -8,6 +8,8 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import { useSubjectStore } from '../stores/subjectStore'
+import { useLanguageStore } from '../stores/languageStore'
+import { useTranslation } from '../utils/translations'
 import { chatApi, streamChatMessage } from '../services/api'
 import ChatMessage from '../components/ChatMessage'
 import type { Source } from '../components/SourceCard'
@@ -79,6 +81,9 @@ export default function SubjectChatPage() {
   const subjects = useSubjectStore((s) => s.subjects)
   const getTopics = useSubjectStore((s) => s.getTopics)
   const recordActivity = useSubjectStore((s) => s.recordActivity)
+
+  const { uiLanguage, aiLanguage, setAiLanguage } = useLanguageStore()
+  const t = useTranslation(uiLanguage)
 
   const activeSubjectId = subjectId || 'sslc-math'
   const subject = subjects.find((s) => s.id === activeSubjectId) || subjects[0]
@@ -207,6 +212,7 @@ export default function SubjectChatPage() {
       sessionId: activeSid,
       content: text,
       token,
+      language: aiLanguage,
       signal: abortControllerRef.current?.signal,
       onGraphContext: () => {},
       onSources: (sources) => {
@@ -281,8 +287,38 @@ export default function SubjectChatPage() {
             </div>
           </div>
 
-          {/* Quick Actions */}
+          {/* Quick Actions & Language Control */}
           <div className="flex items-center gap-2">
+            {/* AI Response Language Selector Pill */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-full border border-slate-200 text-xs font-bold mr-1">
+              <button
+                type="button"
+                onClick={() => setAiLanguage('english')}
+                className={`px-2.5 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${
+                  aiLanguage === 'english'
+                    ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Respond in English"
+              >
+                <span>🇬🇧</span>
+                <span>English</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAiLanguage('swedish')}
+                className={`px-2.5 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${
+                  aiLanguage === 'swedish'
+                    ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Svara på svenska"
+              >
+                <span>🇸🇪</span>
+                <span>Svenska</span>
+              </button>
+            </div>
+
             {messages.length > 0 && (
               <button
                 onClick={handleResetChat}

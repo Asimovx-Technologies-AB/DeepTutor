@@ -18,6 +18,8 @@ import {
 } from 'lucide-react'
 import { quizApi } from '../services/api'
 import { useChatStore } from '../stores/chatStore'
+import { useLanguageStore } from '../stores/languageStore'
+import { useTranslation } from '../utils/translations'
 
 interface Question {
   id: string
@@ -52,6 +54,8 @@ export default function GamifiedQuizGame({
 }: Props) {
   const queryClient = useQueryClient()
   const activeSession = useChatStore((s) => s.activeSession)
+  const { uiLanguage, aiLanguage } = useLanguageStore()
+  const t = useTranslation(uiLanguage)
 
   const [quiz, setQuiz] = useState<Quiz | null>(null)
   const [loading, setLoading] = useState(false)
@@ -103,6 +107,7 @@ export default function GamifiedQuizGame({
         custom_topic: effectiveTopic,
         difficulty: difficulty,
         num_questions: numQuestions,
+        language: aiLanguage,
       })
       setQuiz(res.data)
       resetGame()
