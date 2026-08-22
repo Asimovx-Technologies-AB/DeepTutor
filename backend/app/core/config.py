@@ -91,8 +91,11 @@ class Settings(BaseSettings):
 
     # ── AI-Verified Image Search (Serper API) ────────────────────────────────
     SERPER_API_KEY: str = ""
-    IMAGE_SEARCH_FETCH_COUNT: int = 5        # Images to fetch from Serper API
-    IMAGE_SEARCH_KEEP_COUNT: int = 2         # Images to keep after AI validation
+    IMAGE_SEARCH_FETCH_COUNT: int = 8        # Images to fetch from Serper API (5-10)
+    IMAGE_SEARCH_KEEP_COUNT: int = 2         # Images to keep after AI validation (1-3)
+    IMAGE_SEARCH_MIN_WIDTH: int = 200        # Minimum image width for pre-filtering
+    IMAGE_SEARCH_MIN_HEIGHT: int = 200       # Minimum image height for pre-filtering
+    IMAGE_SEARCH_MAX_PER_DOMAIN: int = 2     # Max images from same source domain (deduplication)
     IMAGE_SEARCH_CACHE_DIR: str = "./image_search_cache" # Disk cache for verified images
 
     # ── Stage 1: Semantic Chunking (Fast 350–650 words per chunk) ───────────

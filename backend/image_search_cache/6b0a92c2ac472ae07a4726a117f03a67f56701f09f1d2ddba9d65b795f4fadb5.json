@@ -1,18 +1,28 @@
 [
   {
-    "url": "https://i.ytimg.com/vi/MmTVhIxEEqA/hq720.jpg?sqp=-oaymwEhCK4FEIIDSFryq4qpAxMIARUAAAAAGAElAADIQj0AgKJD&rs=AOn4CLD429MPGFZ_ylXxepL1MXJ-ttrcVg",
-    "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQHglorpp-yFjtG1_YlOXk56sdqFzUuLfv_DTKgaEhc-w&s=10",
-    "source_page": "https://www.youtube.com/watch?v=MmTVhIxEEqA",
-    "title": "What is Support Vector Machine? | SVM Algorithm in Machine Learning | ML  Tutorial For Beginners",
-    "relevance_reason": "The image clearly illustrates the core concepts of a Support Vector Machine, including the optimal hyperplane, margin, decision boundary, and support vectors.",
-    "quality": "good"
-  },
-  {
     "url": "https://media.geeksforgeeks.org/wp-content/uploads/20250807122724737293/support_vectors_hyperplane.webp",
     "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQG76KDmR9VySfWtQrVboy5brncGywlrNPHFCV-wMVEeQ&s=10",
     "source_page": "https://www.geeksforgeeks.org/machine-learning/support-vector-machine-algorithm/",
+    "source_domain": "geeksforgeeks.org",
     "title": "Support Vector Machine (SVM) Algorithm - GeeksforGeeks",
-    "relevance_reason": "The diagram clearly explains SVM concepts with correct visual representations, despite minor typos in the labels.",
-    "quality": "fair"
+    "image_width": 800,
+    "image_height": 400,
+    "relevance_reason": "The diagram clearly illustrates the core concepts of SVM, including the hyperplane, margins, and support vectors, with accurate labeling.",
+    "quality": "good",
+    "is_verified": true,
+    "attribution_text": "Source: geeksforgeeks.org (https://www.geeksforgeeks.org/machine-learning/support-vector-machine-algorithm/)"
+  },
+  {
+    "url": "https://nl.mathworks.com/discovery/support-vector-machine/_jcr_content/thumbnail.adapt.1200.medium.jpg/1607680863365.jpg",
+    "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTpKGb1YJ0bEDQAioqDs1nf_oFF2RMD2sgWfXgNIwbNpA&s=10",
+    "source_page": "https://nl.mathworks.com/discovery/support-vector-machine.html",
+    "source_domain": "nl.mathworks.com",
+    "title": "What Is a Support Vector Machine? - MATLAB & Simulink",
+    "image_width": 781,
+    "image_height": 597,
+    "relevance_reason": "The diagram clearly illustrates the core concepts of SVM: the separating hyperplane, the margin, and the support vectors.",
+    "quality": "good",
+    "is_verified": true,
+    "attribution_text": "Source: nl.mathworks.com (https://nl.mathworks.com/discovery/support-vector-machine.html)"
   }
 ]

@@ -1162,15 +1162,21 @@ class GraphRAGPipeline:
         vector_context_text = ""
         effective_topic_id = topic_id or ""
 
-        # ── Step 0: Kickoff background image search if requested ───────────────
-        wants_image = any(w in question.lower() for w in ["figure", "diagram", "image", "picture"])
+        # ── Step 0: Kickoff background image search ────────────────────────────
+        explicit_image_request = any(w in question.lower() for w in ["figure", "diagram", "image", "picture", "draw", "visual", "illustration"])
+        # Automatically search for verified educational diagrams for academic topics or explicit diagram requests
+        should_search_image = explicit_image_request or (
+            len(question.strip().split()) >= 2 and 
+            not question.strip().lower().startswith(("hi", "hello", "hey", "thanks", "thank you", "bye", "good morning"))
+        )
+        
         image_search_task = None
-        if wants_image:
+        if should_search_image:
             try:
                 from app.services.image_search import image_search_service
                 image_search_task = asyncio.create_task(image_search_service.get_verified_images(question))
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[IMAGE SEARCH TRIGGER WARN] {e}")
 
         # ── Step 1: Retrieval ──────────────────────────────────────────────────
         requested_pages = extract_requested_pages(question)
@@ -1391,16 +1397,32 @@ class GraphRAGPipeline:
             accumulated_text += token
             yield f"data: {json.dumps({'type': 'token', 'data': token})}\n\n"
 
-        # Step 7: Wait for image search to finish if requested, and stream images
+        # Step 7: Wait for image search to finish, and stream verified diagrams
         if image_search_task:
             try:
-                verified_images = await asyncio.wait_for(image_search_task, timeout=6.0)
+                verified_images = await asyncio.wait_for(image_search_task, timeout=15.0)
                 if verified_images:
-                    img_markdown = "\n\n### 🖼️ Relevant Educational Diagrams\n\n"
+                    img_markdown = "\n\n---\n\n### 🖼️ AI-Verified Educational Diagrams\n\n"
                     for img in verified_images:
-                        img_markdown += f"![{img.title}]({img.url})\n\n*{img.title}* — [Source]({img.source_page})\n\n"
+                        title = img.title or "Educational Diagram"
+                        reason = img.relevance_reason or "Verified academic diagram matching the topic"
+                        domain = img.source_domain or "Web"
+                        page = img.source_page or img.url
+                        img_markdown += (
+                            f"![{title}]({img.url})\n\n"
+                            f"> 💡 **Visual Summary:** {reason}  \n"
+                            f"> 🔗 **Source:** [{domain}]({page}) *(AI Verified & Quality Checked)*\n\n"
+                        )
                     
                     for char in img_markdown:
+                        yield f"data: {json.dumps({'type': 'token', 'data': char})}\n\n"
+                        accumulated_text += char
+                elif explicit_image_request:
+                    fallback_msg = (
+                        "\n\n---\n\n"
+                        "> ℹ️ *No verified diagram could be validated with high academic confidence for this specific topic — please refer to the step-by-step text explanation above.*\n\n"
+                    )
+                    for char in fallback_msg:
                         yield f"data: {json.dumps({'type': 'token', 'data': char})}\n\n"
                         accumulated_text += char
             except asyncio.TimeoutError:

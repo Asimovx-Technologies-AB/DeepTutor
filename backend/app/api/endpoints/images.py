@@ -7,10 +7,10 @@ router = APIRouter()
 @router.get("/verified", response_model=List[VerifiedImage])
 async def get_verified_images(topic: str):
     """
-    Search for topic-relevant images via Brave Search, then use Gemini Flash VLM 
-    to validate their accuracy, relevance, and quality.
+    Search for topic-relevant educational images via Serper API (Google Images),
+    then use Gemini Flash VLM to validate accuracy, relevance, and visual quality.
     
-    Returns a filtered, ranked list of only the best verified images.
+    Returns a filtered, ranked list of only the best verified images with source attribution.
     Returns an empty list [] if zero images pass validation.
     """
     if not topic or not topic.strip():
