@@ -90,6 +90,28 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding }
                       </code>
                     )
                   },
+                  img({ node, src, alt, ...props }: any) {
+                    return (
+                      <span className="block my-4 max-w-full overflow-hidden rounded-2xl border border-border/80 shadow-md bg-white p-2.5 transition-all hover:shadow-lg">
+                        <img
+                          src={src}
+                          alt={alt || 'AI Verified Educational Diagram'}
+                          className="w-full max-h-[460px] object-contain rounded-xl mx-auto block bg-white"
+                          loading="lazy"
+                          onError={(e: any) => {
+                            // If hotlink blocked or 404, hide smoothly
+                            e.currentTarget.parentElement.style.display = 'none'
+                          }}
+                          {...props}
+                        />
+                        {alt && (
+                          <span className="block text-center text-xs font-semibold text-text-muted mt-2 px-2">
+                            🖼️ {alt}
+                          </span>
+                        )}
+                      </span>
+                    )
+                  },
                 }}
               >
                 {displayContent}
