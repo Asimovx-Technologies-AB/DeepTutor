@@ -3,11 +3,16 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { BookOpen, ChevronRight, Sparkles, Search, Plus, Check, Clock, Play } from 'lucide-react'
 import { useSubjectStore } from '../stores/subjectStore'
+import { useLanguageStore } from '../stores/languageStore'
+import { useTranslation } from '../utils/translations'
 
 export default function SubjectsPage() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [activeTab, setActiveTab] = useState<'MY_SUBJECTS' | 'ALL' | 'IN_PROGRESS' | 'COMPLETED' | 'NOT_STARTED'>('MY_SUBJECTS')
+
+  const { uiLanguage } = useLanguageStore()
+  const t = useTranslation(uiLanguage)
 
   const {
     subjects,
@@ -56,11 +61,10 @@ export default function SubjectsPage() {
               </span>
             </div>
             <h1 className="text-4xl sm:text-5xl font-black text-[#3C3C3C] tracking-tight mb-3 leading-[1.1]">
-              Master your <br />
-              <span className="text-[#4F46E5]">learning journey.</span>
+              {t.subjects.title}
             </h1>
             <p className="text-[#777777] text-sm sm:text-base font-medium max-w-md leading-relaxed">
-              Track your progress across enrolled subjects, continue active lessons, or explore our complete catalog of topics.
+              {t.subjects.subtitle}
             </p>
           </motion.div>
         </div>

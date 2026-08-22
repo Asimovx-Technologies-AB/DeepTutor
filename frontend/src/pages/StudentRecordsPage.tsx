@@ -14,6 +14,8 @@ import {
 } from 'lucide-react'
 import { progressApi } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
+import { useLanguageStore } from '../stores/languageStore'
+import { useTranslation } from '../utils/translations'
 
 const CUSTOM_TOOLTIP = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
@@ -32,6 +34,9 @@ const CUSTOM_TOOLTIP = ({ active, payload, label }: any) => {
 export default function StudentRecordsPage() {
   const { user } = useAuthStore()
   const navigate = useNavigate()
+
+  const { uiLanguage } = useLanguageStore()
+  const t = useTranslation(uiLanguage)
 
   const [activeTab, setActiveTab] = useState<'all' | 'quizzes' | 'sessions' | 'notes'>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -168,14 +173,14 @@ export default function StudentRecordsPage() {
             </div>
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-text-primary tracking-tight flex items-center gap-2">
-                <span>Student Performance Record</span>
+                <span>{t.records.title}</span>
                 <span className="flex items-center gap-1 text-[11px] font-bold text-success bg-success-soft px-2.5 py-0.5 rounded-full border border-success/30">
                   <span className="w-2 h-2 rounded-full bg-[#4F8A68] animate-pulse" />
                   Live Monitored
                 </span>
               </h1>
               <p className="text-xs sm:text-sm text-text-secondary mt-0.5 font-medium">
-                Real-time tracking of academic performance, attempt logs, subject competencies, and AI diagnostic appraisal.
+                {t.records.subtitle}
               </p>
             </div>
           </div>

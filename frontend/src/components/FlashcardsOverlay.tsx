@@ -18,6 +18,8 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
+import { useLanguageStore } from '../stores/languageStore'
+import { useTranslation } from '../utils/translations'
 import { flashcardsApi, quizApi } from '../services/api'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -58,6 +60,8 @@ interface Props {
 export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props) {
   const activeSession = useChatStore((s) => s.activeSession)
   const queryClient = useQueryClient()
+  const { uiLanguage, aiLanguage } = useLanguageStore()
+  const t = useTranslation(uiLanguage)
 
   const [cards, setCards] = useState<Flashcard[]>([])
   const [loading, setLoading] = useState(false)
@@ -105,6 +109,7 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
         topic_id: activeSession?.topic_id || 'general',
         custom_topic: effectiveTopic,
         num_cards: 5,
+        language: aiLanguage,
       })
       setCards(res.data || [])
       setCurrentIndex(0)
@@ -167,9 +172,9 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
                 <BookOpen size={22} />
               </div>
               <div className="space-y-0.5">
-                <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">AI Study Flashcards Deck</h2>
+                <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">{t.flashcards.title}</h2>
                 <p className="text-xs sm:text-sm text-slate-500 font-medium leading-relaxed">
-                  Generate interactive, point-by-point study cards from your materials
+                  {t.flashcards.subtitle}
                 </p>
               </div>
             </div>
@@ -177,7 +182,7 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
             {/* Scope Selection */}
             <div className="space-y-2.5">
               <label className="text-xs font-black text-slate-800 uppercase tracking-wider block">
-                1. Select Flashcard Scope
+                1. {uiLanguage === 'sv' ? 'VÄLJ STUDIEOMRÅDE' : 'SELECT FLASHCARD SCOPE'}
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <button
@@ -195,8 +200,8 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
                     <Layers size={16} />
                   </div>
                   <div>
-                    <p className="text-sm font-black text-slate-800">Entire Document</p>
-                    <p className="text-xs text-slate-500 mt-0.5 font-medium">All topics combined</p>
+                    <p className="text-sm font-black text-slate-800">{uiLanguage === 'sv' ? 'Hela dokumentet' : 'Entire Document'}</p>
+                    <p className="text-xs text-slate-500 mt-0.5 font-medium">{uiLanguage === 'sv' ? 'Alla avsnitt sammanslagna' : 'All topics combined'}</p>
                   </div>
                 </button>
 
@@ -215,8 +220,8 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
                     <Sparkles size={16} />
                   </div>
                   <div>
-                    <p className="text-sm font-black text-slate-800">Specific Concept</p>
-                    <p className="text-xs text-slate-500 mt-0.5 font-medium">Target 1 topic</p>
+                    <p className="text-sm font-black text-slate-800">{uiLanguage === 'sv' ? 'Specifikt begrepp' : 'Specific Concept'}</p>
+                    <p className="text-xs text-slate-500 mt-0.5 font-medium">{uiLanguage === 'sv' ? 'Fokusera på 1 ämne' : 'Target 1 topic'}</p>
                   </div>
                 </button>
               </div>
@@ -225,7 +230,7 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
             {scopeMode === 'specific' && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3 pt-1">
                 <label className="text-xs font-black text-slate-800 uppercase tracking-wider block">
-                  2. Choose Specific Concept
+                  2. {uiLanguage === 'sv' ? 'VÄLJ SPECIFIKT BEGREPP' : 'CHOOSE SPECIFIC CONCEPT'}
                 </label>
                 {availableTopics.length > 0 && (
                   <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto p-1">
@@ -249,7 +254,7 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
                   type="text"
                   value={customTopic}
                   onChange={(e) => setCustomTopic(e.target.value)}
-                  placeholder="Or type topic name..."
+                  placeholder={uiLanguage === 'sv' ? 'Eller skriv begreppsnamn...' : 'Or type topic name...'}
                   className="w-full bg-white/70 backdrop-blur-md border border-white/90 rounded-2xl px-4 py-3 text-xs sm:text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-indigo-600 shadow-xs placeholder-slate-400"
                 />
               </motion.div>
@@ -263,12 +268,12 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
               {generating ? (
                 <>
                   <RefreshCw size={18} className="animate-spin text-white" />
-                  <span>Generating Study Cards...</span>
+                  <span>{uiLanguage === 'sv' ? 'Skapar studiekort...' : 'Generating Study Cards...'}</span>
                 </>
               ) : (
                 <>
                   <Sparkles size={18} />
-                  <span>Generate Flashcards</span>
+                  <span>{uiLanguage === 'sv' ? 'Generera studiekort' : 'Generate Flashcards'}</span>
                 </>
               )}
             </button>

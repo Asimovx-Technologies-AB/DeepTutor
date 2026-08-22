@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { User, Mail, Sparkles, Check, Edit3, Save, X, LogOut, Award, Clock, BookOpen } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
+import { useLanguageStore } from '../stores/languageStore'
+import { useTranslation } from '../utils/translations'
 import { useQuery } from '@tanstack/react-query'
 import { progressApi } from '../services/api'
 
@@ -12,6 +14,8 @@ interface ProfileModalProps {
 
 export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   const { user, updateUser, logout } = useAuthStore()
+  const { uiLanguage } = useLanguageStore()
+  const t = useTranslation(uiLanguage)
 
   const { data: progress } = useQuery({
     queryKey: ['progress-summary'],
@@ -140,7 +144,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                     onClick={() => setIsEditing(true)}
                     className="flex-1 btn-primary py-2.5 text-xs flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <Edit3 size={15} /> Edit Profile
+                    <Edit3 size={15} /> {t.header.profile}
                   </button>
 
                   <button
@@ -150,7 +154,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                     }}
                     className="btn-ghost py-2.5 px-4 text-xs flex items-center gap-1.5 cursor-pointer text-error hover:bg-error-soft"
                   >
-                    <LogOut size={15} /> Logout
+                    <LogOut size={15} /> {t.header.logout}
                   </button>
                 </div>
               </div>

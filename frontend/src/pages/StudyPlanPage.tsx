@@ -27,6 +27,8 @@ import {
 import { studyPlanApi, documentsApi, default as api } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
+import { useLanguageStore } from '../stores/languageStore'
+import { useTranslation } from '../utils/translations'
 import { UpgradeModal } from '../components/UpgradeModal'
 import GamifiedQuizGame from '../components/GamifiedQuizGame'
 
@@ -58,6 +60,10 @@ export default function StudyPlanPage() {
   const { user } = useAuthStore()
   const sessions = useChatStore((s) => s.sessions)
   const queryClient = useQueryClient()
+
+  const { uiLanguage, aiLanguage } = useLanguageStore()
+  const t = useTranslation(uiLanguage)
+
   const [upgradeModalInfo, setUpgradeModalInfo] = useState<{ open: boolean; fileName?: string; sizeMb?: number }>({ open: false })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -271,6 +277,7 @@ export default function StudyPlanPage() {
         session_id: sessionId,
         target_date: targetDate,
         hours_per_day: hoursPerDay,
+        language: aiLanguage,
       })
 
       queryClient.invalidateQueries({ queryKey: ['study-plans'] })
@@ -298,12 +305,12 @@ export default function StudyPlanPage() {
           <div className="flex items-center gap-2 mb-1">
             <Calendar size={18} className="text-[#4F46E5]" />
             <span className="text-xs font-black text-[#4F46E5] uppercase tracking-widest bg-[#EEF2FF] px-2.5 py-0.5 rounded-full border border-[#4F46E5]/20">
-              AI Study Plan Engine
+              {t.studyPlan.engineLabel}
             </span>
           </div>
-          <h1 className="text-3xl font-black text-[#3C3C3C] tracking-tight">Study Roadmap</h1>
+          <h1 className="text-3xl font-black text-[#3C3C3C] tracking-tight">{t.studyPlan.title}</h1>
           <p className="text-[#777777] text-sm mt-0.5 font-medium">
-            Upload document material + set target completion date to generate a personalized day-by-day study plan.
+            {t.studyPlan.subtitle}
           </p>
         </div>
 
@@ -311,7 +318,7 @@ export default function StudyPlanPage() {
           onClick={() => setShowCreateModal(true)}
           className="btn-primary flex items-center gap-2 py-2.5 px-5 text-xs elevation-2 self-start md:self-auto cursor-pointer"
         >
-          <Plus size={16} /> Create New Study Plan
+          <Plus size={16} /> {t.studyPlan.createNew}
         </button>
       </div>
 

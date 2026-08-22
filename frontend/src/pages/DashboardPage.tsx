@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Search, ChevronDown, MoreHorizontal, BookOpen, Sparkles, Target, ArrowRight } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import { useSubjectStore } from '../stores/subjectStore'
+import { useLanguageStore } from '../stores/languageStore'
+import { useTranslation } from '../utils/translations'
 
 import { useQuery } from '@tanstack/react-query'
 import { dashboardApi } from '../services/api'
@@ -17,6 +19,9 @@ import PageContainer from '../components/PageContainer'
 export default function DashboardPage() {
   const { user } = useAuthStore()
   const navigate = useNavigate()
+
+  const { uiLanguage } = useLanguageStore()
+  const t = useTranslation(uiLanguage)
 
   const [isProfileOpen, setIsProfileOpen] = useState(false)
 
@@ -67,7 +72,7 @@ export default function DashboardPage() {
 
       {/* TOP HEADER: "Dashboard overview" + Top Right Nav */}
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-xl font-bold text-slate-800 tracking-tight">Dashboard Overview</h1>
+        <h1 className="text-xl font-bold text-slate-800 tracking-tight">{t.dashboard.welcome}</h1>
         <div className="flex items-center gap-4">
           <NotificationPopup />
 
@@ -102,12 +107,10 @@ export default function DashboardPage() {
               </div>
               <div>
                 <h2 className="text-3xl sm:text-4xl font-black leading-tight tracking-tight text-slate-800">
-                  Welcome back, {user?.username || 'Learner'}! 👋
+                  {t.dashboard.welcome}, {user?.username || 'Learner'}! 👋
                 </h2>
                 <p className="text-slate-500 text-sm mt-1.5 font-medium">
-                  {stats?.current_streak && stats.current_streak > 0
-                    ? `You're on a ${stats.current_streak}-day learning streak! Keep up the great momentum.`
-                    : 'Track your textbook mastery, take practice quizzes, and study with DeepTutor AI.'}
+                  {t.dashboard.subtitle}
                 </p>
               </div>
             </div>
@@ -117,13 +120,13 @@ export default function DashboardPage() {
                 className="btn-primary px-6 py-2.5 text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-xs hover:shadow-md transition-all flex items-center gap-2"
               >
                 <Sparkles size={16} />
-                Open AI Tutor Chat
+                {t.dashboard.startChat}
               </button>
               <button
                 onClick={() => navigate('/subjects')}
                 className="px-5 py-2.5 text-xs sm:text-sm font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl transition-colors"
               >
-                Curriculum
+                {t.dashboard.mySubjects}
               </button>
             </div>
           </div>
