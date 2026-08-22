@@ -33,11 +33,11 @@ mermaid.initialize({
 })
 
 /**
- * Automatically wraps long text inside Mermaid node labels with `<br/>`
- * so Mermaid natively calculates the correct box height and centers text dead-center.
+ * Safely wraps long text inside Mermaid node labels with `<br/>`
  */
 function wrapMermaidNodeLabels(code: string, maxCharsPerLine: number = 36): string {
-  return code.replace(/(\["|\[|\()([^"\]\)\n]+)("\]|\]|\))/g, (match, prefix, content, suffix) => {
+  // Only target quoted node labels ["..."] to avoid breaking subgraphs or shape definitions
+  return code.replace(/(\["|\[")([^"\]\n]+)("\])/g, (match, prefix, content, suffix) => {
     if (!content || !content.trim()) return match
 
     const existingLines = content.split(/<br\s*\/?>/i)
@@ -97,6 +97,15 @@ export default function MermaidDiagram({ chart }: Props) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isFullscreen])
 
+  // Helper to cleanup Mermaid's injected DOM error elements
+  const cleanupMermaidErrorDOM = () => {
+    document.querySelectorAll('[id^="dmermaid"], [id^="mermaid-"]').forEach((el) => {
+      if (el.parentElement === document.body) {
+        el.remove()
+      }
+    })
+  }
+
   // Render Mermaid SVG with auto-wrapping
   useEffect(() => {
     let isMounted = true
@@ -126,19 +135,29 @@ export default function MermaidDiagram({ chart }: Props) {
           cleanCode = `flowchart TD\n${cleanCode}`
         }
 
-        // Auto-wrap long node text so Mermaid computes exact box dimensions
-        const wrappedCode = wrapMermaidNodeLabels(cleanCode, 36)
+        // Try rendering with wrapped labels first, fallback to raw cleanCode
+        let svgResult = ''
+        try {
+          const wrappedCode = wrapMermaidNodeLabels(cleanCode, 36)
+          const res = await mermaid.render(uniqueId, wrappedCode)
+          svgResult = res.svg
+        } catch {
+          cleanupMermaidErrorDOM()
+          const retryId = `mermaid-retry-${rawId}-${Math.random().toString(36).substring(2, 7)}`
+          const res = await mermaid.render(retryId, cleanCode)
+          svgResult = res.svg
+        }
 
-        const { svg } = await mermaid.render(uniqueId, wrappedCode)
-        if (isMounted) {
-          const enhancedSvg = svg.replace(/<svg\s+([^>]+)>/, (match, attrs) => {
+        if (isMounted && svgResult) {
+          const enhancedSvg = svgResult.replace(/<svg\s+([^>]+)>/, (match, attrs) => {
             return `<svg ${attrs} style="max-width: 100%; height: auto; display: block; margin: 0 auto; overflow: visible;">`
           })
           setSvgContent(enhancedSvg)
           setError(false)
         }
       } catch (err) {
-        console.error('[Mermaid] Render error:', err)
+        console.warn('[Mermaid] Render note:', err)
+        cleanupMermaidErrorDOM()
         if (isMounted) {
           setError(true)
         }
@@ -148,6 +167,7 @@ export default function MermaidDiagram({ chart }: Props) {
     renderChart()
     return () => {
       isMounted = false
+      cleanupMermaidErrorDOM()
     }
   }, [chart, rawId])
 

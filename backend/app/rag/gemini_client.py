@@ -438,46 +438,53 @@ class GeminiClient:
         headers = self._get_headers()
         client = self._get_client()
 
-        target_model = model or getattr(settings, "GEMINI_VLM_MODEL", "gemini-2.5-flash") or "gemini-2.5-flash"
+        target_model = model or getattr(settings, "GEMINI_VLM_MODEL", "gemini-3.6-flash") or "gemini-3.6-flash"
         if target_model.startswith("models/"):
             target_model = target_model[7:]
 
         models_to_try = [target_model]
-        for fallback in ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-3.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"]:
+        for fallback in ["gemini-3.6-flash", "gemini-3.1-flash-lite", "gemini-3.7-flash", "gemini-flash-latest"]:
             if fallback not in models_to_try:
                 models_to_try.append(fallback)
 
         last_error = None
         for attempt, mod in enumerate(models_to_try):
             url = f"{self.base_url}/models/{mod}:generateContent"
-            try:
-                response = await client.post(url, headers=headers, json=payload, timeout=getattr(settings, "GEMINI_TIMEOUT", 30) or 30)
-                if response.status_code == 200:
-                    data = response.json()
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        if parts:
-                            extracted_text = "".join(p.get("text", "") for p in parts).strip()
-                            if extracted_text and use_cache:
-                                try:
-                                    from app.rag.vlm_cache import vlm_cache
-                                    vlm_cache.set(image_input, extracted_text)
-                                except Exception:
-                                    pass
-                            return extracted_text
-                    return ""
-                elif response.status_code in (429, 503, 500):
-                    last_error = f"Gemini VLM error ({response.status_code}): {response.text}"
-                    await asyncio.sleep(0.6 * (attempt + 1))
-                    continue
-                else:
-                    response.raise_for_status()
-            except Exception as e:
-                last_error = str(e)
-                if attempt < len(models_to_try) - 1:
-                    await asyncio.sleep(0.5)
-                    continue
+            for sub_attempt in range(3):
+                try:
+                    response = await client.post(url, headers=headers, json=payload, timeout=getattr(settings, "GEMINI_TIMEOUT", 30) or 30)
+                    if response.status_code == 200:
+                        data = response.json()
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            if parts:
+                                extracted_text = "".join(p.get("text", "") for p in parts).strip()
+                                if extracted_text and use_cache:
+                                    try:
+                                        from app.rag.vlm_cache import vlm_cache
+                                        vlm_cache.set(image_input, extracted_text)
+                                    except Exception:
+                                        pass
+                                return extracted_text
+                        return ""
+                    elif response.status_code == 429:
+                        last_error = f"Gemini Rate Limit (429) on {mod}"
+                        await asyncio.sleep(2.0 * (sub_attempt + 1))
+                        continue
+                    elif response.status_code in (500, 503):
+                        last_error = f"Gemini VLM server error ({response.status_code}) on {mod}"
+                        await asyncio.sleep(1.0 * (sub_attempt + 1))
+                        continue
+                    elif response.status_code == 404:
+                        break  # Try next model
+                    else:
+                        response.raise_for_status()
+                except Exception as e:
+                    last_error = str(e)
+                    if sub_attempt < 2:
+                        await asyncio.sleep(1.0)
+                        continue
 
         raise RuntimeError(last_error or "Gemini VLM image transcription failed across candidate models.")
 
