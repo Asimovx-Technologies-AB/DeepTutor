@@ -213,6 +213,7 @@ export const quizApi = {
     focus_topic?: string
     custom_topic?: string
     num_questions?: number
+    language?: string
   }) => api.post('/quiz/generate', data),
   submit: (quizId: string, answers: Record<string, string>) =>
     api.post(`/quiz/${quizId}/submit`, { answers }),
@@ -230,6 +231,7 @@ export const flashcardsApi = {
     focus_topic?: string
     custom_topic?: string
     num_cards?: number
+    language?: string
   }) => api.post('/flashcards/generate', data),
   byTopic: (topicId: string) => api.get(`/flashcards/topic/${topicId}`),
   bySession: (sessionId: string) => api.get(`/flashcards/session/${sessionId}`),
@@ -335,7 +337,7 @@ export const mcpApi = {
 export const studyPlanApi = {
   myPlans: () => api.get('/study-plan/my-plans'),
   get: (id: string) => api.get(`/study-plan/${id}`),
-  generate: (data: { topic_id?: string; session_id?: string; target_date: string; hours_per_day?: number }) =>
+  generate: (data: { topic_id?: string; session_id?: string; target_date: string; hours_per_day?: number; language?: string }) =>
     api.post('/study-plan/generate', data),
   toggleDay: (planId: string, dayNumber: number) =>
     api.post(`/study-plan/${planId}/toggle-day`, { day_number: dayNumber }),

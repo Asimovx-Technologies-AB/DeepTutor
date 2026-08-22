@@ -5,40 +5,23 @@ import {
   Home,
   BookOpen,
   CalendarCheck,
-  Trophy,
-  TrendingUp,
   Layers,
   LogOut,
-  ChevronRight,
   Menu,
   X,
-  Zap,
-  Bot,
-  Sparkles,
-  Wifi,
   WifiOff,
-  Crown,
-  Plus,
-  FileText,
-  Trash2,
   GraduationCap,
-  Award
+  Award,
+  Globe
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
+import { useLanguageStore } from '../stores/languageStore'
+import { useTranslation } from '../utils/translations'
 import { healthApi, chatApi } from '../services/api'
 import ProfileModal from './ProfileModal'
 import UpgradeModal from './UpgradeModal'
 import ConfirmModal from './ConfirmModal'
-
-
-const NAV_ITEMS = [
-  { to: '/dashboard', icon: Home, label: 'Home', badge: null },
-  { to: '/chat', icon: BookOpen, label: 'Learn', badge: 'Live' },
-  { to: '/subjects', icon: Layers, label: 'My Subjects', badge: null },
-  { to: '/records', icon: Award, label: 'Student Records', badge: 'Live' },
-  { to: '/study-plan', icon: CalendarCheck, label: 'Study Plan', badge: 'AI' },
-]
 
 export default function Layout() {
   const { user, logout } = useAuthStore()
@@ -50,11 +33,20 @@ export default function Layout() {
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false)
   const [confirmDeleteSid, setConfirmDeleteSid] = useState<string | null>(null)
 
-  const sessions = useChatStore((s) => s.sessions)
+  const { uiLanguage, setUiLanguage } = useLanguageStore()
+  const t = useTranslation(uiLanguage)
+
   const activeSession = useChatStore((s) => s.activeSession)
   const setActiveSession = useChatStore((s) => s.setActiveSession)
-  const setSessions = useChatStore((s) => s.setSessions)
   const removeSession = useChatStore((s) => s.removeSession)
+
+  const NAV_ITEMS = [
+    { to: '/dashboard', icon: Home, label: t.nav.home, badge: null },
+    { to: '/chat', icon: BookOpen, label: t.nav.learn, badge: t.nav.live },
+    { to: '/subjects', icon: Layers, label: t.nav.mySubjects, badge: null },
+    { to: '/records', icon: Award, label: t.nav.studentRecords, badge: t.nav.live },
+    { to: '/study-plan', icon: CalendarCheck, label: t.nav.studyPlan, badge: t.nav.ai },
+  ]
 
   useEffect(() => {
     let isMounted = true
@@ -72,16 +64,6 @@ export default function Layout() {
     }
   }, [])
 
-  const handleLogout = useCallback(() => {
-    logout()
-    navigate('/login')
-  }, [logout, navigate])
-
-  const handleDeleteSession = useCallback((e: React.MouseEvent, sid: string) => {
-    e.stopPropagation()
-    setConfirmDeleteSid(sid)
-  }, [])
-
   const executeDeleteSession = useCallback(async () => {
     const sid = confirmDeleteSid
     if (!sid) return
@@ -97,6 +79,10 @@ export default function Layout() {
       console.error('Failed to delete session:', err)
     }
   }, [confirmDeleteSid, activeSession?.id, removeSession, setActiveSession, navigate])
+
+  const toggleLanguage = () => {
+    setUiLanguage(uiLanguage === 'en' ? 'sv' : 'en')
+  }
 
   return (
     <div className="flex h-screen bg-bg-primary overflow-hidden text-text-primary font-sans antialiased">
@@ -119,11 +105,21 @@ export default function Layout() {
         <div className="flex-1 rounded-3xl bg-white/80 backdrop-blur-xl border border-white/60 elevation-1 flex flex-col items-center py-8 justify-between relative">
 
           {/* Top Logo */}
-          <div className="flex items-center justify-center cursor-pointer mb-8" onClick={() => navigate('/dashboard')}>
+          <div className="flex items-center justify-center cursor-pointer mb-6" onClick={() => navigate('/dashboard')}>
             <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/30 hover:bg-indigo-700 transition-colors">
               <GraduationCap size={24} />
             </div>
           </div>
+
+          {/* Website UI Language Switcher Toggle */}
+          <button
+            onClick={toggleLanguage}
+            title={`${t.header.websiteLanguage}: ${uiLanguage === 'en' ? 'English (🇬🇧)' : 'Svenska (🇸🇪)'}`}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-black text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-all mb-4 cursor-pointer"
+          >
+            <Globe size={13} className="text-indigo-600" />
+            <span>{uiLanguage === 'en' ? '🇬🇧 EN' : '🇸🇪 SV'}</span>
+          </button>
 
           {/* Navigation Items */}
           <nav className="flex-1 flex flex-col items-center gap-5 overflow-y-auto no-scrollbar w-full">
@@ -153,14 +149,14 @@ export default function Layout() {
             <div
               onClick={() => setIsProfileOpen(true)}
               className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-sm cursor-pointer shadow-md shadow-indigo-600/20 hover:bg-indigo-700 transition-all"
-              title="View & Edit Profile"
+              title={t.header.profile}
             >
               {user?.username?.charAt(0).toUpperCase() || 'U'}
             </div>
             <button
               onClick={() => logout()}
               className="text-slate-400 hover:text-rose-600 transition-colors p-2 rounded-full hover:bg-rose-50 cursor-pointer"
-              title="Logout"
+              title={t.header.logout}
             >
               <LogOut size={18} />
             </button>
@@ -197,6 +193,19 @@ export default function Layout() {
             )
           })}
         </nav>
+        {/* Mobile Language Switcher */}
+        <div className="p-4 border-t border-slate-200">
+          <button
+            onClick={toggleLanguage}
+            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-sm font-bold text-slate-700 hover:bg-indigo-50"
+          >
+            <div className="flex items-center gap-2">
+              <Globe size={16} className="text-indigo-600" />
+              <span>{t.header.websiteLanguage}</span>
+            </div>
+            <span className="font-black text-indigo-600">{uiLanguage === 'en' ? '🇬🇧 EN' : '🇸🇪 SV'}</span>
+          </button>
+        </div>
       </aside>
 
       {/* ─── MAIN CONTENT CONTAINER ─── */}
@@ -213,7 +222,13 @@ export default function Layout() {
             DeepTutor
           </div>
           <div className="flex items-center gap-3">
-            <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-rose-500 animate-ping'}`} title={isOnline ? 'API Connected' : 'API Offline'} />
+            <button
+              onClick={toggleLanguage}
+              className="px-2 py-1 rounded-lg bg-slate-100 text-xs font-black text-slate-700"
+            >
+              {uiLanguage === 'en' ? '🇬🇧 EN' : '🇸🇪 SV'}
+            </button>
+            <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-rose-500 animate-ping'}`} title={isOnline ? t.header.online : t.header.offline} />
             <button
               onClick={() => setIsProfileOpen(true)}
               className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xs"
@@ -228,10 +243,10 @@ export default function Layout() {
           <div className="bg-amber-50 text-amber-800 border-b border-amber-200 px-4 py-3 text-sm font-bold flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <WifiOff size={16} />
-              <span>Backend server offline. Please check your connection.</span>
+              <span>{t.header.offlineWarning}</span>
             </div>
             <button onClick={() => window.location.reload()} className="bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold">
-              Retry
+              {t.header.retry}
             </button>
           </div>
         )}
@@ -262,4 +277,3 @@ export default function Layout() {
     </div>
   )
 }
-

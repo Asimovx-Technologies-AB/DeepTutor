@@ -31,6 +31,8 @@ import {
 import { flashcardsApi } from '../services/api'
 import { useSubjectStore } from '../stores/subjectStore'
 import { useChatStore } from '../stores/chatStore'
+import { useLanguageStore } from '../stores/languageStore'
+import { useTranslation } from '../utils/translations'
 
 interface Flashcard {
   id: string
@@ -96,6 +98,9 @@ export default function FlashcardsPage() {
   const queryClient = useQueryClient()
   const activeSession = useChatStore((s) => s.activeSession)
 
+  const { uiLanguage, aiLanguage } = useLanguageStore()
+  const t = useTranslation(uiLanguage)
+
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
@@ -154,7 +159,7 @@ export default function FlashcardsPage() {
   const generateMutation = useMutation({
     mutationFn: async () => {
       setGenerating(true)
-      const res = await flashcardsApi.generate({ topic_id: topicId })
+      const res = await flashcardsApi.generate({ topic_id: topicId, language: aiLanguage })
       return res.data
     },
     onSuccess: () => {

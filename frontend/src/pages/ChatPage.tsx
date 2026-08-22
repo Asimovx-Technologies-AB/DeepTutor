@@ -13,6 +13,8 @@ import {
 } from 'lucide-react'
 import { useChatStore } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
+import { useLanguageStore } from '../stores/languageStore'
+import { useTranslation } from '../utils/translations'
 import { chatApi, documentsApi, streamChatMessage } from '../services/api'
 import ChatMessage from '../components/ChatMessage'
 import GraphContextPanel from '../components/GraphContextPanel'
@@ -437,15 +439,9 @@ export default function ChatPage() {
   const [extMessages, setExtMessages] = useState<ExtendedMessage[]>([])
   const [selectedModel, setSelectedModel] = useState('DeepTutor (Gemini Flash)')
 
-  // Response Language State (English 🇬🇧 vs Swedish 🇸🇪)
-  const [responseLanguage, setResponseLanguage] = useState<'english' | 'swedish'>(() => {
-    return (localStorage.getItem('deeptutor_response_lang') as 'english' | 'swedish') || 'english'
-  })
-
-  const handleLanguageChange = (lang: 'english' | 'swedish') => {
-    setResponseLanguage(lang)
-    localStorage.setItem('deeptutor_response_lang', lang)
-  }
+  // Centralized Language Store (UI Language vs AI Response Language)
+  const { uiLanguage, aiLanguage, setAiLanguage } = useLanguageStore()
+  const t = useTranslation(uiLanguage)
 
   // Mobile Drawers State
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false)
@@ -591,7 +587,7 @@ export default function ChatPage() {
       sessionId: currentSessionId,
       content,
       token: token || '',
-      language: responseLanguage,
+      language: aiLanguage,
       signal: controller.signal,
       onToken: (t) => {
         accContent += t
@@ -911,7 +907,7 @@ export default function ChatPage() {
             <div className="flex items-center gap-2">
               <MessageSquare size={18} className="text-[#1CB0F6]" />
               <h3 className="text-xs font-extrabold uppercase text-[#777777] tracking-wider">
-                Chat History
+                {t.chat.chatHistory}
               </h3>
             </div>
             <button
@@ -931,7 +927,7 @@ export default function ChatPage() {
             className="w-full btn-primary font-bold text-xs py-2.5 px-3 rounded-[1.25rem] flex items-center justify-center gap-2 elevation-1 cursor-pointer"
           >
             <Plus size={15} />
-            <span>New Chat</span>
+            <span>{t.chat.newSession}</span>
           </button>
 
           <div className="space-y-1.5 max-h-[65vh] overflow-y-auto">
@@ -994,13 +990,13 @@ export default function ChatPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Language Selector Pill */}
+            {/* AI Response Language Selector Pill */}
             <div className="flex items-center bg-slate-100 p-1 rounded-full border border-slate-200 text-xs font-bold mr-1">
               <button
                 type="button"
-                onClick={() => handleLanguageChange('english')}
+                onClick={() => setAiLanguage('english')}
                 className={`px-2.5 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${
-                  responseLanguage === 'english'
+                  aiLanguage === 'english'
                     ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
@@ -1011,9 +1007,9 @@ export default function ChatPage() {
               </button>
               <button
                 type="button"
-                onClick={() => handleLanguageChange('swedish')}
+                onClick={() => setAiLanguage('swedish')}
                 className={`px-2.5 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${
-                  responseLanguage === 'swedish'
+                  aiLanguage === 'swedish'
                     ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
@@ -1079,10 +1075,10 @@ export default function ChatPage() {
 
               {/* Personal Greeting & Headline */}
               <p className="text-info font-extrabold text-xs sm:text-sm mb-2 tracking-widest uppercase">
-                Welcome back, {user?.username ?? 'Learner'}!
+                {t.dashboard.welcome.toUpperCase()}, {user?.username ?? 'Learner'}!
               </p>
               <h1 className="text-3xl sm:text-5xl font-black text-text-primary tracking-tight mb-8 leading-tight">
-                What are we<br />learning today?
+                {t.chat.welcomeHeader}
               </h1>
 
               {/* Clean Multi-Tool Input Container */}
@@ -1091,7 +1087,7 @@ export default function ChatPage() {
                 {/* 3 Quick Study Tool Action Buttons */}
                 <div className="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b border-[#E2E8F0]">
                   <span className="text-[11px] font-black uppercase text-[#777777] tracking-wider mr-1 flex items-center gap-1">
-                    <Sparkles size={13} className="text-[#1CB0F6]" /> Tools:
+                    <Sparkles size={13} className="text-[#1CB0F6]" /> {t.chat.tools.toUpperCase()}:
                   </span>
 
                   <button
@@ -1105,7 +1101,7 @@ export default function ChatPage() {
                     title="Generate 5-minute structured revision cheat sheet"
                   >
                     <Zap size={13} />
-                    <span>⚡ 5-Min Cheatcode</span>
+                    <span>⚡ {t.chat.cheatcode5Min}</span>
                   </button>
 
                   <button
@@ -1119,7 +1115,7 @@ export default function ChatPage() {
                     title="Generate 5-7 key bullet points"
                   >
                     <ListChecks size={13} className="text-[#1CB0F6]" />
-                    <span>Bullet Points</span>
+                    <span>{t.chat.bulletPoints}</span>
                   </button>
 
                   <button
@@ -1133,7 +1129,7 @@ export default function ChatPage() {
                     title="Highlight key exam-critical formulas & concepts"
                   >
                     <Star size={13} className="text-[#FFC800]" />
-                    <span>Important Points</span>
+                    <span>{t.chat.importantPoints}</span>
                   </button>
 
                   <button
@@ -1147,7 +1143,7 @@ export default function ChatPage() {
                     title="Explain with a simple real-world analogy"
                   >
                     <Lightbulb size={13} className="text-[#58CC02]" />
-                    <span>Simple Analogy</span>
+                    <span>{t.chat.simpleAnalogy}</span>
                   </button>
                 </div>
 
@@ -1276,11 +1272,11 @@ export default function ChatPage() {
                   {/* Language Quick Toggle */}
                   <button
                     type="button"
-                    onClick={() => handleLanguageChange(responseLanguage === 'english' ? 'swedish' : 'english')}
+                    onClick={() => setAiLanguage(aiLanguage === 'english' ? 'swedish' : 'english')}
                     className="flex items-center gap-1 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 px-2.5 py-1.5 rounded-[1.25rem] border border-slate-200 transition-colors cursor-pointer"
-                    title="Switch response language"
+                    title="Switch AI response language"
                   >
-                    <span>{responseLanguage === 'english' ? '🇬🇧 EN' : '🇸🇪 SV'}</span>
+                    <span>{aiLanguage === 'english' ? '🇬🇧 EN' : '🇸🇪 SV'}</span>
                   </button>
                   <button
                     onClick={() => fileInputRef.current?.click()}
@@ -1322,7 +1318,7 @@ export default function ChatPage() {
             <div className="flex items-center gap-2.5">
               <Sparkles size={18} className="text-[#1CB0F6]" />
               <h3 className="text-xs font-extrabold uppercase text-[#777777] tracking-wider">
-                Study Tools & Graph
+                {t.chat.studyToolsGraph}
               </h3>
             </div>
             <button
@@ -1348,13 +1344,13 @@ export default function ChatPage() {
               <img src="/assets/uimojis/uimoji_flashcards.jpg" alt="Flashcards" className="w-full h-full object-cover mix-blend-multiply rounded-lg" />
             </div>
             <h4 className="text-md font-bold text-text-primary group-hover:text-info transition-colors">
-              Flashcards Deck
+              {t.chat.flashcardsDeck}
             </h4>
             <p className="text-sm text-text-secondary mt-2 leading-relaxed">
-              Review AI study cards generated strictly from your uploaded PDF text.
+              {t.chat.flashcardsDesc}
             </p>
             <div className="mt-4 flex items-center gap-1.5 text-sm font-bold text-info group-hover:translate-x-1 transition-transform">
-              <span>Study Flashcards</span> <ArrowRight size={16} />
+              <span>{t.chat.studyFlashcardsAction}</span> <ArrowRight size={16} />
             </div>
           </motion.div>
 
@@ -1368,13 +1364,13 @@ export default function ChatPage() {
               <img src="/assets/uimojis/uimoji_quiz.jpg" alt="Quiz" className="w-full h-full object-cover mix-blend-multiply rounded-lg" />
             </div>
             <h4 className="text-md font-bold text-text-primary group-hover:text-info transition-colors">
-              Play Gamified Quiz
+              {t.chat.playGamifiedQuiz}
             </h4>
             <p className="text-sm text-text-secondary mt-2 leading-relaxed">
-              Test your understanding with PDF-based quizzes, score XP & master topics.
+              {t.chat.quizDesc}
             </p>
             <div className="mt-4 flex items-center gap-1.5 text-sm font-bold text-info group-hover:translate-x-1 transition-transform">
-              <span>Start Quiz Game</span> <ArrowRight size={16} />
+              <span>{t.chat.startQuizGame}</span> <ArrowRight size={16} />
             </div>
           </motion.div>
 
@@ -1389,7 +1385,7 @@ export default function ChatPage() {
             </div>
             <div className="flex items-center justify-between">
               <h4 className="text-md font-bold text-text-primary group-hover:text-success transition-colors">
-                Knowledge Graph
+                {t.chat.knowledgeGraph}
               </h4>
               {liveGraphContext.entities.length > 0 && (
                 <span className="text-xs font-bold bg-success-soft text-success px-2 py-0.5 rounded-full border border-success/30">
@@ -1398,10 +1394,10 @@ export default function ChatPage() {
               )}
             </div>
             <p className="text-sm text-text-secondary mt-2 leading-relaxed">
-              Explore 3D visual entity maps and document relationship connections.
+              {t.chat.graphDesc}
             </p>
             <div className="mt-4 flex items-center gap-1.5 text-sm font-bold text-success group-hover:translate-x-1 transition-transform">
-              <span>Explore 3D Graph</span> <ArrowRight size={16} />
+              <span>{t.chat.explore3dGraph}</span> <ArrowRight size={16} />
             </div>
           </motion.div>
         </div>

@@ -7,6 +7,8 @@ import {
   CheckCircle2, HelpCircle
 } from 'lucide-react'
 import { documentsApi } from '../services/api'
+import { useLanguageStore } from '../stores/languageStore'
+import { useTranslation } from '../utils/translations'
 
 interface GraphNode {
   id: string
@@ -70,6 +72,8 @@ interface SimEdge {
 }
 
 function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTutor }: Props) {
+  const { uiLanguage } = useLanguageStore()
+  const t = useTranslation(uiLanguage)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const animRef = useRef<number>(0)
@@ -786,15 +790,15 @@ function GraphContextPanel({ entities, relationships, isOpen, onClose, onAskTuto
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-lg font-black tracking-tight leading-tight">
-                    3D Knowledge Graph
+                    {uiLanguage === 'sv' ? '3D-Kunskapsgraf' : '3D Knowledge Graph'}
                   </h3>
                   <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${darkMode ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
                     }`}>
-                    Live Interactive
+                    {uiLanguage === 'sv' ? 'Interaktiv' : 'Live Interactive'}
                   </span>
                 </div>
                 <p className={`text-xs font-semibold mt-0.5 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                  {entities.length} concept entities · {relationships.length} relationships connected
+                  {entities.length} {uiLanguage === 'sv' ? 'begrepp' : 'concept entities'} · {relationships.length} {uiLanguage === 'sv' ? 'kopplingar' : 'relationships connected'}
                 </p>
               </div>
             </div>
