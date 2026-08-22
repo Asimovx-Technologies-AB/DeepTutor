@@ -21,6 +21,7 @@ class GenerateQuizRequest(BaseModel):
     difficulty: Optional[str] = "medium"
     time_limit_mins: Optional[int] = 10
     num_questions: Optional[int] = 5
+    language: Optional[str] = "english"
 
 
 class SubmitQuizRequest(BaseModel):
@@ -134,6 +135,7 @@ async def generate_quiz(
         topic_id=section_id,
         note_id=body.note_id,
         note_content=body.note_content,
+        language=body.language or "english",
     )
     if not quiz:
         if not is_curriculum_topic(section_id):

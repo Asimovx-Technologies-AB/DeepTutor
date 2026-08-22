@@ -1392,6 +1392,16 @@ class GraphRAGPipeline:
                 "Translate all section titles, explanations, blockquotes, table column headers, table contents, and conclusions into Swedish.\n"
                 "Keep LaTeX formulas, numbers, and technical terms accurate.\n"
             )
+        elif language and language.lower() in ("arabic", "ar"):
+            system_prompt_to_use += (
+                "\n\n═══════════════════════════════\n"
+                "RESPONSE LANGUAGE INSTRUCTION (MANDATORY)\n"
+                "═══════════════════════════════\n"
+                "The user requested responses in Arabic (العربية).\n"
+                "You MUST formulate your ENTIRE response in clear, fluent, academic Arabic.\n"
+                "Translate all section titles, explanations, blockquotes, table column headers, table contents, and conclusions into Arabic.\n"
+                "Keep LaTeX formulas, numbers, and technical terms accurate.\n"
+            )
 
         messages = [
             {"role": "system", "content": system_prompt_to_use},

@@ -80,8 +80,21 @@ export default function Layout() {
     }
   }, [confirmDeleteSid, activeSession?.id, removeSession, setActiveSession, navigate])
 
+  useEffect(() => {
+    document.documentElement.dir = uiLanguage === 'ar' ? 'rtl' : 'ltr'
+    document.documentElement.lang = uiLanguage
+  }, [uiLanguage])
+
   const toggleLanguage = () => {
-    setUiLanguage(uiLanguage === 'en' ? 'sv' : 'en')
+    if (uiLanguage === 'en') setUiLanguage('sv')
+    else if (uiLanguage === 'sv') setUiLanguage('ar')
+    else setUiLanguage('en')
+  }
+
+  const getLangBadge = (lang: string) => {
+    if (lang === 'ar') return '🇸🇦 AR'
+    if (lang === 'sv') return '🇸🇪 SV'
+    return '🇬🇧 EN'
   }
 
   return (
@@ -114,11 +127,11 @@ export default function Layout() {
           {/* Website UI Language Switcher Toggle */}
           <button
             onClick={toggleLanguage}
-            title={`${t.header.websiteLanguage}: ${uiLanguage === 'en' ? 'English (🇬🇧)' : 'Svenska (🇸🇪)'}`}
+            title={`${t.header.websiteLanguage}: ${uiLanguage === 'en' ? 'English (🇬🇧)' : uiLanguage === 'sv' ? 'Svenska (🇸🇪)' : 'العربية (🇸🇦)'}`}
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-black text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-all mb-4 cursor-pointer"
           >
             <Globe size={13} className="text-indigo-600" />
-            <span>{uiLanguage === 'en' ? '🇬🇧 EN' : '🇸🇪 SV'}</span>
+            <span>{getLangBadge(uiLanguage)}</span>
           </button>
 
           {/* Navigation Items */}
@@ -203,7 +216,7 @@ export default function Layout() {
               <Globe size={16} className="text-indigo-600" />
               <span>{t.header.websiteLanguage}</span>
             </div>
-            <span className="font-black text-indigo-600">{uiLanguage === 'en' ? '🇬🇧 EN' : '🇸🇪 SV'}</span>
+            <span className="font-black text-indigo-600">{getLangBadge(uiLanguage)}</span>
           </button>
         </div>
       </aside>
@@ -226,7 +239,7 @@ export default function Layout() {
               onClick={toggleLanguage}
               className="px-2 py-1 rounded-lg bg-slate-100 text-xs font-black text-slate-700"
             >
-              {uiLanguage === 'en' ? '🇬🇧 EN' : '🇸🇪 SV'}
+              {getLangBadge(uiLanguage)}
             </button>
             <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-rose-500 animate-ping'}`} title={isOnline ? t.header.online : t.header.offline} />
             <button

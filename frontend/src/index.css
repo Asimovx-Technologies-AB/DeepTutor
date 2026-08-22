@@ -206,6 +206,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ─── RTL (Arabic) Font Override ──────────────────────────────── */
+html[dir="rtl"],
+body[dir="rtl"],
+[dir="rtl"] {
+  font-family: 'Cairo', 'Outfit', ui-sans-serif, system-ui, sans-serif;
+}
+
 /* ─── Typography overrides ────────────────────────────────── */
 h1,
 h2,

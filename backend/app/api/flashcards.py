@@ -13,6 +13,7 @@ class GenerateFlashcardsRequest(BaseModel):
     topic_id: Optional[str] = None
     focus_topic: Optional[str] = None
     custom_topic: Optional[str] = None
+    language: Optional[str] = "english"
 
 
 class ReviewFlashcardRequest(BaseModel):
@@ -38,7 +39,8 @@ async def generate_flashcards(
     cards = await generate_flashcards_for_section(
         section_id=section_id,
         focus_topic=effective_focus,
-        user_id=user["id"]
+        user_id=user["id"],
+        language=body.language or "english",
     )
     if not cards:
         raise HTTPException(

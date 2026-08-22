@@ -53,6 +53,7 @@ async def generate_quiz_for_section(
     topic_id: Optional[str] = None,
     note_id: Optional[str] = None,
     note_content: Optional[str] = None,
+    language: str = "english",
 ) -> Optional[dict]:
     """
     Generate a quiz using either a specific Smart Note or the user's textbook/document context.
@@ -123,8 +124,17 @@ SOLVED PRACTICE QUESTIONS:
     import uuid
     gen_seed = str(uuid.uuid4())[:8]
     topic_label = get_chapter_title(topic_id or section_id) or focus_topic or "Class 10 Syllabus"
+    
+    lang_str = (language or "english").lower()
+    if lang_str in ("arabic", "ar"):
+        lang_instruction = "\n\nMANDATORY RESPONSE LANGUAGE: You MUST generate all question titles, options (A, B, C, D), and explanations 100% in fluent, clear, academic Arabic (العربية)."
+    elif lang_str in ("swedish", "sv"):
+        lang_instruction = "\n\nMANDATORY RESPONSE LANGUAGE: You MUST generate all question titles, options (A, B, C, D), and explanations 100% in fluent, clear, academic Swedish (Svenska)."
+    else:
+        lang_instruction = ""
+
     topic_instruction = (
-        f"FOCUS TOPIC: The quiz MUST focus specifically on '{focus_topic or topic_label}'. Generate NEW and DIVERSE questions (Seed: {gen_seed})."
+        f"FOCUS TOPIC: The quiz MUST focus specifically on '{focus_topic or topic_label}'. Generate NEW and DIVERSE questions (Seed: {gen_seed}).{lang_instruction}"
     )
 
     prompt = QUIZ_PROMPT_TEMPLATE.format(
