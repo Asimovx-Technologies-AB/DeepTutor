@@ -19,7 +19,7 @@ USER_DATA = [
     # more users here if needed:
     # {
     #     "username": "admin",
-    #     "email":    "admin@deeptutor.ai",
+   
     #     "password": "adminpass",
     #     "role":     "admin",
     # },
@@ -57,7 +57,7 @@ for u in USER_DATA:
         (uid, u["username"], u["email"], password_hash, u["role"], created_at),
     )
     print(f"  [INSERTED] {u['email']}  (id={uid})")
-    inserted += 1
+    inserted += 1 #     "email":    "admin@deeptutor.ai",
 
 conn.commit()
 conn.close()
