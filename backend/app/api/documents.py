@@ -151,6 +151,7 @@ import re
 from app.rag.topic_sanitizer import is_valid_academic_topic, clean_and_format_topic
 from app.rag.ollama_client import ollama
 from app.rag.gemini_client import gemini_client
+from app.rag.pipeline.embedder import embedding_pipeline
 
 _concept_cache: dict = {}
 
@@ -175,7 +176,13 @@ async def explain_concept(req: ConceptExplainRequest, user: dict = Depends(get_c
     grounding_text = ""
     try:
         coll_id = _user_section_collection_id(user["id"], req.topic_id or "general")
-        results = await vector_store.search(query=concept, collection_id=coll_id, top_k=2)
+        q_vec = await embedding_pipeline.embed(concept)
+        results = active_vector_store.search_hybrid(
+            topic_id=coll_id,
+            query_embedding=q_vec,
+            query_text=concept,
+            top_k=2,
+        )
         if results:
             grounding_text = "\n".join([r.get("text", "")[:400] for r in results if r.get("text")])
     except Exception:

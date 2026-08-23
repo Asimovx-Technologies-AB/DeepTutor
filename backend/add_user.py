@@ -1,5 +1,5 @@
-"""
-a user directly to the deep_tutor.db database.
+r"""
+Add a user directly to the deep_tutor.db database.
 Edit the USER_DATA section below, then run:
   .venv\Scripts\python.exe add_user.py
 """
