@@ -12,6 +12,7 @@ shareable web versions (artifacts) mirror an earlier revision.
 | [mvp-plan.md](mvp-plan.md) | Go-to-market staging: Solo → Family → Classroom |
 | [homework-loop-spec.md](homework-loop-spec.md) | Technical spec for the homework / parent sign-off loop |
 | [release-plan.md](release-plan.md) | Market release timeline (India / Sweden / UAE), reconciled with the MVP stages |
+| [infra-and-cicd.md](infra-and-cicd.md) | Repo cleanup, target infra (~$15–20/mo), GitHub Actions CI/CD design |
 
 ## Decision log
 
@@ -23,3 +24,7 @@ shareable web versions (artifacts) mirror an earlier revision.
   the flagship. Rationale in [differentiation.md](differentiation.md).
 - **2026-08-27** — Market order: India (volume/proof) → Sweden (sovereign B2B
   margin) → UAE (ARPU), per [release-plan.md](release-plan.md).
+- **2026-08-27** — Infra decision: stateless Docker backend on Render Starter +
+  Netlify + Neon + Upstash + Pinecone/S3 free tiers (≈$15–20/mo); all deploys
+  via GitHub Actions; TextBook PDFs purged from git history. Rationale in
+  [infra-and-cicd.md](infra-and-cicd.md).
