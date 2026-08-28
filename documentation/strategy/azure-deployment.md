@@ -7,6 +7,12 @@ before committing budget. Supersedes the hosting section of
 the rest of that document — stateless-backend principle, repo cleanup, CI
 shape — still stands and this plan is built on it.*
 
+> **Paired file:** [`azure-deployment.html`](./azure-deployment.html) is the same
+> report as a styled page, published at
+> <https://claude.ai/code/artifact/253bdd8f-70a5-4f23-9cf0-855a6b0b1086>.
+> This markdown is the source of truth; the two must be updated together, and
+> nothing enforces that but review.
+
 ---
 
 ## 1. Recommendation in one paragraph
