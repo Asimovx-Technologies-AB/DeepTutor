@@ -16,6 +16,7 @@ shareable web versions (artifacts) mirror an earlier revision.
 | [architecture-pattern.md](architecture-pattern.md) | ADR-001: router→service→repository + typed RAG pipeline stages |
 | [code-review-findings.md](code-review-findings.md) | Deep review of data/API/RAG layers — P0 security holes, defects, ticket register |
 | [sprint-plan.md](sprint-plan.md) | Sprints 1–3, AI-assisted sizing, ticket-level plan |
+| [azure-deployment.md](azure-deployment.md) | Azure target infra (~$25/mo, one resource group), Terraform + GitHub Actions. Rendered page: [azure-deployment.html](azure-deployment.html) |
 
 ## Decision log
 
@@ -35,3 +36,10 @@ shareable web versions (artifacts) mirror an earlier revision.
   Netlify + Neon + Upstash + Pinecone/S3 free tiers (≈$15–20/mo); all deploys
   via GitHub Actions; TextBook PDFs purged from git history. Rationale in
   [infra-and-cicd.md](infra-and-cicd.md).
+- **2026-08-28** — Hosting decision revised to **Azure**, superseding the Render/
+  Netlify choice above: one resource group per environment, Container Apps +
+  Static Web Apps Free + one Postgres Flexible B1ms carrying pgvector, so a
+  single server replaces Neon, Pinecone and the graph store's ephemeral disk
+  (≈$25/mo). Terraform over Bicep. The stateless-backend principle, repo
+  cleanup and CI shape from infra-and-cicd.md are unchanged and this plan is
+  built on them. Rationale in [azure-deployment.md](azure-deployment.md).
