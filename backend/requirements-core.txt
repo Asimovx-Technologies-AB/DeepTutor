@@ -1,0 +1,65 @@
+# Deep Tutor — core runtime dependencies (the set the API actually needs).
+#
+# This is requirements.txt minus the OCR/vision stack. Those packages
+# (docling, easyocr, pytesseract) drag in torch and add multiple gigabytes to
+# the image, for a feature that is disabled by default (ENABLE_DOCLING=False)
+# and imported lazily inside functions. Install requirements-ocr.txt on top
+# when a deployment genuinely turns OCR on.
+#
+# Keep this file and requirements.txt in sync for the packages they share.
+
+# ── Web framework ─────────────────────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+gunicorn>=22.0.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+python-multipart>=0.0.9
+
+# ── Database ──────────────────────────────────────────────────────────────────
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9
+
+# ── Vector store ──────────────────────────────────────────────────────────────
+pinecone>=5.0.0
+# chromadb is NOT the active backend, but app/rag/vector_store.py imports it at
+# module scope and app/api/chat.py imports that module, so it is load-bearing
+# until those imports are made lazy. See the Azure report, §4.3.
+chromadb>=0.5.0
+
+# ── Embeddings / LLM providers ────────────────────────────────────────────────
+openai>=1.30.0
+google-generativeai>=0.7.0
+
+# ── Document parsing (the fast path, no ML models) ────────────────────────────
+pymupdf>=1.24.0
+pypdfium2>=4.30.0
+pdfplumber>=0.11.0
+pypdf>=4.0.0
+python-docx>=1.1.0
+openpyxl>=3.1.0
+python-pptx>=0.6.21
+beautifulsoup4>=4.12.0
+
+# ── Retrieval ─────────────────────────────────────────────────────────────────
+rank-bm25>=0.2.2
+networkx>=3.3
+
+# ── Caching / HTTP / utilities ────────────────────────────────────────────────
+cachetools>=5.3.0
+httpx>=0.27.0
+aiofiles>=23.2.1
+python-dotenv>=1.0.0
+tenacity>=8.3.0
+
+# ── Model Context Protocol ────────────────────────────────────────────────────
+mcp>=1.0.0
+
+# ── Cloud storage ─────────────────────────────────────────────────────────────
+# boto3 keeps the existing S3 path working; azure-* are for the Blob migration
+# and the managed-identity credential the container runs under.
+boto3>=1.34.0
+azure-identity>=1.17.0
+azure-storage-blob>=12.20.0

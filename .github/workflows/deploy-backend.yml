@@ -1,0 +1,92 @@
+name: deploy-backend
+
+# Builds the API image inside ACR (no Docker daemon, no registry credentials)
+# and points the Container App at the new tag.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-backend-dev
+  cancel-in-progress: true
+
+env:
+  RESOURCE_GROUP: rg-deeptutor-dev
+  CONTAINER_APP: ca-deeptutor-dev-api
+  IMAGE_REPO: deeptutor-api
+
+jobs:
+  deploy:
+    name: build and deploy (dev)
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve registry
+        id: acr
+        run: |
+          name=$(az acr list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)
+          if [ -z "$name" ]; then
+            echo "No container registry in $RESOURCE_GROUP — run infra-apply first." >&2
+            exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "login_server=$(az acr show --name "$name" --query loginServer -o tsv)" >> "$GITHUB_OUTPUT"
+
+      # `az acr build` ships the context to ACR and builds there: no Docker
+      # layer caching to manage on the runner, and the Basic SKU absorbs it.
+      - name: Build image in ACR
+        run: |
+          az acr build \
+            --registry "${{ steps.acr.outputs.name }}" \
+            --image "${IMAGE_REPO}:${GITHUB_SHA}" \
+            --image "${IMAGE_REPO}:latest" \
+            --file Dockerfile.slim \
+            ./backend
+
+      - name: Roll out new revision
+        run: |
+          az containerapp update \
+            --name "$CONTAINER_APP" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "${{ steps.acr.outputs.login_server }}/${IMAGE_REPO}:${GITHUB_SHA}" \
+            --output none
+
+      - name: Smoke test
+        run: |
+          fqdn=$(az containerapp show --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
+                   --query properties.configuration.ingress.fqdn -o tsv)
+          url="https://${fqdn}/"
+
+          # min_replicas may be 0 — the first request pays the cold start.
+          for attempt in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$url" || true)
+            if [ "$code" = "200" ]; then
+              echo "OK after ${attempt} attempt(s): $url"
+              echo "API: $url" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "attempt ${attempt}: HTTP ${code}"
+            sleep 15
+          done
+
+          echo "Smoke test failed — dumping recent container logs." >&2
+          az containerapp logs show --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
+            --tail 100 --type console || true
+          exit 1

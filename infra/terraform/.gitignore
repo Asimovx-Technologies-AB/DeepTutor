@@ -1,0 +1,26 @@
+# Provider plugins and local workspace metadata
+.terraform/
+.terraform.tfstate.lock.info
+
+# State never belongs in git — it lives in the bootstrap storage account and
+# contains secret values in plain text.
+*.tfstate
+*.tfstate.*
+
+# Plan output is a binary artifact of one run against one state
+tfplan
+plan.txt
+
+# Real variable values. envs/*.tfvars ARE committed on purpose: they hold sizes
+# and toggles, never credentials.
+*.auto.tfvars
+secrets.tfvars
+
+# The backend config carries the bootstrap storage account name, which differs
+# per subscription. envs/dev.backend.hcl ships as a template with a placeholder.
+crash.log
+crash.*.log
+
+# The dependency lock file IS committed — it pins provider versions so a plan
+# in CI matches a plan on a laptop.
+!.terraform.lock.hcl

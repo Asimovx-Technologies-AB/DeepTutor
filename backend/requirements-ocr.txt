@@ -1,0 +1,17 @@
+# Optional OCR / vision extras. Only install where ENABLE_DOCLING=True.
+#
+# These pull torch (~2.5 GB with the default CUDA wheel) and the docling model
+# stack. Installing them roughly quintuples the image and pushes the container
+# past the memory profile of a 0.5 vCPU / 1 GiB Container Apps replica, so they
+# are deliberately absent from the deployed image.
+#
+# Local install:  pip install -r requirements-core.txt -r requirements-ocr.txt
+
+-r requirements-core.txt
+
+docling>=2.0.0
+easyocr>=1.7.0
+pytesseract>=0.3.10
+
+# Local/sovereign vector backend (VECTOR_STORE_BACKEND=faiss).
+faiss-cpu>=1.8.0
