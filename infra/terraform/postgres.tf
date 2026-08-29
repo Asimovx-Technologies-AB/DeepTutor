@@ -7,10 +7,10 @@ resource "azurerm_postgresql_flexible_server" "main" {
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
 
-  version                = var.postgres_version
-  sku_name               = var.postgres_sku_name
-  storage_mb             = var.postgres_storage_mb
-  auto_grow_enabled      = true
+  version           = var.postgres_version
+  sku_name          = var.postgres_sku_name
+  storage_mb        = var.postgres_storage_mb
+  auto_grow_enabled = true
 
   administrator_login    = var.postgres_admin_username
   administrator_password = random_password.postgres_admin.result
