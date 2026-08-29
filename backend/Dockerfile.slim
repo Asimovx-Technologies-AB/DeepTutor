@@ -51,8 +51,20 @@ COPY --chown=appuser:appuser . .
 
 # Writable mount points. /data/* are backed by Azure Files volumes; /tmp/* hold
 # rebuildable caches and are expected to vanish with the replica.
+#
+# /app has to be writable too, and by the directory rather than its contents:
+# WORKDIR created it as root, and the COPY above set ownership only on the files
+# it copied. The lifespan handler in app/main.py mkdirs FAISS_DATA_DIR,
+# CHROMA_PERSIST_DIR and GRAPH_DATA_DIR, which keep their relative defaults
+# ("./faiss_data" and friends) and so land inside /app — creating them as
+# appuser needs write permission on /app itself. Pre-creating them keeps the
+# first boot off that path entirely; the chown covers anything else the app
+# writes to its own directory. The original ./Dockerfile ran as root and never
+# hit this.
 RUN mkdir -p /data/lightrag /data/uploads /tmp/vlm_cache /tmp/image_search_cache \
-    && chown -R appuser:appuser /data /tmp/vlm_cache /tmp/image_search_cache
+    && mkdir -p faiss_data chroma_data graph_data \
+    && chown -R appuser:appuser /data /tmp/vlm_cache /tmp/image_search_cache \
+    && chown appuser:appuser /app faiss_data chroma_data graph_data
 
 USER appuser
 
