@@ -85,6 +85,22 @@ for ROLE in "Contributor" "User Access Administrator"; do
 done
 ```
 
+The `azurerm` backend uses Microsoft Entra authentication for the state blob.
+`Contributor` does not grant blob data-plane access, so grant that separately
+on the state storage account printed by the bootstrap script:
+
+```bash
+STATE_ID=$(az storage account show \
+  --resource-group rg-deeptutor-tfstate \
+  --name <state-storage-account> \
+  --query id -o tsv)
+az role assignment create \
+  --assignee-object-id "$SP_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Storage Blob Data Contributor" \
+  --scope "$STATE_ID"
+```
+
 > Scope both roles to the two resource groups instead of the subscription once
 > they exist, if your tenant's policy calls for it. Subscription scope is only
 > needed for the very first apply.
@@ -112,10 +128,25 @@ Run the **infra-apply** workflow manually, or merge a change under
 `infra/terraform/`. The API starts on a public placeholder image; the real
 image arrives with the first backend deploy.
 
-### 5. Populate the secrets
+### 5. Choose the RAG provider
 
-Terraform creates empty slots so no API key is ever in a `.tfvars` file or in
-Terraform state:
+The safe default keeps the legacy Gemini + Pinecone path until Azure OpenAI
+quota is confirmed. To use the Azure-native path, set this in `envs/dev.tfvars`:
+
+```hcl
+enable_azure_openai = true
+```
+
+That single toggle configures the application for Azure OpenAI chat and
+1,536-dimensional embeddings, PostgreSQL pgvector, and managed-identity
+authentication. On first use, the backend creates the `vector` extension and
+`document_chunks` schema. Existing Pinecone vectors are not copied: re-index
+the source documents before directing test users to the environment.
+
+### 6. Populate legacy secrets only when required
+
+When `enable_azure_openai = false`, Terraform creates legacy secret slots so no
+API key is ever in a `.tfvars` file or in Terraform state:
 
 ```bash
 KV=$(az keyvault list -g rg-deeptutor-dev --query "[0].name" -o tsv)
@@ -128,7 +159,10 @@ az keyvault secret set --vault-name "$KV" --name OPENAI-API-KEY   --value "..."
 Secrets are referenced versionlessly, so a rotated value is picked up by the
 next revision without a Terraform run.
 
-### 6. Deploy
+When Azure-native mode is enabled, these third-party secret slots are not
+created. Azure OpenAI uses the Container App's managed identity.
+
+### 7. Deploy
 
 Push to `main` under `backend/**` or `frontend/**`, or run **deploy-backend** /
 **deploy-frontend** manually. Backend first — the frontend build reads the live
@@ -164,8 +198,9 @@ Tracked in the report, not silently:
 
 - `enable_worker = false` — the ARQ worker has no `app/worker.py` yet, and no
   Redis is provisioned. Report §6.3.
-- The app still uses Pinecone and Google Gemini. Postgres ships with pgvector
-  enabled and ready; the migration is report §6.1.
+- Azure-native RAG is feature-gated by `enable_azure_openai`; quota and model
+  availability must be confirmed before enabling it. Pinecone and Gemini stay
+  available as a rollback path until re-indexing and retrieval benchmarks pass.
 - The API allows CORS from `*` in code and ignores `CORS_ALLOWED_ORIGINS`.
   Report §4.4 — fix this before the environment is shared.
 - The graph store writes JSON to an Azure Files mount. That stops the data

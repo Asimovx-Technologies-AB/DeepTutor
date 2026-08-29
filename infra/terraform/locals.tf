@@ -28,13 +28,13 @@ locals {
     "https://${azurerm_static_web_app.frontend.default_host_name}"
   ]
 
-  # Third-party keys Terraform creates as empty placeholders and never reads.
-  # Values are written out-of-band (az keyvault secret set / GitHub workflow),
-  # so no API key ever lands in state or in a .tfvars file.
-  external_secret_names = [
+  # The Azure-native path authenticates to Azure OpenAI with managed identity
+  # and pgvector with DATABASE_URL, so it needs no third-party API keys.
+  # Legacy keys remain available only while the migration toggle is off.
+  external_secret_names = var.enable_azure_openai ? toset([]) : toset([
     "GEMINI-API-KEY",
     "OPENAI-API-KEY",
     "SERPER-API-KEY",
     "PINECONE-API-KEY",
-  ]
+  ])
 }

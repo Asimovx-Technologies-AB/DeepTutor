@@ -17,7 +17,8 @@ postgres_storage_mb = 32768
 # Off until backend/app/worker.py lands.
 enable_worker = false
 
-# Off until the embedding-migration decision is made (report §6.4).
+# Turn on after Azure OpenAI quota is confirmed. This also selects pgvector and
+# requires a one-time re-index because Azure embeddings are 1536-dimensional.
 enable_azure_openai = false
 
 # Hard cap on log ingestion. 0.2 GB/day caps the worst case at ~6 GB/month
