@@ -51,14 +51,22 @@ jobs:
 
       # `az acr build` ships the context to ACR and builds there: no Docker
       # layer caching to manage on the runner, and the Basic SKU absorbs it.
+      #
+      # Run from backend/ rather than passing `./backend` as the context: the
+      # CLI reads --file itself, to inject it into the tarball it uploads, and
+      # resolves that path against the working directory instead of the context
+      # root. From the repo root `--file Dockerfile.slim` therefore looked for
+      # it beside the workflow and failed. With both arguments relative to
+      # backend/ the two resolve the same way.
       - name: Build image in ACR
+        working-directory: backend
         run: |
           az acr build \
             --registry "${{ steps.acr.outputs.name }}" \
             --image "${IMAGE_REPO}:${GITHUB_SHA}" \
             --image "${IMAGE_REPO}:latest" \
             --file Dockerfile.slim \
-            ./backend
+            .
 
       - name: Roll out new revision
         run: |
