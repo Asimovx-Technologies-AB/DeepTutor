@@ -30,9 +30,9 @@ variable "environment" {
 }
 
 variable "location" {
-  description = "Azure region. Sweden Central keeps data in the EU and carries every SKU used here."
+  description = "Primary Azure region. Central India keeps the API, database, storage and observability close to DeepTutor's Indian users."
   type        = string
-  default     = "swedencentral"
+  default     = "centralindia"
 }
 
 variable "tags" {
@@ -160,7 +160,7 @@ variable "enable_azure_openai" {
 variable "azure_openai_location" {
   description = "Region for the Azure OpenAI account; model availability differs from var.location."
   type        = string
-  default     = "swedencentral"
+  default     = "southindia"
 }
 
 variable "azure_openai_chat_model" {
@@ -211,12 +211,13 @@ variable "log_retention_days" {
 # ─────────────────────────────────────────────────────────────────────────────
 variable "static_web_app_location" {
   description = <<-EOT
-    Static Web Apps is offered in a small set of regions and Sweden Central is
-    not one of them, so the SPA is pinned to West Europe. It serves static
-    assets from a global CDN regardless, and holds no personal data.
+    Static Web Apps is offered in a small set of regions and has no India
+    deployment location, so the SPA is pinned to East Asia, the closest
+    supported option in this provider configuration. Static assets are served
+    through the global edge network, and the SPA holds no personal data.
   EOT
   type        = string
-  default     = "westeurope"
+  default     = "eastasia"
 
   validation {
     condition = contains(

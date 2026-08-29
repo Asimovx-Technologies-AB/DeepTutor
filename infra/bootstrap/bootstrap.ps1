@@ -12,7 +12,7 @@
 #>
 param(
     [Parameter(Mandatory = $true)][string]$SubscriptionId,
-    [string]$Location = "swedencentral"
+    [string]$Location = "centralindia"
 )
 
 $ErrorActionPreference = "Stop"

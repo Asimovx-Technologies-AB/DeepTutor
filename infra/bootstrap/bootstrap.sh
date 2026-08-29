@@ -12,7 +12,7 @@
 set -euo pipefail
 
 SUBSCRIPTION_ID="${1:-}"
-LOCATION="${2:-swedencentral}"
+LOCATION="${2:-centralindia}"
 PROJECT="deeptutor"
 
 STATE_RG="rg-${PROJECT}-tfstate"

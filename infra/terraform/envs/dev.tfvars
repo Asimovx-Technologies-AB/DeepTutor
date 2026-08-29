@@ -1,6 +1,6 @@
 # Development environment — cheapest configuration that is still production-shaped.
 environment = "dev"
-location    = "swedencentral"
+location    = "centralindia"
 
 # Scale to zero between demos. The Container Apps free grant then covers the
 # whole environment; the trade is a ~10-20s cold start on the first request.

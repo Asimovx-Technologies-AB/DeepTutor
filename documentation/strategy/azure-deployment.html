@@ -1178,14 +1178,14 @@ documentation/strategy/
       <h3>Open questions, before the first apply</h3>
       <ol class="questions">
         <li>Is there an existing Azure subscription and tenant, or does one need creating? A free trial's $200 credit covers roughly seven months of this environment.</li>
-        <li>Sweden Central for data residency, or West Europe? Static Web Apps runs in West Europe either way — it holds no personal data.</li>
+        <li>Central India is the primary region because DeepTutor targets Indian users. Static Web Apps uses East Asia because India is not an available deployment location for that service; static assets are delivered through its global edge network and the SPA holds no personal data.</li>
         <li>Does the first environment need to be always-warm for demos? That is the $0-versus-$33 decision in §3.</li>
         <li>Who owns the Entra app registration for OIDC? It needs <em>User Access Administrator</em> for the first apply, which is more than a typical developer holds.</li>
       </ol>
     </section>
 
     <footer>
-      Prices are list prices for Sweden Central at time of writing — verify in the Azure pricing
+      Prices are list prices for Central India at time of writing — verify in the Azure pricing
       calculator before committing budget.<br>
       Supersedes the hosting section of <code>infra-and-cicd.md</code>; its stateless-backend
       principle, repo cleanup and CI shape still stand and this plan is built on them.

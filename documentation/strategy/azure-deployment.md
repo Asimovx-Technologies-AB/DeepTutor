@@ -1,7 +1,7 @@
 # Azure Deployment — Analysis and Plan
 
 *Written 28 Aug 2026 against the repo at `e3295bb`. Prices are list prices at
-the time of writing for Sweden Central; verify in the Azure pricing calculator
+the time of writing for Central India; verify in the Azure pricing calculator
 before committing budget. Supersedes the hosting section of
 [`infra-and-cicd.md`](./infra-and-cicd.md), which recommended Render + Netlify;
 the rest of that document — stateless-backend principle, repo cleanup, CI
@@ -345,15 +345,17 @@ Azure is proven; `Dockerfile.slim` should replace it once it is.
 | Azure Files latency on many small graph JSON files | Medium | Real, and the reason Phase 3 exists. Acceptable at beta document volumes |
 | CORS `*` shipped to a shared environment | **High if unfixed** | §4.4 — fix before sharing the URL |
 | Terraform state corruption | Low | Blob versioning + 30-day soft delete, enabled by the bootstrap script |
-| Sweden Central capacity for a SKU | Low | Region is a variable; `westeurope` is the fallback |
+| Central India capacity for a SKU | Low | Region is a variable; validate subscription quota before apply |
 
 **Open questions for the team, before the first apply:**
 
 1. Is there an existing Azure subscription and tenant, or does one need
    creating? A free trial's USD 200 credit covers roughly seven months of this
    environment.
-2. Sweden Central for data residency, or West Europe? Static Web Apps runs in
-   West Europe either way — it holds no personal data.
+2. Central India is the primary region because DeepTutor targets Indian users.
+   Static Web Apps uses East Asia because India is not an available deployment
+   location for that service; static assets are delivered through its global
+   edge network and the SPA holds no personal data.
 3. Does the first environment need to be always-warm for demos? That is the
    USD 0 versus USD 33 decision in §3.
 4. Who owns the Entra app registration for OIDC? It needs
