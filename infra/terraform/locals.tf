@@ -1,6 +1,6 @@
 locals {
   # `deeptutor-dev`, `deeptutordev` — the two shapes Azure naming rules need.
-  name        = "${var.project}-${var.environment}"
+  name         = "${var.project}-${var.environment}"
   name_compact = "${var.project}${var.environment}"
 
   tags = merge(
