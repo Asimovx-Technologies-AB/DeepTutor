@@ -122,6 +122,7 @@ class Document(Base):
     indexed = Column(Boolean, default=False)
     entity_count = Column(Integer, default=0)
     chunk_count = Column(Integer, default=0)
+    detected_subject = Column(String, default="")
     _key_topics = Column("key_topics", Text, default="[]")
     created_at = Column(String, default=lambda: datetime.utcnow().isoformat())
 
@@ -377,5 +378,4 @@ class StudyNote(Base):
     @solved_questions.setter
     def solved_questions(self, value):
         self._solved_questions = json.dumps(value or [])
-
 
