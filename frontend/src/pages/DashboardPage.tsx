@@ -58,11 +58,11 @@ export default function DashboardPage() {
   // Resolve continue learning meta
   let continueSubject = null
   let continueTopic = null
-  let resolvedTopicTitle = 'Active Curriculum Topic'
+  let resolvedTopicTitle = 'Active Document Topic'
   if (continueData) {
     continueSubject = getSubject(continueData.subject_id)
     continueTopic = getTopics(continueData.subject_id)?.find(t => t.id === continueData.topic_id)
-    resolvedTopicTitle = continueData.topic_title || continueTopic?.title || continueData.topic_id || 'Textbook Preparation'
+    resolvedTopicTitle = continueData.topic_title || continueTopic?.title || continueData.topic_id || 'Document Study'
   }
 
   return (
@@ -162,7 +162,7 @@ export default function DashboardPage() {
                     {uiLanguage === 'sv' ? 'Redo att börja lära dig?' : 'Ready to Start Learning?'}
                   </p>
                   <p className="text-[11px] text-slate-500 font-medium max-w-xs">
-                    {uiLanguage === 'sv' ? 'Ladda upp kursmaterial eller utforska läroplanen för AI-handledning.' : 'Upload a textbook or explore the curriculum to begin AI tutoring.'}
+                    {uiLanguage === 'sv' ? 'Ladda upp ditt eget kursmaterial. AI identifierar ämnet och viktiga områden.' : 'Upload your own study material. AI will identify the subject and key topics.'}
                   </p>
                   <button 
                     onClick={() => navigate('/chat')} 
