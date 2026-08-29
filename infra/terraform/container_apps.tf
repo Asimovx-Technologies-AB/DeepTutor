@@ -130,6 +130,18 @@ resource "azurerm_container_app" "api" {
     min_replicas = var.api_min_replicas
     max_replicas = var.api_max_replicas
 
+    // Scaling from zero requires a trigger. The portal and `az containerapp
+    // create` attach a default HTTP rule for you; Terraform sends an explicit
+    // (and here, empty) scale block instead, which overrides that default. The
+    // result is a revision that provisions cleanly, reports Provisioned with 0
+    // replicas, and has nothing to wake it — requests to the ingress hang until
+    // the client gives up, which is what produced twenty HTTP 000s in the
+    // deploy smoke test. With min_replicas = 0 this rule is load-bearing.
+    http_scale_rule {
+      name                = "http"
+      concurrent_requests = "10"
+    }
+
     container {
       name   = "api"
       image  = var.container_image
@@ -171,6 +183,23 @@ resource "azurerm_container_app" "api" {
         path                    = "/"
         interval_seconds        = 15
         failure_count_threshold = 3
+      }
+
+      // Without this the liveness and readiness budgets above are also the
+      // cold-start budget: readiness gives 3 x 15s and liveness kills the
+      // container at 20 + 3 x 30s. Importing chromadb and sqlalchemy and
+      // running create_all() against Postgres on half a vCPU can exceed both,
+      // and the replica then restarts before it ever serves a request — which
+      // presents as an ingress with no healthy backend and curl reporting
+      // HTTP 000. A startup probe holds the other two off until the app answers
+      // once, giving boot up to 5 minutes without loosening steady-state checks.
+      startup_probe {
+        transport               = "HTTP"
+        port                    = 8000
+        path                    = "/"
+        initial_delay           = 10
+        interval_seconds        = 10
+        failure_count_threshold = 30
       }
 
       volume_mounts {

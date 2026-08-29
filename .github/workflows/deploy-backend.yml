@@ -78,9 +78,18 @@ jobs:
 
       - name: Smoke test
         run: |
-          fqdn=$(az containerapp show --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
-                   --query properties.configuration.ingress.fqdn -o tsv)
+          app=(--name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP")
+          fqdn=$(az containerapp show "${app[@]}" --query properties.configuration.ingress.fqdn -o tsv)
+
+          # An empty FQDN means ingress is off or the app is gone. Without this
+          # guard the loop curls "https:///" and reports HTTP 000 twenty times,
+          # which looks like a cold start that never ends.
+          if [ -z "$fqdn" ]; then
+            echo "No ingress FQDN on $CONTAINER_APP — ingress is disabled or the app does not exist." >&2
+            exit 1
+          fi
           url="https://${fqdn}/"
+          echo "Probing $url"
 
           # min_replicas may be 0 — the first request pays the cold start.
           for attempt in $(seq 1 20); do
@@ -93,8 +102,34 @@ jobs:
             echo "attempt ${attempt}: HTTP ${code}"
             sleep 15
           done
-
-          echo "Smoke test failed — dumping recent container logs." >&2
-          az containerapp logs show --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
-            --tail 100 --type console || true
           exit 1
+
+      # `logs show --type console` needs a live replica, so on the failure that
+      # actually happens — a revision that never started one — it prints
+      # "Could not find a replica for this app" and nothing else. Revision state
+      # and system logs are where provisioning, image-pull, secret-resolution
+      # and OOM failures are reported.
+      - name: Diagnose failed rollout
+        if: failure()
+        run: |
+          app=(--name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP")
+          q='[].{name:name,active:properties.active,replicas:properties.replicas,provisioning:properties.provisioningState,health:properties.healthState,image:properties.template.containers[0].image}'
+
+          echo "::group::Revisions"
+          az containerapp revision list "${app[@]}" --query "$q" -o table || true
+          echo "::endgroup::"
+
+          revision=$(az containerapp show "${app[@]}" --query properties.latestRevisionName -o tsv)
+          echo "Latest revision: ${revision:-<none>}"
+
+          echo "::group::Replicas on $revision"
+          az containerapp replica list "${app[@]}" --revision "$revision" -o table || true
+          echo "::endgroup::"
+
+          echo "::group::System logs (provisioning, image pull, probe failures, OOM)"
+          az containerapp logs show "${app[@]}" --type system --tail 200 || true
+          echo "::endgroup::"
+
+          echo "::group::Console logs (only if a replica ever started)"
+          az containerapp logs show "${app[@]}" --type console --tail 200 || true
+          echo "::endgroup::"
