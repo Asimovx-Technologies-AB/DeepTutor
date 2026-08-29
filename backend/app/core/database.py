@@ -49,6 +49,7 @@ except Exception as e:
 with engine.connect() as conn:
     for sql in [
         "ALTER TABLE documents ADD COLUMN key_topics TEXT DEFAULT '[]'",
+        "ALTER TABLE documents ADD COLUMN detected_subject VARCHAR DEFAULT ''",
         "ALTER TABLE users ADD COLUMN is_premium BOOLEAN DEFAULT 0",
         "ALTER TABLE users ADD COLUMN plan VARCHAR DEFAULT 'free'",
         "ALTER TABLE users ADD COLUMN current_streak INTEGER DEFAULT 0",
@@ -331,6 +332,7 @@ def get_documents_for_topic(topic_id: str) -> List[dict]:
                 "entity_count": d.entity_count,
                 "chunk_count": d.chunk_count,
                 "key_topics": getattr(d, "key_topics", []),
+                "detected_subject": getattr(d, "detected_subject", ""),
                 "created_at": d.created_at,
             }
             for d in docs
@@ -358,6 +360,7 @@ def get_documents_for_user_and_topic(user_id: str, topic_id: str) -> List[dict]:
                 "entity_count": d.entity_count,
                 "chunk_count": d.chunk_count,
                 "key_topics": getattr(d, "key_topics", []),
+                "detected_subject": getattr(d, "detected_subject", ""),
                 "created_at": d.created_at,
             }
             for d in docs
@@ -379,13 +382,14 @@ def get_documents_for_user(user_id: str) -> List[dict]:
                 "entity_count": d.entity_count,
                 "chunk_count": d.chunk_count,
                 "key_topics": getattr(d, "key_topics", []),
+                "detected_subject": getattr(d, "detected_subject", ""),
                 "created_at": d.created_at,
             }
             for d in docs
         ]
 
 
-def update_document_stats(doc_id: str, indexed: bool, entity_count: int, chunk_count: int, key_topics: list = None) -> bool:
+def update_document_stats(doc_id: str, indexed: bool, entity_count: int, chunk_count: int, key_topics: list = None, detected_subject: str = "") -> bool:
     with DBContext() as db:
         doc = db.query(Document).filter(Document.id == doc_id).first()
         if doc:
@@ -394,6 +398,8 @@ def update_document_stats(doc_id: str, indexed: bool, entity_count: int, chunk_c
             doc.chunk_count = chunk_count
             if key_topics is not None:
                 doc.key_topics = key_topics
+            if detected_subject:
+                doc.detected_subject = detected_subject
             return True
     return False
 
@@ -1372,6 +1378,4 @@ def get_detailed_student_record(user_id: str) -> dict:
                 "last_evaluated": now_iso(),
             }
         }
-
-
 
