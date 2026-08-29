@@ -28,8 +28,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./deep_tutor.db"
 
     # ── LLM / Chat Provider ──────────────────────────────────────────────────
-    # Switch via .env: LLM_PROVIDER=gemini | ollama
-    LLM_PROVIDER: str = "gemini"             # "gemini" | "ollama"
+    # Switch via .env: LLM_PROVIDER=azure_openai | gemini | ollama
+    LLM_PROVIDER: str = "gemini"
     GEMINI_API_KEY: str = ""
     GEMINI_CHAT_MODEL: str = "gemini-3.5-flash-lite"
     GEMINI_TIMEOUT: int = 60
@@ -43,15 +43,25 @@ class Settings(BaseSettings):
     OLLAMA_NUM_PREDICT: int = 2048
 
     # ── Stage 2: Embedding Provider ─────────────────────────────────────────
-    # Switch via .env: EMBEDDING_PROVIDER=ollama | openai | gemini
+    # Switch via .env: EMBEDDING_PROVIDER=azure_openai | ollama | openai | gemini
     EMBEDDING_PROVIDER: str = "gemini"
     OPENAI_API_KEY: str = ""
     OPENAI_EMBED_MODEL: str = "text-embedding-3-small"   # or text-embedding-3-large
+    AZURE_OPENAI_ENDPOINT: str = ""
+    AZURE_OPENAI_API_KEY: str = ""  # local fallback only; Azure uses managed identity
+    AZURE_OPENAI_API_VERSION: str = "2024-10-21"
+    AZURE_OPENAI_CHAT_DEPLOYMENT: str = "gpt-4.1-mini"
+    AZURE_OPENAI_EMBED_DEPLOYMENT: str = "text-embedding-3-small"
+    AZURE_CLIENT_ID: str = ""
     GEMINI_EMBED_MODEL: str = "models/gemini-embedding-2"
 
     # ── Stage 3: Vector Store Backend ───────────────────────────────────────
-    # Switch via .env: VECTOR_STORE_BACKEND=pinecone | faiss | chroma
+    # Switch via .env: VECTOR_STORE_BACKEND=pgvector | pinecone | faiss | chroma
     VECTOR_STORE_BACKEND: str = "pinecone"
+    PGVECTOR_DIMENSIONS: int = 1536
+    PGVECTOR_HNSW_M: int = 16
+    PGVECTOR_HNSW_EF_CONSTRUCTION: int = 64
+    PGVECTOR_HNSW_EF_SEARCH: int = 40
     PINECONE_API_KEY: str = ""
     PINECONE_INDEX_NAME: str = "textbook"
     PINECONE_TEXTBOOK_INDEX: str = "textbook"

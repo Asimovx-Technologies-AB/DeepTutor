@@ -1,0 +1,53 @@
+# Keep the build context to source only. `az acr build` uploads this whole
+# directory to the registry, so anything listed here is bandwidth and image
+# layers saved on every deploy — and, for .env, a credential not shipped.
+
+# Secrets and local config
+.env
+env
+*.env
+!.env.example
+
+# Local runtime state — provided by Azure Files volumes at runtime instead
+lightrag_data/
+graph_data/
+faiss_data/
+chroma_data/
+vlm_cache/
+image_search_cache/
+uploads/
+*.db
+*.sqlite3
+
+# Evaluation runs and generated reports
+evaluations/
+eval_results_run*/
+deepeval_ragas_evaluation.json
+rag_evaluation_report.*
+parsed_result.json
+raw_gemini_resp.txt
+raw_resp_dump.txt
+exported_document.md
+docling_exported_document.md
+
+# Tests and scratch scripts (the image runs the API, not the suite)
+tests/
+test_*.py
+test.pdf
+test.txt
+replace_colors*.js
+start.bat
+
+# Python noise
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Editor / VCS
+.git/
+.gitignore
+.vscode/
+.idea/

@@ -1,0 +1,12 @@
+# The team develops on Windows but every one of these files is consumed by a
+# Linux shell — GitHub Actions runners, Docker builds, Azure CLI. A CRLF in
+# bootstrap.sh produces "bad interpreter: /usr/bin/env bash^M", so pin them.
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+Dockerfile.*    text eol=lf
+.dockerignore   text eol=lf
+*.tf            text eol=lf
+*.tfvars        text eol=lf
+*.hcl           text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf

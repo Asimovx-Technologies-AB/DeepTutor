@@ -1,0 +1,1194 @@
+<!--
+  Rendered companion to azure-deployment.md — the same report as a styled page.
+
+  Two things to know before editing:
+
+  1. THIS FILE AND azure-deployment.md MUST BE UPDATED TOGETHER. The markdown is
+     the source of truth and carries the full detail; this page is the version
+     that gets shared as a link. Nothing enforces the pairing, so a PR that
+     changes one and not the other is a review comment.
+
+  2. This is deliberately a FRAGMENT, not a standalone document: no <!DOCTYPE>,
+     <html>, <head> or <body>. It is published as a Claude artifact, and the
+     publisher wraps it in that skeleton. Adding those tags here would nest them
+     and break the publish. Browsers render it fine from disk regardless.
+
+  Published at: https://claude.ai/code/artifact/253bdd8f-70a5-4f23-9cf0-855a6b0b1086
+-->
+<title>DeepTutor on Azure</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+  :root {
+    --bg: #eaeef1;
+    --surface: #ffffff;
+    --surface-2: #f4f7f8;
+    --ink: #101820;
+    --ink-2: #4d5f6d;
+    --ink-3: #74848f;
+    --line: #d3dce2;
+    --line-strong: #b6c4cd;
+    --accent: #10606f;
+    --accent-ink: #0c4c58;
+    --accent-wash: #e2eef0;
+    --ok: #2a6b4f;
+    --ok-wash: #e3f0e9;
+    --warn: #8a6410;
+    --warn-wash: #f5ecd8;
+    --risk: #a5382c;
+    --risk-wash: #f7e5e2;
+
+    --f-display: "IBM Plex Sans Condensed", "Helvetica Neue", Arial, sans-serif;
+    --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+    --shadow: 0 1px 2px rgba(16, 24, 32, .05), 0 8px 24px -16px rgba(16, 24, 32, .3);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0c1217;
+      --surface: #141d24;
+      --surface-2: #18232b;
+      --ink: #e2e9ee;
+      --ink-2: #9aa9b5;
+      --ink-3: #74858f;
+      --line: #253138;
+      --line-strong: #33434c;
+      --accent: #56b4c4;
+      --accent-ink: #7fcbd8;
+      --accent-wash: #13282e;
+      --ok: #63b98f;
+      --ok-wash: #15271f;
+      --warn: #cfa244;
+      --warn-wash: #2a2317;
+      --risk: #e08477;
+      --risk-wash: #2c1a18;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 28px -18px rgba(0, 0, 0, .9);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0c1217;
+    --surface: #141d24;
+    --surface-2: #18232b;
+    --ink: #e2e9ee;
+    --ink-2: #9aa9b5;
+    --ink-3: #74858f;
+    --line: #253138;
+    --line-strong: #33434c;
+    --accent: #56b4c4;
+    --accent-ink: #7fcbd8;
+    --accent-wash: #13282e;
+    --ok: #63b98f;
+    --ok-wash: #15271f;
+    --warn: #cfa244;
+    --warn-wash: #2a2317;
+    --risk: #e08477;
+    --risk-wash: #2c1a18;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 28px -18px rgba(0, 0, 0, .9);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
+    padding: 0 20px 96px;
+  }
+
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+
+  @media (min-width: 1000px) {
+    .shell {
+      grid-template-columns: 196px minmax(0, 1fr);
+      align-items: start;
+    }
+  }
+
+  /* ── Table of contents rail ───────────────────────────────────────────── */
+  .rail { display: none; }
+
+  @media (min-width: 1000px) {
+    .rail {
+      display: block;
+      position: sticky;
+      top: 32px;
+      padding-top: 8px;
+    }
+  }
+
+  .rail-label {
+    font-family: var(--f-mono);
+    font-size: 10px;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 14px;
+  }
+
+  .rail ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    counter-reset: toc;
+  }
+
+  .rail a {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 6px;
+    padding: 5px 8px 5px 0;
+    font-family: var(--f-display);
+    font-size: 13.5px;
+    line-height: 1.35;
+    color: var(--ink-2);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    padding-left: 10px;
+    transition: color .15s, border-color .15s;
+  }
+
+  .rail a::before {
+    counter-increment: toc;
+    content: "§" counter(toc);
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    color: var(--ink-3);
+    padding-top: 2px;
+  }
+
+  .rail a:hover, .rail a:focus-visible {
+    color: var(--accent-ink);
+    border-left-color: var(--accent);
+  }
+
+  /* ── Masthead ─────────────────────────────────────────────────────────── */
+  header.masthead { padding-top: 48px; }
+
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .eyebrow .sep { color: var(--line-strong); }
+
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: clamp(38px, 6.5vw, 62px);
+    line-height: 1.02;
+    letter-spacing: -.018em;
+    text-wrap: balance;
+    margin: 14px 0 0;
+  }
+
+  .standfirst {
+    font-size: 19px;
+    line-height: 1.55;
+    color: var(--ink-2);
+    max-width: 62ch;
+    margin: 18px 0 0;
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin-top: 30px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .fact {
+    padding: 14px 26px 14px 0;
+    margin-right: 26px;
+    border-right: 1px solid var(--line);
+  }
+
+  .fact:last-child { border-right: 0; margin-right: 0; }
+
+  .fact dt {
+    font-family: var(--f-mono);
+    font-size: 10px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  .fact dd {
+    margin: 3px 0 0;
+    font-family: var(--f-display);
+    font-size: 20px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Sections ─────────────────────────────────────────────────────────── */
+  section { margin-top: 64px; scroll-margin-top: 24px; }
+
+  h2 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: 27px;
+    letter-spacing: -.012em;
+    line-height: 1.2;
+    text-wrap: balance;
+    margin: 0 0 4px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--ink);
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  h2 .num {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: .05em;
+  }
+
+  h3 {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: 18px;
+    letter-spacing: -.005em;
+    margin: 34px 0 8px;
+  }
+
+  p { margin: 14px 0; max-width: 68ch; }
+  section > p:first-of-type { margin-top: 20px; }
+
+  a { color: var(--accent-ink); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+  code {
+    font-family: var(--f-mono);
+    font-size: .875em;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: .08em .32em;
+    white-space: nowrap;
+  }
+
+  strong { font-weight: 600; }
+
+  /* ── The call-out that carries the recommendation ─────────────────────── */
+  .verdict {
+    margin-top: 44px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 3px;
+    padding: 26px 30px;
+    box-shadow: var(--shadow);
+  }
+
+  .verdict h2 {
+    border: 0;
+    padding: 0;
+    font-size: 15px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    font-family: var(--f-mono);
+    font-weight: 500;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+
+  .verdict p { margin: 10px 0 0; font-size: 17px; }
+  .verdict p:first-of-type { margin-top: 0; }
+
+  /* ── Tables ───────────────────────────────────────────────────────────── */
+  .scroller {
+    overflow-x: auto;
+    margin: 22px 0;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--surface);
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 580px;
+    font-size: 14.5px;
+  }
+
+  th {
+    font-family: var(--f-mono);
+    font-size: 10px;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    text-align: left;
+    font-weight: 500;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line-strong);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+    line-height: 1.5;
+  }
+
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  th.right, td.right { text-align: right; }
+
+  tr.total td {
+    border-top: 2px solid var(--ink);
+    border-bottom: 0;
+    font-weight: 600;
+    background: var(--surface-2);
+  }
+
+  td .why { color: var(--ink-2); font-size: 13.5px; }
+
+  /* ── The resource-group diagram ───────────────────────────────────────── */
+  .topology {
+    margin: 26px 0;
+    display: grid;
+    gap: 16px;
+  }
+
+  @media (min-width: 760px) {
+    .topology { grid-template-columns: minmax(0, 1fr) 208px; align-items: start; }
+  }
+
+  .rg {
+    border: 2px solid var(--accent);
+    border-radius: 4px;
+    background: var(--accent-wash);
+    padding: 14px;
+    position: relative;
+  }
+
+  .rg-tag {
+    position: absolute;
+    top: -10px;
+    left: 14px;
+    background: var(--accent);
+    color: var(--surface);
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: .06em;
+    padding: 2px 8px;
+    border-radius: 2px;
+  }
+
+  :root[data-theme="dark"] .rg-tag { color: #0c1217; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .rg-tag { color: #0c1217; }
+  }
+
+  .tiles {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+    gap: 8px;
+  }
+
+  .tile {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 11px 12px;
+  }
+
+  .tile .k {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 1.25;
+  }
+
+  .tile .v {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    color: var(--ink-3);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  .tile.wide { grid-column: 1 / -1; }
+  .tile.pg { border-left: 3px solid var(--accent); }
+  .tile.off { opacity: .58; border-style: dashed; }
+
+  .aside-stack { display: grid; gap: 12px; }
+
+  .outside {
+    border: 1px dashed var(--line-strong);
+    border-radius: 4px;
+    padding: 13px 14px;
+    background: var(--surface);
+  }
+
+  .outside .h {
+    font-family: var(--f-mono);
+    font-size: 10px;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 7px;
+  }
+
+  .outside ul { margin: 0; padding-left: 16px; font-size: 13.5px; color: var(--ink-2); }
+  .outside li { margin: 3px 0; }
+
+  /* ── Findings ─────────────────────────────────────────────────────────── */
+  .findings { display: grid; gap: 12px; margin-top: 24px; }
+
+  .finding {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--line-strong);
+    border-radius: 3px;
+    padding: 18px 20px;
+  }
+
+  .finding.handled { border-left-color: var(--ok); }
+  .finding.workaround { border-left-color: var(--warn); }
+  .finding.blocking { border-left-color: var(--risk); }
+
+  .finding-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .finding-head h3 { margin: 0; font-size: 16.5px; }
+
+  .pill {
+    font-family: var(--f-mono);
+    font-size: 9.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+
+  .pill.handled { background: var(--ok-wash); color: var(--ok); }
+  .pill.workaround { background: var(--warn-wash); color: var(--warn); }
+  .pill.blocking { background: var(--risk-wash); color: var(--risk); }
+
+  .finding p { margin: 8px 0 0; font-size: 14.5px; max-width: none; }
+
+  /* ── Phases ───────────────────────────────────────────────────────────── */
+  .phases { margin-top: 24px; display: grid; gap: 0; }
+
+  .phase {
+    display: grid;
+    gap: 4px 20px;
+    padding: 20px 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .phase:last-child { border-bottom: 1px solid var(--line); }
+
+  @media (min-width: 700px) {
+    .phase { grid-template-columns: 160px minmax(0, 1fr); }
+  }
+
+  .phase-meta { display: flex; flex-direction: column; gap: 3px; }
+
+  .phase-n {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .phase-cost {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+
+  .phase h3 { margin: 0 0 4px; }
+  .phase p { margin: 0; font-size: 14.5px; max-width: 66ch; }
+
+  /* ── File tree ────────────────────────────────────────────────────────── */
+  pre.tree {
+    font-family: var(--f-mono);
+    font-size: 12.5px;
+    line-height: 1.7;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 18px 20px;
+    overflow-x: auto;
+    margin: 22px 0;
+    color: var(--ink-2);
+  }
+
+  pre.tree b { color: var(--ink); font-weight: 500; }
+  pre.tree i { color: var(--ink-3); font-style: normal; }
+
+  /* ── Questions ────────────────────────────────────────────────────────── */
+  ol.questions { margin: 22px 0 0; padding-left: 0; list-style: none; counter-reset: q; }
+
+  ol.questions li {
+    counter-increment: q;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 10px;
+    padding: 14px 0;
+    border-top: 1px solid var(--line);
+    max-width: 72ch;
+  }
+
+  ol.questions li:last-child { border-bottom: 1px solid var(--line); }
+
+  ol.questions li::before {
+    content: counter(q, decimal-leading-zero);
+    font-family: var(--f-mono);
+    font-size: 12px;
+    color: var(--accent);
+    padding-top: 3px;
+  }
+
+  footer {
+    margin-top: 72px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    color: var(--ink-3);
+    line-height: 1.8;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<div class="shell">
+  <nav class="rail" aria-label="Sections">
+    <div class="rail-label">Contents</div>
+    <ol>
+      <li><a href="#today">Where it is today</a></li>
+      <li><a href="#target">The target</a></li>
+      <li><a href="#arguable">Two arguable calls</a></li>
+      <li><a href="#findings">What will break</a></li>
+      <li><a href="#tooling">Terraform, not Bicep</a></li>
+      <li><a href="#phases">Migration path</a></li>
+      <li><a href="#branch">On the branch</a></li>
+      <li><a href="#risks">Risks &amp; questions</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="masthead">
+      <div class="eyebrow">
+        <span>Infrastructure plan</span>
+        <span class="sep">/</span>
+        <span>feat/azure-infra-terraform</span>
+        <span class="sep">/</span>
+        <span>28 Aug 2026</span>
+      </div>
+      <h1>DeepTutor on Azure</h1>
+      <p class="standfirst">
+        The platform currently spans Render, Netlify, Vercel, Neon, Pinecone, AWS and Google AI.
+        This plan puts the infrastructure in one Azure resource group per environment, provisioned
+        by Terraform and deployed by GitHub Actions — and does it for roughly the price of two
+        coffees a week.
+      </p>
+
+      <dl class="facts">
+        <div class="fact">
+          <dt>Dev run cost</dt>
+          <dd>~$25<span style="font-size:13px;font-weight:400;color:var(--ink-3)">/mo</span></dd>
+        </div>
+        <div class="fact">
+          <dt>Resource groups</dt>
+          <dd>1<span style="font-size:13px;font-weight:400;color:var(--ink-3)"> + state</span></dd>
+        </div>
+        <div class="fact">
+          <dt>Stored cloud secrets</dt>
+          <dd>0</dd>
+        </div>
+        <div class="fact">
+          <dt>App code changed</dt>
+          <dd>None</dd>
+        </div>
+      </dl>
+    </header>
+
+    <div class="verdict">
+      <h2>The recommendation</h2>
+      <p>
+        Run the API on <strong>Container Apps (Consumption)</strong>, the SPA on
+        <strong>Static Web Apps Free</strong>, and — the load-bearing choice — use
+        <strong>one PostgreSQL Flexible Server (B1ms) with <code>pgvector</code></strong> as the
+        relational database, the vector index <em>and</em> the knowledge-graph store.
+      </p>
+      <p>
+        That one decision collapses three paid-or-soon-paid services (Neon, Pinecone, and the local
+        disk the graph store is quietly losing data on) into a single ~$16/month resource. It is the
+        difference between a dev environment at <strong>~$25/month</strong> and one at
+        <strong>~$100</strong>.
+      </p>
+    </div>
+
+    <section id="today">
+      <h2><span class="num">§1</span> Where it is today</h2>
+      <p>Measured against the repo, not assumed.</p>
+
+      <div class="scroller">
+        <table>
+          <thead>
+            <tr><th>What we found</th><th>Consequence on Azure</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Frontend has deploy config for <strong>three</strong> hosts — <code>netlify.toml</code> and two <code>vercel.json</code> files</td>
+              <td class="why">Three deploy paths, none authoritative. One wins by accident</td>
+            </tr>
+            <tr>
+              <td>The API base URL is hardcoded to a Render host in <code>api.ts</code></td>
+              <td class="why">A Render teardown breaks the app even after it has moved to Azure</td>
+            </tr>
+            <tr>
+              <td><strong>No <code>.github/</code> directory at all</strong></td>
+              <td class="why">CI/CD is greenfield. Nothing to migrate, nothing to fight</td>
+            </tr>
+            <tr>
+              <td>The graph store writes JSON to local disk (<code>LIGHTRAG_DATA_DIR</code>)</td>
+              <td class="why">On any container platform this is silent data loss on every deploy — the bug is already live on Render</td>
+            </tr>
+            <tr>
+              <td><code>DATABASE_URL</code> silently falls back to SQLite on a connection error</td>
+              <td class="why">A Postgres outage forks user data onto a disposable disk instead of paging someone</td>
+            </tr>
+            <tr>
+              <td><code>requirements.txt</code> installs docling + easyocr, which pull torch</td>
+              <td class="why">Multi-gigabyte image for features disabled by default (<code>ENABLE_DOCLING=False</code>)</td>
+            </tr>
+            <tr>
+              <td>Data lives with four vendors: Neon, Pinecone, AWS S3, local disk</td>
+              <td class="why">Four bills, four dashboards, four failure modes, no single resource group</td>
+            </tr>
+            <tr>
+              <td>Git pack is 81 MB, mostly three PDFs in <code>TextBook/</code></td>
+              <td class="why">Every CI checkout pays for it</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="target">
+      <h2><span class="num">§2</span> The target</h2>
+      <p>
+        One resource group, <code>rg-deeptutor-dev</code>. A single user-assigned managed identity is
+        the only principal in the system: it pulls images, reads secrets, and writes blobs. No
+        connection string, registry password, or deployment token is stored in GitHub.
+      </p>
+
+      <div class="topology">
+        <div class="rg">
+          <span class="rg-tag">rg-deeptutor-dev</span>
+          <div class="tiles">
+            <div class="tile">
+              <div class="k">Container App — API</div>
+              <div class="v">FastAPI · 0.5 vCPU / 1 GiB<br>scale to zero</div>
+            </div>
+            <div class="tile">
+              <div class="k">Static Web App</div>
+              <div class="v">React 19 SPA · Free tier</div>
+            </div>
+            <div class="tile pg wide">
+              <div class="k">PostgreSQL Flexible — B1ms</div>
+              <div class="v">app tables · pgvector index · graph JSONB — one server, three jobs</div>
+            </div>
+            <div class="tile">
+              <div class="k">Storage account</div>
+              <div class="v">Blob: documents, caches<br>Files: mounted durable state</div>
+            </div>
+            <div class="tile">
+              <div class="k">Key Vault</div>
+              <div class="v">DB URL · JWT key<br>API-key slots</div>
+            </div>
+            <div class="tile">
+              <div class="k">Container Registry</div>
+              <div class="v">Basic · identity pull</div>
+            </div>
+            <div class="tile">
+              <div class="k">Log Analytics + Insights</div>
+              <div class="v">capped at 0.2 GB/day</div>
+            </div>
+            <div class="tile">
+              <div class="k">Managed identity</div>
+              <div class="v">ACR pull · KV read · Blob write</div>
+            </div>
+            <div class="tile off">
+              <div class="k">Azure OpenAI</div>
+              <div class="v">written, disabled — see §6</div>
+            </div>
+            <div class="tile off">
+              <div class="k">Container App — worker</div>
+              <div class="v">written, disabled — see §6</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="aside-stack">
+          <div class="outside">
+            <div class="h">Outside, phase 1</div>
+            <ul>
+              <li>Google Gemini — chat &amp; embeddings</li>
+              <li>Pinecone — vector index</li>
+              <li>AWS S3 — document originals</li>
+            </ul>
+          </div>
+          <div class="outside">
+            <div class="h">Retired</div>
+            <ul>
+              <li>Render — backend</li>
+              <li>Netlify — frontend</li>
+              <li>Vercel — frontend</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <h3>What each line costs</h3>
+
+      <div class="scroller">
+        <table>
+          <thead>
+            <tr>
+              <th>Layer</th>
+              <th>SKU</th>
+              <th class="right">USD/mo</th>
+              <th>Why this one</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>API</td>
+              <td>Container Apps, Consumption, min 0 replicas</td>
+              <td class="num right">0–3</td>
+              <td class="why">The monthly free grant covers an idle dev environment. The same image runs the future worker</td>
+            </tr>
+            <tr>
+              <td>Frontend</td>
+              <td>Static Web Apps, Free</td>
+              <td class="num right">0</td>
+              <td class="why">Global CDN, TLS, custom domains. Replaces Netlify <em>and</em> Vercel</td>
+            </tr>
+            <tr>
+              <td>DB + vectors + graph</td>
+              <td>PostgreSQL Flexible B1ms, 32 GiB</td>
+              <td class="num right">~16</td>
+              <td class="why">Cheapest SKU that runs pgvector. Does the work of three services</td>
+            </tr>
+            <tr>
+              <td>Object storage</td>
+              <td>Storage account, Standard LRS</td>
+              <td class="num right">~1–2</td>
+              <td class="why">Blob replaces S3; Files gives the container a durable mount today</td>
+            </tr>
+            <tr>
+              <td>Registry</td>
+              <td>Container Registry, Basic</td>
+              <td class="num right">~5</td>
+              <td class="why">Identity-based pull means no registry password exists to leak</td>
+            </tr>
+            <tr>
+              <td>Secrets</td>
+              <td>Key Vault, Standard</td>
+              <td class="num right">~0.1</td>
+              <td class="why">Priced per 10k operations</td>
+            </tr>
+            <tr>
+              <td>Observability</td>
+              <td>Log Analytics + App Insights</td>
+              <td class="num right">0–2</td>
+              <td class="why">5 GB/month free; the daily cap makes the worst case about $2</td>
+            </tr>
+            <tr class="total">
+              <td colspan="2">Total, development tier</td>
+              <td class="num right">~23–28</td>
+              <td class="why">About $8/mo more than the Render plan — for one bill, one identity model, one IaC definition, and no free-tier cliff at launch</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="arguable">
+      <h2><span class="num">§3</span> Two calls worth arguing about</h2>
+
+      <h3>Scale-to-zero versus always-warm</h3>
+      <p>
+        <code>api_min_replicas = 0</code> is the dev default and makes compute effectively free, at
+        the price of a 10–20 second cold start on the first request. If a warm endpoint matters more
+        than the money, note the arithmetic: Container Apps at <code>min_replicas = 1</code> costs
+        about <strong>$33/month</strong> — more than <strong>App Service Linux B1 at ~$13</strong>.
+        If always-warm becomes permanent, moving the API to App Service is the cheaper answer, and
+        it is a contained change to one Terraform file. Scale-to-zero is right until somebody asks
+        otherwise.
+      </p>
+
+      <h3>Azure AI Search was considered and rejected</h3>
+      <p>
+        It is the obvious "Azure vector database", and its Basic tier is <strong>$75/month</strong> —
+        three times the entire rest of this environment. The Free tier caps at 50 MB and one service
+        per subscription, which will not hold a textbook corpus. <code>pgvector</code> on a server
+        that has to exist anyway is both cheaper and simpler. Revisit AI Search when semantic ranking
+        becomes a product differentiator rather than an infrastructure line item.
+      </p>
+    </section>
+
+    <section id="findings">
+      <h2><span class="num">§4</span> What will break</h2>
+      <p>
+        Reading the application code turned up six things that would turn a clean
+        <code>terraform apply</code> into a broken environment. Four are handled or worked around in
+        the Terraform; two need application changes.
+      </p>
+
+      <div class="findings">
+        <div class="finding handled">
+          <div class="finding-head">
+            <h3>Graph data is lost on every deploy</h3>
+            <span class="pill handled">Handled</span>
+          </div>
+          <p>
+            <code>GraphKVStore</code> writes entities, relations and triplets as JSON to local disk.
+            Container Apps replicas are disposable, so every revision would discard the knowledge
+            graph. An Azure Files share is now mounted at <code>/data/lightrag</code> — no code
+            change, loss stopped. The real fix is Postgres JSONB, in phase 3.
+          </p>
+        </div>
+
+        <div class="finding handled">
+          <div class="finding-head">
+            <h3>Uploads land on disposable disk</h3>
+            <span class="pill handled">Handled</span>
+          </div>
+          <p>
+            Same treatment: <code>/data/uploads</code> is an Azure Files share. Separately,
+            <code>MAX_UPLOAD_SIZE_MB</code> is set to <strong>5000</strong> — Container Apps ingress
+            will not carry a 5 GB upload in one request and gunicorn would time out first. Nobody has
+            hit it because nobody has tried.
+          </p>
+        </div>
+
+        <div class="finding workaround">
+          <div class="finding-head">
+            <h3>The image cannot drop ChromaDB yet</h3>
+            <span class="pill workaround">Worked around</span>
+          </div>
+          <p>
+            A new slim multi-stage Dockerfile drops docling, easyocr and torch, taking the image from
+            multiple GB to well under one — which is what makes a 0.5 vCPU replica and a fast cold
+            start viable. ChromaDB could not go with them: <code>vector_store.py</code> imports it at
+            module scope and six API modules import <em>that</em> at their own module scope, so it
+            loads on every boot even though Pinecone is the active backend. Making those imports lazy
+            is a small change with a real payoff.
+          </p>
+        </div>
+
+        <div class="finding workaround">
+          <div class="finding-head">
+            <h3><code>/health</code> bills an LLM call per probe</h3>
+            <span class="pill workaround">Worked around</span>
+          </div>
+          <p>
+            The health endpoint calls Gemini and then queries the database. Wired to a container probe
+            at 15-second intervals, that is roughly <strong>5,700 Gemini calls a day</strong> for a
+            health check. The probes therefore point at <code>/</code>, which returns static JSON.
+            The right fix is to split the route: a no-I/O <code>/health/live</code>, a DB-only
+            <code>/health/ready</code>, and the expensive view kept for humans.
+          </p>
+        </div>
+
+        <div class="finding blocking">
+          <div class="finding-head">
+            <h3>CORS is open to <code>*</code> and the env var is ignored</h3>
+            <span class="pill blocking">Blocking</span>
+          </div>
+          <p>
+            <code>main.py</code> sets <code>allow_origins=["*"]</code>. Terraform passes a correct
+            <code>CORS_ALLOWED_ORIGINS</code> to the container and nothing reads it. This must be
+            fixed before the environment is shared with anyone outside the team. It is a five-line
+            change, and the one item here that is genuinely security-relevant.
+          </p>
+        </div>
+
+        <div class="finding blocking">
+          <div class="finding-head">
+            <h3>The SQLite fallback hides a Postgres outage</h3>
+            <span class="pill blocking">Blocking</span>
+          </div>
+          <p>
+            A Postgres connection failure is caught and silently swapped for a local SQLite file. On a
+            disposable container that means an outage produces a working-<em>looking</em> API writing
+            user data to a disk that is about to vanish. In a deployed environment this must raise;
+            keep the fallback behind an explicit local-dev flag.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="tooling">
+      <h2><span class="num">§5</span> Terraform, not Bicep</h2>
+      <p>Either would work. Terraform, for four reasons:</p>
+      <p>
+        <strong>It is not Azure-only.</strong> S3, Pinecone, Neon and Netlify all have providers.
+        The migration window is months, not days, and the same tool can describe the resources that
+        have not moved yet. Bicep can only ever describe the Azure half.
+      </p>
+      <p>
+        <strong><code>plan</code> is a genuine review artifact.</strong> The plan workflow posts it on
+        the PR, so a reviewer sees "3 to add, 1 to change, 0 to destroy" before approving.
+      </p>
+      <p>
+        <strong>State is explicit</strong> — a versioned blob you can inspect, lock and roll back,
+        rather than deployment history inferred from a resource group. And the
+        <strong>sovereign-bundle direction</strong> in the product strategy implies non-Azure targets
+        eventually; Terraform keeps that door open.
+      </p>
+      <p>
+        The cost is honest: an extra tool, a state file to protect, and provider version drift. The
+        bootstrap script enables blob versioning and 30-day soft delete on the state container, which
+        turns state corruption from a rebuild into a two-minute restore.
+      </p>
+      <p>
+        <strong>Verification status, stated plainly:</strong> the configuration has not been run
+        against a live subscription — there is no Azure CLI or Terraform binary in the dev
+        environment. The plan workflow (<code>fmt</code> → <code>init</code> → <code>validate</code>
+        → <code>plan</code>) is the gate, and it runs on this branch's first PR. Expect one or two
+        provider-schema fixes on the first pass; that is what the gate is for.
+      </p>
+    </section>
+
+    <section id="phases">
+      <h2><span class="num">§6</span> Migration path</h2>
+      <p>
+        Phase 1 ships an environment that runs the app exactly as it is today. Nothing is rewritten
+        to get it live — that is deliberate, and it is what keeps the first deploy a one-day job
+        instead of a two-week one.
+      </p>
+
+      <div class="phases">
+        <div class="phase">
+          <div class="phase-meta">
+            <span class="phase-n">Phase 1 — this branch</span>
+            <span class="phase-cost">~2 days</span>
+          </div>
+          <div>
+            <h3>Lift onto Azure</h3>
+            <p>
+              Deploy the resource group. The backend keeps Gemini, Pinecone and S3;
+              <code>DATABASE_URL</code> points at the new Flexible Server. Azure Files mounts stop the
+              graph-data loss. Retire Vercel; keep Netlify until the Static Web App is proven, then
+              delete all three config files. <strong>Exit proof:</strong> a push to <code>main</code>
+              reaches a working URL with no human step, and a deliberate restart loses zero data.
+            </p>
+          </div>
+        </div>
+
+        <div class="phase">
+          <div class="phase-meta">
+            <span class="phase-n">Phase 2</span>
+            <span class="phase-cost">~2 days</span>
+          </div>
+          <div>
+            <h3>S3 → Azure Blob</h3>
+            <p>
+              <code>s3_store.py</code> is a clean, self-contained class. Add a Blob equivalent behind
+              the same interface, authenticating with the managed identity already in place, and copy
+              the bucket with <code>azcopy</code>. Removes the AWS bill and the last long-lived access
+              key.
+            </p>
+          </div>
+        </div>
+
+        <div class="phase">
+          <div class="phase-meta">
+            <span class="phase-n">Phase 3</span>
+            <span class="phase-cost">~3 days</span>
+          </div>
+          <div>
+            <h3>Graph KV → Postgres JSONB</h3>
+            <p>
+              Replace per-topic JSON files with a <code>graph_kv</code> table holding JSONB. The store
+              already has a narrow interface, so this is a backend swap, not a redesign. Fixes
+              concurrent writes and Azure Files latency in one move. This is also when the ARQ worker
+              and a queue become worth provisioning — not before.
+            </p>
+          </div>
+        </div>
+
+        <div class="phase">
+          <div class="phase-meta">
+            <span class="phase-n">Phase 4 — the real work</span>
+            <span class="phase-cost">~1 week</span>
+          </div>
+          <div>
+            <h3>Pinecone → pgvector</h3>
+            <p>
+              <code>PineconeVectorStore</code> is ~550 lines and does more than store vectors: BM25
+              sparse search, RRF fusion, page-filtered lookups, namespaces. Postgres answers each
+              piece — HNSW for dense, <code>ts_rank_cd</code> for sparse, the fusion arithmetic ported
+              as-is — and having both in one engine makes hybrid retrieval a single SQL statement
+              instead of two round trips. Re-run the RAGAS suite; the existing retrieval numbers are
+              the acceptance gate.
+            </p>
+          </div>
+        </div>
+
+        <div class="phase">
+          <div class="phase-meta">
+            <span class="phase-n">Decision, not a phase</span>
+            <span class="phase-cost">disabled</span>
+          </div>
+          <div>
+            <h3>Azure OpenAI</h3>
+            <p>
+              The module exists and is off. Enabling it is nearly free — S0 is pay-per-token — but
+              switching <em>embeddings</em> changes the vector dimension and forces a full re-index of
+              every document. Two defensible positions: keep Gemini, or move chat to Azure OpenAI for
+              data residency and leave embeddings alone. Do not switch both at once, and never during
+              phase 4.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="branch">
+      <h2><span class="num">§7</span> What is on the branch</h2>
+      <p>
+        Everything below is committed to <code>feat/azure-infra-terraform</code>. Nothing under
+        <code>backend/app/</code> or <code>frontend/src/</code> was touched, and the existing
+        <code>backend/Dockerfile</code> is untouched so Render keeps working until Azure is proven.
+      </p>
+
+      <pre class="tree">infra/
+  bootstrap/<b>bootstrap.sh</b> · <b>.ps1</b>     <i>one-time Terraform state storage</i>
+  terraform/                       <i>~15 resources, one resource group</i>
+    envs/<b>dev.tfvars</b>              <i>the cheap dev shape</i>
+  <b>README.md</b>                      <i>the runbook</i>
+
+.github/workflows/
+  <b>infra-plan.yml</b>                 <i>PR: fmt, validate, plan, comment on the PR</i>
+  <b>infra-apply.yml</b>                <i>apply behind an environment approval</i>
+  <b>deploy-backend.yml</b>             <i>acr build, roll revision, smoke test + log dump</i>
+  <b>deploy-frontend.yml</b>            <i>build against the live API URL, upload to SWA</i>
+
+backend/
+  <b>Dockerfile.slim</b>                <i>multi-stage, non-root, no torch</i>
+  <b>requirements-core.txt</b>          <i>what the API actually imports</i>
+  <b>requirements-ocr.txt</b>           <i>OCR extras, only where enabled</i>
+  <b>.dockerignore</b>                  <i>keeps caches, evals and .env out of the context</i>
+
+documentation/strategy/
+  <b>azure-deployment.md</b>            <i>the full report this page summarises</i></pre>
+
+      <p>
+        Setup is six steps in the runbook: bootstrap state, create the OIDC identity, set six
+        repository variables, create a <code>dev</code> environment with reviewers, apply, then
+        populate four Key Vault secrets. Terraform creates those secrets as empty slots on purpose —
+        no API key ever lands in a <code>.tfvars</code> file or in Terraform state.
+      </p>
+    </section>
+
+    <section id="risks">
+      <h2><span class="num">§8</span> Risks, and what we need from you</h2>
+
+      <div class="scroller">
+        <table>
+          <thead>
+            <tr><th>Risk</th><th>Severity</th><th>Handling</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>First apply hits a provider-schema mismatch</td>
+              <td><span class="pill workaround">Likely, low</span></td>
+              <td class="why">The plan workflow catches it on the PR; fix and re-plan</td>
+            </tr>
+            <tr>
+              <td>B1ms Postgres undersized once pgvector holds the corpus</td>
+              <td><span class="pill workaround">Medium</span></td>
+              <td class="why">Burstable scales in place. Measure at phase 4, do not pre-buy</td>
+            </tr>
+            <tr>
+              <td>Cold start makes the first request of a demo look broken</td>
+              <td><span class="pill workaround">Medium</span></td>
+              <td class="why">Set min replicas to 1 before a demo, or move to App Service if permanent</td>
+            </tr>
+            <tr>
+              <td>Azure Files latency on many small graph JSON files</td>
+              <td><span class="pill workaround">Medium</span></td>
+              <td class="why">Real, and the reason phase 3 exists. Acceptable at beta volumes</td>
+            </tr>
+            <tr>
+              <td>CORS <code>*</code> shipped to a shared environment</td>
+              <td><span class="pill blocking">High if unfixed</span></td>
+              <td class="why">Fix before sharing the URL — see §4</td>
+            </tr>
+            <tr>
+              <td>Terraform state corruption</td>
+              <td><span class="pill handled">Low</span></td>
+              <td class="why">Blob versioning + 30-day soft delete, enabled by the bootstrap script</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Open questions, before the first apply</h3>
+      <ol class="questions">
+        <li>Is there an existing Azure subscription and tenant, or does one need creating? A free trial's $200 credit covers roughly seven months of this environment.</li>
+        <li>Central India is the primary region because DeepTutor targets Indian users. Static Web Apps uses East Asia because India is not an available deployment location for that service; static assets are delivered through its global edge network and the SPA holds no personal data.</li>
+        <li>Does the first environment need to be always-warm for demos? That is the $0-versus-$33 decision in §3.</li>
+        <li>Who owns the Entra app registration for OIDC? It needs <em>User Access Administrator</em> for the first apply, which is more than a typical developer holds.</li>
+      </ol>
+    </section>
+
+    <footer>
+      Prices are list prices for Central India at time of writing — verify in the Azure pricing
+      calculator before committing budget.<br>
+      Supersedes the hosting section of <code>infra-and-cicd.md</code>; its stateless-backend
+      principle, repo cleanup and CI shape still stand and this plan is built on them.
+    </footer>
+  </main>
+</div>

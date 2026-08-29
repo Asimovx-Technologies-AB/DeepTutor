@@ -1,0 +1,104 @@
+name: deploy-frontend
+
+# Builds the Vite SPA and publishes it to Static Web Apps. The API base URL is
+# read from the live Container App rather than baked into a committed .env, so
+# a redeployed backend never leaves the frontend pointing at a dead host.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-frontend.yml"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-frontend-dev
+  cancel-in-progress: true
+
+env:
+  RESOURCE_GROUP: rg-deeptutor-dev
+  CONTAINER_APP: ca-deeptutor-dev-api
+  STATIC_WEB_APP: stapp-deeptutor-dev
+
+jobs:
+  deploy:
+    name: build and deploy (dev)
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve API URL
+        id: api
+        run: |
+          fqdn=$(az containerapp show --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
+                   --query properties.configuration.ingress.fqdn -o tsv)
+          if [ -z "$fqdn" ]; then
+            echo "Container App $CONTAINER_APP has no ingress — run infra-apply first." >&2
+            exit 1
+          fi
+          echo "base_url=https://${fqdn}/api" >> "$GITHUB_OUTPUT"
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint and typecheck
+        working-directory: frontend
+        run: |
+          npm run lint
+          npx tsc -b
+
+      - name: Build
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: ${{ steps.api.outputs.base_url }}
+        run: npm run build
+
+      # Fetched at deploy time, so no deployment token is stored as a
+      # long-lived GitHub secret.
+      - name: Read Static Web Apps deployment token
+        id: swa
+        run: |
+          token=$(az staticwebapp secrets list --name "$STATIC_WEB_APP" \
+                    --resource-group "$RESOURCE_GROUP" \
+                    --query properties.apiKey -o tsv)
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ steps.swa.outputs.token }}
+          action: upload
+          app_location: frontend/dist
+          skip_app_build: true
+          skip_api_build: true
+
+      - name: Summary
+        run: |
+          host=$(az staticwebapp show --name "$STATIC_WEB_APP" --resource-group "$RESOURCE_GROUP" \
+                   --query defaultHostname -o tsv)
+          {
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Frontend | https://${host} |"
+            echo "| API base | ${{ steps.api.outputs.base_url }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

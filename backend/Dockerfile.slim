@@ -1,0 +1,69 @@
+# Slim production image for the DeepTutor API on Azure Container Apps.
+#
+# Differences from ./Dockerfile, and why they matter here:
+#   - installs requirements-core.txt, not requirements.txt: no docling/easyocr,
+#     so no torch. The image drops from several GB to well under one, which is
+#     what makes a 0.5 vCPU / 1 GiB replica and a fast cold start possible.
+#   - multi-stage: compilers stay in the builder and never ship.
+#   - runs as a non-root user.
+#   - one image serves both roles; the Container App overrides CMD for the
+#     ARQ worker.
+#
+# Once this image is proven on Azure it should replace ./Dockerfile outright.
+
+# ── Builder ───────────────────────────────────────────────────────────────────
+FROM python:3.11-slim AS builder
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+COPY requirements-core.txt .
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install -r requirements-core.txt
+
+# ── Runtime ───────────────────────────────────────────────────────────────────
+FROM python:3.11-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    PORT=8000
+
+# libgomp1 is required by a few numeric wheels; curl is here for the container
+# health probe and nothing else.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 10001 appuser
+
+COPY --from=builder /opt/venv /opt/venv
+
+WORKDIR /app
+COPY --chown=appuser:appuser . .
+
+# Writable mount points. /data/* are backed by Azure Files volumes; /tmp/* hold
+# rebuildable caches and are expected to vanish with the replica.
+RUN mkdir -p /data/lightrag /data/uploads /tmp/vlm_cache /tmp/image_search_cache \
+    && chown -R appuser:appuser /data /tmp/vlm_cache /tmp/image_search_cache
+
+USER appuser
+
+EXPOSE 8000
+
+# Two workers fit 1 GiB. Timeout is generous because document parsing runs
+# in-request until the ARQ worker lands.
+CMD ["sh", "-c", "exec gunicorn app.main:app \
+    --workers 2 \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 0.0.0.0:${PORT:-8000} \
+    --timeout 300 \
+    --graceful-timeout 30 \
+    --access-logfile -"]

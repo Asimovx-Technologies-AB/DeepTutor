@@ -1,0 +1,91 @@
+name: infra-apply
+
+# Applies the Terraform config. Gated behind a GitHub Environment so a human
+# approves before anything is created, changed or destroyed in Azure.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/infra-apply.yml"
+  workflow_dispatch:
+    inputs:
+      destroy:
+        description: "Destroy the environment instead of applying it"
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+# Terraform state takes one writer at a time. Never cancel a run in progress —
+# an interrupted apply leaves a lease on the state blob.
+concurrency:
+  group: infra-apply-dev
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: infra/terraform
+
+env:
+  ARM_USE_OIDC: "true"
+  ARM_USE_AZUREAD: "true"
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+jobs:
+  apply:
+    name: apply (dev)
+    runs-on: ubuntu-latest
+    environment: dev # protection rules on this environment are the approval gate
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+
+      - name: terraform init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ vars.TFSTATE_CONTAINER }}" \
+            -backend-config="key=dev.terraform.tfstate" \
+            -backend-config="use_azuread_auth=true"
+
+      - name: terraform apply
+        if: ${{ !inputs.destroy }}
+        run: terraform apply -auto-approve -input=false -var-file=envs/dev.tfvars
+
+      - name: terraform destroy
+        if: ${{ inputs.destroy }}
+        run: terraform destroy -auto-approve -input=false -var-file=envs/dev.tfvars
+
+      - name: Publish endpoints
+        if: ${{ !inputs.destroy }}
+        run: |
+          {
+            echo "### Environment"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| API | $(terraform output -raw api_url) |"
+            echo "| Frontend | $(terraform output -raw frontend_url) |"
+            echo "| Resource group | \`$(terraform output -raw resource_group_name)\` |"
+            echo "| Registry | \`$(terraform output -raw container_registry_login_server)\` |"
+            echo "| Key Vault | \`$(terraform output -raw key_vault_name)\` |"
+            echo ""
+            echo "Secrets still to populate: \`$(terraform output -json secrets_to_populate | tr -d '[]"' )\`"
+          } >> "$GITHUB_STEP_SUMMARY"
