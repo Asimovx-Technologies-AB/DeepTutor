@@ -39,9 +39,9 @@ resource "azurerm_role_assignment" "blob_contributor" {
 # ── Blob containers ──────────────────────────────────────────────────────────
 locals {
   blob_containers = {
-    documents    = "User uploads and textbook originals (the AWS S3 bucket's replacement)"
-    vlm-cache    = "Gemini Vision page transcriptions, keyed by content hash"
-    image-cache  = "Serper diagram images that passed AI verification"
+    documents      = "User uploads and textbook originals (the AWS S3 bucket's replacement)"
+    vlm-cache      = "Gemini Vision page transcriptions, keyed by content hash"
+    image-cache    = "Serper diagram images that passed AI verification"
     eval-artifacts = "RAGAS / DeepEval run outputs produced by CI"
   }
 }
@@ -60,7 +60,7 @@ resource "azurerm_storage_container" "main" {
 # no-code-change fix; moving it into Postgres JSONB is the real fix (report §6).
 locals {
   file_shares = {
-    lightrag-data = 5  # GiB
+    lightrag-data = 5 # GiB
     uploads       = 20
   }
 }
