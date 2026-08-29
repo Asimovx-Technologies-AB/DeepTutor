@@ -17,12 +17,12 @@ postgres_storage_mb = 32768
 # Off until backend/app/worker.py lands.
 enable_worker = false
 
-# Turn on after Azure OpenAI quota is confirmed. This also selects pgvector and
-# requires a one-time re-index because Azure embeddings are 1536-dimensional.
-enable_azure_openai = false
+# Azure-native RAG: Azure OpenAI chat and embeddings with PostgreSQL pgvector.
+# Existing Pinecone vectors must be re-indexed at 1536 dimensions.
+enable_azure_openai = true
 
 # Hard cap on log ingestion. 0.2 GB/day caps the worst case at ~6 GB/month
-# (~USD 2), while a scale-to-zero dev app realistically emits a tenth of that.
+# (~USD 2), while a scale-to-zero dev app realistically emits a tenth of that).
 log_daily_quota_gb = 0.2
 
 # Add operator IPs here to run psql / migrations from a laptop, e.g.
