@@ -51,7 +51,7 @@ jobs:
           terraform_wrapper: false
 
       - name: terraform fmt
-        run: terraform fmt -check -recursive
+        run: terraform fmt -check -diff -recursive
 
       - name: terraform init
         run: |
