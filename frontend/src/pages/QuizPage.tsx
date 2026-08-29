@@ -22,7 +22,7 @@ export default function QuizPage() {
   const { uiLanguage, aiLanguage } = useLanguageStore()
   const t = useTranslation(uiLanguage)
 
-  const effectiveTopicId = (rawTopicId || locationState.topicId || 'math-10-1').trim()
+  const effectiveTopicId = (rawTopicId || locationState.topicId || '').trim()
   const focusTopic = locationState.focusTopic || locationState.title || ''
 
   const [currentQ, setCurrentQ] = useState(0)
