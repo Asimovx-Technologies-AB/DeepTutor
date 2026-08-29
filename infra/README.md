@@ -143,6 +143,10 @@ authentication. On first use, the backend creates the `vector` extension and
 `document_chunks` schema. Existing Pinecone vectors are not copied: re-index
 the source documents before directing test users to the environment.
 
+The South India deployment uses regional Standard for `gpt-4.1-mini` and
+Global Standard for `text-embedding-3-small`; the embedding model is not
+available as regional Standard in South India.
+
 ### 6. Populate legacy secrets only when required
 
 When `enable_azure_openai = false`, Terraform creates legacy secret slots so no

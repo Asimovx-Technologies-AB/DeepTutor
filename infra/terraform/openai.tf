@@ -40,7 +40,7 @@ resource "azurerm_cognitive_deployment" "chat" {
   }
 
   sku {
-    name     = "GlobalStandard"
+    name     = "Standard"
     capacity = var.azure_openai_chat_model.capacity
   }
 }
@@ -58,7 +58,9 @@ resource "azurerm_cognitive_deployment" "embedding" {
   }
 
   sku {
-    name     = "Standard"
+    # text-embedding-3-small is not available as a regional Standard
+    # deployment in South India; Global Standard is supported there.
+    name     = "GlobalStandard"
     capacity = var.azure_openai_embedding_model.capacity
   }
 }
