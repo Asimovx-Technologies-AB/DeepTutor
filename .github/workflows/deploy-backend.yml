@@ -94,7 +94,21 @@ jobs:
             sleep 15
           done
 
-          echo "Smoke test failed — dumping recent container logs." >&2
+          echo "Smoke test failed — dumping revision state and logs." >&2
+
+          # Console logs need a live replica, and the interesting failures are
+          # exactly the ones where no replica came up. Revision state and the
+          # system log are readable either way, and name the cause: image pull
+          # refused, volume mount failed, probe never passed, container exited.
+          az containerapp revision list \
+            --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
+            --query "[].{revision:name, active:properties.active, replicas:properties.replicas, running:properties.runningState, health:properties.healthState, provisioning:properties.provisioningState}" \
+            -o table || true
+
+          az containerapp logs show --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
+            --tail 100 --type system || true
+
+          # Best effort: only returns anything if a replica lived long enough.
           az containerapp logs show --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
             --tail 100 --type console || true
           exit 1
