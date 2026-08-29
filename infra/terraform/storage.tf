@@ -60,7 +60,7 @@ resource "azurerm_storage_container" "main" {
 # no-code-change fix; moving it into Postgres JSONB is the real fix (report §6).
 locals {
   file_shares = {
-    lightrag-data = 5 # GiB
+    lightrag-data = 5  # GiB
     uploads       = 20
   }
 }
