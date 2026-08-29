@@ -77,6 +77,9 @@ locals {
   }
 
   openai_env = var.enable_azure_openai ? {
+    LLM_PROVIDER                  = "azure_openai"
+    EMBEDDING_PROVIDER            = "azure_openai"
+    VECTOR_STORE_BACKEND          = "pgvector"
     AZURE_OPENAI_ENDPOINT         = azurerm_cognitive_account.openai[0].endpoint
     AZURE_OPENAI_CHAT_DEPLOYMENT  = var.azure_openai_chat_model.name
     AZURE_OPENAI_EMBED_DEPLOYMENT = var.azure_openai_embedding_model.name

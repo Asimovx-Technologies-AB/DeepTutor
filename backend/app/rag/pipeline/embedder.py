@@ -2,6 +2,7 @@
 Stage 2 — Embedding Pipeline
 ==============================
 Multi-provider embedding engine:
+  - azure_openai: Azure OpenAI with managed identity
   - ollama   : local Ollama (nomic-embed-text, bge-m3, mxbai-embed-large, etc.)
   - openai   : OpenAI API (text-embedding-3-small / text-embedding-3-large)
   - gemini   : Google Gemini API (models/text-embedding-004)
@@ -75,6 +76,16 @@ async def _embed_batch_openai(texts: List[str]) -> List[List[float]]:
         raise RuntimeError("openai package not installed.")
 
 
+async def _embed_azure_openai(text: str) -> List[float]:
+    from app.rag.azure_openai_client import azure_openai
+    return await azure_openai.embed(text)
+
+
+async def _embed_batch_azure_openai(texts: List[str]) -> List[List[float]]:
+    from app.rag.azure_openai_client import azure_openai
+    return await azure_openai.embed_batch(texts)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Provider: Gemini
 # ══════════════════════════════════════════════════════════════════════════════
@@ -113,12 +124,14 @@ class EmbeddingPipeline:
         print(f"[EMBED] Provider: {self.provider.upper()}")
 
     def _get_default_dim(self) -> int:
-        return 3072 if self.provider == "gemini" else (1536 if self.provider == "openai" else 768)
+        return 3072 if self.provider == "gemini" else (1536 if self.provider in ("openai", "azure_openai") else 768)
 
     async def embed(self, text: str) -> List[float]:
         """Embed a single text. Falls back to pseudo-embedding on error."""
         try:
-            if self.provider == "openai":
+            if self.provider == "azure_openai":
+                vec = await _embed_azure_openai(text)
+            elif self.provider == "openai":
                 vec = await _embed_openai(text)
             elif self.provider == "gemini":
                 vec = await _embed_gemini(text)
@@ -140,7 +153,9 @@ class EmbeddingPipeline:
         if not texts:
             return []
         try:
-            if self.provider == "openai":
+            if self.provider == "azure_openai":
+                vecs = await _embed_batch_azure_openai(texts)
+            elif self.provider == "openai":
                 vecs = await _embed_batch_openai(texts)
             elif self.provider == "gemini":
                 vecs = await _embed_batch_gemini(texts)

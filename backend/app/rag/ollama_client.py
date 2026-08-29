@@ -262,7 +262,7 @@ class OllamaClient:
 
 class UnifiedLLMClient:
     """
-    Unified LLM Client that seamlessly delegates to GeminiClient or OllamaClient
+    Unified LLM Client that delegates to Azure OpenAI, Gemini, or Ollama
     based on settings.LLM_PROVIDER (defaults to 'gemini').
     Preserves 100% backward compatibility for all modules importing `ollama`.
     """
@@ -274,6 +274,9 @@ class UnifiedLLMClient:
         return getattr(settings, "LLM_PROVIDER", "gemini").lower()
 
     async def is_available(self) -> bool:
+        if self.provider == "azure_openai":
+            from app.rag.azure_openai_client import azure_openai
+            return await azure_openai.is_available()
         if self.provider == "gemini":
             from app.rag.gemini_client import gemini
             if await gemini.is_available():
@@ -283,6 +286,9 @@ class UnifiedLLMClient:
         return await self.ollama_client.is_available()
 
     async def get_working_chat_model(self, requested_model: Optional[str] = None) -> str:
+        if self.provider == "azure_openai":
+            from app.rag.azure_openai_client import azure_openai
+            return await azure_openai.get_working_chat_model(requested_model)
         if self.provider == "gemini":
             from app.rag.gemini_client import gemini
             return await gemini.get_working_chat_model(requested_model)
@@ -295,6 +301,9 @@ class UnifiedLLMClient:
         temperature: float = 0.2,
         options: Optional[Dict] = None,
     ) -> str:
+        if self.provider == "azure_openai":
+            from app.rag.azure_openai_client import azure_openai
+            return await azure_openai.chat(messages, model, temperature, options)
         if self.provider == "gemini":
             from app.rag.gemini_client import gemini
             if await gemini.is_available():
@@ -311,6 +320,11 @@ class UnifiedLLMClient:
         temperature: float = 0.2,
         options: Optional[Dict] = None,
     ) -> AsyncGenerator[str, None]:
+        if self.provider == "azure_openai":
+            from app.rag.azure_openai_client import azure_openai
+            async for token in azure_openai.stream(messages, model, temperature, options):
+                yield token
+            return
         if self.provider == "gemini":
             from app.rag.gemini_client import gemini
             if await gemini.is_available():
@@ -321,6 +335,9 @@ class UnifiedLLMClient:
             yield token
 
     async def embed(self, text: str, model: Optional[str] = None) -> List[float]:
+        if self.provider == "azure_openai":
+            from app.rag.azure_openai_client import azure_openai
+            return await azure_openai.embed(text, model)
         if self.provider == "gemini":
             from app.rag.gemini_client import gemini
             if await gemini.is_available():
@@ -330,6 +347,9 @@ class UnifiedLLMClient:
     async def embed_batch(
         self, texts: List[str], model: Optional[str] = None
     ) -> List[List[float]]:
+        if self.provider == "azure_openai":
+            from app.rag.azure_openai_client import azure_openai
+            return await azure_openai.embed_batch(texts, model)
         if self.provider == "gemini":
             from app.rag.gemini_client import gemini
             if await gemini.is_available():
@@ -340,4 +360,3 @@ class UnifiedLLMClient:
 # Singleton — provides backward compatibility for all existing callers
 ollama = UnifiedLLMClient()
 llm = ollama
-

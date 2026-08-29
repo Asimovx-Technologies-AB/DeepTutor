@@ -171,8 +171,8 @@ variable "azure_openai_chat_model" {
     capacity = number
   })
   default = {
-    name     = "gpt-4o-mini"
-    version  = "2024-07-18"
+    name     = "gpt-4.1-mini"
+    version  = "2025-04-14"
     capacity = 10 # x1000 TPM — keeps the dev spend bounded
   }
 }

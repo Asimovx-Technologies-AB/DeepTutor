@@ -172,7 +172,12 @@ async def send_message(
 
     if not await ollama.is_available():
         provider = getattr(settings, "LLM_PROVIDER", "gemini").lower()
-        if provider == "gemini":
+        if provider == "azure_openai":
+            response_text = (
+                "⚠️ **Azure OpenAI is not configured.** Set `AZURE_OPENAI_ENDPOINT` "
+                "and grant the application identity access to the deployment."
+            )
+        elif provider == "gemini":
             response_text = (
                 "⚠️ **Gemini API key is not configured.**\n\n"
                 "Please add your Gemini API key in `backend/.env`:\n"
@@ -238,7 +243,12 @@ async def stream_message(
         # If LLM not available, send helpful provider-specific error
         if not await ollama.is_available():
             provider = getattr(settings, "LLM_PROVIDER", "gemini").lower()
-            if provider == "gemini":
+            if provider == "azure_openai":
+                msg = (
+                    "⚠️ **Azure OpenAI is not configured.** Set `AZURE_OPENAI_ENDPOINT` "
+                    "and grant the application identity access to the deployment."
+                )
+            elif provider == "gemini":
                 msg = (
                     "⚠️ **Gemini API key is not configured.**\n\n"
                     "Please add your Gemini API key in `backend/.env`:\n"
