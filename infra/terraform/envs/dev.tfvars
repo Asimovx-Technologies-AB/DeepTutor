@@ -22,7 +22,7 @@ enable_worker = false
 enable_azure_openai = true
 
 # Hard cap on log ingestion. 0.2 GB/day caps the worst case at ~6 GB/month
-# (~USD 2), while a scale-to-zero dev app realistically emits a tenth of that).
+# (~USD 2), while a scale-to-zero dev app realistically emits a tenth of that.
 log_daily_quota_gb = 0.2
 
 # Add operator IPs here to run psql / migrations from a laptop, e.g.
