@@ -5,6 +5,7 @@ namespaced as: {user_id}_{topic_id}
 """
 import os
 import asyncio
+import json
 from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, BackgroundTasks
@@ -16,8 +17,9 @@ from app.rag.storage import active_vector_store, active_graph_store
 from app.rag.graph_store import graph_store
 from app.rag.vector_store import vector_store
 from app.rag.cache import query_result_cache
-from app.rag.section_scope import get_section_collection_id
+from app.rag.section_scope import get_section_collection_id, user_owns_section
 from app.rag.storage.s3_store import s3_store
+from app.rag.ollama_client import ollama
 
 
 settings = get_settings()
@@ -25,6 +27,25 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 
 # Track indexing progress
 _indexing_status: dict = {}  # doc_id → {status, progress, stats}
+
+
+@router.get("")
+async def list_user_documents(
+    topic_id: Optional[str] = None,
+    user: dict = Depends(get_current_user),
+):
+    """Return only the authenticated user's uploaded study materials."""
+    docs = (
+        db.get_documents_for_user_and_topic(user["id"], topic_id)
+        if topic_id
+        else db.get_documents_for_user(user["id"])
+    )
+    for doc in docs:
+        status = _indexing_status.get(doc["id"])
+        doc["index_status"] = status.get("status") if status else ("done" if doc.get("indexed") else "pending")
+        doc["index_progress"] = status.get("progress", 0) if status else (100 if doc.get("indexed") else 0)
+        doc["index_stats"] = status.get("stats", {}) if status else {}
+    return docs
 
 
 def _user_section_collection_id(user_id: str, section_id: str) -> str:
@@ -48,12 +69,32 @@ async def _run_indexing(doc_id: str, section_id: str, file_path: str, user_id: s
     try:
         stats = await graph_rag.index_document(namespaced_topic, file_path, progress_callback=progress_cb)
         _indexing_status[doc_id] = {"status": "done", "progress": 100, "stats": stats}
+        topics = stats.get("extracted_topics", [])
+        detected_subject = "General Studies"
+        try:
+            response = await ollama.chat([
+                {"role": "system", "content": "Classify study material. Return JSON only."},
+                {"role": "user", "content": (
+                    "Identify one concise academic subject for this uploaded file. "
+                    f"File: {Path(file_path).name}. Topics: {topics[:12]}. "
+                    'Return exactly: {"subject":"Subject name"}'
+                )},
+            ], temperature=0.0)
+            parsed = json.loads(response.strip().removeprefix("```json").removesuffix("```").strip())
+            candidate = str(parsed.get("subject", "")).strip()
+            if candidate:
+                detected_subject = candidate[:100]
+        except Exception as exc:
+            print(f"[documents] Subject detection fallback used: {exc}")
+
+        stats["detected_subject"] = detected_subject
         db.update_document_stats(
             doc_id=doc_id,
             indexed=True,
             entity_count=stats.get("entities_extracted", 0),
             chunk_count=stats.get("chunks_indexed", 0),
-            key_topics=stats.get("extracted_topics", []),
+            key_topics=topics,
+            detected_subject=detected_subject,
         )
     except Exception as e:
         _indexing_status[doc_id] = {"status": "error", "progress": 0, "error": str(e), "stats": {}}
@@ -141,6 +182,8 @@ async def list_documents(topic_id: str, user: dict = Depends(get_current_user)):
 @router.get("/{doc_id}/status")
 async def indexing_status(doc_id: str, user: dict = Depends(get_current_user)):
     """Poll indexing progress for a document."""
+    if not any(d["id"] == doc_id for d in db.get_documents_for_user(user["id"])):
+        raise HTTPException(status_code=404, detail="Document not found")
     status = _indexing_status.get(doc_id, {"status": "pending", "progress": 0})
     return status
 
@@ -269,18 +312,13 @@ JSON:"""
 @router.get("/topic/{topic_id}/graph")
 async def get_knowledge_graph(topic_id: str, user: dict = Depends(get_current_user)):
     """Return full knowledge graph for visualization — scoped to the current user section."""
+    if not user_owns_section(user["id"], topic_id):
+        raise HTTPException(status_code=404, detail="Study material not found")
     namespaced_topic = _user_section_collection_id(user["id"], topic_id)
     raw_graph = graph_store.get_full_graph(namespaced_topic)
     stats = graph_store.get_graph_stats(namespaced_topic)
 
-    # Fallback 1: check un-namespaced topic_id if present
-    if not raw_graph.get("nodes"):
-        fallback_graph = graph_store.get_full_graph(topic_id)
-        if fallback_graph.get("nodes"):
-            raw_graph = fallback_graph
-            stats = graph_store.get_graph_stats(topic_id)
-
-    # Fallback 2: construct concept graph from document key_topics if graph store has no nodes
+    # Construct a concept graph from this user's document topics if needed.
     docs = db.get_documents_for_user_and_topic(user["id"], topic_id)
     if not docs:
         docs = db.get_documents_for_user(user["id"]) if topic_id == "general" else []
@@ -520,4 +558,3 @@ async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
         "file_name": doc["file_name"],
         "message": f"Deleted document '{doc['file_name']}'."
     }
-
