@@ -428,6 +428,28 @@ export default function ChatPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [uploadingFile, setUploadingFile] = useState(false)
   const [activeUploads, setActiveUploads] = useState<ActiveUpload[]>([])
+
+  // Upload processing belongs to the server, not to this browser render. Restore
+  // unfinished uploads whenever a chat is reopened or the page is refreshed.
+  useEffect(() => {
+    if (!sessionId) return
+
+    let cancelled = false
+    documentsApi.list(sessionId)
+      .then((res) => {
+        if (cancelled) return
+        const unfinished = (res.data || [])
+          .filter((doc: any) => doc.index_status !== 'done')
+          .map((doc: any) => ({
+            docId: doc.id,
+            fileName: doc.file_name,
+          }))
+        setActiveUploads(unfinished)
+      })
+      .catch((err) => console.error('Failed to restore document processing status:', err))
+
+    return () => { cancelled = true }
+  }, [sessionId])
   const [showGraphPanel, setShowGraphPanel] = useState(false)
   const [showQuizGame, setShowQuizGame] = useState(false)
   const [showFlashcards, setShowFlashcards] = useState(false)
@@ -1532,4 +1554,3 @@ function SuggestionCard({ icon, title, description, onClick }: {
     </div>
   )
 }
-

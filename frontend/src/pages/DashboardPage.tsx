@@ -151,8 +151,9 @@ export default function DashboardPage() {
                     subjectId={continueData.subject_id || 'general'}
                     topicId={continueData.topic_id || 'history'}
                     topicTitle={resolvedTopicTitle}
-                    progress={continueData.progress_percentage || 40}
+                    progress={continueData.progress_percentage ?? 0}
                     lastStudied={continueData.last_studied_at}
+                    continuePath={continueData.continue_path}
                   />
                 </div>
               ) : (
@@ -257,7 +258,3 @@ export default function DashboardPage() {
 
         </div>
 
-      </div>
-    </PageContainer>
-  )
-}
