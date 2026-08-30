@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAuthStore } from './stores/authStore'
 import { useChatStore } from './stores/chatStore'
@@ -99,6 +99,15 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return !isAuthenticated ? <>{children}</> : <Navigate to="/dashboard" replace />
 }
 
+function SubjectChatRoute() {
+  const { subjectId, topicId } = useParams<{ subjectId: string; topicId?: string }>()
+  const isUploadedDocumentRoute = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(subjectId || '')
+  if (isUploadedDocumentRoute) {
+    return <Navigate to={`/chat/${topicId || subjectId}`} replace />
+  }
+  return <SubjectChatPage />
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -122,8 +131,8 @@ export default function App() {
             <Route path="chat/:sessionId" element={<ChatPage />} />
             <Route path="subjects" element={<SubjectsPage />} />
             <Route path="subjects/:subjectId" element={<SubjectWorkspacePage />} />
-            <Route path="subjects/:subjectId/chat" element={<SubjectChatPage />} />
-            <Route path="subjects/:subjectId/chat/:topicId" element={<SubjectChatPage />} />
+            <Route path="subjects/:subjectId/chat" element={<SubjectChatRoute />} />
+            <Route path="subjects/:subjectId/chat/:topicId" element={<SubjectChatRoute />} />
             <Route path="subjects/:subjectId/topics" element={<TopicsPage />} />
             <Route path="topics" element={<TopicsPage />} />
             <Route path="records" element={<StudentRecordsPage />} />
@@ -140,8 +149,8 @@ export default function App() {
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="subjects" element={<SubjectsPage />} />
               <Route path="subjects/:subjectId" element={<SubjectWorkspacePage />} />
-              <Route path="subjects/:subjectId/chat" element={<SubjectChatPage />} />
-              <Route path="subjects/:subjectId/chat/:topicId" element={<SubjectChatPage />} />
+              <Route path="subjects/:subjectId/chat" element={<SubjectChatRoute />} />
+              <Route path="subjects/:subjectId/chat/:topicId" element={<SubjectChatRoute />} />
               <Route path="subjects/:subjectId/topics" element={<TopicsPage />} />
               <Route path="topics" element={<TopicsPage />} />
               <Route path="records" element={<StudentRecordsPage />} />
@@ -169,4 +178,3 @@ export default function App() {
     </QueryClientProvider>
   )
 }
-
