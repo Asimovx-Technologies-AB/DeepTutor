@@ -84,6 +84,7 @@ backend/deepeval_ragas_evaluation.json
 .env.local
 env
 *.env
+!backend/.env.canonical-local.example
 !frontend/.env.production
 
 # IDE & System
