@@ -41,6 +41,10 @@ async def list_user_documents(
         else db.get_documents_for_user(user["id"])
     )
     for doc in docs:
+        topics = doc.get("key_topics") or []
+        subject_marker = next((topic for topic in topics if str(topic).startswith("__subject__:")), "")
+        doc["detected_subject"] = subject_marker.removeprefix("__subject__:").strip()
+        doc["key_topics"] = [topic for topic in topics if not str(topic).startswith("__subject__:")]
         status = _indexing_status.get(doc["id"])
         doc["index_status"] = status.get("status") if status else ("done" if doc.get("indexed") else "pending")
         doc["index_progress"] = status.get("progress", 0) if status else (100 if doc.get("indexed") else 0)
@@ -93,8 +97,7 @@ async def _run_indexing(doc_id: str, section_id: str, file_path: str, user_id: s
             indexed=True,
             entity_count=stats.get("entities_extracted", 0),
             chunk_count=stats.get("chunks_indexed", 0),
-            key_topics=topics,
-            detected_subject=detected_subject,
+            key_topics=[f"__subject__:{detected_subject}", *topics],
         )
     except Exception as e:
         _indexing_status[doc_id] = {"status": "error", "progress": 0, "error": str(e), "stats": {}}
@@ -332,6 +335,8 @@ async def get_knowledge_graph(topic_id: str, user: dict = Depends(get_current_us
         for doc in docs:
             key_topics = doc.get("key_topics", [])
             for kt in key_topics:
+                if str(kt).startswith("__subject__:"):
+                    continue
                 clean_kt = clean_and_format_topic(str(kt))
                 if clean_kt and is_valid_academic_topic(clean_kt):
                     node_id = clean_kt.lower().strip()
