@@ -513,7 +513,7 @@ def get_key_topics_for_user_section(user_id: str, topic_id: str) -> List[str]:
         extracted = []
         for d in docs:
             for t in getattr(d, "key_topics", []):
-                if t and t not in extracted:
+                if t and not str(t).startswith("__subject__:") and t not in extracted:
                     extracted.append(t)
         return extracted
 
@@ -1372,6 +1372,3 @@ def get_detailed_student_record(user_id: str) -> dict:
                 "last_evaluated": now_iso(),
             }
         }
-
-
-

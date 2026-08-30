@@ -5,7 +5,7 @@ name: deploy-frontend
 # a redeployed backend never leaves the frontend pointing at a dead host.
 on:
   push:
-    branches: [main]
+    branches: [main, feature/document-first-learning-flow]
     paths:
       - "frontend/**"
       - ".github/workflows/deploy-frontend.yml"

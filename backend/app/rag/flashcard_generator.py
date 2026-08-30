@@ -10,7 +10,6 @@ from app.rag.document_processor import process_document
 from app.rag.section_scope import get_section_context, user_owns_section
 from app.core import database as db
 
-from app.rag.textbook_reader import is_curriculum_topic, extract_textbook_chunks, get_chapter_title
 
 FLASHCARD_PROMPT_TEMPLATE = """You are an elite academic study engine and Kerala SCERT / CBSE Board Exam Specialist. 
 Create a deck of 8-10 high-quality, point-by-point study flashcards derived STRICTLY from the provided CONTEXT.
@@ -68,27 +67,22 @@ async def generate_flashcards_for_section(
     language: str = "english",
 ) -> List[dict]:
     """
-    Generate a deck of flashcards derived strictly from textbook context or uploaded PDF document text.
+    Generate a deck of flashcards strictly from a user-owned uploaded document.
     """
     context_docs: List[str] = []
 
     if not section_id:
         return []
 
-    # 1. Handle curriculum topics via direct textbook extraction
-    if is_curriculum_topic(section_id):
-        query_text = focus_topic if (focus_topic and focus_topic.lower() != "all topics (entire pdf)") else None
-        context_docs = extract_textbook_chunks(section_id, query=query_text, max_chunks=14)
-    else:
-        if not user_id or not user_owns_section(user_id, section_id):
-            return []
-        query_text = focus_topic if (focus_topic and focus_topic.lower() != "all topics (entire pdf)") else None
-        context_docs = await get_section_context(
-            user_id=user_id,
-            section_id=section_id,
-            query=query_text,
-            top_k=12,
-        )
+    if not user_id or not user_owns_section(user_id, section_id):
+        return []
+    query_text = focus_topic if (focus_topic and focus_topic.lower() != "all topics (entire pdf)") else None
+    context_docs = await get_section_context(
+        user_id=user_id,
+        section_id=section_id,
+        query=query_text,
+        top_k=12,
+    )
 
     if not context_docs:
         return []
@@ -98,7 +92,7 @@ async def generate_flashcards_for_section(
         sample_docs = random.sample(sample_docs, 15)
 
     context = "\n\n".join(sample_docs)[:4500]
-    chapter_label = get_chapter_title(section_id)
+    chapter_label = focus_topic or "Uploaded document"
 
     lang_str = (language or "english").lower()
     if lang_str in ("arabic", "ar"):

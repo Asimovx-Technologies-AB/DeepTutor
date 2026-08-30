@@ -268,8 +268,9 @@ async def get_continue_learning(user: dict = Depends(get_current_user)):
             return {
                 "subject_id": latest_doc.topic_id or "social-science",
                 "topic_id": latest_doc.topic_id or "history",
+                "continue_path": f"/chat/{latest_doc.topic_id}" if latest_doc.topic_id else "/chat",
                 "topic_title": latest_doc.file_name,
-                "progress_percentage": min(90, max(25, (latest_doc.chunk_count or 4) * 6)),
+                "progress_percentage": 100 if latest_doc.indexed else 0,
                 "last_studied_at": latest_doc.created_at
             }
 
@@ -282,6 +283,7 @@ async def get_continue_learning(user: dict = Depends(get_current_user)):
             return {
                 "subject_id": latest_session.topic_id or "general",
                 "topic_id": latest_session.topic_id or "general",
+                "continue_path": f"/chat/{latest_session.id}",
                 "topic_title": latest_session.session_title,
                 "progress_percentage": 50,
                 "last_studied_at": latest_session.started_at
@@ -336,43 +338,3 @@ async def update_progress(req: ProgressRequest, user: dict = Depends(get_current
             UserProgress.topic_id == req.topic_id
         ).first()
         
-        now = now_iso()
-        status = 'COMPLETED' if req.progress_percentage >= 100 else ('IN_PROGRESS' if req.progress_percentage > 0 else 'NOT_STARTED')
-        
-        if progress:
-            progress.progress_percentage = req.progress_percentage
-            progress.status = status
-            progress.last_studied_at = now
-        else:
-            progress = UserProgress(
-                id=new_id(),
-                user_id=user["id"],
-                subject_id=req.subject_id,
-                topic_id=req.topic_id,
-                status=status,
-                progress_percentage=req.progress_percentage,
-                last_studied_at=now
-            )
-            db.add(progress)
-            
-        db.commit()
-        return {"status": "success", "message": "Progress updated"}
-
-
-@router.get("/goals")
-async def get_goals(user: dict = Depends(get_current_user)):
-    with DBContext() as db:
-        goals = db.query(LearningGoal).filter(
-            LearningGoal.user_id == user["id"]
-        ).all()
-        
-        return [
-            {
-                "id": g.id,
-                "title": g.title,
-                "target": g.target,
-                "deadline": g.deadline,
-                "progress_percentage": g.progress_percentage
-            }
-            for g in goals
-        ]

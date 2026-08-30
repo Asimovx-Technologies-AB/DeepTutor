@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 from app.api.auth import get_current_user
 from app.core import database as db
 from app.rag.quiz_generator import generate_quiz_for_section
-from app.rag.section_scope import get_section_collection_id
+from app.rag.section_scope import get_section_collection_id, user_owns_section
 
 router = APIRouter(prefix="/quiz", tags=["quiz"])
 
@@ -105,7 +105,6 @@ async def get_topic_suggestions(
 
 from app.rag.ollama_client import ollama
 from app.rag.gemini_client import gemini_client
-from app.rag.textbook_reader import is_curriculum_topic
 
 
 @router.post("/generate")
@@ -125,6 +124,12 @@ async def generate_quiz(
 
     effective_focus = body.focus_topic or body.custom_topic
 
+    if not body.note_id and not body.note_content and not user_owns_section(user["id"], section_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Upload and process a document before generating a quiz.",
+        )
+
     quiz = await generate_quiz_for_section(
         section_id=section_id,
         user_id=user["id"],
@@ -138,13 +143,12 @@ async def generate_quiz(
         language=body.language or "english",
     )
     if not quiz:
-        if not is_curriculum_topic(section_id):
-            user_docs = db.get_documents_for_user(user["id"])
-            if not user_docs:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No uploaded documents found. Please upload a PDF document before generating a quiz."
-                )
+        user_docs = db.get_documents_for_user_and_topic(user["id"], section_id)
+        if not user_docs:
+            raise HTTPException(
+                status_code=400,
+                detail="No uploaded document is available for this study session. Upload and process a document before generating a quiz."
+            )
 
         llm_online = await ollama.is_available()
         if not llm_online:
@@ -155,7 +159,7 @@ async def generate_quiz(
 
         raise HTTPException(
             status_code=500,
-            detail="Failed to generate quiz from textbook/document text. Please try again with a different focus topic."
+            detail="The uploaded document could not provide enough indexed text for a quiz. Wait for processing to finish or try another topic."
         )
     return quiz
 
@@ -175,21 +179,9 @@ async def list_quizzes(
     topic_id: str,
     user: dict = Depends(get_current_user),
 ):
+    if not user_owns_section(user["id"], topic_id):
+        raise HTTPException(status_code=404, detail="Study material not found")
     quizzes = db.get_quizzes_by_topic(topic_id)
-    if is_curriculum_topic(topic_id) and not quizzes:
-        # Auto-generate a fresh quiz on-demand from the textbook index
-        try:
-            quiz = await generate_quiz_for_section(
-                section_id=topic_id,
-                user_id=user["id"],
-                topic_id=topic_id,
-                difficulty="medium",
-                num_questions=5,
-            )
-            if quiz:
-                return [quiz]
-        except Exception as e:
-            print(f"[quiz] Auto-generate failed for {topic_id}: {e}")
     return quizzes
 
 

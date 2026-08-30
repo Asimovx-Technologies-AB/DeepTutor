@@ -59,7 +59,6 @@ async def generate_quiz_for_section(
     Generate a quiz using either a specific Smart Note or the user's textbook/document context.
     """
     from app.rag.section_scope import get_section_context, user_owns_section
-    from app.rag.textbook_reader import get_chapter_title, is_curriculum_topic
 
     context = ""
     context_docs = []
@@ -123,7 +122,7 @@ SOLVED PRACTICE QUESTIONS:
 
     import uuid
     gen_seed = str(uuid.uuid4())[:8]
-    topic_label = get_chapter_title(topic_id or section_id) or focus_topic or "Class 10 Syllabus"
+    topic_label = focus_topic or "Uploaded document"
     
     lang_str = (language or "english").lower()
     if lang_str in ("arabic", "ar"):

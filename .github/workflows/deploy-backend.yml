@@ -4,7 +4,7 @@ name: deploy-backend
 # and points the Container App at the new tag.
 on:
   push:
-    branches: [main]
+    branches: [main, feature/document-first-learning-flow]
     paths:
       - "backend/**"
       - ".github/workflows/deploy-backend.yml"

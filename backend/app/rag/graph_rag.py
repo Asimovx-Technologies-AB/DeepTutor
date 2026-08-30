@@ -1277,8 +1277,62 @@ class GraphRAGPipeline:
                     ])
 
         # ── Step 2: Confidence scoring + out-of-scope detection ───────────────
-        from app.rag.query_engine import is_document_level_meta_query
+        from app.rag.query_engine import is_document_level_meta_query, is_document_structure_query
         is_meta_query = is_document_level_meta_query(question)
+        is_structure_query = is_document_structure_query(question)
+
+        # Structural questions (chapter count/list, contents, page count) cannot be
+        # answered reliably from a semantic top-k search. Build a compact manifest
+        # from every indexed chunk's hierarchy metadata instead.
+        if is_structure_query and effective_topic_id and _vs.count(effective_topic_id) > 0:
+            try:
+                all_doc_chunks = _vs.get_all_chunks(effective_topic_id, limit=500)
+                top_level_sections = []
+                seen_sections = set()
+                indexed_headings = []
+                seen_headings = set()
+                page_numbers = []
+                for chunk in all_doc_chunks:
+                    meta = chunk.get("metadata", {})
+                    raw_page = meta.get("page")
+                    try:
+                        page_numbers.append(int(raw_page))
+                    except (TypeError, ValueError):
+                        pass
+
+                    section_path = str(meta.get("section_path") or "").strip()
+                    section_title = str(meta.get("section_title") or "").strip()
+                    section_level = meta.get("section_level")
+                    heading_key = section_title.casefold()
+                    if section_title and heading_key not in seen_headings:
+                        seen_headings.add(heading_key)
+                        indexed_headings.append(section_title)
+                    candidate = section_path.split(" > ")[0].strip() if section_path else ""
+                    if not candidate and section_title and section_level in (0, 1, "0", "1"):
+                        candidate = section_title
+                    normalized = candidate.casefold()
+                    if candidate and normalized not in seen_sections:
+                        seen_sections.add(normalized)
+                        top_level_sections.append(candidate)
+
+                manifest_lines = ["DOCUMENT STRUCTURE (derived from indexed headings):"]
+                if top_level_sections:
+                    manifest_lines.append(f"Top-level section count: {len(top_level_sections)}")
+                    manifest_lines.extend(f"- {title}" for title in top_level_sections)
+                elif indexed_headings:
+                    manifest_lines.append("Indexed headings (chapter hierarchy was not explicitly detected):")
+                    manifest_lines.extend(f"- {title}" for title in indexed_headings[:80])
+                if page_numbers:
+                    manifest_lines.append(f"Highest indexed PDF page: {max(page_numbers)}")
+                manifest_lines.append(
+                    "Use this manifest for structural questions. If headings do not clearly represent chapters, "
+                    "say so instead of inventing a chapter count."
+                )
+                vector_context_text = "\n".join(manifest_lines) + "\n\n" + vector_context_text
+                if not vector_chunks:
+                    vector_chunks = all_doc_chunks[:8]
+            except Exception:
+                pass
 
         # Fallback to document chunks if meta-query (questions/summary/notes) had zero vector search hits
         if is_meta_query and not vector_chunks and effective_topic_id and _vs.count(effective_topic_id) > 0:

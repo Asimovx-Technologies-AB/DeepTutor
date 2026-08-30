@@ -34,9 +34,7 @@ class MessageRequest(BaseModel):
 
 
 def _user_section_collection_id(user_id: str, topic_id: str, session_id: str = "") -> str:
-    """Build a collection id: curriculum topics query the textbook index directly; user uploads use namespaced ID."""
-    if topic_id and topic_id.startswith(("sslc-", "math-10-", "phys-10-", "chem-10-", "math-", "phys-", "chem-", "textbook")):
-        return topic_id
+    """Build a collection id scoped to the authenticated user's upload."""
     section_id = topic_id or session_id or "general"
     return get_section_collection_id(user_id, section_id)
 
@@ -61,14 +59,12 @@ async def list_sessions(
     user: dict = Depends(get_current_user)
 ):
     sessions = db.get_sessions_for_user(user["id"])
-    curriculum_prefixes = ("sslc-", "math-", "phys-", "chem-", "bio-", "soc-", "eng-", "cbse-", "kerala-", "textbook-")
-    
     if scope == "learn":
-        # Only general / uploaded PDF sessions
-        sessions = [s for s in sessions if not (s.get("topic_id") and s["topic_id"].lower().startswith(curriculum_prefixes))]
+        # All learning sessions are based on the user's own materials.
+        pass
     elif scope == "subjects":
-        # Only curriculum subject chapter sessions
-        sessions = [s for s in sessions if s.get("topic_id") and s["topic_id"].lower().startswith(curriculum_prefixes)]
+        # The legacy curriculum catalogue no longer has a separate scope.
+        sessions = []
         
     return sorted(sessions, key=lambda s: s["started_at"], reverse=True)
 
@@ -76,7 +72,7 @@ async def list_sessions(
 @router.get("/sessions/{session_id}/messages")
 async def get_messages(session_id: str, user: dict = Depends(get_current_user)):
     session = db.get_session(session_id)
-    if not session:
+    if not session or session.get("user_id") != user["id"]:
         raise HTTPException(status_code=404, detail="Session not found")
     return db.get_messages(session_id)
 
@@ -85,6 +81,8 @@ async def get_messages(session_id: str, user: dict = Depends(get_current_user)):
 async def delete_session(session_id: str, user: dict = Depends(get_current_user)):
     user_id = user["id"]
     session = db.get_session(session_id)
+    if session and session.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Session not found")
     if not session:
         # Also clean up any possible leftover session id data
         db.delete_session(session_id)

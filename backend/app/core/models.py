@@ -377,5 +377,3 @@ class StudyNote(Base):
     @solved_questions.setter
     def solved_questions(self, value):
         self._solved_questions = json.dumps(value or [])
-
-

@@ -6,6 +6,9 @@ Welcome to the **IndieTutor** documentation directory. All technical specificati
 
 ## 🗂️ Documentation Index
 
+### 🎯 MVP Strategy
+- 📌 [**mvpstrategy/README.md**](mvpstrategy/README.md): Validation-first commercial MVP strategy for the Swedish curriculum-aligned, parent-managed test-preparation programme.
+
 ### ⚙️ Core Architecture & Project Overview
 - 🛠️ [**techstack.md**](file:///d:/AI%20Projects/Indie-tutor/documentation/techstack.md): Complete tech stack breakdown, system architecture diagrams, 4-stage RAG pipeline details, database ER schema, and FastMCP integration.
 - 📋 [**PROJECT_OVERVIEW.md**](file:///d:/AI%20Projects/Indie-tutor/documentation/PROJECT_OVERVIEW.md): High-level overview of capabilities, data flow, backend configuration, and usage guide.

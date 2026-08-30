@@ -88,8 +88,21 @@ def is_document_level_meta_query(query: str) -> bool:
         r'\b(?:explain\s+(?:in\s+simple\s+words|simply|easy\s+way|to\s+a\s+student|clearly|for\s+beginner))\b',
         r'\b(?:teach\s+me|learn\s+simple|make\s+it\s+simple|simple\s+notes?)\b',
         r'\b(?:what\s+is\s+this\s+(?:pdf|document|chapter)\s+about)\b',
+        r'\b(?:how\s+many|number\s+of|count\s+of)\s+(?:chapters?|sections?|units?|parts?|topics?|pages?)\b',
+        r'\b(?:list|show|name|what\s+are)\s+(?:all\s+|the\s+)?(?:chapters?|sections?|units?|parts?|topics?)\b',
+        r'\b(?:table\s+of\s+contents|contents\s+page|document\s+structure)\b',
     ]
     return any(re.search(p, q) for p in patterns)
+
+
+def is_document_structure_query(query: str) -> bool:
+    """Questions answered from document metadata/headings rather than one body chunk."""
+    q = (query or "").lower().strip()
+    return any(re.search(pattern, q) for pattern in [
+        r'\b(?:how\s+many|number\s+of|count\s+of)\s+(?:chapters?|sections?|units?|parts?|topics?|pages?)\b',
+        r'\b(?:list|show|name|what\s+are)\s+(?:all\s+|the\s+)?(?:chapters?|sections?|units?|parts?|topics?)\b',
+        r'\b(?:table\s+of\s+contents|contents\s+page|document\s+structure)\b',
+    ])
 
 
 
