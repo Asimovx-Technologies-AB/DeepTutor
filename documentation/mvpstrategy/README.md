@@ -25,6 +25,7 @@ Biology for Swedish school years 7–9 is the initial pilot subject because it f
 3. [03-product-ai-and-platform-plan.md](03-product-ai-and-platform-plan.md) — complete MVP requirements across curriculum, AI, application, security, operations, and measurement.
 4. [04-validation-and-marketing-plan.md](04-validation-and-marketing-plan.md) — parent research, concierge pilot, launch funnel, content, pricing tests, and acquisition.
 5. [05-delivery-roadmap-and-gates.md](05-delivery-roadmap-and-gates.md) — phased execution, priorities, release gates, metrics, and go/no-go rules.
+6. [06-alice-interactive-tutoring-study.md](06-alice-interactive-tutoring-study.md) — Alice-style structured tutoring, animated progress, and verified interactive visual explanations for Biology and future Mathematics.
 
 ## Governing principles
 
@@ -34,7 +35,8 @@ Biology for Swedish school years 7–9 is the initial pilot subject because it f
 4. **Use AI as infrastructure.** Foundation models may be changed or combined. Curriculum workflow, mastery evidence, parent trust, safety, and distribution are the product.
 5. **Use the smallest credible curriculum scope.** Biology is a pilot vehicle, not the permanent identity of the company.
 6. **Design for children from the beginning.** Parent control, privacy, safety, data minimisation, and transparent AI use are MVP requirements.
-7. **Stop when evidence is weak.** A failed pilot should trigger correction, repositioning, or termination—not automatic feature expansion.
+7. **Control interactive teaching components.** AI may select and parameterise reviewed visual primitives; it must not execute arbitrary generated interface code for children.
+8. **Stop when evidence is weak.** A failed pilot should trigger correction, repositioning, or termination—not automatic feature expansion.
 
 ## MVP success definition
 
@@ -43,4 +45,3 @@ The MVP is successful only if it demonstrates all three outcomes:
 1. Students repeatedly follow the preparation programme.
 2. Controlled pre/post assessment shows meaningful improvement.
 3. Parents understand the value and pay to use it again.
-
