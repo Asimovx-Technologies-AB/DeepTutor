@@ -6,6 +6,11 @@ Welcome to the **IndieTutor** documentation directory. All technical specificati
 
 ## 🗂️ Documentation Index
 
+### ☁️ DevOps & Azure Platform
+- 🚀 [**devops/README.md**](devops/README.md): Current Azure technology stack, Terraform-managed resources, GitHub Actions deployment flows, identity and secrets, developer responsibilities, cost controls, and troubleshooting.
+- 🧰 [**../infra/README.md**](../infra/README.md): Infrastructure bootstrap and operations runbook.
+- 🪟 [**development/local-windows-setup.md**](development/local-windows-setup.md): Canonical Windows local setup with PostgreSQL/pgvector and selectable AI chat providers.
+
 ### 🎯 MVP Strategy
 - 📌 [**mvpstrategy/README.md**](mvpstrategy/README.md): Validation-first commercial MVP strategy for the Swedish curriculum-aligned, parent-managed test-preparation programme.
 

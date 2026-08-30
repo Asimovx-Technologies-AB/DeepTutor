@@ -26,6 +26,9 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./deep_tutor.db"
+    # Canonical development and deployed environments must fail fast instead
+    # of silently running against SQLite when PostgreSQL is unavailable.
+    ALLOW_SQLITE_FALLBACK: bool = True
 
     # ── LLM / Chat Provider ──────────────────────────────────────────────────
     # Switch via .env: LLM_PROVIDER=azure_openai | gemini | ollama

@@ -9,7 +9,8 @@ from app.core.models import Base, User, ChatSession, ChatMessage, Document, Quiz
 
 settings = get_settings()
 
-# Initialize database engine (supports Cloud PostgreSQL & SQLite with automatic local fallback)
+# Initialize database engine. The legacy/offline profile may fall back to
+# SQLite; canonical local and deployed profiles fail fast on PostgreSQL errors.
 db_url = settings.DATABASE_URL.replace("sqlite+aiosqlite://", "sqlite://")
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
@@ -30,6 +31,11 @@ def _create_engine_with_fallback(primary_url: str):
                 conn.execute(text("SELECT 1"))
             return eng
         except Exception as e:
+            if not settings.ALLOW_SQLITE_FALLBACK:
+                raise RuntimeError(
+                    "PostgreSQL is required but could not be reached. "
+                    "Start the local database or correct DATABASE_URL."
+                ) from e
             print(f"[DATABASE] Warning: PostgreSQL unreachable ({e}). Falling back to local SQLite.")
             return create_engine("sqlite:///./deep_tutor.db", connect_args={"check_same_thread": False})
     else:
