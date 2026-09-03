@@ -7,65 +7,87 @@ mermaid.initialize({
   theme: 'base',
   themeVariables: {
     primaryColor: '#FFFFFF',
-    primaryTextColor: '#1F2937',
+    primaryTextColor: '#1E293B',
     primaryBorderColor: '#6366F1',
-    lineColor: '#4F46E5',
+    lineColor: '#6366F1',
     secondaryColor: '#FFFFFF',
     tertiaryColor: '#FFFFFF',
     fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-    fontSize: '13px',
+    fontSize: '12.5px',
     nodeBorder: '1.5px',
     clusterBkg: 'transparent',
-    clusterBorder: '#E2E8F0',
+    clusterBorder: '#CBD5E1',
     titleColor: '#64748B',
     edgeLabelBackground: '#FFFFFF',
   },
   flowchart: {
     htmlLabels: true,
     curve: 'basis',
-    padding: 16,
-    nodeSpacing: 40,
-    rankSpacing: 40,
+    padding: 24,
+    nodeSpacing: 60,
+    rankSpacing: 85,
     useMaxWidth: true,
   },
   securityLevel: 'loose',
 })
 
 /**
- * Safely wraps long text inside Mermaid node labels with `<br/>`
+ * Universal text wrapper that inserts `<br/>` into all Mermaid node shapes
+ * (quoted or unquoted, square, rounded, stadium, diamond, circle).
  */
-function wrapMermaidNodeLabels(code: string, maxCharsPerLine: number = 36): string {
-  return code.replace(/(\["|\[")([^"\]\n]+)("\])/g, (match, prefix, content, suffix) => {
-    if (!content || !content.trim()) return match
+function wrapMermaidNodeLabels(code: string, maxCharsPerLine: number = 28): string {
+  const wrapText = (text: string): string => {
+    if (!text || !text.trim()) return text
+    // Don't modify if it contains html tags other than simple br
+    const lines = text.split(/<br\s*\/?>/i)
+    const wrapped: string[] = []
 
-    const existingLines = content.split(/<br\s*\/?>/i)
-    const newLines: string[] = []
-
-    existingLines.forEach((line: string) => {
+    lines.forEach((line) => {
       const trimmed = line.trim()
       if (trimmed.length <= maxCharsPerLine) {
-        newLines.push(trimmed)
+        wrapped.push(trimmed)
       } else {
         const words = trimmed.split(/\s+/)
-        let curLine = ''
-        words.forEach((w: string) => {
-          if (!curLine) {
-            curLine = w
-          } else if ((curLine + ' ' + w).length <= maxCharsPerLine) {
-            curLine += ' ' + w
+        let cur = ''
+        words.forEach((w) => {
+          if (!cur) {
+            cur = w
+          } else if ((cur + ' ' + w).length <= maxCharsPerLine) {
+            cur += ' ' + w
           } else {
-            newLines.push(curLine)
-            curLine = w
+            wrapped.push(cur)
+            cur = w
           }
         })
-        if (curLine) {
-          newLines.push(curLine)
-        }
+        if (cur) wrapped.push(cur)
       }
     })
+    return wrapped.join('<br/>')
+  }
 
-    return `${prefix}${newLines.join('<br/>')}${suffix}`
+  let res = code
+
+  // 1. Stadium nodes: id(["..."]) or id([...])
+  res = res.replace(/(\(\["?)([^"\]\n\r]+)("?\]\))/g, (_, p1, content, p3) => {
+    return `${p1}${wrapText(content)}${p3}`
   })
+
+  // 2. Square nodes: id["..."] or id[...] (exclude style definitions)
+  res = res.replace(/([a-zA-Z0-9_-]+\["??)([^"\]\n\r]+)("??\])/g, (_, p1, content, p3) => {
+    return `${p1}${wrapText(content)}${p3}`
+  })
+
+  // 3. Rounded nodes: id("...") or id(...)
+  res = res.replace(/(?<!subgraph\s+|graph\s+|flowchart\s+)([a-zA-Z0-9_-]+\("??)([^"\)\n\r]+)("??\))/g, (_, p1, content, p3) => {
+    return `${p1}${wrapText(content)}${p3}`
+  })
+
+  // 4. Diamond nodes: id{"..."} or id{...}
+  res = res.replace(/([a-zA-Z0-9_-]+\{"??)([^"\}\n\r]+)("??\})/g, (_, p1, content, p3) => {
+    return `${p1}${wrapText(content)}${p3}`
+  })
+
+  return res
 }
 
 interface Props {
@@ -118,7 +140,7 @@ export default function MermaidDiagram({ chart }: Props) {
 
         let svgResult = ''
         try {
-          const wrappedCode = wrapMermaidNodeLabels(cleanCode, 36)
+          const wrappedCode = wrapMermaidNodeLabels(cleanCode, 26)
           const res = await mermaid.render(uniqueId, wrappedCode)
           svgResult = res.svg
         } catch {
@@ -208,8 +230,8 @@ export default function MermaidDiagram({ chart }: Props) {
           stroke: #CBD5E1 !important;
           stroke-width: 1.2px !important;
           stroke-dasharray: 4 4 !important;
-          rx: 12px !important;
-          ry: 12px !important;
+          rx: 14px !important;
+          ry: 14px !important;
         }
 
         .mermaid-wrapper .cluster text {
@@ -221,12 +243,12 @@ export default function MermaidDiagram({ chart }: Props) {
         /* ── Node Boxes: Clean white card on transparent background ── */
         .mermaid-wrapper .node rect,
         .mermaid-wrapper .node polygon {
-          rx: 12px !important;
-          ry: 12px !important;
+          rx: 14px !important;
+          ry: 14px !important;
           stroke: #6366F1 !important;
           stroke-width: 1.5px !important;
           fill: #FFFFFF !important;
-          filter: drop-shadow(0 2px 6px rgba(99, 102, 241, 0.08)) !important;
+          filter: drop-shadow(0 2px 8px rgba(99, 102, 241, 0.08)) !important;
           transition: all 0.2s ease !important;
         }
 
@@ -234,7 +256,7 @@ export default function MermaidDiagram({ chart }: Props) {
           stroke: #4F46E5 !important;
           stroke-width: 2px !important;
           fill: #FFFFFF !important;
-          filter: drop-shadow(0 4px 12px rgba(99, 102, 241, 0.16)) !important;
+          filter: drop-shadow(0 4px 14px rgba(99, 102, 241, 0.16)) !important;
         }
 
         .mermaid-wrapper .node circle {
@@ -255,13 +277,14 @@ export default function MermaidDiagram({ chart }: Props) {
           text-align: center !important;
           width: 100% !important;
           height: 100% !important;
-          padding: 8px 14px !important;
+          padding: 4px 8px !important;
           box-sizing: border-box !important;
-          font-size: 13px !important;
+          font-size: 12.5px !important;
           font-weight: 500 !important;
-          line-height: 1.4 !important;
+          line-height: 1.35 !important;
           color: #1E293B !important;
-          word-break: break-word !important;
+          word-break: normal !important;
+          white-space: normal !important;
         }
 
         .mermaid-wrapper .edgePath path {
@@ -277,13 +300,40 @@ export default function MermaidDiagram({ chart }: Props) {
         }
 
         .mermaid-wrapper .edgeLabel {
+          background-color: transparent !important;
+        }
+
+        .mermaid-wrapper .edgeLabel rect {
+          fill: #FFFFFF !important;
+          rx: 6px !important;
+          ry: 6px !important;
+          stroke: #E2E8F0 !important;
+          stroke-width: 1px !important;
+        }
+
+        .mermaid-wrapper .edgeLabel foreignObject {
+          overflow: visible !important;
+        }
+
+        .mermaid-wrapper .edgeLabel .label span,
+        .mermaid-wrapper .edgeLabel span {
           background-color: #FFFFFF !important;
-          padding: 2px 6px !important;
+          padding: 3px 8px !important;
           border-radius: 6px !important;
           font-size: 11px !important;
           font-weight: 500 !important;
-          color: #475569 !important;
-          border: 1px solid #E2E8F0 !important;
+          color: #334155 !important;
+          border: 1px solid #CBD5E1 !important;
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05) !important;
+          display: inline-block !important;
+          white-space: nowrap !important;
+        }
+
+        .mermaid-wrapper .edgeLabel text,
+        .mermaid-wrapper .edgeLabel tspan {
+          fill: #334155 !important;
+          font-size: 11px !important;
+          font-weight: 500 !important;
         }
       `}</style>
     </div>

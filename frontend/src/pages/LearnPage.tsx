@@ -175,6 +175,7 @@ export default function LearnPage() {
 
   // Upload modal & drag drop
   const [isUploading, setIsUploading] = useState(false)
+  const [uploadingFileMeta, setUploadingFileMeta] = useState<{ name: string; sizeFormatted: string } | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSubject, setUploadSubject] = useState('Machine Learning')
@@ -282,6 +283,10 @@ export default function LearnPage() {
 
   // ─── 4. Document Ingestion Handler ───
   const handleFileUpload = async (file: File) => {
+    const sizeStr = file.size < 1024 * 1024 
+      ? `${(file.size / 1024).toFixed(1)} KB` 
+      : `${(file.size / (1024 * 1024)).toFixed(2)} MB`
+    setUploadingFileMeta({ name: file.name, sizeFormatted: sizeStr })
     setIsUploading(true)
     setUploadProgress(15)
     setUploadError(null)
@@ -289,7 +294,7 @@ export default function LearnPage() {
     try {
       const interval = setInterval(() => {
         setUploadProgress((p) => (p < 85 ? p + 12 : p))
-      }, 400)
+      }, 350)
 
       const res = await studyApi.upload(file, uploadSubject, activeSessionId || undefined)
       clearInterval(interval)
@@ -317,9 +322,13 @@ export default function LearnPage() {
       ])
 
       fetchSessions()
-      setIsUploading(false)
+      setTimeout(() => {
+        setIsUploading(false)
+        setUploadingFileMeta(null)
+      }, 500)
     } catch (err: any) {
       setIsUploading(false)
+      setUploadingFileMeta(null)
       const msg = err.response?.data?.detail || err.message || 'Upload failed'
       setUploadError(msg)
     }
@@ -1080,7 +1089,7 @@ export default function LearnPage() {
                   onScroll={handleChatScroll}
                   className="flex-1 overflow-y-auto px-4 sm:px-8 pt-24 sm:pt-28 pb-36"
                 >
-                  {messages.length === 0 && !isAgentThinking && (
+                  {messages.length === 0 && !isAgentThinking && !isUploading && (
                     <div className="flex flex-col items-center justify-center min-h-[50vh] text-center max-w-lg mx-auto pt-6">
                       <div className="w-14 h-14 rounded-2xl bg-white border border-slate-200 text-slate-800 flex items-center justify-center mb-4 shadow-sm">
                         <BookOpen size={24} className="text-slate-800" />
@@ -1092,7 +1101,7 @@ export default function LearnPage() {
                     </div>
                   )}
 
-                  {(messages.length > 0 || isAgentThinking) && (
+                  {(messages.length > 0 || isAgentThinking || isUploading) && (
                     <div className="max-w-3xl mx-auto w-full flex flex-col gap-6 pt-2 sm:pt-4">
                       {messages.map((msg) => {
                         const isUser = msg.role === 'user'
@@ -1297,10 +1306,10 @@ export default function LearnPage() {
                         )
                       })}
 
-                      {/* ─── TYPING INDICATOR (AI Thinking) ─── */}
-                      {isAgentThinking && (
+                      {/* ─── NATURAL TYPING / PRINTING INDICATOR ─── */}
+                      {(isAgentThinking || isUploading) && (
                         <motion.div
-                          initial={{ opacity: 0, y: 5 }}
+                          initial={{ opacity: 0, y: 4 }}
                           animate={{ opacity: 1, y: 0 }}
                           className="flex items-center gap-2.5 py-2 px-1 text-slate-400"
                         >
@@ -1309,7 +1318,9 @@ export default function LearnPage() {
                             <span className="w-[5px] h-[5px] rounded-full bg-slate-500 animate-dot-2" />
                             <span className="w-[5px] h-[5px] rounded-full bg-slate-500 animate-dot-3" />
                           </div>
-                          <span className="text-xs italic font-serif text-slate-400">writing...</span>
+                          <span className="text-xs italic font-serif text-slate-400">
+                            {isUploading ? 'reading document...' : 'writing...'}
+                          </span>
                         </motion.div>
                       )}
                     </div>

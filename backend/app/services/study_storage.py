@@ -352,7 +352,7 @@ def save_session_message(
     schedule_s3_db_backup(session_id)
 
 
-def get_session_messages(session_id: str) -> List[Dict[str, Any]]:
+def get_session_messages(session_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
     """Retrieve ordered conversation messages for a session."""
     db_path = get_session_db_path(session_id)
     if not db_path.exists():
@@ -362,8 +362,12 @@ def get_session_messages(session_id: str) -> List[Dict[str, Any]]:
     conn.row_factory = sqlite3.Row
     try:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM session_messages ORDER BY created_at ASC")
-        rows = cur.fetchall()
+        if limit:
+            cur.execute("SELECT * FROM session_messages ORDER BY created_at DESC LIMIT ?", (limit,))
+            rows = list(reversed(cur.fetchall()))
+        else:
+            cur.execute("SELECT * FROM session_messages ORDER BY created_at ASC")
+            rows = cur.fetchall()
         msgs = []
         for r in rows:
             msgs.append({

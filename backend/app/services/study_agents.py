@@ -65,11 +65,11 @@ async def call_gemini_vision(
     if system_instruction:
         payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
 
-    models = ["gemini-3.7-flash", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-2.5-flash"]
+    models = ["gemini-3.7-flash", "gemini-3.8-flash", "gemini-2.5-flash"]
     for m in models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key}"
         try:
-            async with httpx.AsyncClient(timeout=35.0) as client:
+            async with httpx.AsyncClient(timeout=22.0) as client:
                 res = await client.post(url, json=payload)
                 if res.status_code == 200:
                     data = res.json()
@@ -411,7 +411,7 @@ Return ONLY valid JSON in this exact structure:
                             p_num = retrieved_chunks[0].get("page", 1)
                         if p_num and 1 <= p_num <= len(p_doc):
                             page_obj = p_doc[p_num - 1]
-                            pix = page_obj.get_pixmap(dpi=150)
+                            pix = page_obj.get_pixmap(dpi=120)
                             page_image_bytes = pix.tobytes("png")
                         p_doc.close()
             except Exception as e:

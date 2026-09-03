@@ -204,19 +204,14 @@ class StudyDocumentProcessor:
             png_bytes = pix.tobytes("png")
             doc.close()
 
-            settings = get_settings()
-            if settings.GEMINI_API_KEY:
-                import google.generativeai as genai
-                genai.configure(api_key=settings.GEMINI_API_KEY)
-                model = genai.GenerativeModel("gemini-2.5-flash")
-                prompt = (
-                    "Transcribe this academic document page cleanly. Preserve all formulas in LaTeX ($...$ or $$...$$), "
-                    "maintain academic heading structure, and output clean markdown text. Do not hallucinate."
-                )
-                image_part = {"mime_type": "image/png", "data": png_bytes}
-                resp = await asyncio.to_thread(model.generate_content, [prompt, image_part])
-                if resp and resp.text:
-                    return resp.text
+            from app.services.study_agents import call_gemini_vision
+            prompt = (
+                "Transcribe this academic document page cleanly. Preserve all formulas in LaTeX ($...$ or $$...$$), "
+                "maintain academic heading structure, and output clean markdown text. Do not hallucinate."
+            )
+            resp = await call_gemini_vision(prompt, png_bytes)
+            if resp and resp.strip():
+                return resp.strip()
         except Exception:
             pass
         return ""

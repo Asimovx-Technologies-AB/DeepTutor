@@ -827,3 +827,51 @@ textarea:focus-visible {
   animation: blink 1.2s infinite ease-in-out;
   animation-delay: 0.4s;
 }
+
+/* ─── Document Scanner & Printing Keyframes ─── */
+@keyframes scan-line {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+.animate-scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #3B82F6, #60A5FA, transparent);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
+  animation: scan-line 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes shimmer-flow {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer-flow {
+  background: linear-gradient(
+    90deg,
+    rgba(241, 245, 249, 0.5) 0%,
+    rgba(226, 232, 240, 0.9) 50%,
+    rgba(241, 245, 249, 0.5) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-flow 1.8s infinite linear;
+}
