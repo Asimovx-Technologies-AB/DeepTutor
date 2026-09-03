@@ -20,6 +20,8 @@ import { studyApi, streamTeacherLecture } from '../services/api'
 import { exportNotesToPdf } from '../utils/pdfExport'
 import { useAuthStore } from '../stores/authStore'
 import confetti from 'canvas-confetti'
+import MermaidDiagram from '../components/MermaidDiagram'
+import StudyNotesCard from '../components/StudyNotesCard'
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
@@ -52,6 +54,8 @@ interface ChatMessage {
   sources?: Array<{ chunk_id: string; page: number; source_type: string; snippet?: string }>
   quiz_data?: any
   format?: string
+  response_format?: string
+  export_ready?: boolean
   created_at?: string
 }
 
@@ -326,6 +330,12 @@ export default function LearnPage() {
         difficulty: activeTopic?.difficulty || 'Intermediate'
       })
 
+      const isExport = res.data.export_ready ?? (
+        res.data.response_format === 'study_notes' ||
+        res.data.format === 'study_notes' ||
+        (Boolean(res.data.text) && res.data.text.startsWith('# ') && res.data.text.toLowerCase().includes('study notes'))
+      )
+
       const assistantMsg: ChatMessage = {
         id: res.data.id || `ast-${Date.now()}`,
         role: 'assistant',
@@ -334,6 +344,8 @@ export default function LearnPage() {
         sources: res.data.sources,
         quiz_data: res.data.quiz_data,
         format: res.data.format,
+        response_format: res.data.response_format || res.data.format,
+        export_ready: isExport,
         created_at: new Date().toISOString()
       }
 
@@ -649,6 +661,15 @@ export default function LearnPage() {
     td: ({ node, ...props }: any) => (
       <td className="px-4 py-2 border-b border-slate-100 text-slate-700" {...props} />
     ),
+    code: ({ node, inline, className, children, ...props }: any) => {
+      const match = /language-(\w+)/.exec(className || '')
+      const lang = match ? match[1] : ''
+      const codeString = String(children).replace(/\n$/, '')
+      if (!inline && lang === 'mermaid') {
+        return <MermaidDiagram chart={codeString} />
+      }
+      return <code className={className} {...props}>{children}</code>
+    },
   }), [])
 
   return (
@@ -906,19 +927,6 @@ export default function LearnPage() {
           {/* Right Action Controls */}
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setArtifactViewerOpen(!artifactViewerOpen)}
-              className={`p-2 rounded-2xl border transition text-xs font-bold flex items-center gap-1.5 ${
-                artifactViewerOpen
-                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-xs'
-              }`}
-              title="Claude-Style Artifact Viewer"
-            >
-              <Split size={15} />
-              <span className="hidden lg:inline">Artifact</span>
-            </button>
-
-            <button
               onClick={() => setStudyMapOpen(!studyMapOpen)}
               className={`p-2 rounded-2xl border transition text-xs font-bold flex items-center gap-1.5 ${
                 studyMapOpen
@@ -981,6 +989,12 @@ export default function LearnPage() {
                     messages.map((msg) => {
                       const isUser = msg.role === 'user'
                       const isThoughtExpanded = expandedThoughtIds[msg.id] ?? false
+                      const isStudyNotes = !isUser && (
+                        Boolean(msg.export_ready) ||
+                        msg.response_format === 'study_notes' ||
+                        msg.format === 'study_notes' ||
+                        (Boolean(msg.text) && msg.text.startsWith('# ') && msg.text.toLowerCase().includes('study notes'))
+                      )
                       return (
                         <div
                           key={msg.id}
@@ -988,7 +1002,7 @@ export default function LearnPage() {
                         >
                           {/* Role Header */}
                           <div className="flex items-center gap-2 mb-1 px-1 text-[11px] font-bold text-slate-400">
-                            <span>{isUser ? 'You' : 'DeepTutor Academic Agent'}</span>
+                            <span>{isUser ? 'You' : (isStudyNotes ? 'DeepTutor Study Notes' : 'DeepTutor Academic Agent')}</span>
                             {!isUser && (
                               <button
                                 onClick={() => handleToggleVoice(msg.id, msg.text)}
@@ -1007,9 +1021,15 @@ export default function LearnPage() {
                             className={`max-w-2xl p-4.5 rounded-3xl text-sm leading-relaxed shadow-xs ${
                               isUser
                                 ? 'bg-indigo-600 text-white rounded-br-xs'
-                                : 'bg-white text-slate-800 border border-slate-200/80 rounded-bl-xs'
+                                : isStudyNotes
+                                  ? 'bg-white text-slate-800 border-2 border-indigo-100/90 rounded-bl-xs shadow-md'
+                                  : 'bg-white text-slate-800 border border-slate-200/80 rounded-bl-xs'
                             }`}
                           >
+                            {/* Study Notes Document Attachment Card (Matching the user design spec) */}
+                            {isStudyNotes && (
+                              <StudyNotesCard markdown={msg.text} className="mb-4" />
+                            )}
                             {/* Expandable Chain-of-Thought Pass */}
                             {!isUser && msg.thought_process && (
                               <div className="mb-3 rounded-2xl bg-slate-50/90 border border-slate-200/70 overflow-hidden">

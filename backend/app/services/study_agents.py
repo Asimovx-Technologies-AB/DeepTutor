@@ -137,12 +137,16 @@ Return ONLY valid JSON:
         # Fallback planner rule
         words = [w for w in re.findall(r"\w+", user_query) if len(w) > 2 and w.lower() not in ("what", "how", "why", "explain", "does", "the", "and")]
         query_noun = " ".join(words[:4]) or user_query
+        is_study_notes = bool(re.search(
+            r"\b(study notes?|cheat sheet|revision notes?|study map|summari[sz]e.*as notes)\b", user_query.lower()
+        ))
+        resp_format = "study_notes" if is_study_notes else ("comparison" if "compare" in user_query.lower() else "conceptual")
         return {
             "sub_questions": [user_query],
             "bm25_queries": [query_noun, subject],
-            "requires_table_data": "table" in user_query.lower() or "compare" in user_query.lower(),
-            "requires_image_data": "diagram" in user_query.lower() or "figure" in user_query.lower(),
-            "response_format": "comparison" if "compare" in user_query.lower() else "conceptual",
+            "requires_table_data": "table" in user_query.lower() or "compare" in user_query.lower() or is_study_notes,
+            "requires_image_data": "diagram" in user_query.lower() or "figure" in user_query.lower() or is_study_notes,
+            "response_format": resp_format,
             "confidence": 0.85,
             "needs_clarification": False
         }
@@ -230,6 +234,12 @@ STRICT RULES:
 3. Tone: Articulate, authoritative, university-grade academic tone. Strictly ZERO emojis.
 4. Chain-of-Thought: Provide a dedicated thought process detailing your reasoning and verification before the answer.
 5. Quiz Mode: If the student asks for a quiz or format is 'quiz', present ONE question with 4 multiple-choice options (A, B, C, D) and wait for the student's answer.
+6. Study Notes Mode: If format is 'study_notes':
+   - Start with '# {{Topic}} — Study Notes'
+   - Break into 5-9 numbered '## ' sections covering definitions, mechanisms, applications, and trade-offs
+   - Use Markdown tables for scannable comparison
+   - If a process, pipeline, or architecture is involved, include ONE Mermaid diagram in fenced ```mermaid ... ``` (4-8 nodes max)
+   - End with '## Quick-Reference Glossary' (two-column table of terms) and '**Suggested next step:** ...'
 
 Return ONLY valid JSON in this exact structure:
 {{
@@ -269,6 +279,9 @@ Return ONLY valid JSON in this exact structure:
         # Background update of student memory (extract learning facts / weaknesses)
         asyncio.create_task(self._update_memory_background(user_id, user_query, answer))
 
+        resp_format = plan.get("response_format", "conceptual")
+        export_ready = (resp_format == "study_notes") and ("could not find the answer" not in answer.lower())
+
         return {
             "thought_process": thought,
             "response": answer,
@@ -277,7 +290,9 @@ Return ONLY valid JSON in this exact structure:
                 {"chunk_id": c["chunk_id"], "page": c["page"], "source_type": c["source_type"], "snippet": c["content"][:180]}
                 for c in retrieved_chunks[:4]
             ],
-            "format": plan.get("response_format", "conceptual")
+            "format": resp_format,
+            "response_format": resp_format,
+            "export_ready": export_ready,
         }
 
     async def _maybe_reground(self, draft_answer: str, context: str, subject: str) -> str:

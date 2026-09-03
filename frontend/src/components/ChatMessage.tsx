@@ -8,6 +8,7 @@ import { Bot, User, Copy, Check } from 'lucide-react'
 import { motion } from 'framer-motion'
 import SourceCard, { type Source } from './SourceCard'
 import MermaidDiagram from './MermaidDiagram'
+import StudyNotesCard from './StudyNotesCard'
 
 interface Props {
   role: 'user' | 'assistant'
@@ -19,11 +20,19 @@ interface Props {
     formatted_badge?: string
     verified?: boolean
   }
+  export_ready?: boolean
+  response_format?: string
 }
 
-const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding }: Props) => {
+const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding, export_ready, response_format }: Props) => {
   const [copied, setCopied] = useState(false)
   const isAssistant = role === 'assistant'
+  
+  const isStudyNotes = isAssistant && (
+    export_ready ||
+    response_format === 'study_notes' ||
+    (Boolean(content) && content.startsWith('# ') && content.toLowerCase().includes('study notes'))
+  )
   
   // Use React 19 deferred value during streaming so UI thread stays responsive to scrolling and typing
   const deferredContent = useDeferredValue(content)
@@ -67,6 +76,11 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding }
         }`}>
           {isAssistant ? (
             <div className="markdown-content">
+              {/* Study Notes Document Attachment Card */}
+              {isStudyNotes && (
+                <StudyNotesCard markdown={content} className="mb-3" />
+              )}
+
               {/* Grounding Badge (only for substantive answers) */}
               {grounding && grounding.formatted_badge && !content.includes("Topic Not Found") && (
                 <div className="mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-success-soft text-success border border-success/30">

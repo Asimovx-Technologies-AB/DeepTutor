@@ -251,6 +251,8 @@ async def send_agent_message(body: AgentMessageRequest):
         "sources": exec_result.get("sources", []),
         "quiz_data": exec_result.get("quiz_data"),
         "format": exec_result.get("format", "conceptual"),
+        "response_format": exec_result.get("response_format", exec_result.get("format", "conceptual")),
+        "export_ready": exec_result.get("export_ready", False),
         "confidence": plan.get("confidence", 0.9)
     }
 

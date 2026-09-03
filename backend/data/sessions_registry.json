@@ -1,14 +1,113 @@
 [
   {
-    "id": "session_2370324316",
+    "id": "session_6341756997",
     "subject": "General Study",
     "title": "New Study Workspace",
     "document_name": "",
     "status": "ready",
     "topic_count": 0,
-    "message_count": 2,
+    "message_count": 0,
+    "created_at": "2026-09-03T06:23:58.735476+00:00",
+    "last_active": "2026-09-03T06:23:58.735476+00:00"
+  },
+  {
+    "id": "session_8460962241",
+    "subject": "General Study",
+    "title": "New Study Workspace",
+    "document_name": "",
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-03T06:23:58.697540+00:00",
+    "last_active": "2026-09-03T06:23:58.697540+00:00"
+  },
+  {
+    "id": "session_2273982061",
+    "subject": "General Study",
+    "title": "New Study Workspace",
+    "document_name": "",
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-03T06:23:58.656933+00:00",
+    "last_active": "2026-09-03T06:23:58.656933+00:00"
+  },
+  {
+    "id": "session_6601853127",
+    "subject": "General Study",
+    "title": "New Study Workspace",
+    "document_name": "",
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-03T06:23:58.620195+00:00",
+    "last_active": "2026-09-03T06:23:58.620195+00:00"
+  },
+  {
+    "id": "session_6493918057",
+    "subject": "General Study",
+    "title": "New Study Workspace",
+    "document_name": "",
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-03T06:23:58.580208+00:00",
+    "last_active": "2026-09-03T06:23:58.580208+00:00"
+  },
+  {
+    "id": "session_1998385032",
+    "subject": "General Study",
+    "title": "New Study Workspace",
+    "document_name": "",
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-03T06:23:58.541468+00:00",
+    "last_active": "2026-09-03T06:23:58.541468+00:00"
+  },
+  {
+    "id": "session_1545364913",
+    "subject": "General Study",
+    "title": "New Study Workspace",
+    "document_name": "",
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-03T06:23:58.511434+00:00",
+    "last_active": "2026-09-03T06:23:58.511434+00:00"
+  },
+  {
+    "id": "session_7604744315",
+    "subject": "General Study",
+    "title": "New Study Workspace",
+    "document_name": "",
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-03T06:23:58.415136+00:00",
+    "last_active": "2026-09-03T06:23:58.415136+00:00"
+  },
+  {
+    "id": "session_7270936338",
+    "subject": "General Study",
+    "title": "New Study Workspace",
+    "document_name": "",
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-03T06:23:58.376186+00:00",
+    "last_active": "2026-09-03T06:23:58.376186+00:00"
+  },
+  {
+    "id": "session_2370324316",
+    "subject": "Machine Learning",
+    "title": "Ml Algorithams Study Room",
+    "document_name": "ml algorithams.pdf",
+    "status": "text_ready",
+    "topic_count": 5,
+    "message_count": 14,
     "created_at": "2026-09-03T06:04:11.421256+00:00",
-    "last_active": "2026-09-03T06:04:15.521255+00:00"
+    "last_active": "2026-09-03T06:42:32.317038+00:00"
   },
   {
     "id": "87e82c2d-a0a8-4d63-8f62-9acf1d10a673",

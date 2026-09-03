@@ -31,11 +31,8 @@ async def lifespan(app: FastAPI):
         Path(dir_path).mkdir(parents=True, exist_ok=True)
 
     print(f"[START] {settings.APP_NAME} v{settings.APP_VERSION}")
-    print(f"[LLM]   Ollama @ {settings.OLLAMA_BASE_URL} | Chat: {settings.OLLAMA_CHAT_MODEL}")
-    print(f"[EMBED] Provider: {settings.EMBEDDING_PROVIDER.upper()} | Model: {settings.OLLAMA_EMBED_MODEL}")
-    print(f"[STORE] Vector: {settings.VECTOR_STORE_BACKEND.upper()} @ {settings.FAISS_DATA_DIR}")
-    print(f"[STORE] Graph:  {settings.GRAPH_STORE_BACKEND.upper()} @ {settings.LIGHTRAG_DATA_DIR}")
-    print(f"[CHUNK] Semantic chunker: {settings.CHUNK_MIN_WORDS}–{settings.CHUNK_MAX_WORDS} words/chunk")
+    print(f"[LLM]   Provider: {settings.LLM_PROVIDER.upper()} | Model: {settings.GEMINI_MODEL}")
+    print(f"[EMBED] Provider: {settings.EMBEDDING_PROVIDER.upper()} | Model: {settings.GEMINI_EMBED_MODEL}")
 
     # Report active parser
     try:
@@ -104,22 +101,8 @@ async def root():
 @app.get("/api/health")
 async def health():
     from app.rag.ollama_client import ollama
-    from app.rag.cache import embedding_cache, query_result_cache
-    from app.rag.storage import active_vector_store, active_graph_store
 
     ollama_ok = await ollama.is_available()
-
-    # Vector store stats
-    try:
-        vs_stats = active_vector_store.cache_stats()
-    except Exception:
-        vs_stats = {"backend": settings.VECTOR_STORE_BACKEND}
-
-    # Graph store stats
-    try:
-        gs_stats = {"backend": settings.GRAPH_STORE_BACKEND, "data_dir": settings.LIGHTRAG_DATA_DIR}
-    except Exception:
-        gs_stats = {"backend": settings.GRAPH_STORE_BACKEND}
 
     # Database health check
     db_status = "connected"
@@ -135,21 +118,13 @@ async def health():
     return {
         "api": "ok",
         "version": settings.APP_VERSION,
+        "llm_online": ollama_ok,
         "database": {
             "status": db_status,
             "type": db_type,
         },
         "pipeline": {
-            "stage1_parser": settings.PRIMARY_PARSER,
-            "stage1_chunker": f"semantic_{settings.CHUNK_MIN_WORDS}_{settings.CHUNK_MAX_WORDS}w",
-            "stage2_embedder": settings.EMBEDDING_PROVIDER,
-            "stage3_vector_store": settings.VECTOR_STORE_BACKEND,
-            "stage3_graph_store": settings.GRAPH_STORE_BACKEND,
-        },
-        "vector_store": vs_stats,
-        "graph_store": gs_stats,
-        "cache": {
-            "embedding": embedding_cache.stats(),
-            "query": query_result_cache.stats(),
+            "status": "active",
+            "storage": "sqlite_fts",
         },
     }
