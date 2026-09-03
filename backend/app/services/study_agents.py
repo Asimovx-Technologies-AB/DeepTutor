@@ -129,14 +129,37 @@ class QueryAnalyzerAgent:
         is_table = any(k in q_lower for k in ("table", "data", "fill", "solve", "matrix", "column", "row", "calculate", "position", "sequence"))
         is_image = is_diagram or any(k in q_lower for k in ("image", "picture", "visual", "graph", "plot"))
 
-        # 3. Clean search keywords
-        words = [w for w in re.findall(r"[a-z0-9]+", q_lower) if len(w) > 2 and w not in (
-            "what", "how", "why", "explain", "does", "the", "and", "for", "with", "from", "help", "solve", "please", "about"
-        )]
-        clean_noun_phrase = " ".join(words[:4]) or user_query
+        # 3. Clean search keywords with acronym & symbol preservation
+        stopwords = {
+            "what", "how", "why", "when", "where", "who", "which", "does", "the", "and", "for", 
+            "with", "from", "help", "solve", "please", "about", "tell", "explain", "give", "show", "is", "are", "was", "were"
+        }
+        raw_words = re.findall(r"[a-z0-9_]+", q_lower)
+        filtered_words = [w for w in raw_words if w not in stopwords]
+        clean_noun_phrase = " ".join(filtered_words[:5]) or user_query
 
-        bm25_queries = [clean_noun_phrase]
-        if subject and subject not in clean_noun_phrase:
+        bm25_queries = [clean_noun_phrase, user_query]
+
+        # Domain expansions for common technical/math abbreviations
+        expansions = []
+        if any(w in filtered_words for w in ("q", "k", "v")) or "q k v" in q_lower or "qkv" in q_lower:
+            expansions.append("query key value attention")
+        if "svm" in filtered_words:
+            expansions.append("support vector machine kernel")
+        if "knn" in filtered_words:
+            expansions.append("k nearest neighbor")
+        if "cnn" in filtered_words:
+            expansions.append("convolutional neural network")
+        if "rnn" in filtered_words or "lstm" in filtered_words:
+            expansions.append("recurrent neural network lstm")
+        if "ap" in filtered_words:
+            expansions.append("arithmetic sequence progression")
+
+        for exp in expansions:
+            if exp not in bm25_queries:
+                bm25_queries.append(exp)
+
+        if subject and subject.lower() not in clean_noun_phrase.lower() and subject != "General Study":
             bm25_queries.append(f"{clean_noun_phrase} {subject}")
 
         return {

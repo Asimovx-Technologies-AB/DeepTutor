@@ -1,5 +1,16 @@
 [
   {
+    "id": "session_250558229",
+    "subject": "Machine Learning",
+    "title": "Attention All U Need Study Room",
+    "document_name": "Attention all u need.pdf",
+    "status": "text_ready",
+    "topic_count": 4,
+    "message_count": 10,
+    "created_at": "2026-09-03T11:13:26.776889+00:00",
+    "last_active": "2026-09-03T11:15:57.186281+00:00"
+  },
+  {
     "id": "session_3035732715",
     "subject": "Machine Learning",
     "title": "Ml Algorithams Study Room",
