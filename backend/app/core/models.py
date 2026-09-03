@@ -377,3 +377,115 @@ class StudyNote(Base):
     @solved_questions.setter
     def solved_questions(self, value):
         self._solved_questions = json.dumps(value or [])
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# NEW: Shared workspace-session schema (replaces per-session physical
+# SQLite files previously managed by SessionManager).
+#
+# NOTE: document_fts (the FTS5 search index) stays in the per-session
+# physical file at backend/data/sessions/{id}.db — that table is owned by
+# app/rag/sqlite_fts_store.py and is intentionally untouched here. Only
+# session_messages/session_topics move into this shared schema.
+# ─────────────────────────────────────────────────────────────────────────
+
+class WorkspaceSession(Base):
+    __tablename__ = 'workspace_sessions'
+
+    id = Column(String, primary_key=True)  # e.g. "session_1735689000000"
+    user_id = Column(String, ForeignKey('users.id'), nullable=True, index=True)
+    title = Column(String, nullable=False)
+    subject = Column(String, nullable=False, default="General Study")
+    created_at = Column(String, default=lambda: datetime.utcnow().isoformat())
+    last_active = Column(String, default=lambda: datetime.utcnow().isoformat())
+    topics_count = Column(Integer, default=0)
+    messages_count = Column(Integer, default=0)
+
+    user = relationship("User")
+    messages = relationship(
+        "WorkspaceMessage", back_populates="session", cascade="all, delete-orphan"
+    )
+    topics = relationship(
+        "WorkspaceTopic", back_populates="session", cascade="all, delete-orphan"
+    )
+
+
+class WorkspaceMessage(Base):
+    __tablename__ = 'workspace_messages'
+
+    id = Column(String, primary_key=True)
+    session_id = Column(String, ForeignKey('workspace_sessions.id'), nullable=False, index=True)
+    role = Column(String, nullable=False)
+    text = Column(Text, nullable=True)
+    thought_process = Column(Text, nullable=True)
+    _quiz_data = Column("quiz_data_json", Text, nullable=True)
+    _topics = Column("topics_json", Text, nullable=True)
+    _attachment = Column("attachment_json", Text, nullable=True)
+    is_explanation = Column(Boolean, default=False)
+    created_at = Column(String, default=lambda: datetime.utcnow().isoformat())
+
+    session = relationship("WorkspaceSession", back_populates="messages")
+
+    @property
+    def quiz_data(self):
+        if not self._quiz_data:
+            return None
+        try:
+            return json.loads(self._quiz_data)
+        except Exception:
+            return None
+
+    @quiz_data.setter
+    def quiz_data(self, value):
+        self._quiz_data = json.dumps(value) if value else None
+
+    @property
+    def topics(self):
+        if not self._topics:
+            return None
+        try:
+            return json.loads(self._topics)
+        except Exception:
+            return None
+
+    @topics.setter
+    def topics(self, value):
+        self._topics = json.dumps(value) if value else None
+
+    @property
+    def attachment(self):
+        if not self._attachment:
+            return None
+        try:
+            return json.loads(self._attachment)
+        except Exception:
+            return None
+
+    @attachment.setter
+    def attachment(self, value):
+        self._attachment = json.dumps(value) if value else None
+
+
+class WorkspaceTopic(Base):
+    __tablename__ = 'workspace_topics'
+
+    id = Column(String, primary_key=True)
+    session_id = Column(String, ForeignKey('workspace_sessions.id'), nullable=False, index=True)
+    title = Column(String, nullable=True)
+    summary = Column(Text, nullable=True)
+    difficulty = Column(String, default="Beginner")
+    _key_concepts = Column("key_concepts_json", Text, default="[]")
+    estimated_study_time = Column(String, default="15 mins")
+
+    session = relationship("WorkspaceSession", back_populates="topics")
+
+    @property
+    def key_concepts(self):
+        try:
+            return json.loads(self._key_concepts)
+        except Exception:
+            return []
+
+    @key_concepts.setter
+    def key_concepts(self, value):
+        self._key_concepts = json.dumps(value or [])
