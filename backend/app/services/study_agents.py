@@ -17,26 +17,86 @@ import asyncio
 from typing import Dict, Any, List, Optional, AsyncGenerator
 
 from app.core.config import get_settings
+from pathlib import Path
 from app.services.study_storage import (
     search_fts_chunks,
     get_all_chunks,
     get_chunks_by_page,
     get_student_memory,
     add_student_memory_fact,
+    get_session_documents,
+    BACKEND_DIR,
 )
 
 
-# ─── Universal LLM Caller with Multi-Provider Cascade ───────────────────────
+# ─── Universal Fast LLM Caller with Multi-Provider Cascade & Vision Grounding ─
 
-# ─── Universal Fast LLM Caller with Multi-Provider Cascade ───────────────────
+async def call_gemini_vision(
+    prompt: str,
+    image_bytes: bytes,
+    system_instruction: str = "",
+    temperature: float = 0.1
+) -> str:
+    """Invokes Google Gemini Vision directly with high-resolution page rendering."""
+    settings = get_settings()
+    key = settings.GEMINI_API_KEY
+    if not key:
+        return ""
+    import base64
+    import httpx
+    b64_img = base64.b64encode(image_bytes).decode("utf-8")
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {"text": prompt},
+                    {
+                        "inline_data": {
+                            "mime_type": "image/png",
+                            "data": b64_img
+                        }
+                    }
+                ]
+            }
+        ],
+        "generationConfig": {"temperature": temperature}
+    }
+    if system_instruction:
+        payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+
+    models = ["gemini-3.7-flash", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-2.5-flash"]
+    for m in models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key}"
+        try:
+            async with httpx.AsyncClient(timeout=35.0) as client:
+                res = await client.post(url, json=payload)
+                if res.status_code == 200:
+                    data = res.json()
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            return parts[0].get("text", "")
+        except Exception:
+            continue
+    return ""
+
 
 async def call_llm(
     prompt: str,
     system_instruction: str = "",
-    temperature: float = 0.2
+    temperature: float = 0.2,
+    image_bytes: Optional[bytes] = None
 ) -> str:
-    """Fast Async Cascade: Google Gemini REST -> Google GenAI SDK -> NVIDIA NIM -> Local Ollama."""
+    """Fast Async Cascade: Google Gemini Vision -> Gemini REST -> Google GenAI SDK -> NVIDIA NIM -> Local Ollama."""
     settings = get_settings()
+
+    # 0. High-Precision Vision Mode (for technical tables, circuits, formulas, diagrams)
+    if image_bytes:
+        vision_resp = await call_gemini_vision(prompt, image_bytes, system_instruction, temperature)
+        if vision_resp and vision_resp.strip():
+            return vision_resp.strip()
 
     # 1. Ultra-fast direct Gemini REST Client (Async, Sub-second)
     try:
@@ -57,7 +117,7 @@ async def call_llm(
         try:
             import google.generativeai as genai
             genai.configure(api_key=settings.GEMINI_API_KEY)
-            model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
+            model_name = getattr(settings, "GEMINI_MODEL", "gemini-3.7-flash")
             clean_name = model_name.replace("models/", "")
             model = genai.GenerativeModel(
                 model_name=clean_name,
@@ -298,11 +358,13 @@ STRICT RULES:
 2. Boolean Continuations & Follow-up Acceptance:
    - If the student answers 'Yes', 'Sure', 'Explain that', or 'Continue' to your previous follow-up question, you MUST directly fulfill and explain that topic step-by-step. Do NOT output a refusal message for follow-ups that you offered.
    - If the student answers 'No' / 'Nope', acknowledge politely and ask what other concept from their uploaded material they would like to study.
-3. Table & Problem Solving: If the student asks to solve, calculate, complete, or fill a table or exercise from the document (e.g. "solve the table on page 22", "fill the table"):
-   - Step 1: Explain the general formula and rule in simple, intuitive steps with block KaTeX math.
-   - Step 2: Show the clear step-by-step calculation for EVERY row and sequence in the table (including ALL integer and fraction sequences).
-   - Step 3: Output the Complete Solved Markdown Table with EVERY row fully computed. Strictly do NOT use ellipses (...) or placeholders. Every sequence and test number in the original table must be explicitly filled with its exact Yes/No and Position.
-   Do NOT output raw JSON formatting or escape slashes in the response text.
+3. Universal STEM Problem Solving & Table Completion Protocol:
+   When solving, calculating, or filling any table, exercise, or problem across ANY subject (Chemistry, Physics, Mathematics, Biology, Computer Science, Economics):
+   - Stage 1: First-Principles Governing Laws: Identify the fundamental laws, governing formulas, or naming conventions (e.g., in Physics: free-body balance, conservation laws, sign conventions; in Chemistry: IUPAC longest continuous chain tracing all branches, lowest locant rule; in Math: algebraic rules, boundary conditions; in CS: state transitions).
+   - Stage 2: Structural Inspection & Trap Elimination: Inspect every sub-component for classic textbook traps (e.g., in Chemistry: check if a bent substituent branch is longer than the horizontal chain, e.g. an ethyl group at C2 makes the chain longer; in Physics: verify coordinate directions and units; in Math: check $n=0$ or negative bounds).
+   - Stage 3: Row-by-Row Independent Computation: Compute EVERY single row, sequence, or test case individually from first principles. Double-check from both directions/perspectives (e.g., number carbons from both left and right and select the lowest locant set).
+   - Stage 4: Sanity & Verification Check: Verify dimensional consistency, IUPAC validity, or algebraic balance before finalizing the table.
+   - Stage 5: Complete Solved Markdown Table: Output the 100% complete Markdown table with EVERY row, position, value, and name fully populated. Strictly do NOT use ellipses (...) or placeholders. Show clear step-by-step reasoning for each row above or below the table.
 4. Mathematics: Format ALL formulas in standalone block KaTeX:
    $$
    formula
@@ -327,8 +389,36 @@ Return ONLY valid JSON in this exact structure:
   "quiz_data": null
 }}
 """
+        # Dynamic Visual Grounding: render high-resolution page image when diagrams, tables, circuits, or formulas are involved
+        page_image_bytes = None
+        has_visual_need = target_page is not None or any(
+            w in user_query.lower() for w in ("table", "diagram", "figure", "solve", "fill", "calculate", "structure", "circuit", "graph", "chart", "formula", "mechanism", "image")
+        )
+
+        if has_visual_need:
+            try:
+                docs = get_session_documents(session_id)
+                if docs:
+                    pdf_rel = docs[0].get("file_path", "")
+                    pdf_full = Path(pdf_rel)
+                    if not pdf_full.is_absolute():
+                        pdf_full = BACKEND_DIR / pdf_rel
+                    if pdf_full.exists() and pdf_full.suffix.lower() == ".pdf":
+                        import pymupdf
+                        p_doc = pymupdf.open(str(pdf_full))
+                        p_num = target_page
+                        if p_num is None and retrieved_chunks:
+                            p_num = retrieved_chunks[0].get("page", 1)
+                        if p_num and 1 <= p_num <= len(p_doc):
+                            page_obj = p_doc[p_num - 1]
+                            pix = page_obj.get_pixmap(dpi=150)
+                            page_image_bytes = pix.tobytes("png")
+                        p_doc.close()
+            except Exception as e:
+                print(f"[Vision Grounding] Note: {e}")
+
         sys_inst = "You are a distinguished university professor. Output clean JSON only. Strictly no emojis."
-        raw = await call_llm(prompt, sys_inst, temperature=0.2)
+        raw = await call_llm(prompt, sys_inst, temperature=0.2, image_bytes=page_image_bytes)
 
         thought = "Synthesizing retrieved FTS5 chunks into a structured step-by-step explanation."
         answer = ""

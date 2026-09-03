@@ -759,18 +759,18 @@ textarea:focus-visible {
 .floating-header-gradient {
   background: linear-gradient(
     to bottom,
-    #F9FAFB 0%,
-    rgba(249, 250, 251, 0.85) 55%,
-    transparent 100%
+    rgba(249, 250, 251, 0.96) 0%,
+    rgba(249, 250, 251, 0.82) 48%,
+    rgba(249, 250, 251, 0) 100%
   );
 }
 
 .floating-input-gradient {
   background: linear-gradient(
     to top,
-    #F9FAFB 0%,
-    rgba(249, 250, 251, 0.75) 45%,
-    transparent 100%
+    rgba(249, 250, 251, 0.96) 0%,
+    rgba(249, 250, 251, 0.82) 48%,
+    rgba(249, 250, 251, 0) 100%
   );
 }
 

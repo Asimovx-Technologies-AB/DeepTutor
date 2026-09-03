@@ -916,8 +916,8 @@ export default function LearnPage() {
                         key={s.id}
                         onClick={() => handleSelectSession(s.id)}
                         className={`group relative p-3.5 rounded-2xl cursor-pointer transition border ${isActive
-                            ? 'bg-slate-100/90 border-slate-300/90 text-slate-900 shadow-xs font-semibold'
-                            : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80 shadow-xs'
+                          ? 'bg-slate-100/90 border-slate-300/90 text-slate-900 shadow-xs font-semibold'
+                          : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80 shadow-xs'
                           }`}
                       >
                         <div className="flex items-start justify-between">
@@ -971,107 +971,105 @@ export default function LearnPage() {
       {/* ─── 2. MAIN CENTER STUDY ROOM WORKSPACE ─── */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
 
-        {/* ─── Top Header & Controls (Floating Translucent "Scholarly Ambient" Bar) ─── */}
-        <header className="relative py-3 px-6 bg-transparent flex items-center justify-between flex-shrink-0 z-20 pointer-events-none floating-header-gradient">
-          <div className="flex items-center gap-3 pointer-events-auto">
-            <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-white/95 border border-slate-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.04)] backdrop-blur-md">
-              <button
-                onClick={() => setWorkspaceOpen(true)}
-                className="text-slate-600 hover:text-slate-900 transition flex items-center gap-1.5 text-sm font-semibold cursor-pointer"
-                title="Open Workspaces"
-              >
-                <PanelLeft size={15} />
-                <span className="hidden sm:inline">Courses</span>
-              </button>
-
-              <div className="h-3.5 w-[1px] bg-slate-200" />
-
-              <div className="flex items-center gap-2 min-w-0">
-                <h2 className="text-sm font-bold text-slate-900 truncate max-w-[180px] sm:max-w-xs">
-                  {documentName ? documentName : activeSubject}
-                </h2>
-                <span className="learn-caption font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 shrink-0 text-xs">
-                  {docStatus === 'fully_processed' ? 'Fully Grounded' : 'Sub-2ms FTS5'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Mode Switcher Tabs (Unified Floating Segmented Pill) */}
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 p-1 rounded-full bg-slate-100/80 border border-slate-200/70 shadow-[0_2px_12px_rgba(0,0,0,0.03)] backdrop-blur-md pointer-events-auto">
-            <button
-              onClick={() => setActiveTab('chat')}
-              className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'chat'
-                  ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                }`}
-            >
-              <BookOpen size={13} />
-              <span className="hidden md:inline">Tutor Chat</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('normal')}
-              className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'normal'
-                  ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                }`}
-            >
-              <Sparkles size={13} />
-              <span className="hidden md:inline">Normal Mode</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('teacher')}
-              className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'teacher'
-                  ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                }`}
-            >
-              <GraduationCap size={13} />
-              <span className="hidden md:inline">Teacher Mode</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('exam')}
-              className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'exam'
-                  ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                }`}
-            >
-              <Award size={13} />
-              <span className="hidden md:inline">Topic Exam</span>
-            </button>
-          </div>
-
-          {/* Right Action Controls (Floating Pill) */}
-          <div className="flex items-center gap-2 pointer-events-auto">
-            <button
-              onClick={() => setStudyMapOpen(!studyMapOpen)}
-              className={`px-3.5 py-1.5 rounded-full border transition text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-[0_2px_12px_rgba(0,0,0,0.04)] backdrop-blur-md ${studyMapOpen
-                  ? 'bg-slate-100 text-slate-900 border-slate-300'
-                  : 'bg-white/95 text-slate-700 hover:text-slate-900 hover:bg-slate-50 border-slate-200/80'
-                }`}
-              title="Curriculum Study Map"
-            >
-              <PanelRight size={14} />
-              <span className="hidden xl:inline">Curriculum</span>
-            </button>
-          </div>
-        </header>
-
         {/* ─── Mode Content Area ─── */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden relative">
 
           {/* Left Docked Artifact Viewer (if configured to dock left) */}
           {artifactViewerOpen && artifactDockSide === 'left' && (
-            <div className={`${artifactExpanded ? 'w-3/5' : 'w-[480px]'} h-full border-r border-slate-200 bg-white shadow-xl transition-all duration-300 z-10 flex flex-col`}>
+            <div className={`${artifactExpanded ? 'w-3/5' : 'w-[480px]'} h-full border-r border-slate-200 bg-white shadow-xl transition-all duration-300 z-30 flex flex-col`}>
               {renderArtifactPanel()}
             </div>
           )}
 
           {/* ─── Central Active Workspace View ─── */}
           <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+
+            {/* ─── Top Header & Controls (Floating Translucent Ambient Bar like Chatbox) ─── */}
+            <header className="absolute top-0 inset-x-0 pt-3.5 pb-6 px-4 sm:px-6 bg-transparent flex items-center justify-between gap-3 flex-shrink-0 z-20 pointer-events-none floating-header-gradient">
+              {/* Left Course / Document Pill */}
+              <div className="flex items-center gap-2 pointer-events-auto shrink-0 max-w-[28%] sm:max-w-[30%]">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 border border-slate-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.04)] backdrop-blur-md min-w-0">
+                  <button
+                    onClick={() => setWorkspaceOpen(true)}
+                    className="text-slate-500 hover:text-slate-900 transition flex items-center gap-1.5 text-xs font-medium cursor-pointer shrink-0"
+                    title="Open Workspaces & Courses"
+                  >
+                    <PanelLeft size={14} />
+                    <span className="hidden md:inline">Courses</span>
+                  </button>
+
+                  <div className="h-3.5 w-[1px] bg-slate-200 shrink-0" />
+
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-xs font-medium text-slate-700 font-sans truncate max-w-[120px] sm:max-w-[180px] md:max-w-[220px]" title={documentName ? documentName : activeSubject}>
+                      {documentName ? documentName : activeSubject}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mode Switcher Tabs (Individual Centered Floating Pills with Gap) */}
+              <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 sm:gap-2 pointer-events-auto z-10">
+                <button
+                  onClick={() => setActiveTab('chat')}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md ${activeTab === 'chat'
+                    ? 'bg-white text-slate-900 font-bold border border-slate-300 shadow-sm'
+                    : 'bg-white/85 text-slate-600 hover:text-slate-900 hover:bg-white border border-slate-200/80 shadow-2xs'
+                    }`}
+                >
+                  <BookOpen size={13} className={activeTab === 'chat' ? 'text-slate-900' : 'text-slate-500'} />
+                  <span className="hidden sm:inline">Tutor Chat</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('normal')}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md ${activeTab === 'normal'
+                    ? 'bg-white text-slate-900 font-bold border border-slate-300 shadow-sm'
+                    : 'bg-white/85 text-slate-600 hover:text-slate-900 hover:bg-white border border-slate-200/80 shadow-2xs'
+                    }`}
+                >
+                  <Sparkles size={13} className={activeTab === 'normal' ? 'text-slate-900' : 'text-slate-500'} />
+                  <span className="hidden sm:inline">Normal Mode</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('teacher')}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md ${activeTab === 'teacher'
+                    ? 'bg-white text-slate-900 font-bold border border-slate-300 shadow-sm'
+                    : 'bg-white/85 text-slate-600 hover:text-slate-900 hover:bg-white border border-slate-200/80 shadow-2xs'
+                    }`}
+                >
+                  <GraduationCap size={13} className={activeTab === 'teacher' ? 'text-slate-900' : 'text-slate-500'} />
+                  <span className="hidden sm:inline">Teacher Mode</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('exam')}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md ${activeTab === 'exam'
+                    ? 'bg-white text-slate-900 font-bold border border-slate-300 shadow-sm'
+                    : 'bg-white/85 text-slate-600 hover:text-slate-900 hover:bg-white border border-slate-200/80 shadow-2xs'
+                    }`}
+                >
+                  <Award size={13} className={activeTab === 'exam' ? 'text-slate-900' : 'text-slate-500'} />
+                  <span className="hidden sm:inline">Topic Exam</span>
+                </button>
+              </div>
+
+              {/* Right Action Controls (Floating Pill) */}
+              <div className="flex items-center gap-2 pointer-events-auto shrink-0">
+                <button
+                  onClick={() => setStudyMapOpen(!studyMapOpen)}
+                  className={`px-3 py-1.5 rounded-full border transition text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-[0_2px_12px_rgba(0,0,0,0.04)] backdrop-blur-md ${studyMapOpen
+                    ? 'bg-slate-100 text-slate-900 border-slate-300'
+                    : 'bg-white/95 text-slate-700 hover:text-slate-900 hover:bg-slate-50 border-slate-200/80'
+                    }`}
+                  title="Curriculum Study Map"
+                >
+                  <PanelRight size={14} />
+                  <span className="hidden xl:inline">Curriculum</span>
+                </button>
+              </div>
+            </header>
 
             {/* TAB 1: GROUNDED TUTOR CHAT (IndTutor Cognitive Minimalist Experience) */}
             {activeTab === 'chat' && (
@@ -1080,10 +1078,10 @@ export default function LearnPage() {
                 <div
                   ref={chatScrollRef}
                   onScroll={handleChatScroll}
-                  className="flex-1 overflow-y-auto p-4 sm:p-8 pb-36"
+                  className="flex-1 overflow-y-auto px-4 sm:px-8 pt-24 sm:pt-28 pb-36"
                 >
                   {messages.length === 0 && !isAgentThinking && (
-                    <div className="flex flex-col items-center justify-center min-h-[50vh] text-center max-w-lg mx-auto">
+                    <div className="flex flex-col items-center justify-center min-h-[50vh] text-center max-w-lg mx-auto pt-6">
                       <div className="w-14 h-14 rounded-2xl bg-white border border-slate-200 text-slate-800 flex items-center justify-center mb-4 shadow-sm">
                         <BookOpen size={24} className="text-slate-800" />
                       </div>
@@ -1095,7 +1093,7 @@ export default function LearnPage() {
                   )}
 
                   {(messages.length > 0 || isAgentThinking) && (
-                    <div className="max-w-3xl mx-auto w-full flex flex-col gap-6">
+                    <div className="max-w-3xl mx-auto w-full flex flex-col gap-6 pt-2 sm:pt-4">
                       {messages.map((msg) => {
                         const isUser = msg.role === 'user'
                         const isThoughtExpanded = expandedThoughtIds[msg.id] ?? false
@@ -1181,10 +1179,10 @@ export default function LearnPage() {
                                           <span
                                             key={wIdx}
                                             className={`inline-block mr-1.5 transition-all duration-150 ${isCurrent
-                                                ? 'bg-amber-300 text-slate-950 font-bold px-1.5 py-0.5 rounded-md ring-2 ring-amber-400/60 scale-105 shadow-xs'
-                                                : isPast
-                                                  ? 'text-slate-900 font-medium'
-                                                  : 'text-slate-400 opacity-75'
+                                              ? 'bg-amber-300 text-slate-950 font-bold px-1.5 py-0.5 rounded-md ring-2 ring-amber-400/60 scale-105 shadow-xs'
+                                              : isPast
+                                                ? 'text-slate-900 font-medium'
+                                                : 'text-slate-400 opacity-75'
                                               }`}
                                           >
                                             {word}
@@ -1425,8 +1423,8 @@ export default function LearnPage() {
                         <button
                           onClick={handleToggleMic}
                           className={`w-8 h-8 rounded-full flex items-center justify-center transition shrink-0 cursor-pointer ${isListeningVoice
-                              ? 'bg-red-500 text-white animate-pulse'
-                              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                            ? 'bg-red-500 text-white animate-pulse'
+                            : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
                             }`}
                           title="Voice input"
                         >
@@ -1441,7 +1439,7 @@ export default function LearnPage() {
 
             {/* TAB 2: NORMAL MODE (4-STEP CORE IDEA) */}
             {activeTab === 'normal' && (
-              <div className="flex-1 overflow-y-auto p-6">
+              <div className="flex-1 overflow-y-auto p-6 pt-28">
                 <div className="max-w-3xl mx-auto space-y-6">
                   {/* Topic Title Header */}
                   <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between">
@@ -1479,8 +1477,8 @@ export default function LearnPage() {
                             key={idx}
                             onClick={() => setCoreIdeaStep(idx)}
                             className={`p-3 rounded-2xl text-xs font-medium transition text-left border cursor-pointer ${coreIdeaStep === idx
-                                ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80'
+                              ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                              : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80'
                               }`}
                           >
                             <span className={`block learn-caption ${coreIdeaStep === idx ? 'text-slate-300' : 'text-slate-400'}`}>
@@ -1616,7 +1614,7 @@ export default function LearnPage() {
 
             {/* TAB 3: TEACHER MODE (SSE STREAMED LECTURE) */}
             {activeTab === 'teacher' && (
-              <div className="flex-1 overflow-y-auto p-6">
+              <div className="flex-1 overflow-y-auto p-6 pt-28">
                 <div className="max-w-3xl mx-auto space-y-6">
                   {/* Lecture Header */}
                   <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between">
@@ -1703,7 +1701,7 @@ export default function LearnPage() {
 
             {/* TAB 4: TOPIC MASTERY EXAM ENGINE */}
             {activeTab === 'exam' && (
-              <div className="flex-1 overflow-y-auto p-6">
+              <div className="flex-1 overflow-y-auto p-6 pt-28">
                 <div className="max-w-3xl mx-auto space-y-6">
                   {/* Exam Header */}
                   <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between">
@@ -1823,8 +1821,8 @@ export default function LearnPage() {
                                     key={oIdx}
                                     onClick={() => setExamAnswers({ ...examAnswers, [q.id]: opt })}
                                     className={`w-full text-left p-3.5 rounded-xl text-xs font-medium transition border cursor-pointer ${isSelected
-                                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                                        : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                                      ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
                                       }`}
                                   >
                                     {opt}
@@ -1885,7 +1883,7 @@ export default function LearnPage() {
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2">
                   <BookOpen size={15} className="text-slate-700" />
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Curriculum Roadmap</h3>
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">FOCUS</h3>
                 </div>
                 <button
                   onClick={() => setStudyMapOpen(false)}
@@ -1913,29 +1911,16 @@ export default function LearnPage() {
                           if (activeTab === 'exam') handleFetchExam(t)
                         }}
                         className={`p-3.5 rounded-2xl cursor-pointer transition border text-left ${isSelected
-                            ? 'bg-slate-100/90 border-slate-300/90 text-slate-900 shadow-xs'
-                            : 'bg-white hover:bg-slate-50 border-slate-200/80 text-slate-800 shadow-xs'
+                          ? 'bg-slate-100/90 border-slate-300/90 text-slate-900 shadow-xs'
+                          : 'bg-white hover:bg-slate-50 border-slate-200/80 text-slate-800 shadow-xs'
                           }`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="learn-caption font-bold text-slate-500">Topic {idx + 1}</span>
-                          <span className={`learn-caption font-semibold px-2 py-0.5 rounded-full ${isSelected
-                              ? 'bg-white text-slate-800 border border-slate-300/80 shadow-xs'
-                              : t.difficulty === 'Beginner'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80'
-                                : t.difficulty === 'Intermediate'
-                                  ? 'bg-amber-50 text-amber-700 border border-amber-200/80'
-                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
-                            }`}>
-                            {t.difficulty}
-                          </span>
+                          <span className={`text-[11px] ${isSelected ? 'text-slate-900 font-bold' : 'text-slate-500 font-medium'}`}>Select →</span>
                         </div>
-                        <h4 className="text-xs font-bold line-clamp-1">{t.title}</h4>
+                        <h4 className="text-xs font-bold line-clamp-1 text-slate-900">{t.title}</h4>
                         <p className="learn-caption line-clamp-2 mt-0.5 text-slate-500">{t.summary}</p>
-                        <div className="mt-2 learn-caption font-semibold flex items-center justify-between text-slate-400">
-                          <span>Est: {t.estimated_study_time}</span>
-                          <span className={isSelected ? 'text-slate-900 font-bold' : 'text-slate-700 font-semibold'}>Select →</span>
-                        </div>
                       </div>
                     )
                   })
