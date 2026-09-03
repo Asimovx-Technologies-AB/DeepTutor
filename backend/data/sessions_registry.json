@@ -1,13 +1,24 @@
 [
   {
-    "id": "session_2370324316",
+    "id": "session_6826437486",
     "subject": "Machine Learning",
-    "title": "Ml Algorithams Study Room",
-    "document_name": "ml algorithams.pdf",
+    "title": "Class-10-Geography Study Room",
+    "document_name": "Class-10-Geography.pdf",
     "status": "text_ready",
     "topic_count": 7,
-    "message_count": 8,
+    "message_count": 4,
+    "created_at": "2026-09-03T08:34:55.765547+00:00",
+    "last_active": "2026-09-03T08:53:40.981444+00:00"
+  },
+  {
+    "id": "session_2370324316",
+    "subject": "Machine Learning",
+    "title": "Class-10-Geography Study Room",
+    "document_name": "Class-10-Geography.pdf",
+    "status": "text_ready",
+    "topic_count": 7,
+    "message_count": 10,
     "created_at": "2026-09-03T07:36:27.590182+00:00",
-    "last_active": "2026-09-03T07:48:02.047221+00:00"
+    "last_active": "2026-09-03T08:34:46.648494+00:00"
   }
 ]

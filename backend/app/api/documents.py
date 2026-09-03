@@ -84,6 +84,9 @@ async def _run_indexing(doc_id: str, section_id: str, file_path: str, user_id: s
             chunk_count=len(doc_record.chunks) if doc_record else 0,
             key_topics=[f"__subject__:{detected_subject}", *topic_titles],
         )
+
+        # Dispatch Background Path: Stage 2 (Table) & Stage 3 (Image/VLM) Enrichment
+        asyncio.create_task(doc_processor.run_background_enrichment(doc_id))
     except Exception as e:
         print(f"[documents] Indexing error for {doc_id}: {e}")
         _indexing_status[doc_id] = {"status": "error", "progress": 0, "error": str(e), "stats": {}}

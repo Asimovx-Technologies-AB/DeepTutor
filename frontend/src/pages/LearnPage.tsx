@@ -214,7 +214,7 @@ export default function LearnPage() {
             setActiveSessionId(r.data.id)
             setSessions([r.data])
           }
-        }).catch(() => {})
+        }).catch(() => { })
       }
     } catch (err) {
       console.error('Failed to load study sessions:', err)
@@ -277,7 +277,7 @@ export default function LearnPage() {
     const uid = user?.id || 'default-user'
     studyApi.getMemory(uid).then((res) => {
       setStudentMemory(res.data)
-    }).catch(() => {})
+    }).catch(() => { })
   }, [user?.id])
 
   // ─── 4. Document Ingestion Handler ───
@@ -586,7 +586,7 @@ export default function LearnPage() {
       onToken: (token) => {
         setTeacherLectureText((prev) => prev + token)
       },
-      onPhaseEnd: () => {},
+      onPhaseEnd: () => { },
       onDone: () => {
         setIsTeacherStreaming(false)
         setCurrentArtifactMarkdown(
@@ -857,7 +857,7 @@ export default function LearnPage() {
                   {isUploading && (
                     <div className="mt-3">
                       <div className="flex items-center justify-between learn-caption font-bold text-slate-700 mb-1">
-                        <span>Parallel OCR & Indexing...</span>
+                        <span>{uploadSubject} - Processing...</span>
                         <span>{uploadProgress}%</span>
                       </div>
                       <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
@@ -885,11 +885,10 @@ export default function LearnPage() {
                       <div
                         key={s.id}
                         onClick={() => handleSelectSession(s.id)}
-                        className={`group relative p-3.5 rounded-2xl cursor-pointer transition border ${
-                          isActive
+                        className={`group relative p-3.5 rounded-2xl cursor-pointer transition border ${isActive
                             ? 'bg-slate-100/90 border-slate-300/90 text-slate-900 shadow-xs font-semibold'
                             : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80 shadow-xs'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-start justify-between">
                           <div className="pr-4 overflow-hidden">
@@ -943,7 +942,7 @@ export default function LearnPage() {
       <div className="flex-1 flex flex-col h-full overflow-hidden">
 
         {/* ─── Top Header & Controls (Floating Translucent "Scholarly Ambient" Bar) ─── */}
-        <header className="py-3 px-6 bg-transparent flex items-center justify-between flex-shrink-0 z-20 pointer-events-none floating-header-gradient">
+        <header className="relative py-3 px-6 bg-transparent flex items-center justify-between flex-shrink-0 z-20 pointer-events-none floating-header-gradient">
           <div className="flex items-center gap-3 pointer-events-auto">
             <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-white/95 border border-slate-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.04)] backdrop-blur-md">
               <button
@@ -969,14 +968,13 @@ export default function LearnPage() {
           </div>
 
           {/* Mode Switcher Tabs (Unified Floating Segmented Pill) */}
-          <div className="flex items-center gap-1 p-1 rounded-full bg-slate-100/80 border border-slate-200/70 shadow-[0_2px_12px_rgba(0,0,0,0.03)] backdrop-blur-md pointer-events-auto">
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 p-1 rounded-full bg-slate-100/80 border border-slate-200/70 shadow-[0_2px_12px_rgba(0,0,0,0.03)] backdrop-blur-md pointer-events-auto">
             <button
               onClick={() => setActiveTab('chat')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'chat'
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'chat'
                   ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-              }`}
+                }`}
             >
               <BookOpen size={13} />
               <span className="hidden md:inline">Tutor Chat</span>
@@ -984,11 +982,10 @@ export default function LearnPage() {
 
             <button
               onClick={() => setActiveTab('normal')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'normal'
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'normal'
                   ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-              }`}
+                }`}
             >
               <Sparkles size={13} />
               <span className="hidden md:inline">Normal Mode</span>
@@ -996,11 +993,10 @@ export default function LearnPage() {
 
             <button
               onClick={() => setActiveTab('teacher')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'teacher'
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'teacher'
                   ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-              }`}
+                }`}
             >
               <GraduationCap size={13} />
               <span className="hidden md:inline">Teacher Mode</span>
@@ -1008,11 +1004,10 @@ export default function LearnPage() {
 
             <button
               onClick={() => setActiveTab('exam')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'exam'
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'exam'
                   ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-              }`}
+                }`}
             >
               <Award size={13} />
               <span className="hidden md:inline">Topic Exam</span>
@@ -1023,11 +1018,10 @@ export default function LearnPage() {
           <div className="flex items-center gap-2 pointer-events-auto">
             <button
               onClick={() => setStudyMapOpen(!studyMapOpen)}
-              className={`px-3.5 py-1.5 rounded-full border transition text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-[0_2px_12px_rgba(0,0,0,0.04)] backdrop-blur-md ${
-                studyMapOpen
+              className={`px-3.5 py-1.5 rounded-full border transition text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-[0_2px_12px_rgba(0,0,0,0.04)] backdrop-blur-md ${studyMapOpen
                   ? 'bg-slate-100 text-slate-900 border-slate-300'
                   : 'bg-white/95 text-slate-700 hover:text-slate-900 hover:bg-slate-50 border-slate-200/80'
-              }`}
+                }`}
               title="Curriculum Study Map"
             >
               <PanelRight size={14} />
@@ -1058,7 +1052,7 @@ export default function LearnPage() {
                   onScroll={handleChatScroll}
                   className="flex-1 overflow-y-auto p-4 sm:p-8 pb-36"
                 >
-                  {messages.length === 0 ? (
+                  {messages.length === 0 && !isAgentThinking && (
                     <div className="flex flex-col items-center justify-center min-h-[50vh] text-center max-w-lg mx-auto">
                       <div className="w-14 h-14 rounded-2xl bg-white border border-slate-200 text-slate-800 flex items-center justify-center mb-4 shadow-sm">
                         <BookOpen size={24} className="text-slate-800" />
@@ -1084,252 +1078,251 @@ export default function LearnPage() {
                         ))}
                       </div>
                     </div>
-                  ) : (
+                  )}
+
+                  {(messages.length > 0 || isAgentThinking) && (
                     <div className="max-w-3xl mx-auto w-full flex flex-col gap-6">
                       {messages.map((msg) => {
                         const isUser = msg.role === 'user'
-                      const isThoughtExpanded = expandedThoughtIds[msg.id] ?? false
-                      const isStudyNotes = !isUser && (
-                        Boolean(msg.export_ready) ||
-                        msg.response_format === 'study_notes' ||
-                        msg.format === 'study_notes' ||
-                        (Boolean(msg.text) && msg.text.startsWith('# ') && msg.text.toLowerCase().includes('study notes'))
-                      )
+                        const isThoughtExpanded = expandedThoughtIds[msg.id] ?? false
+                        const isStudyNotes = !isUser && (
+                          Boolean(msg.export_ready) ||
+                          msg.response_format === 'study_notes' ||
+                          msg.format === 'study_notes' ||
+                          (Boolean(msg.text) && msg.text.startsWith('# ') && msg.text.toLowerCase().includes('study notes'))
+                        )
 
-                      return (
-                        <motion.div
-                          key={msg.id}
-                          initial={{ opacity: 0, y: 5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.25, ease: 'easeOut' }}
-                          className={`flex flex-col ${isUser ? 'items-end' : 'items-start w-full'}`}
-                        >
-                          {/* ─── USER MESSAGE BUBBLE (Right-aligned, white card with tail) ─── */}
-                          {isUser ? (
-                            <div className="bg-[#FFFFFF] border-[1.5px] border-[#E5E7EB] rounded-[14px_14px_4px_14px] px-4 py-2.5 max-w-[80%] shadow-[0_2px_8px_rgba(27,35,64,0.04)] chat-reading text-[#000000] font-serif">
-                              {msg.text}
-                            </div>
-                          ) : (
-                            /* ─── AI MESSAGE (Full-width, sits directly on paper bg) ─── */
-                            <div className="w-full max-w-3xl flex flex-col items-start text-left">
-                              {/* Optional Thought Process Disclosure */}
-                              {msg.thought_process && (
-                                <div className="mb-2.5 w-full rounded-xl bg-slate-50/90 border border-slate-200/70 overflow-hidden font-sans">
-                                  <button
-                                    onClick={() =>
-                                      setExpandedThoughtIds((p) => ({ ...p, [msg.id]: !isThoughtExpanded }))
-                                    }
-                                    className="w-full flex items-center justify-between px-3 py-1.5 learn-caption font-semibold text-slate-500 hover:text-slate-800 transition cursor-pointer"
-                                  >
-                                    <span className="flex items-center gap-1.5">
-                                      <Brain size={13} className="text-slate-600" />
-                                      IndTutor Grounding Pass & Reasoning
-                                    </span>
-                                    {isThoughtExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                                  </button>
-                                  {isThoughtExpanded && (
-                                    <div className="px-3 pb-2.5 pt-1 text-xs text-slate-600 font-mono border-t border-slate-100 bg-white/70">
-                                      {msg.thought_process}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* EQUALIZER INDICATOR (when reading aloud) */}
-                              {speakingMsgId === msg.id && (
-                                <div className="flex items-center gap-2 mb-2 px-2 py-1 rounded-md bg-slate-100/90 border border-slate-200/60 w-fit">
-                                  <div className="flex items-end gap-[3px] h-3.5 px-0.5">
-                                    <span className="w-[2px] bg-[#334155] rounded-full animate-audio-bar-1" />
-                                    <span className="w-[2px] bg-[#334155] rounded-full animate-audio-bar-2" />
-                                    <span className="w-[2px] bg-[#334155] rounded-full animate-audio-bar-3" />
+                        return (
+                          <motion.div
+                            key={msg.id}
+                            initial={{ opacity: 0, y: 5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.25, ease: 'easeOut' }}
+                            className={`flex flex-col ${isUser ? 'items-end' : 'items-start w-full'}`}
+                          >
+                            {/* ─── USER MESSAGE BUBBLE (Right-aligned, white card with tail) ─── */}
+                            {isUser ? (
+                              <div className="bg-[#FFFFFF] border-[1.5px] border-[#E5E7EB] rounded-[14px_14px_4px_14px] px-4 py-2.5 max-w-[80%] shadow-[0_2px_8px_rgba(27,35,64,0.04)] chat-reading text-[#000000] font-serif">
+                                {msg.text}
+                              </div>
+                            ) : (
+                              /* ─── AI MESSAGE (Full-width, sits directly on paper bg) ─── */
+                              <div className="w-full max-w-3xl flex flex-col items-start text-left">
+                                {/* Optional Thought Process Disclosure */}
+                                {msg.thought_process && (
+                                  <div className="mb-2.5 w-full rounded-xl bg-slate-50/90 border border-slate-200/70 overflow-hidden font-sans">
+                                    <button
+                                      onClick={() =>
+                                        setExpandedThoughtIds((p) => ({ ...p, [msg.id]: !isThoughtExpanded }))
+                                      }
+                                      className="w-full flex items-center justify-between px-3 py-1.5 learn-caption font-semibold text-slate-500 hover:text-slate-800 transition cursor-pointer"
+                                    >
+                                      <span className="flex items-center gap-1.5">
+                                        <Brain size={13} className="text-slate-600" />
+                                        IndTutor Grounding Pass & Reasoning
+                                      </span>
+                                      {isThoughtExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                                    </button>
+                                    {isThoughtExpanded && (
+                                      <div className="px-3 pb-2.5 pt-1 text-xs text-slate-600 font-mono border-t border-slate-100 bg-white/70">
+                                        {msg.thought_process}
+                                      </div>
+                                    )}
                                   </div>
-                                  <span className="learn-caption font-semibold text-slate-600 font-sans">
-                                    Reading aloud...
-                                  </span>
+                                )}
+
+                                {/* EQUALIZER INDICATOR (when reading aloud) */}
+                                {speakingMsgId === msg.id && (
+                                  <div className="flex items-center gap-2 mb-2 px-2 py-1 rounded-md bg-slate-100/90 border border-slate-200/60 w-fit">
+                                    <div className="flex items-end gap-[3px] h-3.5 px-0.5">
+                                      <span className="w-[2px] bg-[#334155] rounded-full animate-audio-bar-1" />
+                                      <span className="w-[2px] bg-[#334155] rounded-full animate-audio-bar-2" />
+                                      <span className="w-[2px] bg-[#334155] rounded-full animate-audio-bar-3" />
+                                    </div>
+                                    <span className="learn-caption font-semibold text-slate-600 font-sans">
+                                      Reading aloud...
+                                    </span>
+                                    <button
+                                      onClick={() => handleToggleVoice(msg.id, msg.text)}
+                                      className="learn-caption text-slate-400 hover:text-slate-800 ml-1 underline cursor-pointer font-sans"
+                                    >
+                                      Stop
+                                    </button>
+                                  </div>
+                                )}
+
+                                {/* Message Content: Word-by-Word Highlight OR Study Notes OR Editorial Markdown */}
+                                {speakingMsgId === msg.id ? (
+                                  /* WORD-BY-WORD HIGHLIGHT MODE */
+                                  <div className="markdown-content text-slate-900 leading-[1.85] flex flex-wrap gap-y-1 items-baseline w-full">
+                                    {msg.text
+                                      .replace(/```[\s\S]*?```/g, '')
+                                      .replace(/[#*`_~>\[\]\(\)]/g, ' ')
+                                      .split(/\s+/)
+                                      .filter(Boolean)
+                                      .map((word, wIdx) => {
+                                        const isCurrent = wIdx === speakingWordIndex
+                                        const isPast = speakingWordIndex !== null && wIdx < speakingWordIndex
+                                        return (
+                                          <span
+                                            key={wIdx}
+                                            className={`inline-block mr-1.5 transition-all duration-150 ${isCurrent
+                                                ? 'bg-amber-300 text-slate-950 font-bold px-1.5 py-0.5 rounded-md ring-2 ring-amber-400/60 scale-105 shadow-xs'
+                                                : isPast
+                                                  ? 'text-slate-900 font-medium'
+                                                  : 'text-slate-400 opacity-75'
+                                              }`}
+                                          >
+                                            {word}
+                                          </span>
+                                        )
+                                      })}
+                                  </div>
+                                ) : isStudyNotes ? (
+                                  /* Study Notes Response (Matching Claude design) */
+                                  <div className="w-full">
+                                    <p className="text-sm leading-relaxed text-slate-700 mb-2.5 font-serif">
+                                      I have prepared the structured study notes reference document for{' '}
+                                      <strong className="text-slate-900 font-semibold">
+                                        {extractDocTitle(msg.text) || `${activeSubject || 'Study'} notes`}
+                                      </strong>
+                                      . You can view the full formatted document in the Markdown viewer on the right or download the{' '}
+                                      <code className="text-xs font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-700">.md</code> file below.
+                                    </p>
+
+                                    <StudyNotesCard
+                                      markdown={msg.text}
+                                      title={extractDocTitle(msg.text) || `${activeSubject || 'Study'} notes`}
+                                      className="mb-2"
+                                      onOpenViewer={() => {
+                                        setCurrentArtifactMarkdown(msg.text)
+                                        setArtifactViewerOpen(true)
+                                        setArtifactDockSide('right')
+                                        setStudyMapOpen(false)
+                                      }}
+                                    />
+
+                                    <button
+                                      onClick={() => setExpandedInlineNotes((p) => ({ ...p, [msg.id]: !p[msg.id] }))}
+                                      className="learn-caption font-semibold text-slate-400 hover:text-slate-700 transition flex items-center gap-1 mt-1 cursor-pointer font-sans"
+                                    >
+                                      {expandedInlineNotes[msg.id] ? (
+                                        <>Collapse inline preview <ChevronDown size={12} /></>
+                                      ) : (
+                                        <>Preview full notes in chat <ChevronRight size={12} /></>
+                                      )}
+                                    </button>
+
+                                    {expandedInlineNotes[msg.id] && (
+                                      <div className="mt-3 pt-3 border-t border-slate-200/80 markdown-content">
+                                        <ReactMarkdown
+                                          remarkPlugins={[remarkGfm, remarkMath]}
+                                          rehypePlugins={[rehypeKatex]}
+                                          components={customMarkdownComponents}
+                                        >
+                                          {msg.text}
+                                        </ReactMarkdown>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  /* Standard Editorial Markdown Render */
+                                  <div className="w-full markdown-content">
+                                    <ReactMarkdown
+                                      remarkPlugins={[remarkGfm, remarkMath]}
+                                      rehypePlugins={[rehypeKatex]}
+                                      components={customMarkdownComponents}
+                                    >
+                                      {msg.text}
+                                    </ReactMarkdown>
+                                  </div>
+                                )}
+
+                                {/* Grounding Source Citation Badges */}
+                                {msg.sources && msg.sources.length > 0 && (
+                                  <div className="mt-3 pt-2.5 border-t border-slate-200/60 flex flex-wrap items-center gap-1.5 w-full">
+                                    <span className="learn-caption font-bold text-slate-400 uppercase tracking-wider font-sans">
+                                      Grounding:
+                                    </span>
+                                    {msg.sources.map((src, idx) => (
+                                      <span
+                                        key={idx}
+                                        className="learn-caption font-medium px-2 py-0.5 rounded bg-white text-slate-600 border border-slate-200 font-sans"
+                                        title={src.snippet}
+                                      >
+                                        Page {src.page} · {src.source_type}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Action Footer: Listen + Feedback buttons */}
+                                <div className="mt-3 flex items-center gap-2 chat-reading font-serif text-slate-400">
                                   <button
                                     onClick={() => handleToggleVoice(msg.id, msg.text)}
-                                    className="learn-caption text-slate-400 hover:text-slate-800 ml-1 underline cursor-pointer font-sans"
+                                    className={`flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-100 transition cursor-pointer ${speakingMsgId === msg.id ? 'text-indigo-600' : 'hover:text-slate-600'
+                                      }`}
+                                    title="Read aloud"
                                   >
-                                    Stop
+                                    <Volume2 size={15} />
+                                    <span>Listen</span>
                                   </button>
-                                </div>
-                              )}
 
-                              {/* Message Content: Word-by-Word Highlight OR Study Notes OR Editorial Markdown */}
-                              {speakingMsgId === msg.id ? (
-                                /* WORD-BY-WORD HIGHLIGHT MODE */
-                                <div className="markdown-content text-slate-900 leading-[1.85] flex flex-wrap gap-y-1 items-baseline w-full">
-                                  {msg.text
-                                    .replace(/```[\s\S]*?```/g, '')
-                                    .replace(/[#*`_~>\[\]\(\)]/g, ' ')
-                                    .split(/\s+/)
-                                    .filter(Boolean)
-                                    .map((word, wIdx) => {
-                                      const isCurrent = wIdx === speakingWordIndex
-                                      const isPast = speakingWordIndex !== null && wIdx < speakingWordIndex
-                                      return (
-                                        <span
-                                          key={wIdx}
-                                          className={`inline-block mr-1.5 transition-all duration-150 ${
-                                            isCurrent
-                                              ? 'bg-amber-300 text-slate-950 font-bold px-1.5 py-0.5 rounded-md ring-2 ring-amber-400/60 scale-105 shadow-xs'
-                                              : isPast
-                                              ? 'text-slate-900 font-medium'
-                                              : 'text-slate-400 opacity-75'
-                                          }`}
-                                        >
-                                          {word}
-                                        </span>
-                                      )
-                                    })}
-                                </div>
-                              ) : isStudyNotes ? (
-                                /* Study Notes Response (Matching Claude design) */
-                                <div className="w-full">
-                                  <p className="text-sm leading-relaxed text-slate-700 mb-2.5 font-serif">
-                                    I have prepared the structured study notes reference document for{' '}
-                                    <strong className="text-slate-900 font-semibold">
-                                      {extractDocTitle(msg.text) || `${activeSubject || 'Study'} notes`}
-                                    </strong>
-                                    . You can view the full formatted document in the Markdown viewer on the right or download the{' '}
-                                    <code className="text-xs font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-700">.md</code> file below.
-                                  </p>
-
-                                  <StudyNotesCard
-                                    markdown={msg.text}
-                                    title={extractDocTitle(msg.text) || `${activeSubject || 'Study'} notes`}
-                                    className="mb-2"
-                                    onOpenViewer={() => {
-                                      setCurrentArtifactMarkdown(msg.text)
-                                      setArtifactViewerOpen(true)
-                                      setArtifactDockSide('right')
-                                      setStudyMapOpen(false)
-                                    }}
-                                  />
+                                  <span className="text-slate-200">|</span>
 
                                   <button
-                                    onClick={() => setExpandedInlineNotes((p) => ({ ...p, [msg.id]: !p[msg.id] }))}
-                                    className="learn-caption font-semibold text-slate-400 hover:text-slate-700 transition flex items-center gap-1 mt-1 cursor-pointer font-sans"
+                                    onClick={() =>
+                                      setFeedbackRatings((p) => ({ ...p, [msg.id]: p[msg.id] === 'good' ? null : 'good' }))
+                                    }
+                                    className={`flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-100 transition cursor-pointer ${feedbackRatings[msg.id] === 'good' ? 'text-emerald-700 bg-emerald-50' : 'hover:text-slate-600'
+                                      }`}
+                                    title="Mark as helpful"
                                   >
-                                    {expandedInlineNotes[msg.id] ? (
-                                      <>Collapse inline preview <ChevronDown size={12} /></>
-                                    ) : (
-                                      <>Preview full notes in chat <ChevronRight size={12} /></>
-                                    )}
+                                    <ThumbsUp size={15} />
+                                    <span>Good</span>
                                   </button>
 
-                                  {expandedInlineNotes[msg.id] && (
-                                    <div className="mt-3 pt-3 border-t border-slate-200/80 markdown-content">
-                                      <ReactMarkdown
-                                        remarkPlugins={[remarkGfm, remarkMath]}
-                                        rehypePlugins={[rehypeKatex]}
-                                        components={customMarkdownComponents}
-                                      >
-                                        {msg.text}
-                                      </ReactMarkdown>
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                /* Standard Editorial Markdown Render */
-                                <div className="w-full markdown-content">
-                                  <ReactMarkdown
-                                    remarkPlugins={[remarkGfm, remarkMath]}
-                                    rehypePlugins={[rehypeKatex]}
-                                    components={customMarkdownComponents}
+                                  <span className="text-slate-200">|</span>
+
+                                  <button
+                                    onClick={() => {
+                                      setFeedbackRatings((p) => ({ ...p, [msg.id]: p[msg.id] === 'easier' ? null : 'easier' }))
+                                      handleSendMessage('Please explain that more simply with an everyday analogy and clearer terms.')
+                                    }}
+                                    className={`flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-100 transition cursor-pointer ${feedbackRatings[msg.id] === 'easier' ? 'text-amber-700 bg-amber-50' : 'hover:text-slate-600'
+                                      }`}
+                                    title="Simplify this explanation"
                                   >
-                                    {msg.text}
-                                  </ReactMarkdown>
+                                    <ChevronDown size={15} />
+                                    <span>Make it easier</span>
+                                  </button>
                                 </div>
-                              )}
-
-                              {/* Grounding Source Citation Badges */}
-                              {msg.sources && msg.sources.length > 0 && (
-                                <div className="mt-3 pt-2.5 border-t border-slate-200/60 flex flex-wrap items-center gap-1.5 w-full">
-                                  <span className="learn-caption font-bold text-slate-400 uppercase tracking-wider font-sans">
-                                    Grounding:
-                                  </span>
-                                  {msg.sources.map((src, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="learn-caption font-medium px-2 py-0.5 rounded bg-white text-slate-600 border border-slate-200 font-sans"
-                                      title={src.snippet}
-                                    >
-                                      Page {src.page} · {src.source_type}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-
-                              {/* Action Footer: Listen + Feedback buttons */}
-                              <div className="mt-2 flex items-center gap-2 learn-caption text-slate-400 font-sans">
-                                <button
-                                  onClick={() => handleToggleVoice(msg.id, msg.text)}
-                                  className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-slate-100 transition cursor-pointer ${
-                                    speakingMsgId === msg.id ? 'text-indigo-600' : 'hover:text-slate-600'
-                                  }`}
-                                  title="Read aloud"
-                                >
-                                  <Volume2 size={11} />
-                                  <span>Listen</span>
-                                </button>
-
-                                <span className="text-slate-200">|</span>
-
-                                <button
-                                  onClick={() =>
-                                    setFeedbackRatings((p) => ({ ...p, [msg.id]: p[msg.id] === 'good' ? null : 'good' }))
-                                  }
-                                  className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-slate-100 transition cursor-pointer ${
-                                    feedbackRatings[msg.id] === 'good' ? 'text-emerald-700 bg-emerald-50' : 'hover:text-slate-600'
-                                  }`}
-                                  title="Mark as helpful"
-                                >
-                                  <ThumbsUp size={11} />
-                                  <span>Good</span>
-                                </button>
-
-                                <span className="text-slate-200">|</span>
-
-                                <button
-                                  onClick={() => {
-                                    setFeedbackRatings((p) => ({ ...p, [msg.id]: p[msg.id] === 'easier' ? null : 'easier' }))
-                                    handleSendMessage('Please explain that more simply with an everyday analogy and clearer terms.')
-                                  }}
-                                  className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-slate-100 transition cursor-pointer ${
-                                    feedbackRatings[msg.id] === 'easier' ? 'text-amber-700 bg-amber-50' : 'hover:text-slate-600'
-                                  }`}
-                                  title="Simplify this explanation"
-                                >
-                                  <ChevronDown size={11} />
-                                  <span>Make it easier</span>
-                                </button>
                               </div>
-                            </div>
-                          )}
-                        </motion.div>
-                      )
-                    })
-                  )}
+                            )}
+                          </motion.div>
+                        )
+                      })}
 
-                  {/* ─── TYPING INDICATOR (AI Thinking) ─── */}
-                  {isAgentThinking && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center gap-2.5 py-2 px-1 text-slate-400"
-                    >
-                      <div className="flex items-center gap-1">
-                        <span className="w-[5px] h-[5px] rounded-full bg-slate-500 animate-dot-1" />
-                        <span className="w-[5px] h-[5px] rounded-full bg-slate-500 animate-dot-2" />
-                        <span className="w-[5px] h-[5px] rounded-full bg-slate-500 animate-dot-3" />
-                      </div>
-                      <span className="text-xs italic font-serif text-slate-400">writing...</span>
-                    </motion.div>
+                      {/* ─── TYPING INDICATOR (AI Thinking) ─── */}
+                      {isAgentThinking && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="flex items-center gap-2.5 py-2 px-1 text-slate-400"
+                        >
+                          <div className="flex items-center gap-1">
+                            <span className="w-[5px] h-[5px] rounded-full bg-slate-500 animate-dot-1" />
+                            <span className="w-[5px] h-[5px] rounded-full bg-slate-500 animate-dot-2" />
+                            <span className="w-[5px] h-[5px] rounded-full bg-slate-500 animate-dot-3" />
+                          </div>
+                          <span className="text-xs italic font-serif text-slate-400">writing...</span>
+                        </motion.div>
                       )}
                     </div>
                   )}
 
+                  {/* Spacer to push content above the floating input pill when scrolled to bottom */}
+                  <div className="h-28 shrink-0" />
                   <div ref={messagesEndRef} />
                 </div>
 
@@ -1435,11 +1428,10 @@ export default function LearnPage() {
                       ) : (
                         <button
                           onClick={handleToggleMic}
-                          className={`w-8 h-8 rounded-full flex items-center justify-center transition shrink-0 cursor-pointer ${
-                            isListeningVoice
+                          className={`w-8 h-8 rounded-full flex items-center justify-center transition shrink-0 cursor-pointer ${isListeningVoice
                               ? 'bg-red-500 text-white animate-pulse'
                               : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
-                          }`}
+                            }`}
                           title="Voice input"
                         >
                           <Mic size={17} />
@@ -1490,11 +1482,10 @@ export default function LearnPage() {
                           <button
                             key={idx}
                             onClick={() => setCoreIdeaStep(idx)}
-                            className={`p-3 rounded-2xl text-xs font-medium transition text-left border cursor-pointer ${
-                              coreIdeaStep === idx
+                            className={`p-3 rounded-2xl text-xs font-medium transition text-left border cursor-pointer ${coreIdeaStep === idx
                                 ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
                                 : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80'
-                            }`}
+                              }`}
                           >
                             <span className={`block learn-caption ${coreIdeaStep === idx ? 'text-slate-300' : 'text-slate-400'}`}>
                               Phase {idx + 1}
@@ -1772,17 +1763,15 @@ export default function LearnPage() {
                         {examEvaluation.evaluations.map((ev, idx) => (
                           <div
                             key={ev.id}
-                            className={`p-6 rounded-3xl bg-white border shadow-xs ${
-                              ev.is_correct ? 'border-emerald-200' : 'border-amber-200'
-                            }`}
+                            className={`p-6 rounded-3xl bg-white border shadow-xs ${ev.is_correct ? 'border-emerald-200' : 'border-amber-200'
+                              }`}
                           >
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-xs font-bold text-slate-500">
                                 Question {idx + 1} ({ev.type.toUpperCase()})
                               </span>
-                              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                                ev.is_correct ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'
-                              }`}>
+                              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${ev.is_correct ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'
+                                }`}>
                                 {ev.score_percentage}%
                               </span>
                             </div>
@@ -1837,11 +1826,10 @@ export default function LearnPage() {
                                   <button
                                     key={oIdx}
                                     onClick={() => setExamAnswers({ ...examAnswers, [q.id]: opt })}
-                                    className={`w-full text-left p-3.5 rounded-xl text-xs font-medium transition border cursor-pointer ${
-                                      isSelected
+                                    className={`w-full text-left p-3.5 rounded-xl text-xs font-medium transition border cursor-pointer ${isSelected
                                         ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
                                         : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                                    }`}
+                                      }`}
                                   >
                                     {opt}
                                   </button>
@@ -1928,23 +1916,21 @@ export default function LearnPage() {
                           if (activeTab === 'normal') fetchCoreIdea(t)
                           if (activeTab === 'exam') handleFetchExam(t)
                         }}
-                        className={`p-3.5 rounded-2xl cursor-pointer transition border text-left ${
-                          isSelected
+                        className={`p-3.5 rounded-2xl cursor-pointer transition border text-left ${isSelected
                             ? 'bg-slate-100/90 border-slate-300/90 text-slate-900 shadow-xs'
                             : 'bg-white hover:bg-slate-50 border-slate-200/80 text-slate-800 shadow-xs'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="learn-caption font-bold text-slate-500">Topic {idx + 1}</span>
-                          <span className={`learn-caption font-semibold px-2 py-0.5 rounded-full ${
-                            isSelected
+                          <span className={`learn-caption font-semibold px-2 py-0.5 rounded-full ${isSelected
                               ? 'bg-white text-slate-800 border border-slate-300/80 shadow-xs'
                               : t.difficulty === 'Beginner'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80'
-                              : t.difficulty === 'Intermediate'
-                              ? 'bg-amber-50 text-amber-700 border border-amber-200/80'
-                              : 'bg-slate-100 text-slate-700 border border-slate-200'
-                          }`}>
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80'
+                                : t.difficulty === 'Intermediate'
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200/80'
+                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
+                            }`}>
                             {t.difficulty}
                           </span>
                         </div>
@@ -2017,17 +2003,15 @@ export default function LearnPage() {
           <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-xl text-xs">
             <button
               onClick={() => setArtifactTab('preview')}
-              className={`px-3 py-1 rounded-lg font-bold transition ${
-                artifactTab === 'preview' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-600'
-              }`}
+              className={`px-3 py-1 rounded-lg font-bold transition ${artifactTab === 'preview' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-600'
+                }`}
             >
               Preview
             </button>
             <button
               onClick={() => setArtifactTab('raw')}
-              className={`px-3 py-1 rounded-lg font-bold transition ${
-                artifactTab === 'raw' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-600'
-              }`}
+              className={`px-3 py-1 rounded-lg font-bold transition ${artifactTab === 'raw' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-600'
+                }`}
             >
               Raw Source
             </button>
