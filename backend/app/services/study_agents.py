@@ -138,7 +138,7 @@ Return ONLY valid JSON:
         words = [w for w in re.findall(r"\w+", user_query) if len(w) > 2 and w.lower() not in ("what", "how", "why", "explain", "does", "the", "and")]
         query_noun = " ".join(words[:4]) or user_query
         is_study_notes = bool(re.search(
-            r"\b(study notes?|cheat sheet|revision notes?|study map|summari[sz]e.*as notes)\b", user_query.lower()
+            r"\b(study notes?|cheat sheet|revision notes?|study map|summari[sz]e.*as notes|create.*(?:md|\.md|markdown)\s*(?:file|doc)?|make.*(?:md|\.md|markdown)\s*(?:file|doc)?|generate.*(?:md|\.md|markdown)\s*(?:file|doc)?|(?:md|\.md|markdown)\s*(?:file|doc)?\s*(?:on|for|about))\b", user_query.lower()
         ))
         resp_format = "study_notes" if is_study_notes else ("comparison" if "compare" in user_query.lower() else "conceptual")
         return {

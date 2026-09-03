@@ -66,7 +66,7 @@ CRITICAL RULES:
 
 INTENT TYPES:
 - "EXPLANATION_REQUEST": explain / find important topics / summarize / compare / clarify doubts.
-- "STUDY_NOTES_REQUEST": student explicitly wants structured study notes, a cheat sheet, a revision summary, or a "study map" for a topic — not a single Q&A answer (e.g. "give me study notes on X", "make notes for revision", "create a cheat sheet on X", "summarize this chapter as notes").
+- "STUDY_NOTES_REQUEST": student explicitly wants structured study notes, a cheat sheet, a revision summary, a "study map", or a Markdown/MD reference file for a topic (e.g. "give me study notes on X", "make notes for revision", "create a cheat sheet on X", "create a md file on X", "make a markdown file on X", "summarize this chapter as notes").
 - "QUIZ_REQUEST": be tested/quizzed ("quiz me", "test me", "ask 5 questions").
 - "QUIZ_ANSWER": answering a previous quiz question.
 - "STUDY_PLAN_REQUEST": timetable, revision strategy, roadmap.
@@ -288,7 +288,7 @@ class QueryAnalyzerAgent:
         """Deterministic fallback used only if the LLM is unreachable after all retries."""
         lower = raw_msg.lower()
         is_study_notes = bool(re.search(
-            r"\b(study notes?|cheat sheet|revision notes?|study map|summari[sz]e.*as notes)\b", lower
+            r"\b(study notes?|cheat sheet|revision notes?|study map|summari[sz]e.*as notes|create.*(?:md|\.md|markdown)\s*(?:file|doc)?|make.*(?:md|\.md|markdown)\s*(?:file|doc)?|generate.*(?:md|\.md|markdown)\s*(?:file|doc)?|(?:md|\.md|markdown)\s*(?:file|doc)?\s*(?:on|for|about))\b", lower
         ))
         is_question = bool(re.search(
             r"\b(what|how|why|when|where|which|explain|describe|difference|types|"
@@ -301,12 +301,15 @@ class QueryAnalyzerAgent:
 
         if is_study_notes:
             clean_topic = _clean_topic_string(
-                re.sub(r"\b(give me|make|create|prepare|generate|summarize|as)?\s*(study notes?|cheat sheet|revision notes?|study map|notes?)\s*(on|for|about)?\s*", "", lower, flags=re.IGNORECASE)
+                re.sub(
+                    r"\b(give me|make|create|prepare|generate|summarize|as|write)?\s*(a\s*)?(study notes?|cheat sheet|revision notes?|study map|notes?|(?:md|\.md|markdown)\s*(?:file|doc)?)\s*(on|for|about|of)?\s*",
+                    "", lower, flags=re.IGNORECASE
+                )
             )
             topic = (clean_topic.title() if clean_topic and len(clean_topic) > 2 else current_subject)
             return QueryPlan(
                 intent="STUDY_NOTES_REQUEST",
-                reasoning="Heuristic fallback: matched explicit study-notes keywords.",
+                reasoning="Heuristic fallback: matched explicit study-notes / MD file keywords.",
                 sub_questions=[raw_msg],
                 target_topic=topic,
                 search_queries=[q for q in [topic, raw_msg] if q],

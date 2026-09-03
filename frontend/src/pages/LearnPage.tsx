@@ -13,7 +13,8 @@ import {
   ChevronRight, ArrowRight, Download, Printer, Copy, Check,
   Trash2, Plus, FileText, UploadCloud, RefreshCw, PanelLeft,
   PanelRight, Maximize2, Minimize2, Split, HelpCircle, Award,
-  Brain, FileSpreadsheet, Eye, Play, Pause, X
+  Brain, FileSpreadsheet, Eye, Play, Pause, X, ArrowUp,
+  ThumbsUp, ThumbsDown
 } from 'lucide-react'
 
 import { studyApi, streamTeacherLecture } from '../services/api'
@@ -21,7 +22,7 @@ import { exportNotesToPdf } from '../utils/pdfExport'
 import { useAuthStore } from '../stores/authStore'
 import confetti from 'canvas-confetti'
 import MermaidDiagram from '../components/MermaidDiagram'
-import StudyNotesCard from '../components/StudyNotesCard'
+import StudyNotesCard, { extractDocTitle } from '../components/StudyNotesCard'
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
@@ -122,6 +123,7 @@ export default function LearnPage() {
   const [artifactExpanded, setArtifactExpanded] = useState(false)
   const [artifactTab, setArtifactTab] = useState<'preview' | 'raw'>('preview')
   const [copiedArtifact, setCopiedArtifact] = useState(false)
+  const [expandedInlineNotes, setExpandedInlineNotes] = useState<Record<string, boolean>>({})
 
   // Active Mode Tab
   const [activeTab, setActiveTab] = useState<ActiveTab>('chat')
@@ -136,9 +138,19 @@ export default function LearnPage() {
   const [isAgentThinking, setIsAgentThinking] = useState(false)
   const [expandedThoughtIds, setExpandedThoughtIds] = useState<Record<string, boolean>>({})
 
-  // Voice Tutor
+  // Voice Tutor & Reading System (Cognitive Minimalist TTS)
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null)
+  const [speakingWordIndex, setSpeakingWordIndex] = useState<number | null>(null)
   const [isListeningVoice, setIsListeningVoice] = useState(false)
+  const ttsIntervalRef = useRef<any>(null)
+
+  // Floating Input Bar & Attachments
+  const [attachedFile, setAttachedFile] = useState<{ name: string; sizeFormatted: string } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const chatScrollRef = useRef<HTMLDivElement | null>(null)
+  const [showScrollBottom, setShowScrollBottom] = useState(false)
+  const [feedbackRatings, setFeedbackRatings] = useState<Record<string, 'good' | 'easier' | null>>({})
 
   // Normal Mode 4-Step Cards
   const [coreIdeaData, setCoreIdeaData] = useState<CoreIdeaData | null>(null)
@@ -228,6 +240,26 @@ export default function LearnPage() {
       setTopics(data.topics || [])
       if (data.topics && data.topics.length > 0) {
         setActiveTopic(data.topics[0])
+      }
+
+      // Prepare study notes in state, but do NOT auto-open viewer initially
+      if (data.messages && data.messages.length > 0) {
+        const latestNotes = [...data.messages].reverse().find((m: any) =>
+          m.role === 'assistant' && (
+            m.export_ready ||
+            m.format === 'study_notes' ||
+            m.response_format === 'study_notes' ||
+            (Boolean(m.text) && m.text.startsWith('# ') && m.text.toLowerCase().includes('study notes'))
+          )
+        )
+        if (latestNotes) {
+          setCurrentArtifactMarkdown(latestNotes.text)
+          setArtifactDockSide('right')
+        }
+        // No popup initially on session load; only pops up when clicking the note box
+        setArtifactViewerOpen(false)
+      } else {
+        setArtifactViewerOpen(false)
       }
     } catch (err) {
       console.error('Failed to load session details:', err)
@@ -349,9 +381,12 @@ export default function LearnPage() {
         created_at: new Date().toISOString()
       }
 
-      setMessages((prev) => [...prev, assistantMsg])
-      // Update Artifact Viewer content with the latest substantial explanation
-      if (res.data.text.length > 250) {
+      // Update Artifact Viewer content with the latest notes/explanation (do not auto-popup; user clicks on box to pop up)
+      if (isExport) {
+        setCurrentArtifactMarkdown(res.data.text)
+        setArtifactDockSide('right')
+        setArtifactViewerOpen(false)
+      } else if (res.data.text.length > 250) {
         setCurrentArtifactMarkdown(
           `# ${activeSubject} — Study Notes\n\n**Topic Focus**: ${activeTopic?.title || 'Course Material'}\n\n${res.data.text}`
         )
@@ -372,26 +407,93 @@ export default function LearnPage() {
     }
   }
 
-  // ─── 6. Speech Synthesis & Microphone Input ───
+  // ─── 6. Speech Synthesis (Word-by-Word Cognitive Highlight) & Microphone Input ───
   const handleToggleVoice = (msgId: string, text: string) => {
     if (!('speechSynthesis' in window)) return
 
     if (speakingMsgId === msgId) {
       window.speechSynthesis.cancel()
+      if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
       setSpeakingMsgId(null)
+      setSpeakingWordIndex(null)
       return
     }
 
     window.speechSynthesis.cancel()
-    const cleanText = text.replace(/[$#*`_]/g, '').slice(0, 500)
+    if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
+
+    // Clean text for speech synthesis
+    const cleanText = text
+      .replace(/```[\s\S]*?```/g, 'Code block omitted.')
+      .replace(/[#*`_~>\[\]\(\)]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 1500)
+
+    const words = cleanText.split(/\s+/).filter(Boolean)
     const utterance = new SpeechSynthesisUtterance(cleanText)
-    utterance.rate = 1.05
+    utterance.rate = 1.0
     utterance.pitch = 1.0
-    utterance.onend = () => setSpeakingMsgId(null)
-    utterance.onerror = () => setSpeakingMsgId(null)
+
+    let currentWordIdx = 0
+    setSpeakingWordIndex(0)
+
+    // Real-time word boundary synchronization
+    utterance.onboundary = (event) => {
+      if (event.name === 'word') {
+        const charIndex = event.charIndex
+        const substr = cleanText.slice(0, charIndex)
+        const wordCount = substr.trim().split(/\s+/).filter(Boolean).length
+        currentWordIdx = Math.min(wordCount, words.length - 1)
+        setSpeakingWordIndex(currentWordIdx)
+      }
+    }
+
+    // Fallback cadence timer if browser synthesis does not fire onboundary
+    const wordsPerMinute = 150
+    const msPerWord = (60 / wordsPerMinute) * 1000
+    ttsIntervalRef.current = setInterval(() => {
+      currentWordIdx++
+      if (currentWordIdx < words.length) {
+        setSpeakingWordIndex((prev) => (prev !== null ? Math.max(prev, currentWordIdx) : currentWordIdx))
+      } else {
+        if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
+      }
+    }, msPerWord)
+
+    utterance.onend = () => {
+      if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
+      setSpeakingMsgId(null)
+      setSpeakingWordIndex(null)
+    }
+
+    utterance.onerror = () => {
+      if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
+      setSpeakingMsgId(null)
+      setSpeakingWordIndex(null)
+    }
 
     setSpeakingMsgId(msgId)
     window.speechSynthesis.speak(utterance)
+  }
+
+  const handleChatScroll = () => {
+    if (!chatScrollRef.current) return
+    const { scrollTop, scrollHeight, clientHeight } = chatScrollRef.current
+    setShowScrollBottom(scrollHeight - scrollTop - clientHeight > 140)
+  }
+
+  const handleFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const sizeKb = (file.size / 1024).toFixed(1)
+    const sizeFormatted = file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${sizeKb} KB`
+    setAttachedFile({ name: file.name, sizeFormatted })
+  }
+
+  const handleRemoveAttachedFile = () => {
+    setAttachedFile(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const handleToggleMic = () => {
@@ -673,7 +775,7 @@ export default function LearnPage() {
   }), [])
 
   return (
-    <div className="flex h-screen w-full bg-[#FAF8F3] text-slate-800 font-sans overflow-hidden">
+    <div className="flex h-screen w-full bg-[#F9FAFB] text-[#000000] font-serif antialiased overflow-hidden">
 
       {/* ─── 1. COLLAPSIBLE LEFT WORKSPACE DRAWER ─── */}
       <AnimatePresence>
@@ -697,46 +799,46 @@ export default function LearnPage() {
                 {/* Header */}
                 <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md">
-                      <Layers size={18} />
+                    <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center shadow-xs">
+                      <Layers size={16} />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900 leading-tight">Course Workspaces</h3>
-                      <p className="text-[11px] text-slate-400 font-medium">Session-Isolated SQLite DBs</p>
+                      <h3 className="text-xs font-bold text-slate-900 leading-tight">Course Workspaces</h3>
+                      <p className="learn-caption text-slate-400 font-medium">Session-Isolated SQLite DBs</p>
                     </div>
                   </div>
                   <button
                     onClick={() => setWorkspaceOpen(false)}
-                    className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"
+                    className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition cursor-pointer"
                   >
-                    <X size={16} />
+                    <X size={15} />
                   </button>
                 </div>
 
                 {/* New Session Button */}
                 <button
                   onClick={handleCreateNewSession}
-                  className="w-full mt-4 flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs transition border border-indigo-200/70"
+                  className="w-full mt-4 flex items-center justify-center gap-2 py-2.5 px-4 rounded-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs transition shadow-xs cursor-pointer"
                 >
-                  <Plus size={15} />
+                  <Plus size={14} />
                   New Course Workspace
                 </button>
 
                 {/* Document Upload Area */}
-                <div className="mt-4 p-4 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center">
-                  <UploadCloud size={24} className="mx-auto text-indigo-500 mb-2" />
-                  <p className="text-xs font-bold text-slate-700">Upload Study Material</p>
-                  <p className="text-[10px] text-slate-400 mb-3">PDF, Scanned Docs, Word, PPTX</p>
+                <div className="mt-4 p-4 rounded-2xl bg-slate-50/70 border border-dashed border-slate-200 text-center">
+                  <UploadCloud size={22} className="mx-auto text-slate-600 mb-2" />
+                  <p className="text-xs font-bold text-slate-800">Upload Study Material</p>
+                  <p className="learn-caption text-slate-400 mb-3">PDF, Scanned Docs, Word, PPTX</p>
 
                   <input
                     type="text"
                     value={uploadSubject}
                     onChange={(e) => setUploadSubject(e.target.value)}
                     placeholder="Course / Subject name"
-                    className="w-full text-xs px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 mb-2 focus:outline-indigo-600"
+                    className="w-full text-xs px-3 py-1.5 rounded-xl bg-white border border-slate-200 mb-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-slate-400"
                   />
 
-                  <label className="inline-block py-1.5 px-4 rounded-xl bg-indigo-600 text-white font-bold text-xs cursor-pointer hover:bg-indigo-700 transition shadow-xs">
+                  <label className="inline-block py-2 px-5 rounded-full bg-slate-900 text-white font-medium text-xs cursor-pointer hover:bg-slate-800 transition shadow-xs">
                     Choose File
                     <input
                       type="file"
@@ -751,13 +853,13 @@ export default function LearnPage() {
 
                   {isUploading && (
                     <div className="mt-3">
-                      <div className="flex items-center justify-between text-[10px] font-bold text-indigo-700 mb-1">
+                      <div className="flex items-center justify-between learn-caption font-bold text-slate-700 mb-1">
                         <span>Parallel OCR & Indexing...</span>
                         <span>{uploadProgress}%</span>
                       </div>
-                      <div className="w-full h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                      <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-indigo-600 transition-all duration-300"
+                          className="h-full bg-slate-900 transition-all duration-300"
                           style={{ width: `${uploadProgress}%` }}
                         />
                       </div>
@@ -765,13 +867,13 @@ export default function LearnPage() {
                   )}
 
                   {uploadError && (
-                    <p className="mt-2 text-[10px] text-red-600 font-semibold">{uploadError}</p>
+                    <p className="mt-2 learn-caption text-red-600 font-semibold">{uploadError}</p>
                   )}
                 </div>
 
                 {/* Active Sessions List */}
                 <div className="mt-4 max-h-[38vh] overflow-y-auto space-y-2 pr-1">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 px-1">
+                  <span className="learn-caption font-bold uppercase tracking-wider text-slate-400 px-1">
                     Your Active Courses ({sessions.length})
                   </span>
                   {sessions.map((s) => {
@@ -780,31 +882,29 @@ export default function LearnPage() {
                       <div
                         key={s.id}
                         onClick={() => handleSelectSession(s.id)}
-                        className={`group relative p-3 rounded-2xl cursor-pointer transition border ${
+                        className={`group relative p-3.5 rounded-2xl cursor-pointer transition border ${
                           isActive
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                            ? 'bg-slate-100/90 border-slate-300/90 text-slate-900 shadow-xs font-semibold'
                             : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80 shadow-xs'
                         }`}
                       >
                         <div className="flex items-start justify-between">
                           <div className="pr-4 overflow-hidden">
-                            <h4 className={`text-xs font-bold truncate ${isActive ? 'text-white' : 'text-slate-900'}`}>
+                            <h4 className="text-xs font-bold truncate text-slate-900">
                               {s.title}
                             </h4>
-                            <p className={`text-[10px] truncate mt-0.5 ${isActive ? 'text-indigo-100' : 'text-slate-400'}`}>
+                            <p className="learn-caption truncate mt-0.5 text-slate-500">
                               {s.document_name || s.subject}
                             </p>
                           </div>
                           <button
                             onClick={(e) => handleDeleteSession(s.id, e)}
-                            className={`opacity-0 group-hover:opacity-100 p-1 rounded-lg transition ${
-                              isActive ? 'hover:bg-indigo-700 text-indigo-200' : 'hover:bg-slate-100 text-slate-400 hover:text-red-600'
-                            }`}
+                            className="opacity-0 group-hover:opacity-100 p-1 rounded-lg transition hover:bg-slate-200/70 text-slate-400 hover:text-red-600"
                           >
                             <Trash2 size={13} />
                           </button>
                         </div>
-                        <div className="mt-2 flex items-center gap-3 text-[9px] font-semibold opacity-85">
+                        <div className="mt-2 flex items-center gap-3 learn-caption font-medium text-slate-400">
                           <span>{s.topic_count} Topics</span>
                           <span>·</span>
                           <span>{s.message_count} Turns</span>
@@ -821,10 +921,10 @@ export default function LearnPage() {
               {studentMemory && (
                 <div className="pt-3 border-t border-slate-100">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <Brain size={14} className="text-indigo-600" />
-                    <span className="text-[11px] font-bold text-slate-700">Episodic Profile</span>
+                    <Brain size={14} className="text-slate-700" />
+                    <span className="learn-caption font-bold text-slate-800">Episodic Profile</span>
                   </div>
-                  <p className="text-[10px] text-slate-500 line-clamp-2">
+                  <p className="learn-caption text-slate-500 line-clamp-2">
                     {studentMemory.weaknesses?.length > 0
                       ? `Focus Area: ${studentMemory.weaknesses[studentMemory.weaknesses.length - 1]}`
                       : 'Active learning style: Step-by-Step with KaTeX formulas.'}
@@ -839,103 +939,95 @@ export default function LearnPage() {
       {/* ─── 2. MAIN CENTER STUDY ROOM WORKSPACE ─── */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
 
-        {/* ─── Top Header & Controls ─── */}
-        <header className="h-16 flex-shrink-0 px-6 bg-white/80 backdrop-blur-xl border-b border-slate-200/70 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setWorkspaceOpen(true)}
-              className="p-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition flex items-center gap-1.5 text-xs font-bold"
-              title="Open Workspaces"
-            >
-              <PanelLeft size={16} />
-              <span className="hidden sm:inline">Courses</span>
-            </button>
+        {/* ─── Top Header & Controls (Floating Translucent "Scholarly Ambient" Bar) ─── */}
+        <header className="py-3 px-6 bg-transparent flex items-center justify-between flex-shrink-0 z-20 pointer-events-none floating-header-gradient">
+          <div className="flex items-center gap-3 pointer-events-auto">
+            <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-white/95 border border-slate-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.04)] backdrop-blur-md">
+              <button
+                onClick={() => setWorkspaceOpen(true)}
+                className="text-slate-600 hover:text-slate-900 transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
+                title="Open Workspaces"
+              >
+                <PanelLeft size={15} />
+                <span className="hidden sm:inline">Courses</span>
+              </button>
 
-            <div className="h-4 w-[1px] bg-slate-200" />
+              <div className="h-3.5 w-[1px] bg-slate-200" />
 
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-black text-slate-900 leading-tight truncate max-w-xs md:max-w-md">
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 className="text-xs font-bold text-slate-900 truncate max-w-[180px] sm:max-w-xs">
                   {documentName ? documentName : activeSubject}
                 </h2>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80">
-                  {docStatus === 'fully_processed' ? 'Fully Grounded (Tables & Figs)' : 'Sub-2ms FTS5 Active'}
+                <span className="learn-caption font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 shrink-0">
+                  {docStatus === 'fully_processed' ? 'Fully Grounded' : 'Sub-2ms FTS5'}
                 </span>
               </div>
-              {activeTopic && (
-                <p className="text-[11px] text-indigo-600 font-semibold truncate flex items-center gap-1">
-                  <span>Topic:</span>
-                  <span className="underline decoration-indigo-200">{activeTopic.title}</span>
-                  <span className="text-slate-300">|</span>
-                  <span className="text-slate-400 font-normal">{activeTopic.difficulty}</span>
-                </p>
-              )}
             </div>
           </div>
 
-          {/* Mode Switcher Tabs */}
-          <div className="flex items-center gap-1 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/60 shadow-xs">
+          {/* Mode Switcher Tabs (Unified Floating Segmented Pill) */}
+          <div className="flex items-center gap-1 p-1 rounded-full bg-slate-100/80 border border-slate-200/70 shadow-[0_2px_12px_rgba(0,0,0,0.03)] backdrop-blur-md pointer-events-auto">
             <button
               onClick={() => setActiveTab('chat')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'chat'
-                  ? 'bg-white text-indigo-600 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
               }`}
             >
-              <BookOpen size={14} />
+              <BookOpen size={13} />
               <span className="hidden md:inline">Tutor Chat</span>
             </button>
 
             <button
               onClick={() => setActiveTab('normal')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'normal'
-                  ? 'bg-white text-indigo-600 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
               }`}
             >
-              <Sparkles size={14} />
+              <Sparkles size={13} />
               <span className="hidden md:inline">Normal Mode</span>
             </button>
 
             <button
               onClick={() => setActiveTab('teacher')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'teacher'
-                  ? 'bg-white text-indigo-600 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
               }`}
             >
-              <GraduationCap size={14} />
+              <GraduationCap size={13} />
               <span className="hidden md:inline">Teacher Mode</span>
             </button>
 
             <button
               onClick={() => setActiveTab('exam')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'exam'
-                  ? 'bg-white text-indigo-600 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
               }`}
             >
-              <Award size={14} />
+              <Award size={13} />
               <span className="hidden md:inline">Topic Exam</span>
             </button>
           </div>
 
-          {/* Right Action Controls */}
-          <div className="flex items-center gap-2">
+          {/* Right Action Controls (Floating Pill) */}
+          <div className="flex items-center gap-2 pointer-events-auto">
             <button
               onClick={() => setStudyMapOpen(!studyMapOpen)}
-              className={`p-2 rounded-2xl border transition text-xs font-bold flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-full border transition text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-[0_2px_12px_rgba(0,0,0,0.04)] backdrop-blur-md ${
                 studyMapOpen
-                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                  ? 'bg-slate-100 text-slate-900 border-slate-300'
+                  : 'bg-white/95 text-slate-700 hover:text-slate-900 hover:bg-slate-50 border-slate-200/80'
               }`}
               title="Curriculum Study Map"
             >
-              <PanelRight size={15} />
+              <PanelRight size={14} />
               <span className="hidden xl:inline">Curriculum</span>
             </button>
           </div>
@@ -954,31 +1046,35 @@ export default function LearnPage() {
           {/* ─── Central Active Workspace View ─── */}
           <main className="flex-1 flex flex-col h-full overflow-hidden relative">
 
-            {/* TAB 1: GROUNDED TUTOR CHAT */}
+            {/* TAB 1: GROUNDED TUTOR CHAT (IndTutor Cognitive Minimalist Experience) */}
             {activeTab === 'chat' && (
-              <div className="flex-1 flex flex-col h-full overflow-hidden">
+              <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-[#F9FAFB]">
                 {/* Message Scroll Container */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                <div
+                  ref={chatScrollRef}
+                  onScroll={handleChatScroll}
+                  className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 pb-36"
+                >
                   {messages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center min-h-[50vh] text-center max-w-md mx-auto">
-                      <div className="w-16 h-16 rounded-3xl bg-indigo-100 text-indigo-600 flex items-center justify-center mb-4 shadow-sm">
-                        <BookOpen size={28} />
+                    <div className="flex flex-col items-center justify-center min-h-[50vh] text-center max-w-lg mx-auto">
+                      <div className="w-14 h-14 rounded-2xl bg-white border border-slate-200 text-slate-800 flex items-center justify-center mb-4 shadow-sm">
+                        <BookOpen size={24} className="text-slate-800" />
                       </div>
-                      <h3 className="text-lg font-black text-slate-900">Your AI Study Room is Ready</h3>
-                      <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                        Ask questions about your uploaded course material. Answers are strictly verified against local FTS5 SQLite chunks with KaTeX mathematical typography.
+                      <h3 className="text-xl font-bold text-slate-900 font-serif tracking-tight">Your Academic Workspace is Ready</h3>
+                      <p className="text-sm text-slate-500 mt-2 leading-relaxed font-serif">
+                        Explore your course material with verified, citation-grounded tutoring. Mathematical formulations, structured tables, and downloadable study notes are ready on demand.
                       </p>
                       <div className="mt-6 flex flex-wrap gap-2 justify-center">
                         {[
                           'Explain the fundamental principle',
                           'Compare key mechanisms with a markdown table',
                           'Quiz me on the core formulas',
-                          'Summarize this topic as study notes'
+                          'Create a md file on this topic'
                         ].map((prompt, idx) => (
                           <button
                             key={idx}
                             onClick={() => handleSendMessage(prompt)}
-                            className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-700 hover:text-indigo-700 transition shadow-xs"
+                            className="text-xs font-sans font-medium px-3.5 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 transition shadow-xs cursor-pointer"
                           >
                             {prompt} →
                           </button>
@@ -995,147 +1091,353 @@ export default function LearnPage() {
                         msg.format === 'study_notes' ||
                         (Boolean(msg.text) && msg.text.startsWith('# ') && msg.text.toLowerCase().includes('study notes'))
                       )
-                      return (
-                        <div
-                          key={msg.id}
-                          className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
-                        >
-                          {/* Role Header */}
-                          <div className="flex items-center gap-2 mb-1 px-1 text-[11px] font-bold text-slate-400">
-                            <span>{isUser ? 'You' : (isStudyNotes ? 'DeepTutor Study Notes' : 'DeepTutor Academic Agent')}</span>
-                            {!isUser && (
-                              <button
-                                onClick={() => handleToggleVoice(msg.id, msg.text)}
-                                className={`p-1 rounded-md transition ${
-                                  speakingMsgId === msg.id ? 'text-indigo-600 bg-indigo-50' : 'hover:text-slate-700'
-                                }`}
-                                title="Read Aloud"
-                              >
-                                {speakingMsgId === msg.id ? <VolumeX size={13} /> : <Volume2 size={13} />}
-                              </button>
-                            )}
-                          </div>
 
-                          {/* Message Bubble Card */}
-                          <div
-                            className={`max-w-2xl p-4.5 rounded-3xl text-sm leading-relaxed shadow-xs ${
-                              isUser
-                                ? 'bg-indigo-600 text-white rounded-br-xs'
-                                : isStudyNotes
-                                  ? 'bg-white text-slate-800 border-2 border-indigo-100/90 rounded-bl-xs shadow-md'
-                                  : 'bg-white text-slate-800 border border-slate-200/80 rounded-bl-xs'
-                            }`}
-                          >
-                            {/* Study Notes Document Attachment Card (Matching the user design spec) */}
-                            {isStudyNotes && (
-                              <StudyNotesCard markdown={msg.text} className="mb-4" />
-                            )}
-                            {/* Expandable Chain-of-Thought Pass */}
-                            {!isUser && msg.thought_process && (
-                              <div className="mb-3 rounded-2xl bg-slate-50/90 border border-slate-200/70 overflow-hidden">
+                      return (
+                        <motion.div
+                          key={msg.id}
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.25, ease: 'easeOut' }}
+                          className={`flex flex-col ${isUser ? 'items-end' : 'items-start w-full'}`}
+                        >
+                          {/* ─── USER MESSAGE BUBBLE (Right-aligned, white card with tail) ─── */}
+                          {isUser ? (
+                            <div className="bg-[#FFFFFF] border-[1.5px] border-[#E5E7EB] rounded-[14px_14px_4px_14px] px-4 py-2.5 max-w-[80%] shadow-[0_2px_8px_rgba(27,35,64,0.04)] chat-reading text-[#000000] font-serif">
+                              {msg.text}
+                            </div>
+                          ) : (
+                            /* ─── AI MESSAGE (Full-width, sits directly on paper bg) ─── */
+                            <div className="w-full max-w-3xl flex flex-col items-start text-left">
+                              {/* Optional Thought Process Disclosure */}
+                              {msg.thought_process && (
+                                <div className="mb-2.5 w-full rounded-xl bg-slate-50/90 border border-slate-200/70 overflow-hidden font-sans">
+                                  <button
+                                    onClick={() =>
+                                      setExpandedThoughtIds((p) => ({ ...p, [msg.id]: !isThoughtExpanded }))
+                                    }
+                                    className="w-full flex items-center justify-between px-3 py-1.5 learn-caption font-semibold text-slate-500 hover:text-slate-800 transition cursor-pointer"
+                                  >
+                                    <span className="flex items-center gap-1.5">
+                                      <Brain size={13} className="text-slate-600" />
+                                      IndTutor Grounding Pass & Reasoning
+                                    </span>
+                                    {isThoughtExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                                  </button>
+                                  {isThoughtExpanded && (
+                                    <div className="px-3 pb-2.5 pt-1 text-xs text-slate-600 font-mono border-t border-slate-100 bg-white/70">
+                                      {msg.thought_process}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* EQUALIZER INDICATOR (when reading aloud) */}
+                              {speakingMsgId === msg.id && (
+                                <div className="flex items-center gap-2 mb-2 px-2 py-1 rounded-md bg-slate-100/90 border border-slate-200/60 w-fit">
+                                  <div className="flex items-end gap-[3px] h-3.5 px-0.5">
+                                    <span className="w-[2px] bg-[#334155] rounded-full animate-audio-bar-1" />
+                                    <span className="w-[2px] bg-[#334155] rounded-full animate-audio-bar-2" />
+                                    <span className="w-[2px] bg-[#334155] rounded-full animate-audio-bar-3" />
+                                  </div>
+                                  <span className="learn-caption font-semibold text-slate-600 font-sans">
+                                    Reading aloud...
+                                  </span>
+                                  <button
+                                    onClick={() => handleToggleVoice(msg.id, msg.text)}
+                                    className="learn-caption text-slate-400 hover:text-slate-800 ml-1 underline cursor-pointer font-sans"
+                                  >
+                                    Stop
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Message Content: Word-by-Word Highlight OR Study Notes OR Editorial Markdown */}
+                              {speakingMsgId === msg.id ? (
+                                /* WORD-BY-WORD HIGHLIGHT MODE */
+                                <div className="markdown-content text-slate-900 leading-[1.85] flex flex-wrap gap-y-1 items-baseline w-full">
+                                  {msg.text
+                                    .replace(/```[\s\S]*?```/g, '')
+                                    .replace(/[#*`_~>\[\]\(\)]/g, ' ')
+                                    .split(/\s+/)
+                                    .filter(Boolean)
+                                    .map((word, wIdx) => {
+                                      const isCurrent = wIdx === speakingWordIndex
+                                      const isPast = speakingWordIndex !== null && wIdx < speakingWordIndex
+                                      return (
+                                        <span
+                                          key={wIdx}
+                                          className={`inline-block mr-1.5 transition-all duration-150 ${
+                                            isCurrent
+                                              ? 'bg-amber-300 text-slate-950 font-bold px-1.5 py-0.5 rounded-md ring-2 ring-amber-400/60 scale-105 shadow-xs'
+                                              : isPast
+                                              ? 'text-slate-900 font-medium'
+                                              : 'text-slate-400 opacity-75'
+                                          }`}
+                                        >
+                                          {word}
+                                        </span>
+                                      )
+                                    })}
+                                </div>
+                              ) : isStudyNotes ? (
+                                /* Study Notes Response (Matching Claude design) */
+                                <div className="w-full">
+                                  <p className="text-sm leading-relaxed text-slate-700 mb-2.5 font-serif">
+                                    I have prepared the structured study notes reference document for{' '}
+                                    <strong className="text-slate-900 font-semibold">
+                                      {extractDocTitle(msg.text) || `${activeSubject || 'Study'} notes`}
+                                    </strong>
+                                    . You can view the full formatted document in the Markdown viewer on the right or download the{' '}
+                                    <code className="text-xs font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-700">.md</code> file below.
+                                  </p>
+
+                                  <StudyNotesCard
+                                    markdown={msg.text}
+                                    title={extractDocTitle(msg.text) || `${activeSubject || 'Study'} notes`}
+                                    className="mb-2"
+                                    onOpenViewer={() => {
+                                      setCurrentArtifactMarkdown(msg.text)
+                                      setArtifactViewerOpen(true)
+                                      setArtifactDockSide('right')
+                                      setStudyMapOpen(false)
+                                    }}
+                                  />
+
+                                  <button
+                                    onClick={() => setExpandedInlineNotes((p) => ({ ...p, [msg.id]: !p[msg.id] }))}
+                                    className="learn-caption font-semibold text-slate-400 hover:text-slate-700 transition flex items-center gap-1 mt-1 cursor-pointer font-sans"
+                                  >
+                                    {expandedInlineNotes[msg.id] ? (
+                                      <>Collapse inline preview <ChevronDown size={12} /></>
+                                    ) : (
+                                      <>Preview full notes in chat <ChevronRight size={12} /></>
+                                    )}
+                                  </button>
+
+                                  {expandedInlineNotes[msg.id] && (
+                                    <div className="mt-3 pt-3 border-t border-slate-200/80 markdown-content">
+                                      <ReactMarkdown
+                                        remarkPlugins={[remarkGfm, remarkMath]}
+                                        rehypePlugins={[rehypeKatex]}
+                                        components={customMarkdownComponents}
+                                      >
+                                        {msg.text}
+                                      </ReactMarkdown>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                /* Standard Editorial Markdown Render */
+                                <div className="w-full markdown-content">
+                                  <ReactMarkdown
+                                    remarkPlugins={[remarkGfm, remarkMath]}
+                                    rehypePlugins={[rehypeKatex]}
+                                    components={customMarkdownComponents}
+                                  >
+                                    {msg.text}
+                                  </ReactMarkdown>
+                                </div>
+                              )}
+
+                              {/* Grounding Source Citation Badges */}
+                              {msg.sources && msg.sources.length > 0 && (
+                                <div className="mt-3 pt-2.5 border-t border-slate-200/60 flex flex-wrap items-center gap-1.5 w-full">
+                                  <span className="learn-caption font-bold text-slate-400 uppercase tracking-wider font-sans">
+                                    Grounding:
+                                  </span>
+                                  {msg.sources.map((src, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="learn-caption font-medium px-2 py-0.5 rounded bg-white text-slate-600 border border-slate-200 font-sans"
+                                      title={src.snippet}
+                                    >
+                                      Page {src.page} · {src.source_type}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Action Footer: Listen + Feedback buttons */}
+                              <div className="mt-3 flex items-center gap-3 text-xs text-slate-400 font-sans">
+                                <button
+                                  onClick={() => handleToggleVoice(msg.id, msg.text)}
+                                  className={`flex items-center gap-1 px-2 py-0.5 rounded hover:bg-slate-200/60 transition cursor-pointer ${
+                                    speakingMsgId === msg.id ? 'text-indigo-600 font-semibold' : 'hover:text-slate-700'
+                                  }`}
+                                  title="Read aloud"
+                                >
+                                  <Volume2 size={13} />
+                                  <span>Listen</span>
+                                </button>
+
+                                <div className="h-3 w-[1px] bg-slate-200" />
+
                                 <button
                                   onClick={() =>
-                                    setExpandedThoughtIds((p) => ({ ...p, [msg.id]: !isThoughtExpanded }))
+                                    setFeedbackRatings((p) => ({ ...p, [msg.id]: p[msg.id] === 'good' ? null : 'good' }))
                                   }
-                                  className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-bold text-slate-500 hover:text-indigo-600 transition"
+                                  className={`flex items-center gap-1 px-2 py-0.5 rounded hover:bg-slate-200/60 transition cursor-pointer ${
+                                    feedbackRatings[msg.id] === 'good' ? 'text-emerald-700 font-bold bg-emerald-50' : 'hover:text-slate-700'
+                                  }`}
+                                  title="Mark as helpful"
                                 >
-                                  <span className="flex items-center gap-1.5">
-                                    <Brain size={13} className="text-indigo-500" />
-                                    DeepTutor Grounding Pass & Reasoning
-                                  </span>
-                                  {isThoughtExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                                  <ThumbsUp size={12} />
+                                  <span>Good</span>
                                 </button>
-                                {isThoughtExpanded && (
-                                  <div className="px-3 pb-2.5 pt-1 text-xs text-slate-600 font-mono border-t border-slate-100 bg-white/70">
-                                    {msg.thought_process}
-                                  </div>
-                                )}
-                              </div>
-                            )}
 
-                            {/* Markdown Rendered Content */}
-                            <div className="prose prose-sm max-w-none text-inherit prose-headings:font-black prose-headings:text-inherit prose-p:my-1 prose-ul:my-1 prose-li:my-0.5">
-                              <ReactMarkdown
-                                remarkPlugins={[remarkGfm, remarkMath]}
-                                rehypePlugins={[rehypeKatex]}
-                                components={customMarkdownComponents}
-                              >
-                                {msg.text}
-                              </ReactMarkdown>
+                                <button
+                                  onClick={() => {
+                                    setFeedbackRatings((p) => ({ ...p, [msg.id]: p[msg.id] === 'easier' ? null : 'easier' }))
+                                    handleSendMessage('Please explain that more simply with an everyday analogy and clearer terms.')
+                                  }}
+                                  className={`flex items-center gap-1 px-2 py-0.5 rounded hover:bg-slate-200/60 transition cursor-pointer ${
+                                    feedbackRatings[msg.id] === 'easier' ? 'text-amber-700 font-bold bg-amber-50' : 'hover:text-slate-700'
+                                  }`}
+                                  title="Simplify this explanation"
+                                >
+                                  <ChevronDown size={13} />
+                                  <span>Make it easier</span>
+                                </button>
+                              </div>
                             </div>
-
-                            {/* Grounding Source Citation Badges */}
-                            {!isUser && msg.sources && msg.sources.length > 0 && (
-                              <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
-                                <span className="text-[10px] font-bold text-slate-400">Grounding Chunks:</span>
-                                {msg.sources.map((src, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200"
-                                    title={src.snippet}
-                                  >
-                                    Page {src.page} · {src.source_type}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                          )}
+                        </motion.div>
                       )
                     })
                   )}
 
-                  {/* Agent Thinking Skeleton */}
+                  {/* ─── TYPING INDICATOR (AI Thinking) ─── */}
                   {isAgentThinking && (
-                    <div className="flex items-center gap-3 p-4 rounded-3xl bg-white border border-slate-200/80 max-w-xs shadow-xs animate-pulse">
-                      <div className="w-8 h-8 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
-                        <Sparkles size={16} className="animate-spin" />
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex items-center gap-2.5 py-2 px-1 text-slate-400"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span className="w-[5px] h-[5px] rounded-full bg-slate-500 animate-dot-1" />
+                        <span className="w-[5px] h-[5px] rounded-full bg-slate-500 animate-dot-2" />
+                        <span className="w-[5px] h-[5px] rounded-full bg-slate-500 animate-dot-3" />
                       </div>
-                      <div>
-                        <p className="text-xs font-bold text-slate-800">Planning & Grounding...</p>
-                        <p className="text-[10px] text-slate-400">QueryAnalyzerAgent → FTS5 BM25</p>
-                      </div>
-                    </div>
+                      <span className="text-xs italic font-serif text-slate-400">writing...</span>
+                    </motion.div>
                   )}
 
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Question Input Bar */}
-                <div className="p-4 bg-white/80 backdrop-blur-xl border-t border-slate-200/70">
-                  <div className="max-w-3xl mx-auto flex items-center gap-2 p-1.5 rounded-2xl bg-slate-50 border border-slate-200/90 shadow-xs focus-within:border-indigo-500 focus-within:bg-white transition">
-                    <button
-                      onClick={handleToggleMic}
-                      className={`p-2 rounded-xl transition ${
-                        isListeningVoice ? 'bg-red-500 text-white animate-pulse' : 'text-slate-400 hover:text-slate-700'
-                      }`}
-                      title="Speech-to-Text Microphone"
+                {/* ─── SCROLL-TO-BOTTOM FLOATING BUTTON ─── */}
+                <AnimatePresence>
+                  {showScrollBottom && (
+                    <motion.button
+                      initial={{ opacity: 0, y: 6, scale: 0.9 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 6, scale: 0.9 }}
+                      onClick={scrollToBottom}
+                      className="absolute bottom-24 right-6 sm:right-10 w-7 h-7 rounded-full bg-white border border-slate-200 shadow-md flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition z-30 cursor-pointer"
+                      title="Scroll to bottom"
                     >
-                      {isListeningVoice ? <MicOff size={18} /> : <Mic size={18} />}
-                    </button>
+                      <ChevronDown size={15} />
+                    </motion.button>
+                  )}
+                </AnimatePresence>
 
-                    <input
-                      type="text"
-                      value={inputQuery}
-                      onChange={(e) => setInputQuery(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault()
-                          handleSendMessage()
-                        }
-                      }}
-                      placeholder={`Ask questions about ${activeTopic?.title || 'your uploaded course notes'}...`}
-                      className="flex-1 bg-transparent text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-hidden px-2"
-                    />
+                {/* ─── FLOATING TRANSLUCENT INPUT BAR ─── */}
+                <div className="absolute bottom-0 inset-x-0 pt-6 pb-3 pointer-events-none z-20 floating-input-gradient">
+                  <div className="max-w-3xl mx-auto px-4 pointer-events-auto">
+                    {/* Animated File Attachment Pill */}
+                    <AnimatePresence>
+                      {attachedFile && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -4, height: 0 }}
+                          animate={{ opacity: 1, y: 0, height: 'auto' }}
+                          exit={{ opacity: 0, y: -4, height: 0 }}
+                          className="mb-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200 shadow-sm text-xs font-sans"
+                        >
+                          <FileText size={14} className="text-blue-600 shrink-0" />
+                          <span className="font-semibold text-slate-800 truncate max-w-[200px]">
+                            {attachedFile.name}
+                          </span>
+                          <span className="text-slate-400 learn-caption">{attachedFile.sizeFormatted}</span>
+                          <button
+                            onClick={handleRemoveAttachedFile}
+                            className="p-0.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 cursor-pointer"
+                            title="Remove attachment"
+                          >
+                            <X size={12} />
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
-                    <button
-                      onClick={() => handleSendMessage()}
-                      disabled={!inputQuery.trim() || isAgentThinking}
-                      className="py-2 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs transition flex items-center gap-1 shadow-xs"
-                    >
-                      <Send size={14} />
-                      <span className="hidden sm:inline">Ask</span>
-                    </button>
+                    {/* ChatInputForm Pill */}
+                    <div className="rounded-full bg-white border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.07)] focus-within:ring-2 focus-within:ring-slate-800/10 focus-within:border-slate-800 transition-all px-2.5 py-1.5 sm:px-3.5 sm:py-2 flex items-center gap-2">
+                      {/* ① [+] Attach Button */}
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition shrink-0 cursor-pointer"
+                        title="Attach notes or document"
+                      >
+                        <Plus size={15} />
+                      </button>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        onChange={handleFileAttach}
+                        accept=".pdf,.txt,.md,.docx,.png,.jpg"
+                      />
+
+                      {/* ② Textarea with auto-resize and serif font */}
+                      <textarea
+                        ref={textareaRef}
+                        rows={1}
+                        value={inputQuery}
+                        onChange={(e) => {
+                          setInputQuery(e.target.value)
+                          if (textareaRef.current) {
+                            textareaRef.current.style.height = 'auto'
+                            textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px'
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault()
+                            handleSendMessage()
+                            if (textareaRef.current) textareaRef.current.style.height = 'auto'
+                          }
+                        }}
+                        placeholder={`Ask questions about ${activeTopic?.title || 'your uploaded course notes'}...`}
+                        className="flex-1 bg-transparent border-0 border-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 ring-0 chat-reading font-serif text-slate-900 placeholder-slate-400 resize-none max-h-[120px] py-1 px-1.5 shadow-none"
+                        style={{ outline: 'none', boxShadow: 'none', border: 'none' }}
+                      />
+
+                      {/* ③ Mic / Send Button */}
+                      {inputQuery.trim() ? (
+                        <button
+                          onClick={() => {
+                            handleSendMessage()
+                            if (textareaRef.current) textareaRef.current.style.height = 'auto'
+                          }}
+                          disabled={isAgentThinking}
+                          className="w-8 h-8 rounded-full bg-[#000000] hover:bg-slate-800 text-white flex items-center justify-center transition shrink-0 cursor-pointer shadow-xs disabled:opacity-40"
+                          title="Send message"
+                        >
+                          <ArrowUp size={16} />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleToggleMic}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center transition shrink-0 cursor-pointer ${
+                            isListeningVoice
+                              ? 'bg-red-500 text-white animate-pulse'
+                              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                          }`}
+                          title="Voice input"
+                        >
+                          <Mic size={17} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1148,10 +1450,10 @@ export default function LearnPage() {
                   {/* Topic Title Header */}
                   <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600">
+                      <span className="learn-caption font-bold uppercase tracking-wider text-slate-500">
                         Normal Mode · 4-Phase Core Idea Distillation
                       </span>
-                      <h2 className="text-xl font-black text-slate-900 mt-1">
+                      <h2 className="text-xl font-black text-slate-900 mt-1 font-serif">
                         {activeTopic?.title || 'Select a Topic'}
                       </h2>
                       <p className="text-xs text-slate-500 mt-1">{activeTopic?.summary}</p>
@@ -1160,17 +1462,17 @@ export default function LearnPage() {
                     <button
                       onClick={() => activeTopic && fetchCoreIdea(activeTopic)}
                       disabled={isLoadingCoreIdea}
-                      className="p-2.5 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition"
+                      className="p-2.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
                       title="Refresh Core Idea"
                     >
-                      <RefreshCw size={16} className={isLoadingCoreIdea ? 'animate-spin' : ''} />
+                      <RefreshCw size={15} className={isLoadingCoreIdea ? 'animate-spin' : ''} />
                     </button>
                   </div>
 
                   {isLoadingCoreIdea ? (
                     <div className="p-12 text-center">
-                      <div className="w-10 h-10 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                      <p className="text-xs font-bold text-slate-500">Distilling 4-Phase Core Mechanics...</p>
+                      <div className="w-8 h-8 border-2 border-slate-800 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                      <p className="text-xs font-medium text-slate-500">Distilling 4-Phase Core Mechanics...</p>
                     </div>
                   ) : coreIdeaData ? (
                     <div className="space-y-4">
@@ -1180,14 +1482,16 @@ export default function LearnPage() {
                           <button
                             key={idx}
                             onClick={() => setCoreIdeaStep(idx)}
-                            className={`p-3 rounded-2xl text-xs font-bold transition text-left border ${
+                            className={`p-3 rounded-2xl text-xs font-medium transition text-left border cursor-pointer ${
                               coreIdeaStep === idx
-                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
-                                : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
+                                ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80'
                             }`}
                           >
-                            <span className="block text-[10px] opacity-75">Phase {idx + 1}</span>
-                            <span className="truncate block mt-0.5">{title.split('. ')[1]}</span>
+                            <span className={`block learn-caption ${coreIdeaStep === idx ? 'text-slate-300' : 'text-slate-400'}`}>
+                              Phase {idx + 1}
+                            </span>
+                            <span className="truncate block mt-0.5 font-semibold">{title.split('. ')[1]}</span>
                           </button>
                         ))}
                       </div>
@@ -1197,13 +1501,13 @@ export default function LearnPage() {
                         key={coreIdeaStep}
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-sm"
+                        className="p-7 rounded-3xl bg-white border border-slate-200/90 shadow-xs"
                       >
                         {coreIdeaStep === 0 && (
                           <div>
-                            <span className="text-[11px] font-black uppercase text-indigo-600">Fundamental Intuition</span>
-                            <h3 className="text-base font-black text-slate-900 mt-1 mb-3">The Big Picture</h3>
-                            <div className="prose prose-sm text-slate-700 leading-relaxed">
+                            <span className="learn-caption font-bold uppercase tracking-wider text-slate-400">Fundamental Intuition</span>
+                            <h3 className="text-lg font-serif font-bold text-slate-900 mt-1 mb-3">The Big Picture</h3>
+                            <div className="markdown-content text-slate-800 leading-relaxed font-serif">
                               <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
                                 {coreIdeaData.big_picture}
                               </ReactMarkdown>
@@ -1213,9 +1517,9 @@ export default function LearnPage() {
 
                         {coreIdeaStep === 1 && (
                           <div>
-                            <span className="text-[11px] font-black uppercase text-indigo-600">Governing Mechanics & Math</span>
-                            <h3 className="text-base font-black text-slate-900 mt-1 mb-3">Core Principle & Formulas</h3>
-                            <div className="prose prose-sm text-slate-700 leading-relaxed">
+                            <span className="learn-caption font-bold uppercase tracking-wider text-slate-400">Governing Mechanics & Math</span>
+                            <h3 className="text-lg font-serif font-bold text-slate-900 mt-1 mb-3">Core Principle & Formulas</h3>
+                            <div className="markdown-content text-slate-800 leading-relaxed font-serif">
                               <ReactMarkdown
                                 remarkPlugins={[remarkGfm, remarkMath]}
                                 rehypePlugins={[rehypeKatex]}
@@ -1229,12 +1533,12 @@ export default function LearnPage() {
 
                         {coreIdeaStep === 2 && (
                           <div>
-                            <span className="text-[11px] font-black uppercase text-emerald-600">High-Yield Revision</span>
-                            <h3 className="text-base font-black text-slate-900 mt-1 mb-3">Key Takeaways</h3>
-                            <ul className="space-y-2.5">
+                            <span className="learn-caption font-bold uppercase tracking-wider text-emerald-600">High-Yield Revision</span>
+                            <h3 className="text-lg font-serif font-bold text-slate-900 mt-1 mb-3">Key Takeaways</h3>
+                            <ul className="space-y-3 font-serif">
                               {coreIdeaData.key_takeaways?.map((item, i) => (
-                                <li key={i} className="flex items-start gap-2.5 text-sm text-slate-700">
-                                  <CheckCircle2 size={16} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+                                <li key={i} className="flex items-start gap-2.5 text-sm text-slate-800">
+                                  <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0 mt-0.5" />
                                   <span>{item}</span>
                                 </li>
                               ))}
@@ -1244,11 +1548,11 @@ export default function LearnPage() {
 
                         {coreIdeaStep === 3 && (
                           <div>
-                            <span className="text-[11px] font-black uppercase text-amber-600">Exam Traps & Misconceptions</span>
-                            <h3 className="text-base font-black text-slate-900 mt-1 mb-3">Common Pitfalls</h3>
-                            <ul className="space-y-2.5">
+                            <span className="learn-caption font-bold uppercase tracking-wider text-amber-600">Exam Traps & Misconceptions</span>
+                            <h3 className="text-lg font-serif font-bold text-slate-900 mt-1 mb-3">Common Pitfalls</h3>
+                            <ul className="space-y-3 font-serif">
                               {coreIdeaData.common_pitfalls?.map((item, i) => (
-                                <li key={i} className="flex items-start gap-2.5 text-sm text-slate-700">
+                                <li key={i} className="flex items-start gap-2.5 text-sm text-slate-800">
                                   <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
                                   <span>{item}</span>
                                 </li>
@@ -1258,19 +1562,19 @@ export default function LearnPage() {
                         )}
 
                         {/* Navigation stepper buttons */}
-                        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                        <div className="mt-8 pt-5 border-t border-slate-100 flex items-center justify-between">
                           <button
                             onClick={() => setCoreIdeaStep((s) => Math.max(0, s - 1))}
                             disabled={coreIdeaStep === 0}
-                            className="py-1.5 px-4 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                            className="py-2 px-5 rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition cursor-pointer"
                           >
                             ← Previous
                           </button>
-                          <span className="text-xs font-bold text-slate-400">Step {coreIdeaStep + 1} of 4</span>
+                          <span className="text-xs font-medium text-slate-400">Step {coreIdeaStep + 1} of 4</span>
                           <button
                             onClick={() => setCoreIdeaStep((s) => Math.min(3, s + 1))}
                             disabled={coreIdeaStep === 3}
-                            className="py-1.5 px-4 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 disabled:opacity-40"
+                            className="py-2 px-5 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 disabled:opacity-40 transition shadow-xs cursor-pointer"
                           >
                             Next Step →
                           </button>
@@ -1278,9 +1582,9 @@ export default function LearnPage() {
                       </motion.div>
 
                       {/* Embedded Topic Doubt Resolution Chat */}
-                      <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs">
+                      <div className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-xs">
                         <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                          <HelpCircle size={15} className="text-indigo-600" />
+                          <HelpCircle size={15} className="text-slate-700" />
                           Have a Specific Doubt on this Topic?
                         </h4>
                         <div className="mt-3 flex items-center gap-2">
@@ -1289,20 +1593,20 @@ export default function LearnPage() {
                             value={topicDoubtInput}
                             onChange={(e) => setTopicDoubtInput(e.target.value)}
                             placeholder="Ask a clarifying question..."
-                            className="flex-1 text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:outline-indigo-600"
+                            className="flex-1 text-xs px-4 py-2.5 rounded-full bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:bg-white focus:border-slate-400"
                             onKeyDown={(e) => e.key === 'Enter' && handleAskTopicDoubt()}
                           />
                           <button
                             onClick={handleAskTopicDoubt}
                             disabled={!topicDoubtInput.trim() || isLoadingDoubt}
-                            className="py-2.5 px-4 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 disabled:opacity-50"
+                            className="py-2.5 px-5 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 disabled:opacity-50 transition shadow-xs cursor-pointer"
                           >
                             {isLoadingDoubt ? 'Solving...' : 'Resolve'}
                           </button>
                         </div>
 
                         {topicDoubtAnswer && (
-                          <div className="mt-4 p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 text-xs text-slate-800 leading-relaxed">
+                          <div className="mt-4 p-5 rounded-2xl bg-slate-50/70 border border-slate-200 markdown-content text-sm text-slate-800 leading-relaxed font-serif">
                             <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
                               {topicDoubtAnswer}
                             </ReactMarkdown>
@@ -1322,18 +1626,18 @@ export default function LearnPage() {
                   {/* Lecture Header */}
                   <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600">
+                      <span className="learn-caption font-bold uppercase tracking-wider text-slate-500">
                         Teacher Mode · Immersive Live Masterclass
                       </span>
-                      <h2 className="text-xl font-black text-slate-900 mt-1">
+                      <h2 className="text-xl font-black text-slate-900 mt-1 font-serif">
                         {activeTopic?.title || 'Select a Topic'}
                       </h2>
                       <div className="flex items-center gap-2 mt-2">
-                        <span className="text-xs font-bold px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        <span className="text-xs font-semibold px-3 py-1 rounded-full bg-slate-100 text-slate-800 border border-slate-200">
                           {currentLecturePhase}
                         </span>
                         {isTeacherStreaming && (
-                          <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold">
+                          <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold">
                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
                             Live SSE Streaming
                           </span>
@@ -1345,14 +1649,14 @@ export default function LearnPage() {
                       {isTeacherStreaming ? (
                         <button
                           onClick={handleStopTeacherLecture}
-                          className="py-2 px-4 rounded-2xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold transition flex items-center gap-1.5 border border-red-200"
+                          className="py-2 px-4 rounded-full bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold transition flex items-center gap-1.5 border border-red-200 cursor-pointer"
                         >
                           <Pause size={14} /> Stop
                         </button>
                       ) : (
                         <button
                           onClick={handleStartTeacherLecture}
-                          className="py-2.5 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md"
+                          className="py-2.5 px-5 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
                         >
                           <Play size={14} /> Start Lecture
                         </button>
@@ -1363,7 +1667,7 @@ export default function LearnPage() {
                   {/* Streamed Lecture Canvas */}
                   <div className="p-8 rounded-3xl bg-white border border-slate-200/90 shadow-xs min-h-[50vh]">
                     {teacherLectureText ? (
-                      <div className="prose prose-sm max-w-none text-slate-800 leading-relaxed font-sans">
+                      <div className="markdown-content max-w-none text-slate-900 leading-relaxed font-serif">
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm, remarkMath]}
                           rehypePlugins={[rehypeKatex]}
@@ -1374,9 +1678,9 @@ export default function LearnPage() {
                       </div>
                     ) : (
                       <div className="text-center py-16">
-                        <GraduationCap size={40} className="mx-auto text-indigo-400 mb-3" />
-                        <h4 className="text-sm font-bold text-slate-700">Live University Lecture Stream</h4>
-                        <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                        <GraduationCap size={38} className="mx-auto text-slate-400 mb-3" />
+                        <h4 className="text-sm font-bold text-slate-800">Live University Lecture Stream</h4>
+                        <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto font-serif">
                           Click 'Start Lecture' to begin real-time streaming of first-principles intuition, deep mechanics, worked derivations, and exam traps.
                         </p>
                       </div>
@@ -1385,13 +1689,13 @@ export default function LearnPage() {
                     {/* Seamless Exam Handoff Button */}
                     {!isTeacherStreaming && teacherLectureText.length > 300 && (
                       <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between">
-                        <p className="text-xs font-bold text-slate-500">Mastered this masterclass?</p>
+                        <p className="text-xs font-medium text-slate-500">Mastered this masterclass?</p>
                         <button
                           onClick={() => {
                             setActiveTab('exam')
                             if (activeTopic) handleFetchExam(activeTopic)
                           }}
-                          className="py-2.5 px-5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition flex items-center gap-2 shadow-sm"
+                          className="py-2.5 px-5 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition flex items-center gap-2 shadow-xs cursor-pointer"
                         >
                           Take Topic Mastery Exam →
                         </button>
@@ -1409,10 +1713,10 @@ export default function LearnPage() {
                   {/* Exam Header */}
                   <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600">
+                      <span className="learn-caption font-bold uppercase tracking-wider text-slate-500">
                         Exam Engine · Written, MCQ & Fill-in-the-Blank
                       </span>
-                      <h2 className="text-xl font-black text-slate-900 mt-1">
+                      <h2 className="text-xl font-black text-slate-900 mt-1 font-serif">
                         {activeTopic?.title || 'Mastery Exam'}
                       </h2>
                       <p className="text-xs text-slate-500 mt-1">
@@ -1423,7 +1727,7 @@ export default function LearnPage() {
                     <button
                       onClick={() => activeTopic && handleFetchExam(activeTopic)}
                       disabled={isLoadingExam}
-                      className="py-2 px-4 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition flex items-center gap-1.5"
+                      className="py-2 px-4 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
                     >
                       <RefreshCw size={13} className={isLoadingExam ? 'animate-spin' : ''} />
                       Retake Exam
@@ -1432,15 +1736,15 @@ export default function LearnPage() {
 
                   {isLoadingExam ? (
                     <div className="p-12 text-center">
-                      <div className="w-10 h-10 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                      <p className="text-xs font-bold text-slate-500">Generating Mixed Exam Questions...</p>
+                      <div className="w-8 h-8 border-2 border-slate-800 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                      <p className="text-xs font-medium text-slate-500">Generating Mixed Exam Questions...</p>
                     </div>
                   ) : examEvaluation ? (
                     /* Evaluation Report View */
                     <div className="space-y-6">
-                      <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+                      <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
                         <div>
-                          <span className="text-[10px] font-black uppercase text-slate-400">Score Earned</span>
+                          <span className="learn-caption font-bold uppercase text-slate-400">Score Earned</span>
                           <div className="text-3xl font-black text-slate-900 mt-0.5">
                             {examEvaluation.percentage}%
                           </div>
@@ -1449,7 +1753,7 @@ export default function LearnPage() {
                           </p>
                         </div>
                         <div className="text-right">
-                          <span className="text-base font-black px-4 py-2 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-200 inline-block shadow-xs">
+                          <span className="text-xs font-bold px-4 py-2 rounded-full bg-slate-100 text-slate-900 border border-slate-200 inline-block shadow-xs">
                             {examEvaluation.mastery_badge}
                           </span>
                         </div>
@@ -1460,7 +1764,7 @@ export default function LearnPage() {
                         {examEvaluation.evaluations.map((ev, idx) => (
                           <div
                             key={ev.id}
-                            className={`p-5 rounded-3xl bg-white border shadow-xs ${
+                            className={`p-6 rounded-3xl bg-white border shadow-xs ${
                               ev.is_correct ? 'border-emerald-200' : 'border-amber-200'
                             }`}
                           >
@@ -1468,19 +1772,19 @@ export default function LearnPage() {
                               <span className="text-xs font-bold text-slate-500">
                                 Question {idx + 1} ({ev.type.toUpperCase()})
                               </span>
-                              <span className={`text-xs font-black px-2.5 py-0.5 rounded-full ${
-                                ev.is_correct ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                                ev.is_correct ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'
                               }`}>
                                 {ev.score_percentage}%
                               </span>
                             </div>
-                            <h4 className="text-sm font-bold text-slate-900 mb-2">{ev.question}</h4>
-                            <div className="p-3 rounded-xl bg-slate-50 text-xs text-slate-700 mb-2">
+                            <h4 className="text-sm font-serif font-bold text-slate-900 mb-2">{ev.question}</h4>
+                            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-xs text-slate-700 mb-2 font-serif">
                               <span className="font-bold">Your Answer: </span>
                               {ev.student_answer || '<Empty>'}
                             </div>
                             {ev.sample_model_answer && (
-                              <div className="p-3 rounded-xl bg-indigo-50/60 text-xs text-indigo-900 mb-2">
+                              <div className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs text-slate-900 mb-2 font-serif">
                                 <span className="font-bold">Model Answer: </span>
                                 {ev.sample_model_answer}
                               </div>
@@ -1497,13 +1801,13 @@ export default function LearnPage() {
                     /* Question Answering Form */
                     <div className="space-y-5">
                       {examQuestions.map((q, idx) => (
-                        <div key={q.id} className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-xs">
+                        <div key={q.id} className="p-7 rounded-3xl bg-white border border-slate-200/90 shadow-xs">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600">
+                            <span className="learn-caption font-bold uppercase tracking-wider text-slate-400">
                               Question {idx + 1} · {q.type === 'written' ? 'Written Synthesis' : q.type === 'mcq' ? 'Multiple Choice' : 'Fill in the Blank'}
                             </span>
                           </div>
-                          <h3 className="text-sm font-bold text-slate-900 mb-4">{q.question}</h3>
+                          <h3 className="text-base font-serif font-bold text-slate-900 mb-4">{q.question}</h3>
 
                           {/* Written */}
                           {q.type === 'written' && (
@@ -1512,7 +1816,7 @@ export default function LearnPage() {
                               value={examAnswers[q.id] || ''}
                               onChange={(e) => setExamAnswers({ ...examAnswers, [q.id]: e.target.value })}
                               placeholder="Write your academic explanation..."
-                              className="w-full text-xs p-3.5 rounded-2xl bg-slate-50 border border-slate-200 focus:outline-indigo-600 focus:bg-white"
+                              className="w-full text-sm p-4 rounded-2xl bg-slate-50/70 border border-slate-200 text-slate-900 font-serif focus:bg-white focus:outline-none focus:border-slate-400 leading-relaxed"
                             />
                           )}
 
@@ -1525,10 +1829,10 @@ export default function LearnPage() {
                                   <button
                                     key={oIdx}
                                     onClick={() => setExamAnswers({ ...examAnswers, [q.id]: opt })}
-                                    className={`w-full text-left p-3 rounded-2xl text-xs font-semibold transition border ${
+                                    className={`w-full text-left p-3.5 rounded-xl text-xs font-medium transition border cursor-pointer ${
                                       isSelected
-                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                        : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
                                     }`}
                                   >
                                     {opt}
@@ -1545,7 +1849,7 @@ export default function LearnPage() {
                               value={examAnswers[q.id] || ''}
                               onChange={(e) => setExamAnswers({ ...examAnswers, [q.id]: e.target.value })}
                               placeholder="Type exact term or formula..."
-                              className="w-full text-xs p-3 rounded-2xl bg-slate-50 border border-slate-200 focus:outline-indigo-600"
+                              className="w-full text-xs px-4 py-2.5 rounded-full bg-slate-50/70 border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:border-slate-400"
                             />
                           )}
                         </div>
@@ -1555,7 +1859,7 @@ export default function LearnPage() {
                         <button
                           onClick={handleSubmitExam}
                           disabled={isSubmittingExam}
-                          className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm transition shadow-md disabled:opacity-50"
+                          className="w-full py-3.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition shadow-xs disabled:opacity-50 cursor-pointer"
                         >
                           {isSubmittingExam ? 'Grading Submission via Rubrics...' : 'Submit Exam for Automated Grading'}
                         </button>
@@ -1588,12 +1892,12 @@ export default function LearnPage() {
             <div className="p-4 flex flex-col h-full overflow-hidden">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2">
-                  <BookOpen size={16} className="text-indigo-600" />
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Curriculum Roadmap</h3>
+                  <BookOpen size={15} className="text-slate-700" />
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Curriculum Roadmap</h3>
                 </div>
                 <button
                   onClick={() => setStudyMapOpen(false)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
+                  className="p-1 rounded-full text-slate-400 hover:text-slate-700 transition cursor-pointer"
                 >
                   <X size={14} />
                 </button>
@@ -1602,7 +1906,7 @@ export default function LearnPage() {
               {/* Topic Stepper List */}
               <div className="mt-3 flex-1 overflow-y-auto space-y-2 pr-1">
                 {topics.length === 0 ? (
-                  <div className="py-12 text-center text-xs text-slate-400">
+                  <div className="py-12 text-center text-xs text-slate-400 font-serif">
                     Upload a syllabus or textbook to generate your progressive curriculum roadmap.
                   </div>
                 ) : (
@@ -1616,29 +1920,31 @@ export default function LearnPage() {
                           if (activeTab === 'normal') fetchCoreIdea(t)
                           if (activeTab === 'exam') handleFetchExam(t)
                         }}
-                        className={`p-3 rounded-2xl cursor-pointer transition border text-left ${
+                        className={`p-3.5 rounded-2xl cursor-pointer transition border text-left ${
                           isSelected
-                            ? 'bg-indigo-50/90 border-indigo-300 text-indigo-950 shadow-xs'
-                            : 'bg-white hover:bg-slate-50 border-slate-200/80 text-slate-700'
+                            ? 'bg-slate-100/90 border-slate-300/90 text-slate-900 shadow-xs'
+                            : 'bg-white hover:bg-slate-50 border-slate-200/80 text-slate-800 shadow-xs'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-black text-slate-400">Topic {idx + 1}</span>
-                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                            t.difficulty === 'Beginner'
-                              ? 'bg-emerald-50 text-emerald-700'
+                          <span className="learn-caption font-bold text-slate-500">Topic {idx + 1}</span>
+                          <span className={`learn-caption font-semibold px-2 py-0.5 rounded-full ${
+                            isSelected
+                              ? 'bg-white text-slate-800 border border-slate-300/80 shadow-xs'
+                              : t.difficulty === 'Beginner'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80'
                               : t.difficulty === 'Intermediate'
-                              ? 'bg-amber-50 text-amber-700'
-                              : 'bg-purple-50 text-purple-700'
+                              ? 'bg-amber-50 text-amber-700 border border-amber-200/80'
+                              : 'bg-slate-100 text-slate-700 border border-slate-200'
                           }`}>
                             {t.difficulty}
                           </span>
                         </div>
                         <h4 className="text-xs font-bold line-clamp-1">{t.title}</h4>
-                        <p className="text-[10px] text-slate-500 line-clamp-2 mt-0.5">{t.summary}</p>
-                        <div className="mt-2 text-[9px] font-semibold text-slate-400 flex items-center justify-between">
+                        <p className="learn-caption line-clamp-2 mt-0.5 text-slate-500">{t.summary}</p>
+                        <div className="mt-2 learn-caption font-semibold flex items-center justify-between text-slate-400">
                           <span>Est: {t.estimated_study_time}</span>
-                          <span className="text-indigo-600 font-bold">Select →</span>
+                          <span className={isSelected ? 'text-slate-900 font-bold' : 'text-slate-700 font-semibold'}>Select →</span>
                         </div>
                       </div>
                     )
@@ -1658,18 +1964,22 @@ export default function LearnPage() {
     return (
       <div className="flex flex-col h-full overflow-hidden">
         {/* Artifact Top Bar */}
-        <div className="p-3.5 px-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <FileText size={16} className="text-indigo-600" />
-            <span className="text-xs font-black text-slate-900">Claude-Style Artifact Viewer</span>
+        <div className="p-3 px-4 bg-white border-b border-slate-200 flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono learn-caption font-bold border border-slate-200/60">
+              &lt;/&gt;
+            </span>
+            <span className="text-xs font-semibold text-slate-800 truncate">
+              {extractDocTitle(currentArtifactMarkdown) || 'Study Notes'} · MD
+            </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             {/* Dock toggle */}
             <button
               onClick={() => setArtifactDockSide((d) => (d === 'right' ? 'left' : 'right'))}
-              className="p-1.5 rounded-xl hover:bg-slate-200 text-slate-500 text-xs"
-              title="Toggle Dock Side"
+              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 text-xs transition cursor-pointer"
+              title={artifactDockSide === 'left' ? 'Dock to right' : 'Dock to left'}
             >
               <Split size={14} />
             </button>
@@ -1677,8 +1987,8 @@ export default function LearnPage() {
             {/* Expand width */}
             <button
               onClick={() => setArtifactExpanded(!artifactExpanded)}
-              className="p-1.5 rounded-xl hover:bg-slate-200 text-slate-500"
-              title={artifactExpanded ? 'Collapse' : 'Expand'}
+              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition cursor-pointer"
+              title={artifactExpanded ? 'Collapse width' : 'Expand width'}
             >
               {artifactExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
             </button>
@@ -1686,7 +1996,8 @@ export default function LearnPage() {
             {/* Close */}
             <button
               onClick={() => setArtifactViewerOpen(false)}
-              className="p-1.5 rounded-xl hover:bg-slate-200 text-slate-500"
+              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition cursor-pointer"
+              title="Close viewer"
             >
               <X size={15} />
             </button>
@@ -1718,7 +2029,7 @@ export default function LearnPage() {
           <div className="flex items-center gap-1.5">
             <button
               onClick={handleCopyArtifact}
-              className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 flex items-center gap-1 text-[11px] font-bold"
+              className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 flex items-center gap-1 learn-caption font-bold"
               title="Copy Markdown"
             >
               {copiedArtifact ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
@@ -1726,7 +2037,7 @@ export default function LearnPage() {
             </button>
             <button
               onClick={handleExportMarkdown}
-              className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 flex items-center gap-1 text-[11px] font-bold"
+              className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 flex items-center gap-1 learn-caption font-bold"
               title="Download .md"
             >
               <Download size={13} />
@@ -1734,7 +2045,7 @@ export default function LearnPage() {
             </button>
             <button
               onClick={handleExportPdf}
-              className="py-1 px-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 text-[11px] font-bold shadow-xs"
+              className="py-1 px-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 learn-caption font-bold shadow-xs"
               title="Publication-Grade PDF"
             >
               <Printer size={13} />
@@ -1746,7 +2057,7 @@ export default function LearnPage() {
         {/* Artifact Content Canvas */}
         <div className="flex-1 overflow-y-auto p-6 bg-white">
           {artifactTab === 'preview' ? (
-            <div className="prose prose-sm max-w-none text-slate-800 leading-relaxed font-sans">
+            <div className="markdown-content prose prose-sm max-w-none text-[#000000] leading-relaxed font-serif">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkMath]}
                 rehypePlugins={[rehypeKatex]}

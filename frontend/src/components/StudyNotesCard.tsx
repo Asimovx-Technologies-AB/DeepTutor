@@ -5,6 +5,7 @@ interface StudyNotesCardProps {
   markdown: string
   title?: string
   className?: string
+  onOpenViewer?: () => void
 }
 
 export function extractDocTitle(markdown: string): string {
@@ -37,6 +38,7 @@ export const StudyNotesCard: React.FC<StudyNotesCardProps> = ({
   markdown,
   title,
   className = '',
+  onOpenViewer,
 }) => {
   const [copied, setCopied] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -55,29 +57,74 @@ export const StudyNotesCard: React.FC<StudyNotesCardProps> = ({
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handlePrintPdf = () => {
+    setDropdownOpen(false)
+    const printWindow = window.open('', '_blank')
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${docTitle}</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, serif; padding: 40px; color: #111; line-height: 1.6; }
+              h1, h2, h3 { color: #000; }
+              pre { background: #f4f4f5; padding: 12px; border-radius: 6px; }
+              table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+              th { background: #f9f9f9; }
+            </style>
+          </head>
+          <body>
+            <pre style="white-space: pre-wrap; font-family: serif; font-size: 15px;">${markdown.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+          </body>
+        </html>
+      `)
+      printWindow.document.close()
+      printWindow.focus()
+      setTimeout(() => printWindow.print(), 250)
+    }
+  }
+
   return (
     <div
-      className={`my-3 p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-xs flex items-center justify-between gap-3 text-slate-800 ${className}`}
+      onClick={(e) => {
+        const target = e.target as HTMLElement
+        if (target.closest('.export-actions') || target.closest('button')) {
+          return
+        }
+        if (onOpenViewer) onOpenViewer()
+      }}
+      className={`my-3 p-3.5 rounded-[12px] bg-white border border-slate-200 hover:border-slate-300 shadow-xs hover:shadow-md transition-all duration-200 flex items-center justify-between gap-3 text-slate-800 ${onOpenViewer ? 'cursor-pointer group' : ''} ${className}`}
+      title={onOpenViewer ? 'Click to open study notes in Markdown Viewer' : undefined}
     >
       {/* Left icon & doc info */}
-      <div className="flex items-center gap-3.5 min-w-0">
-        <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200/60 shadow-2xs">
-          <FileText size={20} className="text-slate-600" />
+      <div
+        className="flex items-center gap-3.5 min-w-0"
+      >
+        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200/80 transition-transform duration-200 group-hover:scale-105">
+          <FileText size={18} className="text-slate-600 group-hover:text-indigo-600 transition-colors" />
         </div>
         <div className="min-w-0">
-          <h4 className="text-sm font-semibold text-slate-900 truncate tracking-tight">
+          <h4 className="text-sm font-semibold text-slate-900 truncate tracking-tight group-hover:text-indigo-600 transition-colors">
             {docTitle}
           </h4>
-          <p className="text-xs text-slate-400 font-medium flex items-center gap-1.5 mt-0.5">
+          <p className="text-xs text-slate-500 font-medium flex items-center gap-1.5 mt-0.5">
             <span>Document</span>
             <span>·</span>
-            <span className="font-semibold text-slate-500">MD</span>
+            <span className="font-semibold text-slate-600">MD</span>
+            {onOpenViewer && (
+              <>
+                <span>·</span>
+                <span className="text-indigo-600 font-semibold group-hover:underline">Open viewer →</span>
+              </>
+            )}
           </p>
         </div>
       </div>
 
       {/* Right action button */}
-      <div className="relative shrink-0 flex items-center">
+      <div className="relative shrink-0 flex items-center export-actions" onClick={(e) => e.stopPropagation()}>
         <div className="inline-flex rounded-xl border border-slate-200 bg-white shadow-2xs overflow-hidden">
           <button
             onClick={handleDownload}
@@ -91,7 +138,7 @@ export const StudyNotesCard: React.FC<StudyNotesCardProps> = ({
           <button
             onClick={() => setDropdownOpen((prev) => !prev)}
             className="px-1.5 py-1.5 border-l border-slate-200 hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition cursor-pointer"
-            title="More export options"
+            title="Export options"
           >
             <ChevronDown size={13} />
           </button>
@@ -105,6 +152,13 @@ export const StudyNotesCard: React.FC<StudyNotesCardProps> = ({
             >
               <Download size={13} className="text-slate-400" />
               Download .md
+            </button>
+            <button
+              onClick={handlePrintPdf}
+              className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2 text-left cursor-pointer"
+            >
+              <FileText size={13} className="text-slate-400" />
+              Print / Save PDF
             </button>
             <button
               onClick={handleCopy}
