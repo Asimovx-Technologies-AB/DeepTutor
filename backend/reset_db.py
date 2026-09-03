@@ -8,7 +8,7 @@ from app.core.database import DBContext, engine
 from app.core.models import (
     Base, User, ChatSession, ChatMessage, Document, 
     Quiz, QuizQuestion, QuizAttempt, Flashcard, StudyPlan,
-    UserActivity, UserProgress, LearningGoal
+    UserActivity, UserProgress, LearningGoal, SessionDocument
 )
 # Legacy stores
 try:
@@ -37,12 +37,13 @@ def wipe_all_data(reseed_default_user: bool = True):
             db.query(Quiz).delete()
             db.query(Flashcard).delete()
             db.query(StudyPlan).delete()
+            db.query(SessionDocument).delete()
             db.query(Document).delete()
             db.query(UserActivity).delete()
             db.query(UserProgress).delete()
             db.query(LearningGoal).delete()
             db.query(User).delete()
-        print("   [OK] Cleared all SQL tables (Chats, Documents, Quizzes, Flashcards, Study Plans, Activities, Progress, Users).")
+        print("   [OK] Cleared all SQL tables (Chats, Documents, Quizzes, Flashcards, Study Plans, Activities, Progress, Users, Session Documents).")
     except Exception as e:
         print(f"   [WARN] SQL clear warning: {e}")
         # Fallback drop and recreate

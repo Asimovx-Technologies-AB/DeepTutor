@@ -122,6 +122,9 @@ class Document(Base):
     indexed = Column(Boolean, default=False)
     entity_count = Column(Integer, default=0)
     chunk_count = Column(Integer, default=0)
+    doc_hash = Column(String(64), nullable=True, index=True)
+    status = Column(String(20), default="pending")  # 'pending', 'processing', 'completed', 'failed'
+    error_message = Column(Text, nullable=True)
     _key_topics = Column("key_topics", Text, default="[]")
     created_at = Column(String, default=lambda: datetime.utcnow().isoformat())
 
@@ -135,6 +138,15 @@ class Document(Base):
     @key_topics.setter
     def key_topics(self, value):
         self._key_topics = json.dumps(value or [])
+
+
+class SessionDocument(Base):
+    __tablename__ = 'session_documents'
+
+    session_id = Column(String, primary_key=True)
+    doc_hash = Column(String(64), primary_key=True, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    uploaded_at = Column(String, default=lambda: datetime.utcnow().isoformat())
 
 
 class Quiz(Base):

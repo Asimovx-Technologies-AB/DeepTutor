@@ -15,6 +15,7 @@ from app.rag.doc_processor import doc_processor
 from app.rag.topic_extractor import topic_extractor
 from app.rag.ollama_client import ollama
 from app.rag.sqlite_fts_store import get_session_store
+from app.rag.document_dedup import get_file_hash, is_already_processed, link_document_to_session
 
 settings = get_settings()
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -83,6 +84,7 @@ async def _run_indexing(doc_id: str, section_id: str, file_path: str, user_id: s
             entity_count=len(topic_titles),
             chunk_count=len(doc_record.chunks) if doc_record else 0,
             key_topics=[f"__subject__:{detected_subject}", *topic_titles],
+            status="completed",
         )
 
         # Dispatch Background Path: Stage 2 (Table) & Stage 3 (Image/VLM) Enrichment
@@ -90,6 +92,14 @@ async def _run_indexing(doc_id: str, section_id: str, file_path: str, user_id: s
     except Exception as e:
         print(f"[documents] Indexing error for {doc_id}: {e}")
         _indexing_status[doc_id] = {"status": "error", "progress": 0, "error": str(e), "stats": {}}
+        db.update_document_stats(
+            doc_id=doc_id,
+            indexed=False,
+            entity_count=0,
+            chunk_count=0,
+            status="failed",
+            error_message=str(e),
+        )
 
 
 @router.post("/upload")
@@ -116,6 +126,24 @@ async def upload_document(
     size_mb = len(content) / (1024 * 1024)
     section_id = (section_id or topic_id or "general").strip() or "general"
 
+    # Fast Content Hash Deduplication
+    doc_hash = get_file_hash(content)
+    if is_already_processed(doc_hash, user["id"], db=db):
+        link_document_to_session(doc_hash, section_id, user["id"], db=db)
+        existing_doc = db.get_document_by_hash(doc_hash, user["id"])
+        return {
+            "status": "already_processed",
+            "id": existing_doc.get("id") if existing_doc else None,
+            "doc_hash": doc_hash,
+            "file_name": file.filename,
+            "filename": file.filename,
+            "file_type": ext.lstrip("."),
+            "chunks_created": 0,
+            "size_mb": round(size_mb, 2),
+            "topic_id": topic_id,
+            "message": "Document already exists, linked to this session instantly",
+        }
+
     upload_dir = Path(settings.UPLOAD_DIR) / user["id"] / section_id
     upload_dir.mkdir(parents=True, exist_ok=True)
     file_path = str(upload_dir / file.filename)
@@ -128,18 +156,24 @@ async def upload_document(
         file_name=file.filename,
         file_path=file_path,
         file_type=ext.lstrip("."),
+        doc_hash=doc_hash,
+        status="processing",
     )
+    link_document_to_session(doc_hash, section_id, user["id"], db=db)
 
     db.delete_flashcards_for_topic(section_id)
     background_tasks.add_task(_run_indexing, doc["id"], section_id, file_path, user["id"], file.filename)
 
     return {
+        "status": "processed",
         "id": doc["id"],
+        "doc_hash": doc_hash,
         "file_name": file.filename,
+        "filename": file.filename,
         "file_type": ext.lstrip("."),
         "size_mb": round(size_mb, 2),
         "topic_id": topic_id,
-        "status": "indexing",
+        "chunks_created": 0,
         "message": f"✅ {file.filename} uploaded and indexing started.",
     }
 
@@ -330,3 +364,15 @@ async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
         "file_name": doc["file_name"],
         "message": f"Deleted document '{doc['file_name']}'."
     }
+
+
+@router.get("/session/{session_id}/status")
+async def session_documents_status(session_id: str, user: dict = Depends(get_current_user)):
+    """Returns UI status signals for documents in this session including cross-session reuse count."""
+    return db.get_document_status_for_ui(session_id, user["id"])
+
+
+@router.get("/session/{session_id}")
+async def session_documents_list(session_id: str, user: dict = Depends(get_current_user)):
+    """Returns all documents linked to the specified session."""
+    return db.get_session_documents(session_id, user["id"])
