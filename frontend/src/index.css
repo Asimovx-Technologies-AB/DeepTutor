@@ -688,6 +688,17 @@ textarea:focus-visible {
   margin: 1.25em 0;
 }
 
+.markdown-content pre:has(.mermaid-wrapper),
+.markdown-content pre:has(> div) {
+  background-color: transparent !important;
+  color: inherit !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  border: none !important;
+  margin: 0 !important;
+  overflow: visible !important;
+}
+
 .markdown-content pre code {
   background-color: transparent;
   color: inherit;

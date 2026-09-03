@@ -145,7 +145,7 @@ export default function LearnPage() {
   const ttsIntervalRef = useRef<any>(null)
 
   // Floating Input Bar & Attachments
-  const [attachedFile, setAttachedFile] = useState<{ name: string; sizeFormatted: string } | null>(null)
+  const [attachedFile, setAttachedFile] = useState<{ name: string; sizeFormatted: string; rawFile?: File } | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const chatScrollRef = useRef<HTMLDivElement | null>(null)
@@ -327,8 +327,25 @@ export default function LearnPage() {
 
   // ─── 5. Send Chat Message (Planner -> Executor) ───
   const handleSendMessage = async (customQuery?: string) => {
+    // If a file is attached without text, upload the file directly
+    if (attachedFile?.rawFile && !customQuery && !inputQuery.trim()) {
+      const fileToUpload = attachedFile.rawFile
+      setAttachedFile(null)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      await handleFileUpload(fileToUpload)
+      return
+    }
+
     const q = customQuery || inputQuery
     if (!q.trim() || isAgentThinking) return
+
+    // If a file is attached WITH text query, upload first then ask
+    if (attachedFile?.rawFile) {
+      const fileToUpload = attachedFile.rawFile
+      setAttachedFile(null)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      await handleFileUpload(fileToUpload)
+    }
 
     let currentSid = activeSessionId
     if (!currentSid) {
@@ -492,7 +509,7 @@ export default function LearnPage() {
     if (!file) return
     const sizeKb = (file.size / 1024).toFixed(1)
     const sizeFormatted = file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${sizeKb} KB`
-    setAttachedFile({ name: file.name, sizeFormatted })
+    setAttachedFile({ name: file.name, sizeFormatted, rawFile: file })
   }
 
   const handleRemoveAttachedFile = () => {
@@ -767,6 +784,18 @@ export default function LearnPage() {
     td: ({ node, ...props }: any) => (
       <td className="px-4 py-2 border-b border-slate-100 text-slate-700" {...props} />
     ),
+    pre: ({ node, children, ...props }: any) => {
+      const child = React.Children.toArray(children)[0] as any
+      const className = child?.props?.className || ''
+      if (className.includes('language-mermaid')) {
+        return <>{children}</>
+      }
+      return (
+        <pre className="my-4 p-4 rounded-xl bg-slate-900 text-slate-100 font-mono text-xs overflow-x-auto border border-slate-800" {...props}>
+          {children}
+        </pre>
+      )
+    },
     code: ({ node, inline, className, children, ...props }: any) => {
       const match = /language-(\w+)/.exec(className || '')
       const lang = match ? match[1] : ''
@@ -1062,22 +1091,6 @@ export default function LearnPage() {
                       <p className="text-sm text-slate-500 mt-2 leading-relaxed font-serif">
                         Explore your course material with verified, citation-grounded tutoring. Mathematical formulations, structured tables, and downloadable study notes are ready on demand.
                       </p>
-                      <div className="mt-6 flex flex-wrap gap-2 justify-center">
-                        {[
-                          'Explain the fundamental principle',
-                          'Compare key mechanisms with a markdown table',
-                          'Quiz me on the core formulas',
-                          'Create a md file on this topic'
-                        ].map((prompt, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => handleSendMessage(prompt)}
-                            className="text-xs font-sans font-medium px-3.5 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 transition shadow-xs cursor-pointer"
-                          >
-                            {prompt} →
-                          </button>
-                        ))}
-                      </div>
                     </div>
                   )}
 
@@ -1396,15 +1409,15 @@ export default function LearnPage() {
                       />
 
                       {/* ③ Mic / Send Button */}
-                      {inputQuery.trim() ? (
+                      {(inputQuery.trim() || attachedFile) ? (
                         <button
                           onClick={() => {
                             handleSendMessage()
                             if (textareaRef.current) textareaRef.current.style.height = 'auto'
                           }}
-                          disabled={isAgentThinking}
+                          disabled={isAgentThinking || isUploading}
                           className="w-8 h-8 rounded-full bg-[#000000] hover:bg-slate-800 text-white flex items-center justify-center transition shrink-0 cursor-pointer shadow-xs disabled:opacity-40"
-                          title="Send message"
+                          title={attachedFile ? "Upload and analyze document" : "Send message"}
                         >
                           <ArrowUp size={16} />
                         </button>

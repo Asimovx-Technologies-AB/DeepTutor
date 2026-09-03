@@ -91,6 +91,14 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding, 
                 remarkPlugins={[remarkGfm, remarkMath]}
                 rehypePlugins={[rehypeKatex]}
                 components={{
+                  pre({ node, children, ...props }: any) {
+                    const child = React.Children.toArray(children)[0] as any
+                    const className = child?.props?.className || ''
+                    if (className.includes('language-mermaid')) {
+                      return <>{children}</>
+                    }
+                    return <pre {...props}>{children}</pre>
+                  },
                   code({ node, className, children, ...props }: any) {
                     const match = /language-(\w+)/.exec(className || '')
                     const language = match ? match[1] : ''
