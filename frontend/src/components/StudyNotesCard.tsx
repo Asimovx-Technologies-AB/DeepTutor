@@ -95,21 +95,21 @@ export const StudyNotesCard: React.FC<StudyNotesCardProps> = ({
         }
         if (onOpenViewer) onOpenViewer()
       }}
-      className={`my-3 p-3.5 rounded-[12px] bg-white border border-slate-200 hover:border-slate-300 shadow-xs hover:shadow-md transition-all duration-200 flex items-center justify-between gap-3 text-slate-800 ${onOpenViewer ? 'cursor-pointer group' : ''} ${className}`}
+      className={`my-2 p-2.5 px-3.5 rounded-[10px] bg-white border border-slate-200 hover:border-slate-300 shadow-xs hover:shadow-sm transition-all duration-200 flex items-center justify-between gap-3 text-slate-800 ${onOpenViewer ? 'cursor-pointer group' : ''} ${className}`}
       title={onOpenViewer ? 'Click to open study notes in Markdown Viewer' : undefined}
     >
       {/* Left icon & doc info */}
       <div
-        className="flex items-center gap-3.5 min-w-0"
+        className="flex items-center gap-3 min-w-0"
       >
-        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200/80 transition-transform duration-200 group-hover:scale-105">
-          <FileText size={18} className="text-slate-600 group-hover:text-indigo-600 transition-colors" />
+        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200/80 transition-transform duration-200 group-hover:scale-105">
+          <FileText size={15} className="text-slate-600 group-hover:text-indigo-600 transition-colors" />
         </div>
         <div className="min-w-0">
-          <h4 className="text-sm font-semibold text-slate-900 truncate tracking-tight group-hover:text-indigo-600 transition-colors">
+          <h4 className="text-[13px] font-semibold text-slate-900 truncate tracking-tight group-hover:text-indigo-600 transition-colors">
             {docTitle}
           </h4>
-          <p className="text-xs text-slate-500 font-medium flex items-center gap-1.5 mt-0.5">
+          <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5 mt-0.5">
             <span>Document</span>
             <span>·</span>
             <span className="font-semibold text-slate-600">MD</span>
@@ -125,22 +125,22 @@ export const StudyNotesCard: React.FC<StudyNotesCardProps> = ({
 
       {/* Right action button */}
       <div className="relative shrink-0 flex items-center export-actions" onClick={(e) => e.stopPropagation()}>
-        <div className="inline-flex rounded-xl border border-slate-200 bg-white shadow-2xs overflow-hidden">
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white shadow-2xs overflow-hidden">
           <button
             onClick={handleDownload}
-            className="px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 transition cursor-pointer"
+            className="px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-1 transition cursor-pointer"
             title="Download study notes as .md file"
           >
-            <Download size={13} className="text-slate-500" />
+            <Download size={12} className="text-slate-500" />
             <span>Download</span>
           </button>
 
           <button
             onClick={() => setDropdownOpen((prev) => !prev)}
-            className="px-1.5 py-1.5 border-l border-slate-200 hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+            className="px-1 py-1 border-l border-slate-200 hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition cursor-pointer"
             title="Export options"
           >
-            <ChevronDown size={13} />
+            <ChevronDown size={12} />
           </button>
         </div>
 

@@ -381,12 +381,15 @@ export default function LearnPage() {
         created_at: new Date().toISOString()
       }
 
+      // ── Push assistant reply into the chat ──
+      setMessages((prev) => [...prev, assistantMsg])
+
       // Update Artifact Viewer content with the latest notes/explanation (do not auto-popup; user clicks on box to pop up)
       if (isExport) {
         setCurrentArtifactMarkdown(res.data.text)
         setArtifactDockSide('right')
         setArtifactViewerOpen(false)
-      } else if (res.data.text.length > 250) {
+      } else if (res.data.text && res.data.text.length > 250) {
         setCurrentArtifactMarkdown(
           `# ${activeSubject} — Study Notes\n\n**Topic Focus**: ${activeTopic?.title || 'Course Material'}\n\n${res.data.text}`
         )
@@ -1053,7 +1056,7 @@ export default function LearnPage() {
                 <div
                   ref={chatScrollRef}
                   onScroll={handleChatScroll}
-                  className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 pb-36"
+                  className="flex-1 overflow-y-auto p-4 sm:p-8 pb-36"
                 >
                   {messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center min-h-[50vh] text-center max-w-lg mx-auto">
@@ -1082,8 +1085,9 @@ export default function LearnPage() {
                       </div>
                     </div>
                   ) : (
-                    messages.map((msg) => {
-                      const isUser = msg.role === 'user'
+                    <div className="max-w-3xl mx-auto w-full flex flex-col gap-6">
+                      {messages.map((msg) => {
+                        const isUser = msg.role === 'user'
                       const isThoughtExpanded = expandedThoughtIds[msg.id] ?? false
                       const isStudyNotes = !isUser && (
                         Boolean(msg.export_ready) ||
@@ -1258,44 +1262,46 @@ export default function LearnPage() {
                               )}
 
                               {/* Action Footer: Listen + Feedback buttons */}
-                              <div className="mt-3 flex items-center gap-3 text-xs text-slate-400 font-sans">
+                              <div className="mt-2 flex items-center gap-2 learn-caption text-slate-400 font-sans">
                                 <button
                                   onClick={() => handleToggleVoice(msg.id, msg.text)}
-                                  className={`flex items-center gap-1 px-2 py-0.5 rounded hover:bg-slate-200/60 transition cursor-pointer ${
-                                    speakingMsgId === msg.id ? 'text-indigo-600 font-semibold' : 'hover:text-slate-700'
+                                  className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-slate-100 transition cursor-pointer ${
+                                    speakingMsgId === msg.id ? 'text-indigo-600' : 'hover:text-slate-600'
                                   }`}
                                   title="Read aloud"
                                 >
-                                  <Volume2 size={13} />
+                                  <Volume2 size={11} />
                                   <span>Listen</span>
                                 </button>
 
-                                <div className="h-3 w-[1px] bg-slate-200" />
+                                <span className="text-slate-200">|</span>
 
                                 <button
                                   onClick={() =>
                                     setFeedbackRatings((p) => ({ ...p, [msg.id]: p[msg.id] === 'good' ? null : 'good' }))
                                   }
-                                  className={`flex items-center gap-1 px-2 py-0.5 rounded hover:bg-slate-200/60 transition cursor-pointer ${
-                                    feedbackRatings[msg.id] === 'good' ? 'text-emerald-700 font-bold bg-emerald-50' : 'hover:text-slate-700'
+                                  className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-slate-100 transition cursor-pointer ${
+                                    feedbackRatings[msg.id] === 'good' ? 'text-emerald-700 bg-emerald-50' : 'hover:text-slate-600'
                                   }`}
                                   title="Mark as helpful"
                                 >
-                                  <ThumbsUp size={12} />
+                                  <ThumbsUp size={11} />
                                   <span>Good</span>
                                 </button>
+
+                                <span className="text-slate-200">|</span>
 
                                 <button
                                   onClick={() => {
                                     setFeedbackRatings((p) => ({ ...p, [msg.id]: p[msg.id] === 'easier' ? null : 'easier' }))
                                     handleSendMessage('Please explain that more simply with an everyday analogy and clearer terms.')
                                   }}
-                                  className={`flex items-center gap-1 px-2 py-0.5 rounded hover:bg-slate-200/60 transition cursor-pointer ${
-                                    feedbackRatings[msg.id] === 'easier' ? 'text-amber-700 font-bold bg-amber-50' : 'hover:text-slate-700'
+                                  className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-slate-100 transition cursor-pointer ${
+                                    feedbackRatings[msg.id] === 'easier' ? 'text-amber-700 bg-amber-50' : 'hover:text-slate-600'
                                   }`}
                                   title="Simplify this explanation"
                                 >
-                                  <ChevronDown size={13} />
+                                  <ChevronDown size={11} />
                                   <span>Make it easier</span>
                                 </button>
                               </div>
@@ -1320,6 +1326,8 @@ export default function LearnPage() {
                       </div>
                       <span className="text-xs italic font-serif text-slate-400">writing...</span>
                     </motion.div>
+                      )}
+                    </div>
                   )}
 
                   <div ref={messagesEndRef} />
@@ -2055,9 +2063,9 @@ export default function LearnPage() {
         </div>
 
         {/* Artifact Content Canvas */}
-        <div className="flex-1 overflow-y-auto p-6 bg-white">
+        <div className="flex-1 overflow-y-auto p-4 bg-white">
           {artifactTab === 'preview' ? (
-            <div className="markdown-content prose prose-sm max-w-none text-[#000000] leading-relaxed font-serif">
+            <div className="artifact-md-viewer prose prose-sm max-w-none font-serif leading-relaxed">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkMath]}
                 rehypePlugins={[rehypeKatex]}
