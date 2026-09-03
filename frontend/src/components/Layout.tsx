@@ -167,7 +167,10 @@ export default function Layout() {
               {user?.username?.charAt(0).toUpperCase() || 'U'}
             </div>
             <button
-              onClick={() => logout()}
+              onClick={() => {
+                logout()
+                navigate('/login', { replace: true })
+              }}
               className="text-slate-400 hover:text-rose-600 transition-colors p-2 rounded-full hover:bg-rose-50 cursor-pointer"
               title={t.header.logout}
             >

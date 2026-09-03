@@ -197,6 +197,15 @@ Respond with ONLY this JSON object:
         # Trigger non-blocking background memory extraction as early as possible.
         asyncio.create_task(user_memory_store.auto_extract_and_update(user_id, message, history))
 
+        # Deterministic short-circuit: the planner's fast-path heuristic already
+        # confirmed this is a bare greeting without spending an LLM call (see
+        # query_analyzer.py). Trust that instead of re-deriving it here — if we
+        # still send this through generation, a coincidentally-retrieved context
+        # chunk can push the model toward the "not found in material" branch
+        # even though the message contains no question at all.
+        if query_analysis and query_analysis.get("intent") == "GREETING":
+            return self._greeting_response()
+
         base_messages = self._build_base_messages(
             current_subject, doc_status_note, context, file_name,
             difficulty, user_id, query_analysis, history,
@@ -486,6 +495,30 @@ Respond with ONLY this JSON object:
             return json.loads(cleaned[start:end + 1], strict=False)
         except Exception:
             return None
+
+    # ------------------------------------------------------------------
+    # Deterministic intent responses (no LLM call)
+    # ------------------------------------------------------------------
+
+    def _greeting_response(self) -> Dict[str, Any]:
+        """Bare greeting, confirmed by the planner's fast-path heuristic.
+        Answered directly — no retrieval, no generation call, so there's no
+        retrieved context around to tempt the model into the wrong branch.
+        """
+        return {
+            "thought_process": "Message is a bare greeting; answered directly without invoking retrieval or generation.",
+            "intent": "GREETING",
+            "extracted_subject": None,
+            "is_explanation": False,
+            "quiz_data": None,
+            "reply": (
+                "Hello! Welcome to IndieTutor. What subject or concept would you like to master today? "
+                "You can type a topic or attach your syllabus/textbook PDF anytime using the clip below."
+            ),
+            "groundedness_note": None,
+            "response_format": "conceptual",
+            "export_ready": False,
+        }
 
     # ------------------------------------------------------------------
     # Deterministic fallback (used only if the LLM is unreachable)

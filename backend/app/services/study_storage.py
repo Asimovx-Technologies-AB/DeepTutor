@@ -281,6 +281,31 @@ def get_all_chunks(session_id: str, limit: int = 100) -> List[Dict[str, Any]]:
         conn.close()
 
 
+def get_chunks_by_page(session_id: str, page: int, source_type: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Retrieve all chunks from document_fts for an exact page number."""
+    db_path = get_session_db_path(session_id)
+    if not db_path.exists():
+        return []
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.cursor()
+        if source_type:
+            cur.execute(
+                "SELECT chunk_id, doc_id, page, source_type, content FROM document_fts WHERE page = ? AND source_type = ?",
+                (page, source_type)
+            )
+        else:
+            cur.execute(
+                "SELECT chunk_id, doc_id, page, source_type, content FROM document_fts WHERE page = ?",
+                (page,)
+            )
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
 # ─── Session Messages CRUD ──────────────────────────────────────────────────
 
 def save_session_message(

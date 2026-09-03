@@ -13,8 +13,8 @@ import pytest
 
 
 PROTECTED_ENDPOINTS = [
-    ("GET",  "/api/study/sessions"),
-    ("GET",  "/api/documents/"),
+    ("GET", "/api/progress/summary"),
+    ("GET", "/api/notes/"),
 ]
 
 
@@ -42,14 +42,20 @@ class TestAuthProtection:
             "password": "SecurePass123!",
             "email": "authtest@deeptutor.test",
         })
-        # 200 = created, 409/400 = already exists (acceptable in repeated runs)
-        assert reg.status_code in (200, 201, 409, 400)
+        # 200 = created, 400 = already registered (acceptable in repeated runs)
+        assert reg.status_code in (200, 201, 400, 409)
 
-        login = sync_client.post("/api/auth/login", data={
-            "username": "authtest_user",
+        login = sync_client.post("/api/auth/login", json={
+            "email": "authtest@deeptutor.test",
             "password": "SecurePass123!",
         })
         assert login.status_code == 200, f"Login failed: {login.text}"
         body = login.json()
         assert "access_token" in body
-        assert len(body["access_token"]) > 20
+        token = body["access_token"]
+        assert len(token) > 20
+
+        # Verified authenticated access
+        me_resp = sync_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+        assert me_resp.status_code == 200
+        assert me_resp.json()["email"] == "authtest@deeptutor.test"

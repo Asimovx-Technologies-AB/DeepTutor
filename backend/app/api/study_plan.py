@@ -169,6 +169,13 @@ async def get_plan(
     return plan
 
 
+@router.get("/my-plans")
+async def get_my_plans(user: dict = Depends(get_current_user)):
+    """Fetch all study plans belonging to the current user."""
+    plans = db.get_study_plans_for_user(user["id"])
+    return plans
+
+
 @router.get("/{plan_id}")
 async def get_plan_by_id(
     plan_id: str,

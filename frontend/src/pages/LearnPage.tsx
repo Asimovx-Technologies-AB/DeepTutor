@@ -184,7 +184,7 @@ export default function LearnPage() {
 
   // Current Generated Markdown for Artifact Viewer
   const [currentArtifactMarkdown, setCurrentArtifactMarkdown] = useState<string>(
-    `# DeepTutor Master Study Notes\n\nWelcome to your AI Study Room. Upload your course documents, textbook chapters, or lecture slides to generate real-time grounded notes, KaTeX formula breakdowns, and curriculum maps.\n\n## Core Mechanics\n- **Sub-2ms FTS5 BM25 Retrieval**: Every query is constrained to your uploaded material.\n- **Two-Agent Architecture**: Planner prepares search queries; Executor verifies factual grounding.\n- **Zero Hallucination Guarantee**: Strict academic integrity and formula preservation.`
+    `# DeepTutor Master Study Notes\n\nWelcome to your AI Study Room! Upload your course documents, textbook chapters, or lecture slides to generate comprehensive notes, formula breakdowns, and revision summaries.\n\n## What You Can Do Here\n- **Ask In-Depth Doubts**: Get clear, intuitive step-by-step explanations for tricky concepts.\n- **Solve Exercises & Tables**: Fill and solve textbook exercise tables and math problems.\n- **Prepare for Exams**: Generate revision notes and test your knowledge with interactive quizzes.`
   )
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -304,14 +304,14 @@ export default function LearnPage() {
         setActiveTopic(data.topics[0])
       }
 
-      // Add system confirmation message in chat
+      // Add student-friendly interactive welcome message in chat
       setMessages((prev) => [
         ...prev,
         {
           id: `sys-${Date.now()}`,
           role: 'assistant',
-          text: `I have analyzed **${data.filename}** and indexed ${data.chunk_count} semantic segments into your session database. The Curriculum Study Map with ${data.topics?.length || 0} progressive topics is ready. How would you like to begin?`,
-          thought_process: 'Fast-path digital text and VLM OCR indexing complete. Sub-2ms FTS5 BM25 retrieval active. Guardrail classification passed.',
+          text: `Welcome! I have prepared your study material for **${data.filename}**.\n\nYou can ask me to:\n- **Explain any concept or topic** with simple step-by-step intuition\n- **Solve exercises and fill tables** from any page in the book\n- **Generate quick revision notes, formulas, or practice quizzes**\n\nWhat would you like to explore first?`,
+          thought_process: 'Study material loaded and ready for interactive learning.',
           format: 'conceptual'
         }
       ])
@@ -359,7 +359,8 @@ export default function LearnPage() {
         session_id: currentSid,
         user_id: user?.id || 'default-user',
         subject: activeSubject,
-        difficulty: activeTopic?.difficulty || 'Intermediate'
+        difficulty: activeTopic?.difficulty || 'Intermediate',
+        history: messages.slice(-4).map((m) => ({ role: m.role, text: m.text }))
       })
 
       const isExport = res.data.export_ready ?? (
@@ -947,7 +948,7 @@ export default function LearnPage() {
             <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-white/95 border border-slate-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.04)] backdrop-blur-md">
               <button
                 onClick={() => setWorkspaceOpen(true)}
-                className="text-slate-600 hover:text-slate-900 transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
+                className="text-slate-600 hover:text-slate-900 transition flex items-center gap-1.5 text-sm font-semibold cursor-pointer"
                 title="Open Workspaces"
               >
                 <PanelLeft size={15} />
@@ -957,10 +958,10 @@ export default function LearnPage() {
               <div className="h-3.5 w-[1px] bg-slate-200" />
 
               <div className="flex items-center gap-2 min-w-0">
-                <h2 className="text-xs font-bold text-slate-900 truncate max-w-[180px] sm:max-w-xs">
+                <h2 className="text-sm font-bold text-slate-900 truncate max-w-[180px] sm:max-w-xs">
                   {documentName ? documentName : activeSubject}
                 </h2>
-                <span className="learn-caption font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 shrink-0">
+                <span className="learn-caption font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 shrink-0 text-xs">
                   {docStatus === 'fully_processed' ? 'Fully Grounded' : 'Sub-2ms FTS5'}
                 </span>
               </div>
@@ -971,7 +972,7 @@ export default function LearnPage() {
           <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 p-1 rounded-full bg-slate-100/80 border border-slate-200/70 shadow-[0_2px_12px_rgba(0,0,0,0.03)] backdrop-blur-md pointer-events-auto">
             <button
               onClick={() => setActiveTab('chat')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'chat'
+              className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'chat'
                   ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
                 }`}
@@ -982,7 +983,7 @@ export default function LearnPage() {
 
             <button
               onClick={() => setActiveTab('normal')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'normal'
+              className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'normal'
                   ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
                 }`}
@@ -993,7 +994,7 @@ export default function LearnPage() {
 
             <button
               onClick={() => setActiveTab('teacher')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'teacher'
+              className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'teacher'
                   ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
                 }`}
@@ -1004,7 +1005,7 @@ export default function LearnPage() {
 
             <button
               onClick={() => setActiveTab('exam')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'exam'
+              className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'exam'
                   ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
                 }`}
@@ -1235,24 +1236,6 @@ export default function LearnPage() {
                                     >
                                       {msg.text}
                                     </ReactMarkdown>
-                                  </div>
-                                )}
-
-                                {/* Grounding Source Citation Badges */}
-                                {msg.sources && msg.sources.length > 0 && (
-                                  <div className="mt-3 pt-2.5 border-t border-slate-200/60 flex flex-wrap items-center gap-1.5 w-full">
-                                    <span className="learn-caption font-bold text-slate-400 uppercase tracking-wider font-sans">
-                                      Grounding:
-                                    </span>
-                                    {msg.sources.map((src, idx) => (
-                                      <span
-                                        key={idx}
-                                        className="learn-caption font-medium px-2 py-0.5 rounded bg-white text-slate-600 border border-slate-200 font-sans"
-                                        title={src.snippet}
-                                      >
-                                        Page {src.page} · {src.source_type}
-                                      </span>
-                                    ))}
                                   </div>
                                 )}
 

@@ -651,8 +651,8 @@ class DocumentProcessor:
         table_keywords = {"table", "value", "compare", "how many", "number", "data", "columns", "rows", "statistic", "percent", "metric", "versus", "vs"}
         is_table_query = any(re.search(rf"\b{re.escape(kw)}\b", query_lower) for kw in table_keywords)
 
-        # Detect specific Page Number e.g. "page 22", "page number 22", "pg 22", "p. 22"
-        page_match = re.search(r"\b(?:page|pg|p\.?)\s*(?:number|no\.?)?\s*(\d+)\b", query_lower)
+        # Detect specific Page Number e.g. "page 22", "pagenumber 22", "page number 22", "pg 22", "p. 22"
+        page_match = re.search(r"\b(?:page\s*number|pagenumber|page|pg|p\.?)\s*(?:no\.?)?\s*(\d+)\b", query_lower)
         target_page = int(page_match.group(1)) if page_match else None
 
         # Detect specific Figure / Table identifiers e.g. "fig. 3.4", "figure 3.4", "fig 2", "table 1.1"

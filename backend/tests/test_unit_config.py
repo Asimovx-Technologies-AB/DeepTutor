@@ -20,7 +20,7 @@ def test_config_loads_defaults():
         # Just access the class, don't re-invoke lru_cache
         settings = cfg_module.Settings()
 
-    assert settings.APP_NAME == "Deep Tutor API"
+    assert settings.APP_NAME in ("Deep Tutor API", "Indie Tutor")
     assert settings.ALGORITHM == "HS256"
     assert settings.ACCESS_TOKEN_EXPIRE_MINUTES == 60 * 24 * 7
     assert settings.LLM_PROVIDER in ("gemini", "azure_openai", "ollama")

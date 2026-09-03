@@ -43,7 +43,11 @@ async def create_session(
         title=body.session_title,
     )
     try:
-        session_manager.create_session(subject=body.session_title, title=body.session_title)
+        session_manager.create_session(
+            subject=body.session_title,
+            title=body.session_title,
+            user_id=user["id"]
+        )
     except Exception:
         pass
     return session

@@ -205,6 +205,12 @@ async def send_agent_message(body: AgentMessageRequest):
     """
     init_session_db(body.session_id)
 
+    # Retrieve previous conversation history before adding new message
+    history = body.history
+    if not history:
+        prev_msgs = get_session_messages(body.session_id, limit=6)
+        history = [{"role": m.get("role", "user"), "text": m.get("text", "")} for m in prev_msgs]
+
     # Record student message in SQLite
     user_msg_id = str(uuid.uuid4())
     save_session_message(
@@ -218,7 +224,7 @@ async def send_agent_message(body: AgentMessageRequest):
     plan = await planner_agent.plan(
         user_query=body.message,
         subject=body.subject or "General Study",
-        history=body.history
+        history=history
     )
 
     # Agent 2: Executor Agent
@@ -228,7 +234,7 @@ async def send_agent_message(body: AgentMessageRequest):
         session_id=body.session_id,
         user_id=body.user_id or "default-user",
         subject=body.subject or "General Study",
-        history=body.history
+        history=history
     )
 
     # Record assistant message in SQLite

@@ -91,18 +91,7 @@ function GlobalSessionLoader() {
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const login = useAuthStore((s) => s.login)
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      login(
-        { id: 'guest-user', username: 'Student Learner', email: 'student@deeptutor.ai', role: 'student' },
-        'demo-guest-token'
-      )
-    }
-  }, [isAuthenticated, login])
-
-  return <>{children}</>
+  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {

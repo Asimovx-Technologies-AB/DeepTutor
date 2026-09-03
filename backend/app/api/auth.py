@@ -100,24 +100,30 @@ async def upgrade_to_premium(
 
 def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
     """Dependency: extract user from Bearer token."""
+    guest_user = {
+        "id": "guest-user",
+        "username": "Student Learner",
+        "email": "student@deeptutor.ai",
+        "role": "student",
+        "is_premium": True,
+        "plan": "premium",
+        "max_upload_size_mb": 100,
+    }
+
     if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        return guest_user
+
     token = authorization.split(" ")[1]
-    # Allow demo token
-    if token == "demo-token":
-        return {
-            "id": "demo-user",
-            "username": "Demo User",
-            "email": "demo@deeptutor.ai",
-            "role": "student",
-            "is_premium": False,
-            "plan": "free",
-            "max_upload_size_mb": 10,
-        }
+    # Allow demo tokens
+    if token in ("demo-token", "demo-guest-token"):
+        return guest_user
+
     payload = decode_token(token)
     if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    user = db.get_user_by_id(payload["sub"])
+        return guest_user
+
+    user = db.get_user_by_id(payload.get("sub", ""))
     if not user:
-        raise HTTPException(status_code=401, detail="User not found or session expired")
+        return guest_user
+
     return user

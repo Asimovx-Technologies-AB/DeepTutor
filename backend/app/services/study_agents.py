@@ -20,6 +20,7 @@ from app.core.config import get_settings
 from app.services.study_storage import (
     search_fts_chunks,
     get_all_chunks,
+    get_chunks_by_page,
     get_student_memory,
     add_student_memory_fact,
 )
@@ -27,15 +28,31 @@ from app.services.study_storage import (
 
 # ─── Universal LLM Caller with Multi-Provider Cascade ───────────────────────
 
+# ─── Universal Fast LLM Caller with Multi-Provider Cascade ───────────────────
+
 async def call_llm(
     prompt: str,
     system_instruction: str = "",
     temperature: float = 0.2
 ) -> str:
-    """Cascade: Google Gemini -> NVIDIA NIM -> Local Ollama/Offline."""
+    """Fast Async Cascade: Google Gemini REST -> Google GenAI SDK -> NVIDIA NIM -> Local Ollama."""
     settings = get_settings()
 
-    # 1. Google Gemini
+    # 1. Ultra-fast direct Gemini REST Client (Async, Sub-second)
+    try:
+        from app.rag.ollama_client import ollama
+        if await ollama.is_available():
+            msgs = []
+            if system_instruction:
+                msgs.append({"role": "system", "content": system_instruction})
+            msgs.append({"role": "user", "content": prompt})
+            resp = await ollama.chat(msgs, temperature=temperature)
+            if resp and resp.strip():
+                return resp.strip()
+    except Exception:
+        pass
+
+    # 2. Google GenerativeAI SDK Fallback
     if settings.GEMINI_API_KEY:
         try:
             import google.generativeai as genai
@@ -51,15 +68,9 @@ async def call_llm(
             if resp and resp.text:
                 return resp.text
         except Exception:
-            try:
-                model = genai.GenerativeModel("gemini-1.5-flash")
-                resp = await asyncio.to_thread(model.generate_content, prompt)
-                if resp and resp.text:
-                    return resp.text
-            except Exception:
-                pass
+            pass
 
-    # 2. NVIDIA NIM Fallback
+    # 3. NVIDIA NIM Fallback
     nvidia_key = getattr(settings, "NVIDIA_API_KEY", "") or os.getenv("NVIDIA_API_KEY", "")
     if nvidia_key:
         try:
@@ -72,7 +83,7 @@ async def call_llm(
                 messages.append({"role": "system", "content": system_instruction})
             messages.append({"role": "user", "content": prompt})
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=20.0) as client:
                 res = await client.post(
                     f"{base_url}/chat/completions",
                     headers=headers,
@@ -87,67 +98,54 @@ async def call_llm(
     return ""
 
 
-# ─── 1. Planner Agent (QueryAnalyzerAgent) ──────────────────────────────────
+# ─── 1. Planner Agent (Instant Zero-Latency Fast-Path) ───────────────────────
 
 class QueryAnalyzerAgent:
-    """Decomposes queries, creates BM25 search strategies, and chooses response contract."""
+    """Instant heuristic planning agent that decomposes queries and identifies search requirements in < 1ms."""
 
     async def plan(self, user_query: str, subject: str = "General Study", history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
-        prompt = f"""
-You are the DeepTutor Planning Agent (QueryAnalyzerAgent).
-Analyze this student query for the subject '{subject}'.
+        q_lower = user_query.lower().strip()
 
-Student Query: "{user_query}"
-
-Tasks:
-1. Decompose compound questions into atomic sub-questions.
-2. Formulate 2 to 4 clean, noun-phrase BM25 search queries (no conversational filler).
-3. Flag if query requires tabular data or diagram/figure data.
-4. Select response format contract:
-   - "conceptual": Intuition -> Definition -> Mechanics -> Example -> Follow-up
-   - "comparison": Hook -> Markdown Comparison Table -> Shared Scenario -> Follow-up
-   - "list": Structured markdown bullet hierarchy
-   - "diagram": Architecture/Figure visual workflow breakdown
-   - "study_notes": Standalone academic reference artifact
-   - "quiz": Interactive one-by-one assessment
-   - "study_plan": Timeline & roadmap
-5. Estimate confidence (0.0 to 1.0).
-
-Return ONLY valid JSON:
-{{
-  "sub_questions": ["..."],
-  "bm25_queries": ["noun phrase 1", "noun phrase 2"],
-  "requires_table_data": false,
-  "requires_image_data": false,
-  "response_format": "conceptual",
-  "confidence": 0.95,
-  "needs_clarification": false
-}}
-"""
-        sys_inst = "You are a precise academic search planner. Return valid JSON only without markdown code blocks."
-        raw = await call_llm(prompt, sys_inst, temperature=0.1)
-
-        if raw:
-            try:
-                clean = raw.strip().replace("```json", "").replace("```", "").strip()
-                return json.loads(clean)
-            except Exception:
-                pass
-
-        # Fallback planner rule
-        words = [w for w in re.findall(r"\w+", user_query) if len(w) > 2 and w.lower() not in ("what", "how", "why", "explain", "does", "the", "and")]
-        query_noun = " ".join(words[:4]) or user_query
+        # 1. Format classification
+        is_quiz = any(k in q_lower for k in ("quiz", "test me", "ask me a question", "pop quiz", "mcq"))
         is_study_notes = bool(re.search(
-            r"\b(study notes?|cheat sheet|revision notes?|study map|summari[sz]e.*as notes|create.*(?:md|\.md|markdown)\s*(?:file|doc)?|make.*(?:md|\.md|markdown)\s*(?:file|doc)?|generate.*(?:md|\.md|markdown)\s*(?:file|doc)?|(?:md|\.md|markdown)\s*(?:file|doc)?\s*(?:on|for|about))\b", user_query.lower()
+            r"\b(study notes?|cheat sheet|revision notes?|study map|summari[sz]e.*as notes|create.*(?:md|\.md|markdown)|make.*(?:md|\.md|markdown)|generate.*(?:md|\.md|markdown)|(?:md|\.md|markdown)\s*(?:file|doc)?\s*(?:on|for|about))\b", q_lower
         ))
-        resp_format = "study_notes" if is_study_notes else ("comparison" if "compare" in user_query.lower() else "conceptual")
+        is_comparison = any(k in q_lower for k in ("compare", "versus", " vs ", "difference between", "distinguish"))
+        is_diagram = any(k in q_lower for k in ("diagram", "figure", "chart", "architecture", "flowchart", "illustration"))
+
+        if is_quiz:
+            resp_format = "quiz"
+        elif is_study_notes:
+            resp_format = "study_notes"
+        elif is_comparison:
+            resp_format = "comparison"
+        elif is_diagram:
+            resp_format = "diagram"
+        else:
+            resp_format = "conceptual"
+
+        # 2. Content requirements
+        is_table = any(k in q_lower for k in ("table", "data", "fill", "solve", "matrix", "column", "row", "calculate", "position", "sequence"))
+        is_image = is_diagram or any(k in q_lower for k in ("image", "picture", "visual", "graph", "plot"))
+
+        # 3. Clean search keywords
+        words = [w for w in re.findall(r"[a-z0-9]+", q_lower) if len(w) > 2 and w not in (
+            "what", "how", "why", "explain", "does", "the", "and", "for", "with", "from", "help", "solve", "please", "about"
+        )]
+        clean_noun_phrase = " ".join(words[:4]) or user_query
+
+        bm25_queries = [clean_noun_phrase]
+        if subject and subject not in clean_noun_phrase:
+            bm25_queries.append(f"{clean_noun_phrase} {subject}")
+
         return {
             "sub_questions": [user_query],
-            "bm25_queries": [query_noun, subject],
-            "requires_table_data": "table" in user_query.lower() or "compare" in user_query.lower() or is_study_notes,
-            "requires_image_data": "diagram" in user_query.lower() or "figure" in user_query.lower() or is_study_notes,
+            "bm25_queries": bm25_queries,
+            "requires_table_data": is_table,
+            "requires_image_data": is_image,
             "response_format": resp_format,
-            "confidence": 0.85,
+            "confidence": 0.95,
             "needs_clarification": False
         }
 
@@ -166,11 +164,45 @@ class DecisionAgent:
         subject: str = "General Study",
         history: List[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        # 1. Retrieve candidate chunks via FTS5 BM25 search
+        # Detect specific Page Number in query (e.g. "page 22", "pagenumber 22", "pg 22", "p. 22")
+        page_match = re.search(r"\b(?:page\s*number|pagenumber|page|pg|p\.?)\s*(?:no\.?)?\s*(\d+)\b", user_query.lower())
+        target_page = int(page_match.group(1)) if page_match else None
+
+        # 1. Retrieve candidate chunks
         retrieved_chunks = []
         seen_ids = set()
 
-        for q in plan.get("bm25_queries", [user_query]):
+        # If a specific page was asked, fetch all chunks from that exact page directly first
+        if target_page is not None:
+            page_chunks = get_chunks_by_page(session_id, target_page)
+            # If user asked about table or solving, prioritize table chunks on that page
+            if any(w in user_query.lower() for w in ("table", "solve", "fill", "calculate", "data", "matrix", "row", "col")):
+                page_chunks.sort(key=lambda c: 0 if c.get("source_type") == "table" else 1)
+            for c in page_chunks:
+                if c["chunk_id"] not in seen_ids:
+                    seen_ids.add(c["chunk_id"])
+                    retrieved_chunks.append(c)
+
+        # 2. Check if student query is a short Boolean confirmation / refusal
+        q_clean = user_query.lower().strip()
+        is_boolean_yes = q_clean in ("yes", "y", "yeah", "yup", "sure", "ok", "okay", "true", "tell me more", "explain that", "go ahead", "please do", "solve that", "explain", "continue")
+        is_boolean_no = q_clean in ("no", "n", "nope", "nah", "false", "not now", "stop", "cancel")
+
+        # If user query is a boolean follow-up ("yes", "sure", etc.), extract keywords from the previous assistant question
+        search_terms = plan.get("bm25_queries", [user_query])
+        if is_boolean_yes and history:
+            prev_turn = ""
+            for m in reversed(history):
+                if m.get("text"):
+                    prev_turn = m.get("text", "")
+                    break
+            prev_words = [w for w in re.findall(r"[a-z0-9]+", prev_turn.lower()) if len(w) > 3 and w not in (
+                "would", "like", "shall", "with", "this", "that", "have", "from", "step", "example", "question", "could", "find", "answer", "please"
+            )]
+            if prev_words:
+                search_terms = [" ".join(prev_words[-6:]), " ".join(prev_words[:4])]
+
+        for q in search_terms:
             src = "table" if plan.get("requires_table_data") else None
             chunks = search_fts_chunks(session_id, q, limit=4, source_type=src)
             for c in chunks:
@@ -180,22 +212,36 @@ class DecisionAgent:
 
         if not retrieved_chunks:
             # Broad search fallback
-            retrieved_chunks = search_fts_chunks(session_id, user_query, limit=5)
+            if is_boolean_yes:
+                retrieved_chunks = get_all_chunks(session_id, limit=5)
+            else:
+                retrieved_chunks = search_fts_chunks(session_id, user_query, limit=5)
 
-        # 2. Check if student asked to "quiz me"
+        # 3. Format Recent Conversation History
+        history_block = ""
+        if history:
+            history_lines = [
+                f"{m.get('role', 'user').capitalize()}: {m.get('text', '')}"
+                for m in history[-3:]
+                if m.get('text')
+            ]
+            if history_lines:
+                history_block = "Recent Conversation History:\n" + "\n".join(history_lines) + "\n\n"
+
+        # 4. Check if student asked to "quiz me"
         is_quiz_query = any(k in user_query.lower() for k in ("quiz me", "ask me a question", "test me", "give me 3 questions", "pop quiz"))
         if is_quiz_query:
             plan["response_format"] = "quiz"
 
-        # 3. Consult Student Episodic Memory
+        # 5. Consult Student Episodic Memory
         student_mem = get_student_memory(user_id)
         weaknesses_str = ", ".join(student_mem.get("weaknesses", [])) or "None identified yet"
         goals_str = ", ".join(student_mem.get("goals", [])) or "Mastery"
 
-        # 4. Strict Grounding Verification
+        # 6. Strict Grounding Verification
         # If no chunks exist at all in the database
         all_doc_chunks = get_all_chunks(session_id, limit=3)
-        if not all_doc_chunks and not retrieved_chunks:
+        if not all_doc_chunks and not retrieved_chunks and not is_boolean_yes:
             decline_msg = f"I could not find the answer to this in your uploaded PDF. Please ask questions specifically related to the concepts and chapters in your uploaded material for {subject}."
             return {
                 "thought_process": "Checked session FTS5 SQLite index. Zero chunks present. Declining query strictly per academic grounding rules.",
@@ -209,7 +255,7 @@ class DecisionAgent:
             for c in retrieved_chunks[:6]
         )
 
-        # 5. Prompt LLM with Strict Academic Grounding & KaTeX Math
+        # 7. Prompt LLM with Strict Academic Grounding, Conversational Follow-up, & KaTeX Math
         prompt = f"""
 You are DeepTutor's Execution Agent (DecisionAgent).
 Subject: {subject}
@@ -217,24 +263,34 @@ Response Contract: {plan.get('response_format', 'conceptual')}
 Student Weakness Profile: {weaknesses_str}
 Student Goals: {goals_str}
 
-Retrieved Grounding Chunks:
+{history_block}Retrieved Grounding Chunks:
 {context_text}
 
-Student Question:
+Student Message:
 "{user_query}"
 
 STRICT RULES:
-1. Grounding Rule: Answer strictly and only from the retrieved chunks above. If the uploaded material does not contain the answer, state:
+1. Grounding Rule: Answer strictly and only from the retrieved chunks and conversation history above. If a completely unrelated topic is asked that is absent from the material, state:
    "I could not find the answer to this in your uploaded PDF. Please ask questions specifically related to the concepts and chapters in your uploaded material for {subject}."
-2. Mathematics: Format ALL formulas in standalone block KaTeX:
+2. Boolean Continuations & Follow-up Acceptance:
+   - If the student answers 'Yes', 'Sure', 'Explain that', or 'Continue' to your previous follow-up question, you MUST directly fulfill and explain that topic step-by-step. Do NOT output a refusal message for follow-ups that you offered.
+   - If the student answers 'No' / 'Nope', acknowledge politely and ask what other concept from their uploaded material they would like to study.
+3. Table & Problem Solving: If the student asks to solve, calculate, complete, or fill a table or exercise from the document (e.g. "solve the table on page 22", "fill the table"):
+   - Step 1: Explain the general formula and rule in simple, intuitive steps with block KaTeX math.
+   - Step 2: Show the clear step-by-step calculation for EVERY row and sequence in the table (including ALL integer and fraction sequences).
+   - Step 3: Output the Complete Solved Markdown Table with EVERY row fully computed. Strictly do NOT use ellipses (...) or placeholders. Every sequence and test number in the original table must be explicitly filled with its exact Yes/No and Position.
+   Do NOT output raw JSON formatting or escape slashes in the response text.
+4. Mathematics: Format ALL formulas in standalone block KaTeX:
    $$
    formula
    $$
    or inline $...$.
-3. Tone: Articulate, authoritative, university-grade academic tone. Strictly ZERO emojis.
-4. Chain-of-Thought: Provide a dedicated thought process detailing your reasoning and verification before the answer.
-5. Quiz Mode: If the student asks for a quiz or format is 'quiz', present ONE question with 4 multiple-choice options (A, B, C, D) and wait for the student's answer.
-6. Study Notes Mode: If format is 'study_notes':
+5. Tone: Articulate, authoritative, engaging academic tone. Strictly ZERO emojis.
+6. Chain-of-Thought: Provide a dedicated thought process detailing your reasoning and verification before the answer.
+7. Interactive Follow-up Question (Conversational Closing):
+   ALWAYS end your response with a natural, conversational follow-up question in bold (e.g., "**Would you like to solve another problem from this section?**" or "**Shall we see how this applies to negative differences, or test this with a quick 1-question practice?**") that the student can easily answer with a simple 'Yes' or 'No'.
+8. Quiz Mode: If the student asks for a quiz or format is 'quiz', present ONE question with 4 multiple-choice options (A, B, C, D) and wait for the student's answer.
+9. Study Notes Mode: If format is 'study_notes':
    - Start with '# {{Topic}} — Study Notes'
    - Break into 5-9 numbered '## ' sections covering definitions, mechanisms, applications, and trade-offs
    - Use Markdown tables for scannable comparison
@@ -251,19 +307,68 @@ Return ONLY valid JSON in this exact structure:
         sys_inst = "You are a distinguished university professor. Output clean JSON only. Strictly no emojis."
         raw = await call_llm(prompt, sys_inst, temperature=0.2)
 
-        thought = "Synthesizing retrieved FTS5 chunks into a structured university explanation."
+        thought = "Synthesizing retrieved FTS5 chunks into a structured step-by-step explanation."
         answer = ""
         quiz_data = None
 
         if raw:
+            text = raw.strip()
+            # Strip code fences if present
+            if text.startswith("```"):
+                text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+                text = re.sub(r"\s*```$", "", text).strip()
+
+            # 1. Try standard JSON decode with strict=False
+            parsed = None
             try:
-                cleaned = raw.strip().replace("```json", "").replace("```", "").strip()
-                parsed = json.loads(cleaned)
+                parsed = json.loads(text, strict=False)
+            except Exception:
+                # 2. Try regex extraction of JSON object
+                json_match = re.search(r"(\{[\s\S]*\})", text)
+                if json_match:
+                    try:
+                        parsed = json.loads(json_match.group(1), strict=False)
+                    except Exception:
+                        pass
+
+            if isinstance(parsed, dict):
                 thought = parsed.get("thought_process", thought)
                 answer = parsed.get("response", "")
                 quiz_data = parsed.get("quiz_data")
-            except Exception:
-                answer = raw.strip()
+
+            # 3. Fallback: Safe regex extraction of fields without unicode_escape
+            if not answer and ('"response"' in text or '"thought_process"' in text):
+                th_match = re.search(r'"thought_process"\s*:\s*"((?:[^"\\]|\\.)*)"', text, re.DOTALL)
+                if th_match:
+                    thought = th_match.group(1).replace(r'\"', '"').replace(r'\n', '\n')
+
+                resp_pattern = re.search(r'"response"\s*:\s*"', text)
+                if resp_pattern:
+                    start_pos = resp_pattern.end()
+                    end_pos = text.rfind('"')
+                    if end_pos > start_pos:
+                        raw_ans = text[start_pos:end_pos]
+                    else:
+                        raw_ans = text[start_pos:]
+                    # Unescape standard JSON string escapes only, leaving all LaTeX backslashes intact!
+                    answer = raw_ans.replace(r'\"', '"').replace(r'\n', '\n').replace(r'\t', '    ')
+
+            if not answer:
+                # Direct markdown response or stripped JSON
+                if text.startswith("{") and '"response":' in text:
+                    cleaned_body = re.sub(r'^\s*\{\s*"thought_process"\s*:\s*".*?"\s*,\s*"response"\s*:\s*"?', '', text, flags=re.DOTALL)
+                    cleaned_body = re.sub(r'"?\s*\}\s*$', '', cleaned_body)
+                    answer = cleaned_body.replace(r'\"', '"').replace(r'\n', '\n').strip()
+                else:
+                    answer = text
+
+        # Sanitize any accidental control character / corrupted LaTeX artifacts
+        if answer:
+            answer = answer.replace('\x0c', r'\f').replace('\x07', r'\a').replace('\x08', r'\b').replace('\x0b', r'\v')
+            # Fix any truncated/corrupted LaTeX keywords
+            answer = re.sub(r'(?<!\\)\brac\{', r'\\frac{', answer)
+            answer = re.sub(r'(?<!\\)\bext\{', r'\\text{', answer)
+            answer = re.sub(r'(?<!\\)\bpprox\b', r'\\approx', answer)
 
         if not answer:
             # Fallback direct generation if JSON parse failed

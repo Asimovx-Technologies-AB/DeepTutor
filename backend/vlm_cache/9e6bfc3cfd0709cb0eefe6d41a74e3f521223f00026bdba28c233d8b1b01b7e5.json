@@ -1,5 +1,0 @@
-{
-  "key": "9e6bfc3cfd0709cb0eefe6d41a74e3f521223f00026bdba28c233d8b1b01b7e5",
-  "text": "{\"relevant\": true, \"accurate\": true, \"quality\": \"fair\", \"reason\": \"The diagram clearly illustrates VMware's classic binary translation virtualization model, mapping the guest OS and hypervisor to x86 privilege rings.\"}",
-  "metadata": {}
-}

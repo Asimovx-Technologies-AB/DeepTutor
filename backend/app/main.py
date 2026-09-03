@@ -21,10 +21,6 @@ async def lifespan(app: FastAPI):
 
     dirs = [
         settings.UPLOAD_DIR,
-        settings.FAISS_DATA_DIR,
-        settings.LIGHTRAG_DATA_DIR,
-        settings.CHROMA_PERSIST_DIR,  # keep for legacy fallback
-        settings.GRAPH_DATA_DIR,       # keep for legacy fallback
         settings.IMAGE_SEARCH_CACHE_DIR,
     ]
     for dir_path in dirs:

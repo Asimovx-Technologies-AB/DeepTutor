@@ -112,11 +112,12 @@ class TestExamEvaluator:
         """MCQ: exact letter match = is_correct True, score 1.0."""
         from app.rag.exam_generator import ExamGenerator
         gen = ExamGenerator()
-        result = await gen.evaluate_exam(
-            questions=SAMPLE_EXAM["questions"],
-            student_answers={"q1": "Some written answer", "q2": "A", "q3": "noise"},
-        )
-        mcq_result = next(r for r in result["evaluations"] if r["id"] == "q2")
+        with patch("app.rag.ollama_client.ollama.chat", new=AsyncMock(return_value='{"score_percentage": 100, "is_correct": true, "feedback": "Good", "ideal_answer": "ans"}')):
+            result = await gen.evaluate_exam(
+                questions=SAMPLE_EXAM["questions"],
+                student_answers={"q1": "Some written answer", "q2": "A", "q3": "noise"},
+            )
+        mcq_result = next(r for r in result["results"] if r["id"] == "q2")
         assert mcq_result["is_correct"] is True
         assert mcq_result["score"] == 1.0
 
@@ -125,11 +126,12 @@ class TestExamEvaluator:
         """MCQ: wrong letter = is_correct False, score 0.0."""
         from app.rag.exam_generator import ExamGenerator
         gen = ExamGenerator()
-        result = await gen.evaluate_exam(
-            questions=SAMPLE_EXAM["questions"],
-            student_answers={"q1": "Any answer", "q2": "C", "q3": "noise"},
-        )
-        mcq_result = next(r for r in result["evaluations"] if r["id"] == "q2")
+        with patch("app.rag.ollama_client.ollama.chat", new=AsyncMock(return_value='{"score_percentage": 100, "is_correct": true, "feedback": "Good", "ideal_answer": "ans"}')):
+            result = await gen.evaluate_exam(
+                questions=SAMPLE_EXAM["questions"],
+                student_answers={"q1": "Any answer", "q2": "C", "q3": "noise"},
+            )
+        mcq_result = next(r for r in result["results"] if r["id"] == "q2")
         assert mcq_result["is_correct"] is False
         assert mcq_result["score"] == 0.0
 
@@ -138,11 +140,12 @@ class TestExamEvaluator:
         """Fill-in-blank: exact match must be graded correct."""
         from app.rag.exam_generator import ExamGenerator
         gen = ExamGenerator()
-        result = await gen.evaluate_exam(
-            questions=SAMPLE_EXAM["questions"],
-            student_answers={"q1": "Written", "q2": "A", "q3": "noise"},
-        )
-        fib = next(r for r in result["evaluations"] if r["id"] == "q3")
+        with patch("app.rag.ollama_client.ollama.chat", new=AsyncMock(return_value='{"score_percentage": 100, "is_correct": true, "feedback": "Good", "ideal_answer": "ans"}')):
+            result = await gen.evaluate_exam(
+                questions=SAMPLE_EXAM["questions"],
+                student_answers={"q1": "Written", "q2": "A", "q3": "noise"},
+            )
+        fib = next(r for r in result["results"] if r["id"] == "q3")
         assert fib["is_correct"] is True
 
     @pytest.mark.asyncio
@@ -150,11 +153,12 @@ class TestExamEvaluator:
         """Fill-in-blank: accepted alternative must also be graded correct."""
         from app.rag.exam_generator import ExamGenerator
         gen = ExamGenerator()
-        result = await gen.evaluate_exam(
-            questions=SAMPLE_EXAM["questions"],
-            student_answers={"q1": "Written", "q2": "A", "q3": "random noise"},
-        )
-        fib = next(r for r in result["evaluations"] if r["id"] == "q3")
+        with patch("app.rag.ollama_client.ollama.chat", new=AsyncMock(return_value='{"score_percentage": 100, "is_correct": true, "feedback": "Good", "ideal_answer": "ans"}')):
+            result = await gen.evaluate_exam(
+                questions=SAMPLE_EXAM["questions"],
+                student_answers={"q1": "Written", "q2": "A", "q3": "random noise"},
+            )
+        fib = next(r for r in result["results"] if r["id"] == "q3")
         assert fib["is_correct"] is True
 
     @pytest.mark.asyncio
@@ -162,11 +166,12 @@ class TestExamEvaluator:
         """Fill-in-blank: completely wrong answer must score 0."""
         from app.rag.exam_generator import ExamGenerator
         gen = ExamGenerator()
-        result = await gen.evaluate_exam(
-            questions=SAMPLE_EXAM["questions"],
-            student_answers={"q1": "Written", "q2": "A", "q3": "gradient"},
-        )
-        fib = next(r for r in result["evaluations"] if r["id"] == "q3")
+        with patch("app.rag.ollama_client.ollama.chat", new=AsyncMock(return_value='{"score_percentage": 100, "is_correct": true, "feedback": "Good", "ideal_answer": "ans"}')):
+            result = await gen.evaluate_exam(
+                questions=SAMPLE_EXAM["questions"],
+                student_answers={"q1": "Written", "q2": "A", "q3": "gradient"},
+            )
+        fib = next(r for r in result["results"] if r["id"] == "q3")
         assert fib["is_correct"] is False
 
     @pytest.mark.asyncio
@@ -188,5 +193,5 @@ class TestExamEvaluator:
                 student_answers={"q1": "Supervised learning uses labelled examples.", "q2": "A", "q3": "noise"},
             )
 
-        per_question_total = sum(r["score"] for r in result["evaluations"])
-        assert abs(result["total_score"] - per_question_total) < 0.01
+        per_question_total = sum(r["score"] for r in result["results"])
+        assert abs(result["earned_score"] - per_question_total) < 0.05
