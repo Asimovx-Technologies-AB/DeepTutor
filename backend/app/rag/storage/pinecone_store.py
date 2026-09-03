@@ -118,7 +118,7 @@ class PineconeVectorStore:
 
     def _get_index(self, topic_id: Optional[str] = None):
         """Lazy initialization of Pinecone client and index based on topic routing."""
-        from app.rag.textbook_reader import is_curriculum_topic
+        from app.rag.document_processor import is_curriculum_topic
 
         client = self._get_client()
         textbook_index = getattr(settings, "PINECONE_TEXTBOOK_INDEX", "textbook") or getattr(settings, "PINECONE_INDEX_NAME", "textbook") or "textbook"

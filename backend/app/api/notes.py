@@ -191,7 +191,7 @@ async def generate_smart_notes(
 
     # If material_text is empty or sparse, retrieve authentic textbook curriculum context
     if not is_custom_upload or len(material_text.strip()) < 100:
-        from app.rag.textbook_reader import is_curriculum_topic, extract_textbook_chunks, get_chapter_title
+        from app.rag.document_processor import is_curriculum_topic, extract_textbook_chunks, get_chapter_title
         curriculum_target = topic_id
         if not is_curriculum_topic(curriculum_target):
             # Match by name in catalog

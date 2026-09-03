@@ -1,5 +1,49 @@
 [
   {
+    "id": "session_2370324316",
+    "subject": "General Study",
+    "title": "New Study Workspace",
+    "document_name": "",
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 2,
+    "created_at": "2026-09-03T06:04:11.421256+00:00",
+    "last_active": "2026-09-03T06:04:15.521255+00:00"
+  },
+  {
+    "id": "87e82c2d-a0a8-4d63-8f62-9acf1d10a673",
+    "subject": "General Study",
+    "title": "Attention All U Need Study Room",
+    "document_name": "Attention all u need.pdf",
+    "status": "text_ready",
+    "topic_count": 0,
+    "message_count": 2,
+    "created_at": "2026-09-03T05:55:14.674267+00:00",
+    "last_active": "2026-09-03T06:04:10.419361+00:00"
+  },
+  {
+    "id": "session_970049090",
+    "subject": "Machine Learning",
+    "title": "Class-10-Geography Study Room",
+    "document_name": "Class-10-Geography.pdf",
+    "status": "text_ready",
+    "topic_count": 7,
+    "message_count": 2,
+    "created_at": "2026-09-03T05:51:13.010115+00:00",
+    "last_active": "2026-09-03T05:52:22.986571+00:00"
+  },
+  {
+    "id": "session_1805405956",
+    "subject": "General Study",
+    "title": "New Study Workspace",
+    "document_name": "",
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-03T05:50:00.456045+00:00",
+    "last_active": "2026-09-03T05:50:00.456045+00:00"
+  },
+  {
     "id": "session_1990214582",
     "subject": "Machine Learning",
     "title": "Ml Algorithams Study Room",
