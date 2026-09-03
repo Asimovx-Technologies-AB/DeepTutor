@@ -6,8 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pathlib import Path
 from app.core.config import get_settings
-from app.api import auth, chat, documents, quiz, flashcards, progress, study_plan, leaderboard, mcp, notes, dashboard
+from app.api import auth, chat, documents, quiz, flashcards, progress, study_plan, leaderboard, mcp, notes, dashboard, study
 from app.api.endpoints import images
+from app.services.study_storage import ensure_data_directories, check_and_restore_s3_backups
 
 settings = get_settings()
 
@@ -15,6 +16,9 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: create all required directories
+    ensure_data_directories()
+    check_and_restore_s3_backups()
+
     dirs = [
         settings.UPLOAD_DIR,
         settings.FAISS_DATA_DIR,
@@ -73,6 +77,7 @@ all_routers = [
     leaderboard.router,
     notes.router,
     dashboard.router,
+    study.router,
 ]
 for r in all_routers:
     app.include_router(r, prefix="/api")

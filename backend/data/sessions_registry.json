@@ -1,0 +1,24 @@
+[
+  {
+    "id": "session_1990214582",
+    "subject": "Machine Learning",
+    "title": "Ml Algorithams Study Room",
+    "document_name": "ml algorithams.pdf",
+    "status": "text_ready",
+    "topic_count": 5,
+    "message_count": 8,
+    "created_at": "2026-09-03T05:41:15.484130+00:00",
+    "last_active": "2026-09-03T05:45:34.894689+00:00"
+  },
+  {
+    "id": "session_8479759789",
+    "subject": "General Study",
+    "title": "Default Study Room",
+    "document_name": "",
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-03T05:41:11.329810+00:00",
+    "last_active": "2026-09-03T05:41:11.329810+00:00"
+  }
+]

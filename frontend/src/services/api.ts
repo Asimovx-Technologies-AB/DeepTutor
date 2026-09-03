@@ -351,6 +351,136 @@ export const leaderboardApi = {
   getRankings: () => api.get('/leaderboard'),
 }
 
+// ─── AI Study Room & GraphRAG Platform API ────────────────────
+export const studyApi = {
+  upload: (file: File, subject?: string, sessionId?: string) => {
+    const form = new FormData()
+    form.append('file', file)
+    if (subject) form.append('subject', subject)
+    if (sessionId) form.append('session_id', sessionId)
+    return api.post('/study/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  sendMessage: (payload: {
+    message: string
+    session_id: string
+    user_id?: string
+    subject?: string
+    difficulty?: string
+    history?: any[]
+  }) => api.post('/study/agent/message', payload),
+  getCoreIdea: (payload: {
+    session_id: string
+    topic_id: string
+    topic_title: string
+    topic_summary?: string
+  }) => api.post('/study/topic/core-idea', payload),
+  askDoubt: (payload: {
+    session_id: string
+    topic_id: string
+    topic_title: string
+    question: string
+    history?: any[]
+  }) => api.post('/study/topic/doubt', payload),
+  getExam: (payload: {
+    session_id: string
+    topic_id: string
+    topic_title: string
+  }) => api.post('/study/topic/exam', payload),
+  evaluateExam: (payload: {
+    session_id: string
+    topic_id: string
+    questions: any[]
+    answers: Record<string, string>
+  }) => api.post('/study/topic/evaluate', payload),
+  exportNotesMd: (payload: { markdown: string; title?: string }) =>
+    api.post('/study/export/notes-md', payload, { responseType: 'blob' }),
+  listSessions: () => api.get('/study/sessions'),
+  createSession: (payload?: { subject?: string; title?: string }) =>
+    api.post('/study/sessions/new', payload || {}),
+  getSession: (sessionId: string) => api.get(`/study/sessions/${sessionId}`),
+  deleteSession: (sessionId: string) => api.delete(`/study/sessions/${sessionId}`),
+  getMemory: (userId: string) => api.get(`/study/memory/${userId}`),
+  addMemoryFact: (userId: string, factData: any) =>
+    api.post(`/study/memory/${userId}/fact`, factData),
+  clearMemory: (userId: string) => api.delete(`/study/memory/${userId}`),
+}
+
+export const streamTeacherLecture = async ({
+  sessionId,
+  topicId,
+  topicTitle,
+  onPhaseStart,
+  onToken,
+  onPhaseEnd,
+  onDone,
+  onError,
+  signal,
+}: {
+  sessionId: string
+  topicId: string
+  topicTitle: string
+  onPhaseStart?: (phase: string) => void
+  onToken: (token: string) => void
+  onPhaseEnd?: (phase: string) => void
+  onDone: () => void
+  onError: (err: any) => void
+  signal?: AbortSignal
+}) => {
+  const baseUrl = getApiBaseUrl()
+  const url = `${baseUrl}/study/topic/teach/stream?session_id=${encodeURIComponent(sessionId)}&topic_id=${encodeURIComponent(topicId)}&topic_title=${encodeURIComponent(topicTitle)}`
+
+  try {
+    const res = await fetch(url, {
+      headers: { Accept: 'text/event-stream' },
+      signal,
+    })
+
+    if (!res.ok || !res.body) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    }
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed.startsWith('data: ')) continue
+        const raw = trimmed.slice(6)
+        try {
+          const evt = JSON.parse(raw)
+          if (evt.type === 'phase_start' && onPhaseStart) {
+            onPhaseStart(evt.phase)
+          } else if (evt.type === 'token') {
+            onToken(evt.token)
+          } else if (evt.type === 'phase_end' && onPhaseEnd) {
+            onPhaseEnd(evt.phase)
+          } else if (evt.type === 'done') {
+            onDone()
+            return
+          }
+        } catch {
+          // ignore partial parse error
+        }
+      }
+    }
+    onDone()
+  } catch (err: any) {
+    if (signal?.aborted || err?.name === 'AbortError') return
+    onError(err)
+  }
+}
+
 export default api
 
 
