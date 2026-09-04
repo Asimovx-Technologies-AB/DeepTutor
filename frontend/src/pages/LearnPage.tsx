@@ -14,7 +14,7 @@ import {
   Trash2, Plus, FileText, UploadCloud, RefreshCw, PanelLeft,
   PanelRight, Maximize2, Minimize2, Split, HelpCircle, Award,
   Brain, FileSpreadsheet, Eye, Play, Pause, X, ArrowUp,
-  ThumbsUp, ThumbsDown
+  ThumbsUp, ThumbsDown, Search, FolderPlus
 } from 'lucide-react'
 
 import { studyApi, streamTeacherLecture } from '../services/api'
@@ -104,6 +104,35 @@ interface ExamEvaluation {
 
 type ActiveTab = 'chat' | 'normal' | 'teacher' | 'exam' | 'artifact'
 
+export const getSubjectVisual = (subjectOrTitle: string) => {
+  const s = (subjectOrTitle || '').toLowerCase()
+  if (s.includes('math') || s.includes('calculus') || s.includes('algebra') || s.includes('geom') || s.includes('trig')) {
+    return { emoji: '📐', bg: 'bg-amber-100/80 text-amber-700 border-amber-200/80', badge: 'bg-amber-50 text-amber-700' }
+  }
+  if (s.includes('geo') || s.includes('earth') || s.includes('map') || s.includes('world') || s.includes('climate') || s.includes('soil')) {
+    return { emoji: '🌍', bg: 'bg-emerald-100/80 text-emerald-700 border-emerald-200/80', badge: 'bg-emerald-50 text-emerald-700' }
+  }
+  if (s.includes('ml') || s.includes('ai') || s.includes('algorithm') || s.includes('code') || s.includes('data') || s.includes('computer') || s.includes('neural') || s.includes('software')) {
+    return { emoji: '🤖', bg: 'bg-indigo-100/80 text-indigo-700 border-indigo-200/80', badge: 'bg-indigo-50 text-indigo-700' }
+  }
+  if (s.includes('bio') || s.includes('genetics') || s.includes('dna') || s.includes('organism') || s.includes('cell') || s.includes('botany') || s.includes('zoolog')) {
+    return { emoji: '🧬', bg: 'bg-green-100/80 text-green-700 border-green-200/80', badge: 'bg-green-50 text-green-700' }
+  }
+  if (s.includes('chem') || s.includes('organic') || s.includes('element') || s.includes('molecule') || s.includes('reaction')) {
+    return { emoji: '🧪', bg: 'bg-purple-100/80 text-purple-700 border-purple-200/80', badge: 'bg-purple-50 text-purple-700' }
+  }
+  if (s.includes('physic') || s.includes('energy') || s.includes('motion') || s.includes('force') || s.includes('quantum') || s.includes('mechanic')) {
+    return { emoji: '⚡', bg: 'bg-yellow-100/80 text-yellow-700 border-yellow-200/80', badge: 'bg-yellow-50 text-yellow-700' }
+  }
+  if (s.includes('hist') || s.includes('civic') || s.includes('polity') || s.includes('war') || s.includes('empire') || s.includes('law')) {
+    return { emoji: '🏛️', bg: 'bg-rose-100/80 text-rose-700 border-rose-200/80', badge: 'bg-rose-50 text-rose-700' }
+  }
+  if (s.includes('eng') || s.includes('lit') || s.includes('grammar') || s.includes('essay') || s.includes('poem') || s.includes('novel')) {
+    return { emoji: '📖', bg: 'bg-sky-100/80 text-sky-700 border-sky-200/80', badge: 'bg-sky-50 text-sky-700' }
+  }
+  return { emoji: '📚', bg: 'bg-slate-100 text-slate-700 border-slate-200', badge: 'bg-slate-50 text-slate-700' }
+}
+
 export default function LearnPage() {
   const { sessionId: routeSessionId } = useParams<{ sessionId?: string }>()
   const navigate = useNavigate()
@@ -116,6 +145,13 @@ export default function LearnPage() {
   const [documentName, setDocumentName] = useState<string>('')
   const [docStatus, setDocStatus] = useState<string>('text_ready')
 
+  // Option A & B Navigation & Search states
+  const [courseDropdownOpen, setCourseDropdownOpen] = useState(false)
+  const [courseSearchQuery, setCourseSearchQuery] = useState('')
+  const [drawerSearchQuery, setDrawerSearchQuery] = useState('')
+  const [isUploadDrawerOpen, setIsUploadDrawerOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
   // Panels
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [studyMapOpen, setStudyMapOpen] = useState(true)
@@ -125,6 +161,51 @@ export default function LearnPage() {
   const [artifactTab, setArtifactTab] = useState<'preview' | 'raw'>('preview')
   const [copiedArtifact, setCopiedArtifact] = useState(false)
   const [expandedInlineNotes, setExpandedInlineNotes] = useState<Record<string, boolean>>({})
+
+  // Filtered lists for quick switching
+  const filteredDropdownSessions = useMemo(() => {
+    if (!courseSearchQuery.trim()) return sessions
+    const q = courseSearchQuery.toLowerCase()
+    return sessions.filter(
+      (s) =>
+        s.title.toLowerCase().includes(q) ||
+        (s.document_name && s.document_name.toLowerCase().includes(q)) ||
+        (s.subject && s.subject.toLowerCase().includes(q))
+    )
+  }, [sessions, courseSearchQuery])
+
+  const filteredDrawerSessions = useMemo(() => {
+    if (!drawerSearchQuery.trim()) return sessions
+    const q = drawerSearchQuery.toLowerCase()
+    return sessions.filter(
+      (s) =>
+        s.title.toLowerCase().includes(q) ||
+        (s.document_name && s.document_name.toLowerCase().includes(q)) ||
+        (s.subject && s.subject.toLowerCase().includes(q))
+    )
+  }, [sessions, drawerSearchQuery])
+
+  // Close dropdown on click outside or escape key
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setCourseDropdownOpen(false)
+      }
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setCourseDropdownOpen(false)
+      }
+    }
+    if (courseDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('keydown', handleKeyDown)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [courseDropdownOpen])
 
   // Active Mode Tab
   const [activeTab, setActiveTab] = useState<ActiveTab>('chat')
@@ -701,6 +782,7 @@ export default function LearnPage() {
       setDocStatus(target.status || 'text_ready')
     }
     setWorkspaceOpen(false)
+    setCourseDropdownOpen(false)
   }
 
   const handleCreateNewSession = async () => {
@@ -716,6 +798,7 @@ export default function LearnPage() {
       setTopics([])
       setActiveTopic(null)
       setWorkspaceOpen(false)
+      setCourseDropdownOpen(false)
     } catch (err) {
       console.error('Create session failed:', err)
     }
@@ -848,23 +931,23 @@ export default function LearnPage() {
             onClick={() => setWorkspaceOpen(false)}
           >
             <motion.aside
-              initial={{ x: -320 }}
+              initial={{ x: -340 }}
               animate={{ x: 0 }}
-              exit={{ x: -320 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 280 }}
-              className="w-80 h-full bg-white/95 backdrop-blur-2xl border-r border-slate-200/80 shadow-2xl p-5 flex flex-col justify-between"
+              exit={{ x: -340 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 300 }}
+              className="w-84 sm:w-92 h-full bg-white/98 backdrop-blur-2xl border-r border-slate-200/90 shadow-2xl p-5 flex flex-col justify-between font-sans"
               onClick={(e) => e.stopPropagation()}
             >
-              <div>
+              <div className="flex-1 overflow-hidden flex flex-col">
                 {/* Header */}
-                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 shrink-0">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center shadow-xs">
-                      <Layers size={16} />
+                    <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
+                      <BookOpen size={16} />
                     </div>
                     <div>
-                      <h3 className="text-xs font-bold text-slate-900 leading-tight">Course Workspaces</h3>
-                      <p className="learn-caption text-slate-400 font-medium">Session-Isolated SQLite DBs</p>
+                      <h3 className="text-xs font-bold text-slate-900 leading-tight">Study Notebooks</h3>
+                      <p className="text-[11px] text-slate-400 font-medium">Courses & learning materials</p>
                     </div>
                   </div>
                   <button
@@ -875,121 +958,206 @@ export default function LearnPage() {
                   </button>
                 </div>
 
-                {/* New Session Button */}
-                <button
-                  onClick={handleCreateNewSession}
-                  className="w-full mt-4 flex items-center justify-center gap-2 py-2.5 px-4 rounded-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs transition shadow-xs cursor-pointer"
-                >
-                  <Plus size={14} />
-                  New Course Workspace
-                </button>
+                {/* Primary Action Row */}
+                <div className="mt-3.5 grid grid-cols-2 gap-2 shrink-0">
+                  <button
+                    onClick={() => setIsUploadDrawerOpen(!isUploadDrawerOpen)}
+                    className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl font-semibold text-xs transition shadow-xs cursor-pointer border ${
+                      isUploadDrawerOpen
+                        ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                        : 'bg-slate-900 hover:bg-slate-800 text-white border-transparent'
+                    }`}
+                  >
+                    <UploadCloud size={14} />
+                    <span>Upload Material</span>
+                  </button>
+                  <button
+                    onClick={handleCreateNewSession}
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs border border-slate-200/90 transition shadow-2xs cursor-pointer"
+                  >
+                    <Plus size={14} />
+                    <span>Blank Room</span>
+                  </button>
+                </div>
 
-                {/* Document Upload Area */}
-                <div className="mt-4 p-4 rounded-2xl bg-slate-50/70 border border-dashed border-slate-200 text-center">
-                  <UploadCloud size={22} className="mx-auto text-slate-600 mb-2" />
-                  <p className="text-xs font-bold text-slate-800">Upload Study Material</p>
-                  <p className="learn-caption text-slate-400 mb-3">PDF, Scanned Docs, Word, PPTX</p>
+                {/* Expandable Document Upload Tray */}
+                <AnimatePresence>
+                  {isUploadDrawerOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden mt-3 shrink-0"
+                    >
+                      <div className="p-3.5 rounded-2xl bg-indigo-50/40 border border-indigo-100 text-center">
+                        <p className="text-xs font-bold text-slate-800 mb-1">Add Study Material</p>
+                        <p className="text-[10px] text-slate-500 mb-2.5">PDFs, Word Docs, PPTX, or Notes</p>
 
+                        <input
+                          type="text"
+                          value={uploadSubject}
+                          onChange={(e) => setUploadSubject(e.target.value)}
+                          placeholder="Subject name (e.g. Machine Learning)"
+                          className="w-full text-xs px-3 py-1.5 rounded-xl bg-white border border-slate-200 mb-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400"
+                        />
+
+                        <label className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-900 text-white font-semibold text-xs cursor-pointer hover:bg-slate-800 transition shadow-xs">
+                          <UploadCloud size={14} />
+                          <span>Choose Document</span>
+                          <input
+                            type="file"
+                            accept=".pdf,.docx,.doc,.pptx,.ppt,.png,.jpg,.jpeg,.txt"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file) handleFileUpload(file)
+                            }}
+                          />
+                        </label>
+
+                        {isUploading && (
+                          <div className="mt-3">
+                            <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1">
+                              <span>Analyzing document...</span>
+                              <span>{uploadProgress}%</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-indigo-600 transition-all duration-300"
+                                style={{ width: `${uploadProgress}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {uploadError && (
+                          <p className="mt-2 text-[11px] text-red-600 font-semibold">{uploadError}</p>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Search Bar for Notebooks */}
+                <div className="mt-3.5 mb-2 relative shrink-0">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
-                    value={uploadSubject}
-                    onChange={(e) => setUploadSubject(e.target.value)}
-                    placeholder="Course / Subject name"
-                    className="w-full text-xs px-3 py-1.5 rounded-xl bg-white border border-slate-200 mb-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-slate-400"
+                    value={drawerSearchQuery}
+                    onChange={(e) => setDrawerSearchQuery(e.target.value)}
+                    placeholder="Search courses or materials..."
+                    className="w-full text-xs pl-7 pr-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:bg-white transition"
                   />
-
-                  <label className="inline-block py-2 px-5 rounded-full bg-slate-900 text-white font-medium text-xs cursor-pointer hover:bg-slate-800 transition shadow-xs">
-                    Choose File
-                    <input
-                      type="file"
-                      accept=".pdf,.docx,.doc,.pptx,.ppt,.png,.jpg,.jpeg,.txt"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (file) handleFileUpload(file)
-                      }}
-                    />
-                  </label>
-
-                  {isUploading && (
-                    <div className="mt-3">
-                      <div className="flex items-center justify-between learn-caption font-bold text-slate-700 mb-1">
-                        <span>{uploadSubject} - Processing...</span>
-                        <span>{uploadProgress}%</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-slate-900 transition-all duration-300"
-                          style={{ width: `${uploadProgress}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {uploadError && (
-                    <p className="mt-2 learn-caption text-red-600 font-semibold">{uploadError}</p>
-                  )}
                 </div>
 
                 {/* Active Sessions List */}
-                <div className="mt-4 max-h-[38vh] overflow-y-auto space-y-2 pr-1">
-                  <span className="learn-caption font-bold uppercase tracking-wider text-slate-400 px-1">
-                    Your Active Courses ({sessions.length})
-                  </span>
-                  {sessions.map((s) => {
-                    const isActive = s.id === activeSessionId
-                    return (
-                      <div
-                        key={s.id}
-                        onClick={() => handleSelectSession(s.id)}
-                        className={`group relative p-3.5 rounded-2xl cursor-pointer transition border ${isActive
-                          ? 'bg-slate-100/90 border-slate-300/90 text-slate-900 shadow-xs font-semibold'
-                          : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80 shadow-xs'
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0">
+                  <div className="flex items-center justify-between px-1 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    <span>Your Notebooks ({filteredDrawerSessions.length})</span>
+                    <button
+                      onClick={() => navigate('/subjects')}
+                      className="hover:text-indigo-600 lowercase font-medium transition text-[11px]"
+                    >
+                      all library →
+                    </button>
+                  </div>
+
+                  {filteredDrawerSessions.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-slate-400">
+                      No notebooks found.
+                    </div>
+                  ) : (
+                    filteredDrawerSessions.map((s) => {
+                      const isActive = s.id === activeSessionId
+                      const visual = getSubjectVisual(s.document_name || s.subject || s.title)
+                      return (
+                        <div
+                          key={s.id}
+                          onClick={() => handleSelectSession(s.id)}
+                          className={`group relative p-3 rounded-2xl cursor-pointer transition border ${
+                            isActive
+                              ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                              : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80 shadow-2xs hover:border-slate-300'
                           }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="pr-4 overflow-hidden">
-                            <h4 className="text-xs font-bold truncate text-slate-900">
-                              {s.title}
-                            </h4>
-                            <p className="learn-caption truncate mt-0.5 text-slate-500">
-                              {s.document_name || s.subject}
-                            </p>
+                        >
+                          <div className="flex items-start justify-between gap-2.5">
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <div
+                                className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm shrink-0 shadow-2xs ${
+                                  isActive ? 'bg-white/15' : visual.bg
+                                }`}
+                              >
+                                {visual.emoji}
+                              </div>
+                              <div className="min-w-0 pr-1">
+                                <h4
+                                  className={`text-xs font-bold truncate ${
+                                    isActive ? 'text-white' : 'text-slate-900'
+                                  }`}
+                                >
+                                  {s.title}
+                                </h4>
+                                <p
+                                  className={`text-[11px] truncate mt-0.5 ${
+                                    isActive ? 'text-slate-300' : 'text-slate-500'
+                                  }`}
+                                >
+                                  {s.document_name || s.subject}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={(e) => handleDeleteSession(s.id, s.title, e)}
+                              className={`opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition shrink-0 cursor-pointer ${
+                                isActive
+                                  ? 'hover:bg-white/20 text-slate-300 hover:text-red-300'
+                                  : 'hover:bg-slate-200 text-slate-400 hover:text-red-600'
+                              }`}
+                              title="Delete notebook"
+                            >
+                              <Trash2 size={13} />
+                            </button>
                           </div>
-                          <button
-                            onClick={(e) => handleDeleteSession(s.id, s.title, e)}
-                            className="opacity-0 group-hover:opacity-100 p-1 rounded-lg transition hover:bg-slate-200/70 text-slate-400 hover:text-red-600"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+
+                          <div className="mt-2.5 flex items-center justify-between text-[10px] font-medium">
+                            <span
+                              className={`px-2 py-0.5 rounded-full ${
+                                isActive
+                                  ? 'bg-white/15 text-slate-200'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              {s.topic_count} Topics
+                            </span>
+                            <span className={isActive ? 'text-slate-300' : 'text-slate-400'}>
+                              {s.message_count > 0 ? `${s.message_count} Questions` : 'Ready to study'}
+                            </span>
+                          </div>
                         </div>
-                        <div className="mt-2 flex items-center gap-3 learn-caption font-medium text-slate-400">
-                          <span>{s.topic_count} Topics</span>
-                          <span>·</span>
-                          <span>{s.message_count} Turns</span>
-                          <span>·</span>
-                          <span>Sub-2ms FTS5</span>
-                        </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })
+                  )}
                 </div>
               </div>
 
-              {/* Episodic Student Profile Snippet */}
-              {studentMemory && (
-                <div className="pt-3 border-t border-slate-100">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <Brain size={14} className="text-slate-700" />
-                    <span className="learn-caption font-bold text-slate-800">Episodic Profile</span>
+              {/* Student Learning Companion Profile */}
+              <div className="pt-3 mt-3 border-t border-slate-100 shrink-0">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles size={13} className="text-indigo-600" />
+                    <span className="text-xs font-bold text-slate-800">Adaptive Study Mode</span>
                   </div>
-                  <p className="learn-caption text-slate-500 line-clamp-2">
-                    {studentMemory.weaknesses?.length > 0
-                      ? `Focus Area: ${studentMemory.weaknesses[studentMemory.weaknesses.length - 1]}`
-                      : 'Active learning style: Step-by-Step with KaTeX formulas.'}
-                  </p>
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700">
+                    Active
+                  </span>
                 </div>
-              )}
+                <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2">
+                  {studentMemory?.weaknesses?.length > 0
+                    ? `Targeting: ${studentMemory.weaknesses[studentMemory.weaknesses.length - 1]}`
+                    : 'Interactive step-by-step tutoring with KaTeX formulas and visual concept maps.'}
+                </p>
+              </div>
             </motion.aside>
           </motion.div>
         )}
@@ -1013,26 +1181,183 @@ export default function LearnPage() {
 
             {/* ─── Top Header & Controls (Floating Translucent Ambient Bar like Chatbox) ─── */}
             <header className="absolute top-0 inset-x-0 pt-3.5 pb-6 px-4 sm:px-6 bg-transparent flex items-center justify-between gap-3 flex-shrink-0 z-20 pointer-events-none floating-header-gradient">
-              {/* Left Course / Document Pill */}
-              <div className="flex items-center gap-2 pointer-events-auto shrink-0 max-w-[28%] sm:max-w-[30%]">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 border border-slate-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.04)] backdrop-blur-md min-w-0">
+              {/* Left Course / Document Pill with Option A Dropdown Switcher */}
+              <div className="relative flex items-center gap-2 pointer-events-auto shrink-0 max-w-[34%] sm:max-w-[38%]" ref={dropdownRef}>
+                <div className="flex items-center gap-1.5 p-1 sm:px-2 sm:py-1 rounded-full bg-white/95 border border-slate-200/90 shadow-[0_2px_14px_rgba(0,0,0,0.05)] backdrop-blur-md min-w-0">
+                  {/* Quick toggle for Option B Drawer */}
                   <button
                     onClick={() => setWorkspaceOpen(true)}
-                    className="text-slate-500 hover:text-slate-900 transition flex items-center gap-1.5 text-xs font-medium cursor-pointer shrink-0"
-                    title="Open Workspaces & Courses"
+                    className="p-1 sm:p-1.5 rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer shrink-0"
+                    title="Open Study Notebooks Drawer"
                   >
                     <PanelLeft size={14} />
-                    <span className="hidden md:inline">Courses</span>
                   </button>
 
                   <div className="h-3.5 w-[1px] bg-slate-200 shrink-0" />
 
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-xs font-medium text-slate-700 font-sans truncate max-w-[120px] sm:max-w-[180px] md:max-w-[220px]" title={documentName ? documentName : activeSubject}>
-                      {documentName ? documentName : activeSubject}
+                  {/* Dropdown Toggle Button */}
+                  <button
+                    onClick={() => {
+                      setCourseDropdownOpen(!courseDropdownOpen)
+                      setCourseSearchQuery('')
+                    }}
+                    className="flex items-center gap-1.5 px-1 py-0.5 rounded-full hover:bg-slate-50 transition cursor-pointer min-w-0"
+                    title="Switch course"
+                  >
+                    <span className="text-sm select-none shrink-0">
+                      {getSubjectVisual(documentName || activeSubject).emoji}
                     </span>
-                  </div>
+                    <span className="text-xs font-semibold text-slate-800 font-sans truncate max-w-[110px] sm:max-w-[170px] md:max-w-[210px]">
+                      {documentName || activeSubject || 'Select Course'}
+                    </span>
+                    <ChevronDown
+                      size={13}
+                      className={`text-slate-400 shrink-0 transition-transform duration-200 ${
+                        courseDropdownOpen ? 'rotate-180 text-slate-800' : ''
+                      }`}
+                    />
+                  </button>
                 </div>
+
+                {/* Option A Floating Dropdown Card */}
+                <AnimatePresence>
+                  {courseDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute left-0 top-full mt-2 w-80 sm:w-92 bg-white/98 backdrop-blur-xl border border-slate-200/90 rounded-2xl shadow-2xl p-2.5 z-50 overflow-hidden font-sans"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* Dropdown Header */}
+                      <div className="flex items-center justify-between px-2 py-1.5 pb-2 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-900 tracking-tight">Switch Course</span>
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                            {sessions.length}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setCourseDropdownOpen(false)
+                            setWorkspaceOpen(true)
+                            setIsUploadDrawerOpen(true)
+                          }}
+                          className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition cursor-pointer"
+                        >
+                          <Plus size={12} />
+                          <span>Upload Material</span>
+                        </button>
+                      </div>
+
+                      {/* Dropdown Quick Search (shown if > 2 courses) */}
+                      {sessions.length > 2 && (
+                        <div className="my-2 relative">
+                          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            value={courseSearchQuery}
+                            onChange={(e) => setCourseSearchQuery(e.target.value)}
+                            placeholder="Filter courses or materials..."
+                            className="w-full text-xs pl-7 pr-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:bg-white transition"
+                            autoFocus
+                          />
+                        </div>
+                      )}
+
+                      {/* Dropdown Courses List */}
+                      <div className="max-h-64 overflow-y-auto space-y-1 my-1 pr-0.5">
+                        {filteredDropdownSessions.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-slate-400">
+                            No matching courses found
+                          </div>
+                        ) : (
+                          filteredDropdownSessions.map((s) => {
+                            const isActive = s.id === activeSessionId
+                            const visual = getSubjectVisual(s.document_name || s.subject || s.title)
+                            return (
+                              <div
+                                key={s.id}
+                                onClick={() => handleSelectSession(s.id)}
+                                className={`group flex items-center justify-between p-2 rounded-xl cursor-pointer transition ${
+                                  isActive
+                                    ? 'bg-slate-900 text-white shadow-xs'
+                                    : 'hover:bg-slate-100 text-slate-800'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                  <div
+                                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0 ${
+                                      isActive ? 'bg-white/15' : visual.bg
+                                    }`}
+                                  >
+                                    {visual.emoji}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p
+                                      className={`text-xs font-semibold truncate ${
+                                        isActive ? 'text-white' : 'text-slate-900'
+                                      }`}
+                                    >
+                                      {s.title}
+                                    </p>
+                                    <p
+                                      className={`text-[10px] truncate ${
+                                        isActive ? 'text-slate-300' : 'text-slate-400'
+                                      }`}
+                                    >
+                                      {s.document_name || s.subject} • {s.topic_count} Topics
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {isActive ? (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                      Active
+                                    </span>
+                                  ) : (
+                                    <button
+                                      onClick={(e) => handleDeleteSession(s.id, s.title, e)}
+                                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-slate-200 transition"
+                                      title="Delete course"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+
+                      {/* Dropdown Footer */}
+                      <div className="pt-2 mt-1 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                        <button
+                          onClick={() => {
+                            setCourseDropdownOpen(false)
+                            handleCreateNewSession()
+                          }}
+                          className="text-slate-600 hover:text-slate-900 font-medium flex items-center gap-1 transition cursor-pointer"
+                        >
+                          <Plus size={12} />
+                          <span>New Workspace</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setCourseDropdownOpen(false)
+                            setWorkspaceOpen(true)
+                          }}
+                          className="text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 transition cursor-pointer"
+                        >
+                          <span>All Notebooks Drawer →</span>
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Mode Switcher Tabs (Individual Centered Floating Pills with Gap) */}
