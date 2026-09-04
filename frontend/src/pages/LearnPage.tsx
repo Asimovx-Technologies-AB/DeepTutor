@@ -109,7 +109,7 @@ interface ExamEvaluation {
 
 type ActiveTab = 'chat' | 'normal' | 'teacher' | 'exam' | 'artifact'
 
-export const getSubjectVisual = (subjectOrTitle: string) => {
+const getSubjectVisual = (subjectOrTitle: string) => {
   const s = (subjectOrTitle || '').toLowerCase()
   if (s.includes('math') || s.includes('calculus') || s.includes('algebra') || s.includes('geom') || s.includes('trig')) {
     return { icon: Calculator, bg: 'bg-amber-50 text-amber-700 border-amber-200/80', badge: 'bg-amber-50 text-amber-700' }
@@ -280,7 +280,7 @@ export default function LearnPage() {
   const [isLoadingCoreIdea, setIsLoadingCoreIdea] = useState(false)
   const [customNormalTopic, setCustomNormalTopic] = useState('')
   const [topicDoubtInput, setTopicDoubtInput] = useState('')
-  const [topicDoubtAnswer, setTopicDoubtAnswer] = useState<string | null>(null)
+  const [_topicDoubtAnswer, setTopicDoubtAnswer] = useState<string | null>(null)
   const [isLoadingDoubt, setIsLoadingDoubt] = useState(false)
 
   // Teacher Mode
@@ -304,13 +304,13 @@ export default function LearnPage() {
 
   // Upload modal & drag drop
   const [isUploading, setIsUploading] = useState(false)
-  const [uploadingFileMeta, setUploadingFileMeta] = useState<{ name: string; sizeFormatted: string } | null>(null)
+  const [_uploadingFileMeta, setUploadingFileMeta] = useState<{ name: string; sizeFormatted: string } | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSubject, setUploadSubject] = useState('')
 
   // Student Profile
-  const [studentMemory, setStudentMemory] = useState<any>(null)
+  const [_studentMemory, setStudentMemory] = useState<any>(null)
 
   // Current Generated Markdown for Artifact Viewer
   const [currentArtifactMarkdown, setCurrentArtifactMarkdown] = useState<string>(
@@ -757,7 +757,7 @@ export default function LearnPage() {
     })
   }
 
-  const handleAskTopicDoubt = async () => {
+  const _handleAskTopicDoubt = async () => {
     if (!topicDoubtInput.trim() || !activeTopic || !activeSessionId || isLoadingDoubt) return
     setIsLoadingDoubt(true)
     try {
@@ -878,6 +878,7 @@ export default function LearnPage() {
     } else if (activeTab === 'exam' && activeTopic && examQuestions.length === 0) {
       handleFetchExam(activeTopic)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, activeTopic?.id])
 
   // ─── Session Switching ───
@@ -983,7 +984,7 @@ export default function LearnPage() {
   // Render KaTeX Math safely
   const customMarkdownComponents = useMemo(() => ({
     // Enforce standalone block KaTeX highlighting
-    div: ({ node, className, children, ...props }: any) => {
+    div: ({ node: _node, className, children, ...props }: any) => {
       if (className?.includes('math-display')) {
         return (
           <div className="my-4 p-4 rounded-2xl bg-indigo-50/80 border border-indigo-200/80 text-indigo-950 font-mono text-center shadow-xs overflow-x-auto">
@@ -993,18 +994,18 @@ export default function LearnPage() {
       }
       return <div className={className} {...props}>{children}</div>
     },
-    table: ({ node, ...props }: any) => (
+    table: ({ node: _node, ...props }: any) => (
       <div className="overflow-x-auto my-4 rounded-xl border border-slate-200 shadow-xs">
         <table className="w-full text-sm text-left border-collapse" {...props} />
       </div>
     ),
-    th: ({ node, ...props }: any) => (
+    th: ({ node: _node, ...props }: any) => (
       <th className="bg-slate-100/90 text-slate-800 font-bold px-4 py-2.5 border-b border-slate-200" {...props} />
     ),
-    td: ({ node, ...props }: any) => (
+    td: ({ node: _node, ...props }: any) => (
       <td className="px-4 py-2 border-b border-slate-100 text-slate-700" {...props} />
     ),
-    pre: ({ node, children, ...props }: any) => {
+    pre: ({ node: _node, children, ...props }: any) => {
       const child = React.Children.toArray(children)[0] as any
       const className = child?.props?.className || ''
       if (className.includes('language-mermaid')) {
@@ -1016,7 +1017,7 @@ export default function LearnPage() {
         </pre>
       )
     },
-    code: ({ node, inline, className, children, ...props }: any) => {
+    code: ({ node: _node, inline, className, children, ...props }: any) => {
       const match = /language-(\w+)/.exec(className || '')
       const lang = match ? match[1] : ''
       const codeString = String(children).replace(/\n$/, '')
@@ -1727,7 +1728,7 @@ export default function LearnPage() {
                                   <div className="markdown-content text-slate-900 leading-[1.85] flex flex-wrap gap-y-1 items-baseline w-full">
                                     {msg.text
                                       .replace(/```[\s\S]*?```/g, '')
-                                      .replace(/[#*`_~>\[\]\(\)]/g, ' ')
+                                      .replace(/[#*`_~>[\]()]/g, ' ')
                                       .split(/\s+/)
                                       .filter(Boolean)
                                       .map((word, wIdx) => {
