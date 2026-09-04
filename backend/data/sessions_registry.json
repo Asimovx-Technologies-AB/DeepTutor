@@ -1,15 +1,75 @@
 [
   {
-    "id": "session_3862000107",
+    "id": "session_6387462719",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "Class-10-Geography",
+    "title": "Class-10-Geography Study Room",
+    "document_name": "Class-10-Geography.pdf",
+    "status": "text_ready",
+    "topic_count": 4,
+    "message_count": 4,
+    "created_at": "2026-09-04T06:09:52.981246+00:00",
+    "last_active": "2026-09-04T06:12:08.021346+00:00"
+  },
+  {
+    "id": "session_5787656657",
     "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
     "subject": "General Study",
-    "title": "Default Study Room",
+    "title": "New Study Workspace",
     "document_name": "",
     "status": "ready",
     "topic_count": 0,
     "message_count": 0,
+    "created_at": "2026-09-04T06:09:52.048431+00:00",
+    "last_active": "2026-09-04T06:09:52.048431+00:00"
+  },
+  {
+    "id": "session_5634524936",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "Ml Algorithams",
+    "title": "Ml Algorithams Study Room",
+    "document_name": "ml algorithams.pdf",
+    "status": "text_ready",
+    "topic_count": 6,
+    "message_count": 0,
+    "created_at": "2026-09-04T06:09:24.710390+00:00",
+    "last_active": "2026-09-04T06:09:40.581018+00:00"
+  },
+  {
+    "id": "session_7270155066",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "General Study",
+    "title": "New Study Workspace",
+    "document_name": "",
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-04T05:53:20.927396+00:00",
+    "last_active": "2026-09-04T05:53:20.927396+00:00"
+  },
+  {
+    "id": "session_5074867722",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "Class-10-Geography",
+    "title": "Class-10-Geography Study Room",
+    "document_name": "Class-10-Geography.pdf",
+    "status": "text_ready",
+    "topic_count": 8,
+    "message_count": 0,
+    "created_at": "2026-09-04T05:40:13.816299+00:00",
+    "last_active": "2026-09-04T05:48:38.795710+00:00"
+  },
+  {
+    "id": "session_3862000107",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "General Study",
+    "title": "Hsslive-35 Maths Eng Study Room",
+    "document_name": "Hsslive-35_Maths Eng.pdf",
+    "status": "text_ready",
+    "topic_count": 3,
+    "message_count": 6,
     "created_at": "2026-09-04T05:36:33.693254+00:00",
-    "last_active": "2026-09-04T05:36:33.693254+00:00"
+    "last_active": "2026-09-04T05:45:27.748705+00:00"
   },
   {
     "id": "session_8957569891",

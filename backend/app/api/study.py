@@ -143,17 +143,19 @@ async def upload_document(
         f.write(content)
 
     doc_id = f"doc_{int(uuid.uuid4().int % 10000000)}"
+    clean_title = Path(file.filename).stem.replace("_", " ").title()
+    effective_subject = subject.strip() if (subject and subject.strip() and subject.strip() != "General Study") else clean_title
 
     # Concurrent Execution: Ingestion + Fast Curriculum Reasoning
     async def _safe_extract_topics(sample_text: str):
-        return await extract_topics_and_validate(sample_text, subject=subject, filename=file.filename)
+        return await extract_topics_and_validate(sample_text, subject=effective_subject, filename=file.filename)
 
     # 1. First run fast-path ingestion
     ingest_result = await doc_processor.ingest_document(
         doc_id=doc_id,
         file_path=file_path,
         file_name=file.filename,
-        subject=subject,
+        subject=effective_subject,
         session_id=study_id,
     )
 
@@ -172,10 +174,9 @@ async def upload_document(
         save_session_topics(study_id, topics)
 
     # Update global registry with user isolation
-    clean_title = Path(file.filename).stem.replace("_", " ").title()
     register_or_update_session(
         session_id=study_id,
-        subject=subject,
+        subject=effective_subject,
         title=f"{clean_title} Study Room",
         status="text_ready",
         document_name=file.filename,

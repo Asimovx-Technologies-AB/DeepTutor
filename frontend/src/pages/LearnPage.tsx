@@ -178,7 +178,7 @@ export default function LearnPage() {
   const [uploadingFileMeta, setUploadingFileMeta] = useState<{ name: string; sizeFormatted: string } | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadError, setUploadError] = useState<string | null>(null)
-  const [uploadSubject, setUploadSubject] = useState('Machine Learning')
+  const [uploadSubject, setUploadSubject] = useState('')
 
   // Student Profile
   const [studentMemory, setStudentMemory] = useState<any>(null)
@@ -198,18 +198,23 @@ export default function LearnPage() {
     scrollToBottom()
   }, [messages, isAgentThinking])
 
+  const activeSessionIdRef = useRef(activeSessionId)
+  useEffect(() => {
+    activeSessionIdRef.current = activeSessionId
+  }, [activeSessionId])
+
   // ─── 1. Load Sessions on Mount ───
   const fetchSessions = useCallback(async () => {
     try {
       const res = await studyApi.listSessions()
       const list = res.data || []
       setSessions(list)
-      if (list.length > 0 && !activeSessionId) {
+      if (list.length > 0 && !activeSessionIdRef.current) {
         const first = list[0]
         setActiveSessionId(first.id)
         setActiveSubject(first.subject || 'General Study')
         setDocumentName(first.document_name || '')
-      } else if (list.length === 0 && !activeSessionId) {
+      } else if (list.length === 0 && !activeSessionIdRef.current) {
         studyApi.createSession({ subject: 'General Study', title: 'Default Study Room' }).then((r) => {
           if (r.data && r.data.id) {
             setActiveSessionId(r.data.id)
@@ -220,7 +225,7 @@ export default function LearnPage() {
     } catch (err) {
       console.error('Failed to load study sessions:', err)
     }
-  }, [activeSessionId])
+  }, [])
 
   useEffect(() => {
     fetchSessions()

@@ -131,7 +131,7 @@ class StudyDocumentProcessor:
             "filename": file_name,
             "page_count": page_count,
             "chunk_count": len(extracted_chunks),
-            "sample_text": full_sample_text[:8000],
+            "sample_text": full_sample_text[:25000],
             "status": "text_ready"
         }
 

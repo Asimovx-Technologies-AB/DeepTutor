@@ -395,6 +395,7 @@ def save_session_topics(session_id: str, topics: List[Dict[str, Any]]):
     conn = sqlite3.connect(str(db_path))
     try:
         cur = conn.cursor()
+        cur.execute("DELETE FROM session_topics")
         for t in topics:
             cur.execute(
                 """
