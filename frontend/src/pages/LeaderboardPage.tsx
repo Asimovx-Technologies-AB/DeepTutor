@@ -135,7 +135,7 @@ export default function LeaderboardPage() {
 
           <div className="grid grid-cols-3 gap-3 md:gap-6 items-end max-w-3xl mx-auto pt-4">
             
-            {/* 🥈 2ND PLACE PODIUM */}
+            {/* 2ND PLACE PODIUM */}
             {second ? (
               <motion.div
                 initial={{ y: 30, opacity: 0 }}
@@ -161,7 +161,7 @@ export default function LeaderboardPage() {
               </motion.div>
             ) : <div />}
 
-            {/* 🥇 1ST PLACE PODIUM (ELEVATED CENTER) */}
+            {/* 1ST PLACE PODIUM (ELEVATED CENTER) */}
             {first ? (
               <motion.div
                 initial={{ y: 40, opacity: 0 }}
@@ -187,7 +187,7 @@ export default function LeaderboardPage() {
               </motion.div>
             ) : <div />}
 
-            {/* 🥉 3RD PLACE PODIUM */}
+            {/* 3RD PLACE PODIUM */}
             {third ? (
               <motion.div
                 initial={{ y: 30, opacity: 0 }}
@@ -301,15 +301,15 @@ export default function LeaderboardPage() {
                         <div className="flex items-center gap-2">
                           {student.rank === 1 ? (
                             <span className="w-7 h-7 rounded-lg bg-[#4F46E5] text-white flex items-center justify-center font-black text-xs elevation-1">
-                              🥇
+                              1
                             </span>
                           ) : student.rank === 2 ? (
                             <span className="w-7 h-7 rounded-lg bg-[#E2E8F0] text-[#3C3C3C] flex items-center justify-center font-black text-xs elevation-1">
-                              🥈
+                              2
                             </span>
                           ) : student.rank === 3 ? (
-                            <span className="w-7 h-7 rounded-lg bg-[#FFC800] text-white flex items-center justify-center font-black text-xs elevation-1">
-                              🥉
+                            <span className="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center font-black text-xs elevation-1">
+                              3
                             </span>
                           ) : (
                             <span className="w-7 h-7 rounded-lg bg-[#E5E5E5] text-[#777777] flex items-center justify-center font-extrabold text-xs">

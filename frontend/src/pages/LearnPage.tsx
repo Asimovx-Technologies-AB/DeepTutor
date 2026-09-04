@@ -14,7 +14,8 @@ import {
   Trash2, Plus, FileText, UploadCloud, RefreshCw, PanelLeft,
   PanelRight, Maximize2, Minimize2, Split, HelpCircle, Award,
   Brain, FileSpreadsheet, Eye, Play, Pause, X, ArrowUp,
-  ThumbsUp, ThumbsDown, Search, FolderPlus
+  ThumbsUp, ThumbsDown, Search, FolderPlus,
+  Calculator, Globe, Cpu, Dna, FlaskConical, Zap, Landmark
 } from 'lucide-react'
 
 import { studyApi, streamTeacherLecture } from '../services/api'
@@ -110,30 +111,30 @@ type ActiveTab = 'chat' | 'normal' | 'teacher' | 'exam' | 'artifact'
 export const getSubjectVisual = (subjectOrTitle: string) => {
   const s = (subjectOrTitle || '').toLowerCase()
   if (s.includes('math') || s.includes('calculus') || s.includes('algebra') || s.includes('geom') || s.includes('trig')) {
-    return { emoji: '📐', bg: 'bg-amber-100/80 text-amber-700 border-amber-200/80', badge: 'bg-amber-50 text-amber-700' }
+    return { icon: Calculator, bg: 'bg-amber-50 text-amber-700 border-amber-200/80', badge: 'bg-amber-50 text-amber-700' }
   }
   if (s.includes('geo') || s.includes('earth') || s.includes('map') || s.includes('world') || s.includes('climate') || s.includes('soil')) {
-    return { emoji: '🌍', bg: 'bg-emerald-100/80 text-emerald-700 border-emerald-200/80', badge: 'bg-emerald-50 text-emerald-700' }
+    return { icon: Globe, bg: 'bg-emerald-50 text-emerald-700 border-emerald-200/80', badge: 'bg-emerald-50 text-emerald-700' }
   }
   if (s.includes('ml') || s.includes('ai') || s.includes('algorithm') || s.includes('code') || s.includes('data') || s.includes('computer') || s.includes('neural') || s.includes('software')) {
-    return { emoji: '🤖', bg: 'bg-indigo-100/80 text-indigo-700 border-indigo-200/80', badge: 'bg-indigo-50 text-indigo-700' }
+    return { icon: Cpu, bg: 'bg-indigo-50 text-indigo-700 border-indigo-200/80', badge: 'bg-indigo-50 text-indigo-700' }
   }
   if (s.includes('bio') || s.includes('genetics') || s.includes('dna') || s.includes('organism') || s.includes('cell') || s.includes('botany') || s.includes('zoolog')) {
-    return { emoji: '🧬', bg: 'bg-green-100/80 text-green-700 border-green-200/80', badge: 'bg-green-50 text-green-700' }
+    return { icon: Dna, bg: 'bg-emerald-50 text-emerald-700 border-emerald-200/80', badge: 'bg-emerald-50 text-emerald-700' }
   }
   if (s.includes('chem') || s.includes('organic') || s.includes('element') || s.includes('molecule') || s.includes('reaction')) {
-    return { emoji: '🧪', bg: 'bg-purple-100/80 text-purple-700 border-purple-200/80', badge: 'bg-purple-50 text-purple-700' }
+    return { icon: FlaskConical, bg: 'bg-purple-50 text-purple-700 border-purple-200/80', badge: 'bg-purple-50 text-purple-700' }
   }
   if (s.includes('physic') || s.includes('energy') || s.includes('motion') || s.includes('force') || s.includes('quantum') || s.includes('mechanic')) {
-    return { emoji: '⚡', bg: 'bg-yellow-100/80 text-yellow-700 border-yellow-200/80', badge: 'bg-yellow-50 text-yellow-700' }
+    return { icon: Zap, bg: 'bg-amber-50 text-amber-700 border-amber-200/80', badge: 'bg-amber-50 text-amber-700' }
   }
   if (s.includes('hist') || s.includes('civic') || s.includes('polity') || s.includes('war') || s.includes('empire') || s.includes('law')) {
-    return { emoji: '🏛️', bg: 'bg-rose-100/80 text-rose-700 border-rose-200/80', badge: 'bg-rose-50 text-rose-700' }
+    return { icon: Landmark, bg: 'bg-rose-50 text-rose-700 border-rose-200/80', badge: 'bg-rose-50 text-rose-700' }
   }
   if (s.includes('eng') || s.includes('lit') || s.includes('grammar') || s.includes('essay') || s.includes('poem') || s.includes('novel')) {
-    return { emoji: '📖', bg: 'bg-sky-100/80 text-sky-700 border-sky-200/80', badge: 'bg-sky-50 text-sky-700' }
+    return { icon: BookOpen, bg: 'bg-sky-50 text-sky-700 border-sky-200/80', badge: 'bg-sky-50 text-sky-700' }
   }
-  return { emoji: '📚', bg: 'bg-slate-100 text-slate-700 border-slate-200', badge: 'bg-slate-50 text-slate-700' }
+  return { icon: BookOpen, bg: 'bg-slate-100 text-slate-700 border-slate-200', badge: 'bg-slate-50 text-slate-700' }
 }
 
 export default function LearnPage() {
@@ -1126,6 +1127,7 @@ export default function LearnPage() {
                     filteredDrawerSessions.map((s) => {
                       const isActive = s.id === activeSessionId
                       const visual = getSubjectVisual(s.document_name || s.subject || s.title)
+                      const SubjectIcon = visual.icon
                       return (
                         <div
                           key={s.id}
@@ -1139,11 +1141,11 @@ export default function LearnPage() {
                           <div className="flex items-start justify-between gap-2.5">
                             <div className="flex items-start gap-2.5 min-w-0">
                               <div
-                                className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm shrink-0 shadow-2xs ${
-                                  isActive ? 'bg-white shadow-sm' : visual.bg
+                                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border shadow-2xs ${
+                                  isActive ? 'bg-white border-indigo-200 text-indigo-600 shadow-sm' : visual.bg
                                 }`}
                               >
-                                {visual.emoji}
+                                <SubjectIcon size={15} />
                               </div>
                               <div className="min-w-0 pr-1">
                                 <h4
@@ -1154,13 +1156,18 @@ export default function LearnPage() {
                                   {s.title}
                                 </h4>
                                 <p
-                                  className={`text-[11px] truncate mt-0.5 ${
+                                  className={`text-[11px] truncate mt-0.5 flex items-center gap-1 ${
                                     isActive ? 'text-indigo-600/80' : 'text-slate-500'
                                   }`}
                                 >
-                                  {s.document_count && s.document_count > 1
-                                    ? `📚 ${s.document_count} materials`
-                                    : (s.document_name || s.subject)}
+                                  {s.document_count && s.document_count > 1 ? (
+                                    <>
+                                      <Layers size={11} className="shrink-0 opacity-70" />
+                                      <span>{s.document_count} materials</span>
+                                    </>
+                                  ) : (
+                                    <span>{s.document_name || s.subject}</span>
+                                  )}
                                 </p>
                               </div>
                             </div>
@@ -1245,9 +1252,15 @@ export default function LearnPage() {
                     className="flex items-center gap-1.5 px-1 py-0.5 rounded-full hover:bg-slate-50 transition cursor-pointer min-w-0"
                     title="Switch course"
                   >
-                    <span className="text-sm select-none shrink-0">
-                      {getSubjectVisual(documentName || activeSubject).emoji}
-                    </span>
+                    {(() => {
+                      const visual = getSubjectVisual(documentName || activeSubject)
+                      const ActiveIcon = visual.icon
+                      return (
+                        <span className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 border ${visual.bg}`}>
+                          <ActiveIcon size={12} />
+                        </span>
+                      )
+                    })()}
                     <span className="text-xs font-semibold text-slate-800 font-sans truncate max-w-[110px] sm:max-w-[170px] md:max-w-[210px]">
                       {documentName || activeSubject || 'Select Course'}
                     </span>
@@ -1390,6 +1403,7 @@ export default function LearnPage() {
                           filteredDropdownSessions.map((s) => {
                             const isActive = s.id === activeSessionId
                             const visual = getSubjectVisual(s.document_name || s.subject || s.title)
+                            const DropdownIcon = visual.icon
                             return (
                               <div
                                 key={s.id}
@@ -1402,11 +1416,11 @@ export default function LearnPage() {
                               >
                                 <div className="flex items-center gap-2.5 min-w-0 pr-2">
                                   <div
-                                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0 ${
-                                      isActive ? 'bg-white shadow-sm' : visual.bg
+                                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
+                                      isActive ? 'bg-white border-indigo-200 text-indigo-600 shadow-sm' : visual.bg
                                     }`}
                                   >
-                                    {visual.emoji}
+                                    <DropdownIcon size={15} />
                                   </div>
                                   <div className="min-w-0">
                                     <p
@@ -1417,11 +1431,20 @@ export default function LearnPage() {
                                       {s.title}
                                     </p>
                                     <p
-                                      className={`text-[10px] truncate ${
+                                      className={`text-[10px] truncate flex items-center gap-1 ${
                                         isActive ? 'text-indigo-600/80' : 'text-slate-400'
                                       }`}
                                     >
-                                      {s.document_count && s.document_count > 1 ? `📚 ${s.document_count} materials` : (s.document_name || s.subject)} • {s.topic_count} Topics
+                                      {s.document_count && s.document_count > 1 ? (
+                                        <>
+                                          <Layers size={10} className="shrink-0 opacity-70" />
+                                          <span>{s.document_count} materials</span>
+                                        </>
+                                      ) : (
+                                        <span>{s.document_name || s.subject}</span>
+                                      )}
+                                      <span>•</span>
+                                      <span>{s.topic_count} Topics</span>
                                     </p>
                                   </div>
                                 </div>

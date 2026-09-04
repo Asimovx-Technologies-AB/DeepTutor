@@ -36,7 +36,9 @@ export default function SubjectWorkspacePage() {
   if (!subject) {
     return (
       <div className="p-8 max-w-4xl mx-auto text-center space-y-4">
-        <div className="text-4xl">📚</div>
+        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+          <BookOpen size={32} />
+        </div>
         <h2 className="text-xl font-bold text-[#3C3C3C]">Subject Not Found</h2>
         <p className="text-sm text-[#777777]">The subject you are looking for does not exist or has been removed.</p>
         <button
@@ -103,7 +105,7 @@ export default function SubjectWorkspacePage() {
 
                 {subjectStatus === 'COMPLETED' && (
                   <span className="text-[11px] font-bold bg-[#D7FFB8] text-[#46A302] px-2.5 py-0.5 rounded-full border border-[#58CC02]/30">
-                    Completed 🎉
+                    Completed
                   </span>
                 )}
                 {subjectStatus === 'IN_PROGRESS' && (

@@ -411,7 +411,7 @@ export default function FlashcardsPage() {
           {/* Card Counter */}
           <div className="flex items-center justify-between text-xs font-black text-gray-500 px-2">
             <span>{uiLanguage === 'sv' ? `Kort ${currentIndex + 1} av ${cards.length}` : `Card ${currentIndex + 1} of ${cards.length}`}</span>
-            <span className="text-gray-400">{uiLanguage === 'sv' ? 'Tryck Blanksteg eller Klicka för att vända 🔄' : 'Press Space or Click to Flip 🔄'}</span>
+            <span className="text-gray-400">{uiLanguage === 'sv' ? 'Tryck Blanksteg eller Klicka för att vända' : 'Press Space or Click to Flip'}</span>
           </div>
 
           {/* 3D Interactive Flip Container */}
@@ -457,7 +457,7 @@ export default function FlashcardsPage() {
                       animate={{ opacity: 1, y: 0 }}
                       className="mt-4 text-xs text-[#FFC800] bg-[#FFF0B3] border border-[#FFC800]/30 rounded-[1.25rem] px-4 py-2 font-bold"
                     >
-                      {uiLanguage === 'sv' ? '💡 Tänk efter noggrant på begreppet...' : '💡 Think about the concept carefully...'}
+                      {uiLanguage === 'sv' ? 'Tänk efter noggrant på begreppet...' : 'Think about the concept carefully...'}
                     </motion.p>
                   )}
                   {currentCard?.mastered && (
@@ -468,7 +468,7 @@ export default function FlashcardsPage() {
                 </div>
 
                 <div className="flex items-center justify-center pt-3 border-t border-[#E2E8F0]/60">
-                  <p className="text-xs text-[#AFAFAF] font-semibold">{uiLanguage === 'sv' ? 'Klicka på kortet för att vända 🔄' : 'Click Card to Flip 🔄'}</p>
+                  <p className="text-xs text-[#AFAFAF] font-semibold">{uiLanguage === 'sv' ? 'Klicka på kortet för att vända' : 'Click Card to Flip'}</p>
                 </div>
               </div>
 
@@ -497,7 +497,7 @@ export default function FlashcardsPage() {
                 </div>
 
                 <div className="flex items-center justify-end pt-3 border-t border-slate-100">
-                  <p className="text-xs text-slate-400 font-semibold">{uiLanguage === 'sv' ? 'Klicka på kortet för att vända tillbaka 🔄' : 'Click Card to Flip Back 🔄'}</p>
+                  <p className="text-xs text-slate-400 font-semibold">{uiLanguage === 'sv' ? 'Klicka på kortet för att vända tillbaka' : 'Click Card to Flip Back'}</p>
                 </div>
               </div>
             </motion.div>
@@ -612,7 +612,7 @@ export default function FlashcardsPage() {
                 <img src="/images/flashcards_trophy.jpg" alt="Completed" className="w-44 h-44 mx-auto rounded-[2rem] shadow-xl object-cover border-4 border-white mb-2" />
 
                 <div>
-                  <h2 className="text-2xl font-black text-text-primary">Deck Mastered! 🎉</h2>
+                  <h2 className="text-2xl font-black text-text-primary">Deck Mastered!</h2>
                   <p className="text-sm text-text-secondary mt-2 font-medium">
                     You reviewed all {cards.length} cards for <span className="font-bold text-text-primary">{topicTitle}</span>.
                   </p>

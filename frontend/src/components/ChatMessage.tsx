@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
-import { Bot, User, Copy, Check } from 'lucide-react'
+import { Bot, User, Copy, Check, Image } from 'lucide-react'
 import { motion } from 'framer-motion'
 import SourceCard, { type Source } from './SourceCard'
 import MermaidDiagram from './MermaidDiagram'
@@ -127,8 +127,9 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding, 
                           {...props}
                         />
                         {alt && (
-                          <span className="block text-center text-xs font-semibold text-text-muted mt-2 px-2">
-                            🖼️ {alt}
+                          <span className="text-center text-xs font-semibold text-text-muted mt-2 px-2 flex items-center justify-center gap-1.5">
+                            <Image size={13} className="opacity-70" />
+                            <span>{alt}</span>
                           </span>
                         )}
                       </span>

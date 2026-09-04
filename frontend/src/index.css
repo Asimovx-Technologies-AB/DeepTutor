@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url("https://cdn.jsdelivr.net/gh/vsalvino/computer-modern@main/fonts/serif.css");
+@import "tailwindcss";
 
 /* 
  * DESIGN DECISION ARCHITECTURAL NOTE:

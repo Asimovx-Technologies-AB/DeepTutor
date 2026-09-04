@@ -2,7 +2,8 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Trophy, RotateCcw, MessageSquare, CheckCircle,
-  XCircle, ArrowLeft, Star, Sparkles, HelpCircle
+  XCircle, ArrowLeft, Star, Sparkles, HelpCircle,
+  Award, BookOpen, AlertCircle, Landmark, Check
 } from 'lucide-react'
 import {
   RadialBarChart, RadialBar, ResponsiveContainer,
@@ -35,11 +36,11 @@ function ScoreRing({ pct }: { pct: number }) {
 }
 
 function getGrade(pct: number) {
-  if (pct >= 90) return { label: 'Excellent!', color: 'text-[#58CC02]', emoji: '🏆' }
-  if (pct >= 75) return { label: 'Great Job!', color: 'text-[#58CC02]', emoji: '🎉' }
-  if (pct >= 60) return { label: 'Good Effort', color: 'text-[#FFC800]', emoji: '👍' }
-  if (pct >= 40) return { label: 'Keep Practicing', color: 'text-[#4F46E5]', emoji: '📚' }
-  return { label: 'Need More Study', color: 'text-[#FF4B4B]', emoji: '💪' }
+  if (pct >= 90) return { label: 'Excellent!', color: 'text-[#58CC02]', icon: Trophy }
+  if (pct >= 75) return { label: 'Great Job!', color: 'text-[#58CC02]', icon: Award }
+  if (pct >= 60) return { label: 'Good Effort', color: 'text-[#FFC800]', icon: CheckCircle }
+  if (pct >= 40) return { label: 'Keep Practicing', color: 'text-[#4F46E5]', icon: BookOpen }
+  return { label: 'Need More Study', color: 'text-[#FF4B4B]', icon: AlertCircle }
 }
 
 export default function QuizResultPage() {
@@ -142,7 +143,14 @@ export default function QuizResultPage() {
     className="glass-card p-8 text-center mb-6 relative overflow-hidden border border-[#E2E8F0] elevation-1 bg-white rounded-[2rem]"
   >
     <div className="max-w-md mx-auto">
-      <div className="text-5xl mb-2">{grade.emoji}</div>
+      {(() => {
+        const GradeIcon = grade.icon
+        return (
+          <div className="w-16 h-16 rounded-3xl bg-slate-50 border border-slate-200 flex items-center justify-center mx-auto mb-3 text-slate-700 shadow-sm">
+            <GradeIcon size={32} className={grade.color} />
+          </div>
+        )
+      })()}
       <h1 className={`text-2xl font-black mb-1 ${grade.color}`}>{grade.label}</h1>
       <p className="text-[#777777] text-sm font-medium mb-6">
         {quiz?.title ?? 'Practice Quiz'} • {new Date().toLocaleDateString()}
@@ -176,7 +184,8 @@ export default function QuizResultPage() {
         onClick={() => navigate(`/subjects/${detectedSubjectId}`)}
         className="btn-ghost flex items-center justify-center gap-2 cursor-pointer font-extrabold border-border bg-white text-text-primary hover:bg-orange-50/50 shadow-2xs py-3 px-4 rounded-2xl text-xs"
       >
-        🏛️ Subject Overview
+        <Landmark size={15} />
+        <span>Subject Overview</span>
       </button>
     ) : (
       <button
@@ -250,7 +259,11 @@ export default function QuizResultPage() {
                       >
                         <span className="font-black">{label}.</span>
                         <span>{opt}</span>
-                        {isCorrectOpt && <span className="ml-auto text-[10px] font-black text-[#58CC02]">✓ Correct</span>}
+                        {isCorrectOpt && (
+                          <span className="ml-auto text-[10px] font-black text-[#58CC02] flex items-center gap-1">
+                            <Check size={12} /> Correct
+                          </span>
+                        )}
                         {isUser && !isCorrect && <span className="ml-auto text-[10px] font-black text-[#FF4B4B]">Your answer</span>}
                       </div>
                     )

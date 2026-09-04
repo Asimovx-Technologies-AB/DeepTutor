@@ -1,4 +1,4 @@
-import { PlayCircle, CheckCircle, Award } from 'lucide-react'
+import { PlayCircle, CheckCircle, Award, Clock } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useLanguageStore } from '../../stores/languageStore'
 
@@ -69,8 +69,8 @@ export default function RecentActivityTimeline({ activities, isLoading }: Recent
   if (!activities || activities.length === 0) {
     return (
       <div className="card p-6 flex-1 flex flex-col items-center justify-center min-h-[250px] bg-black/5 border border-dashed border-border">
-        <div className="w-16 h-16 rounded-full bg-black/10 flex items-center justify-center mb-3">
-          <span className="text-2xl">🌱</span>
+        <div className="w-16 h-16 rounded-full bg-black/10 flex items-center justify-center mb-3 text-text-muted">
+          <Clock size={24} />
         </div>
         <h3 className="font-semibold text-text-primary mb-1">
           {uiLanguage === 'sv' ? 'Ingen senaste aktivitet' : 'No recent activity'}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, ChevronDown, MoreHorizontal, BookOpen, Sparkles, Target, ArrowRight } from 'lucide-react'
+import { Search, ChevronDown, MoreHorizontal, BookOpen, Sparkles, Target, ArrowRight, Trophy } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import { useSubjectStore } from '../stores/subjectStore'
 import { useLanguageStore } from '../stores/languageStore'
@@ -102,12 +102,12 @@ export default function DashboardPage() {
           <div className="xl:col-span-6 flex flex-col justify-center">
             <div className="flex items-start gap-4 mb-4">
               {/* Mascot Badge */}
-              <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-3xl shadow-xs flex-shrink-0">
-                🚀
+              <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-xs flex-shrink-0">
+                <Sparkles size={28} />
               </div>
               <div>
                 <h2 className="text-3xl sm:text-4xl font-black leading-tight tracking-tight text-slate-800">
-                  {t.dashboard.welcome}, {user?.username || 'Learner'}! 👋
+                  {t.dashboard.welcome}, {user?.username || 'Learner'}!
                 </h2>
                 <p className="text-slate-500 text-sm mt-1.5 font-medium">
                   {t.dashboard.subtitle}
@@ -158,7 +158,9 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="col-span-1 p-6 rounded-3xl flex flex-col justify-center items-center gap-2.5 bg-indigo-50/40 border border-dashed border-indigo-200/80 text-center min-h-[140px]">
-                  <span className="text-2xl">📚</span>
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                    <BookOpen size={20} />
+                  </div>
                   <p className="text-xs font-bold text-slate-800">
                     {uiLanguage === 'sv' ? 'Redo att börja lära dig?' : 'Ready to Start Learning?'}
                   </p>
@@ -209,21 +211,27 @@ export default function DashboardPage() {
 
               <div className="grid grid-cols-3 gap-2 border-t border-b border-slate-100 py-4 mb-6">
                 <div className="flex flex-col items-center p-2 rounded-2xl bg-slate-50/70 border border-slate-100">
-                  <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center text-sm mb-1.5 shadow-2xs">📚</div>
+                  <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mb-1.5 shadow-2xs">
+                    <BookOpen size={16} />
+                  </div>
                   <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                     {uiLanguage === 'sv' ? 'KURSER' : 'COURSES'}
                   </p>
                   <p className="text-sm font-black text-slate-800 mt-0.5">{stats?.courses_in_progress ?? stats?.courses_completed ?? 0}</p>
                 </div>
                 <div className="flex flex-col items-center p-2 rounded-2xl bg-slate-50/70 border border-slate-100">
-                  <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center text-sm mb-1.5 shadow-2xs">✨</div>
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center mb-1.5 shadow-2xs">
+                    <Sparkles size={16} />
+                  </div>
                   <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                     {uiLanguage === 'sv' ? 'LEKTIONER' : 'LESSONS'}
                   </p>
                   <p className="text-sm font-black text-slate-800 mt-0.5">{stats?.lessons_completed || 0}</p>
                 </div>
                 <div className="flex flex-col items-center p-2 rounded-2xl bg-slate-50/70 border border-slate-100">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center text-sm mb-1.5 shadow-2xs">🏆</div>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center mb-1.5 shadow-2xs">
+                    <Trophy size={16} />
+                  </div>
                   <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                     {uiLanguage === 'sv' ? 'SVIT' : 'STREAK'}
                   </p>
@@ -240,8 +248,8 @@ export default function DashboardPage() {
                 onClick={() => navigate('/chat')}
                 className="bg-indigo-50/70 border border-indigo-200/80 rounded-2xl p-3.5 flex items-center gap-3 cursor-pointer hover:bg-indigo-100/70 hover:border-indigo-300 transition-all shadow-2xs group"
               >
-                <div className="w-9 h-9 bg-indigo-600 text-white rounded-xl flex items-center justify-center text-base flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
-                  🎯
+                <div className="w-9 h-9 bg-indigo-600 text-white rounded-xl flex items-center justify-center flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                  <Target size={18} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h4 className="text-xs font-bold text-slate-800 truncate">
