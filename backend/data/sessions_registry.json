@@ -1,5 +1,49 @@
 [
   {
+    "id": "session_2143582319",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "Machine Learning & AI",
+    "title": "Default Study Room",
+    "document_name": "",
+    "documents": [],
+    "document_count": 0,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 4,
+    "created_at": "2026-09-04T10:30:35.396708+00:00",
+    "last_active": "2026-09-04T10:52:58.592310+00:00"
+  },
+  {
+    "id": "fbb9bd44-4654-4136-81a6-8ae5790c3a3d",
+    "user_id": "30cc0809-0ce0-4101-8355-77605c809eac",
+    "subject": "Neural Networks",
+    "title": "Neural Networks Study Room",
+    "document_name": "Neural Networks.pdf",
+    "documents": [
+      "Neural Networks.pdf"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 0,
+    "message_count": 8,
+    "created_at": "2026-09-04T10:01:45.470711+00:00",
+    "last_active": "2026-09-04T10:04:37.598407+00:00"
+  },
+  {
+    "id": "session_5088890707",
+    "user_id": "30cc0809-0ce0-4101-8355-77605c809eac",
+    "subject": "General Study",
+    "title": "Default Study Room",
+    "document_name": "",
+    "documents": [],
+    "document_count": 0,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-04T10:01:41.464079+00:00",
+    "last_active": "2026-09-04T10:01:41.464079+00:00"
+  },
+  {
     "id": "session_6243776973",
     "user_id": "7969dca5-437a-4764-abbc-189cd716efe0",
     "subject": "Module-1 Introduction To Big Data",
@@ -11,9 +55,9 @@
     "document_count": 1,
     "status": "text_ready",
     "topic_count": 7,
-    "message_count": 6,
+    "message_count": 20,
     "created_at": "2026-09-04T09:46:45.589534+00:00",
-    "last_active": "2026-09-04T09:50:02.210118+00:00"
+    "last_active": "2026-09-04T09:59:53.256094+00:00"
   },
   {
     "id": "session_2919558626",
@@ -28,9 +72,9 @@
     "document_count": 2,
     "status": "text_ready",
     "topic_count": 7,
-    "message_count": 4,
+    "message_count": 10,
     "created_at": "2026-09-04T07:16:48.977636+00:00",
-    "last_active": "2026-09-04T07:21:39.918229+00:00"
+    "last_active": "2026-09-04T10:55:52.682570+00:00"
   },
   {
     "id": "session_7629085165",

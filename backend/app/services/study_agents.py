@@ -267,6 +267,37 @@ class DecisionAgent:
                     seen_ids.add(c["chunk_id"])
                     retrieved_chunks.append(c)
 
+        # 1.5 Check if student query is a simple greeting
+        q_clean_greeting = user_query.strip().lower().rstrip(".!?,")
+        greeting_words = {
+            "hi", "hello", "hey", "hi there", "hello there", "good morning", 
+            "good afternoon", "good evening", "greetings", "howdy", "namaste", 
+            "hi deeptutor", "hello deeptutor", "hey deeptutor", "hi tutor", "hello tutor", "hey tutor", "sup", "yo"
+        }
+        is_greeting = q_clean_greeting in greeting_words or (
+            bool(re.match(r'^(hi|hello|hey|greetings|good morning|good afternoon|good evening)\b', q_clean_greeting))
+            and len(q_clean_greeting.split()) <= 4
+        )
+
+        if is_greeting:
+            topics = get_session_topics(session_id)
+            topic_bullets = ""
+            if topics:
+                topic_bullets = "\n\nHere are some key topics from your uploaded course materials:\n" + "\n".join(f"- **{t}**" for t in topics[:5])
+
+            greeting_response = (
+                f"Hello! I am **DeepTutor**, your AI academic tutor for **{subject}**.\n\n"
+                f"I am ready to help you analyze your course materials, solve STEM tables from first principles, break down complex schematics, or generate interactive study decks."
+                f"{topic_bullets}\n\n"
+                f"What concept or topic would you like to explore today?"
+            )
+            return {
+                "thought_process": f"Student query '{user_query}' is a greeting. Responded with a warm academic greeting for {subject}.",
+                "response": greeting_response,
+                "sources": [],
+                "format": "conceptual"
+            }
+
         # 2. Check if student query is a short Boolean confirmation / refusal
         q_clean = user_query.lower().strip()
         is_boolean_yes = q_clean in ("yes", "y", "yeah", "yup", "sure", "ok", "okay", "true", "tell me more", "explain that", "go ahead", "please do", "solve that", "explain", "continue")
@@ -421,7 +452,9 @@ Student Message:
 STRICT RULES:
 1. Grounding Rule: Answer strictly and only from the retrieved chunks and conversation history above. If a completely unrelated topic is asked that is absent from the material, state:
    "I could not find the answer to this in your uploaded PDF. Please ask questions specifically related to the concepts and chapters in your uploaded material for {subject}."
-2. Boolean Continuations & Follow-up Acceptance:
+2. Greetings & Salutations:
+   - If the student message is a greeting (e.g., 'Hi', 'Hello', 'Hey', 'Good morning', 'Greetings'), greet them warmly as DeepTutor for **{subject}**, explain your capabilities, and ask what concept from their course materials they'd like to study today. Do NOT say "I could not find the answer to this in your uploaded PDF" for greetings.
+3. Boolean Continuations & Follow-up Acceptance:
    - If the student answers 'Yes', 'Sure', 'Explain that', or 'Continue' to your previous follow-up question, you MUST directly fulfill and explain that topic step-by-step. Do NOT output a refusal message for follow-ups that you offered.
    - If the student answers 'No' / 'Nope', acknowledge politely and ask what other concept from their uploaded material they would like to study.
 3. Universal STEM Problem Solving & Table Completion Protocol:
