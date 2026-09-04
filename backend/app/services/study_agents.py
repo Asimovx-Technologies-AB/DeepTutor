@@ -312,10 +312,75 @@ class DecisionAgent:
             if history_lines:
                 history_block = "Recent Conversation History:\n" + "\n".join(history_lines) + "\n\n"
 
-        # 4. Check if student asked to "quiz me"
-        is_quiz_query = any(k in user_query.lower() for k in ("quiz me", "ask me a question", "test me", "give me 3 questions", "pop quiz"))
-        if is_quiz_query:
-            plan["response_format"] = "quiz"
+        # 4. Check if student asked for flashcards or a quiz
+        is_quiz_or_flashcard = any(k in user_query.lower() for k in (
+            "flashcard", "flashcards", "quiz", "quiz me", "test me", "flash card", "flash cards", "make a flashcard", "create a flashcard", "generate quiz"
+        ))
+
+        if is_quiz_or_flashcard:
+            from app.services.study_quiz_engine import generate_flashcard_deck
+            explanation_level = "standard"
+            if any(w in user_query.lower() for w in ("simply", "simple", "eli5", "basic")):
+                explanation_level = "simple"
+            elif any(w in user_query.lower() for w in ("advanced", "expert", "deep", "complex")):
+                explanation_level = "advanced"
+
+            # Clean topic title from query
+            clean_title = re.sub(
+                r"(?i)\b(create|make|generate|build|give me|show|flashcards|flashcard|quiz|deck|on the topic|about|on|me)\b",
+                "",
+                user_query
+            ).strip() or "Course Material"
+
+            deck = await generate_flashcard_deck(
+                session_id=session_id,
+                topic_id=f"chat_{session_id[:8]}",
+                topic_title=clean_title,
+                subject=subject,
+                num_cards=8,
+                explanation_level=explanation_level,
+                initial_mode="quiz" if ("quiz" in user_query.lower() and "flashcard" not in user_query.lower()) else "flashcards"
+            )
+
+            if deck.get("out_of_topic"):
+                suggested_topics = deck.get("suggested_topics") or []
+                suggested_str = "\n".join(f"- **{t}**" for t in suggested_topics[:6] if t)
+                reason = deck.get("reason", f"The topic '{clean_title}' is not covered in your uploaded course materials.")
+                
+                refusal_response = (
+                    f"The topic **\"{clean_title}\"** is out of the scope of your uploaded course materials for **{subject}**.\n\n"
+                    f"{reason}\n\n"
+                )
+                if suggested_str:
+                    refusal_response += (
+                        f"To ensure accurate and grounded practice, you can generate flashcards and quizzes for topics covered in your syllabus:\n"
+                        f"{suggested_str}\n\n"
+                        f"**Would you like to practice one of these topics instead?**"
+                    )
+                else:
+                    refusal_response += "Please ask for flashcards on a topic from your uploaded course materials."
+
+                return {
+                    "thought_process": f"Requested topic '{clean_title}' is out of syllabus/scope for '{subject}'. Refused ungrounded deck generation.",
+                    "response": refusal_response,
+                    "sources": [],
+                    "quiz_data": None,
+                    "format": "conceptual"
+                }
+
+            resp_text = (
+                f"I have generated an interactive dual-mode **Flashcard & Quiz Deck** for **{deck.get('title', clean_title)}** "
+                f"({len(deck.get('questions', []))} cards grounded in your course materials).\n\n"
+                f"You can flip cards in 3D, view KaTeX mathematical explanations, or switch to **Quiz Mode** for interactive self-testing below!"
+            )
+
+            return {
+                "thought_process": f"Detected flashcard/quiz request '{user_query}'. Generated grounded {len(deck.get('questions', []))}-card dual-mode JSON deck with explanation level '{explanation_level}'.",
+                "response": resp_text,
+                "sources": [{"chunk_id": c["chunk_id"], "page": c["page"]} for c in retrieved_chunks[:3]],
+                "quiz_data": deck,
+                "format": "flashcard" if "flashcard" in user_query.lower() else "quiz"
+            }
 
         # 5. Consult Student Episodic Memory
         student_mem = get_student_memory(user_id)

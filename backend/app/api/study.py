@@ -358,6 +358,31 @@ async def get_teacher_stream(
     )
 
 
+class FlashcardDeckRequest(BaseModel):
+    session_id: str
+    topic_id: str
+    topic_title: str
+    subject: Optional[str] = "General Study"
+    num_cards: Optional[int] = 8
+    explanation_level: Optional[str] = "standard"
+    initial_mode: Optional[str] = "flashcards"
+
+
+@router.post("/flashcard-deck")
+async def get_flashcard_deck_endpoint(body: FlashcardDeckRequest):
+    """Generates grounded dual-mode flashcard/quiz deck for a topic."""
+    from app.services.study_quiz_engine import generate_flashcard_deck
+    return await generate_flashcard_deck(
+        session_id=body.session_id,
+        topic_id=body.topic_id,
+        topic_title=body.topic_title,
+        subject=body.subject or "General Study",
+        num_cards=body.num_cards or 8,
+        explanation_level=body.explanation_level or "standard",
+        initial_mode=body.initial_mode or "flashcards"
+    )
+
+
 # ─── 6. Mixed-Format Topic Mastery Examination Engine ───────────────────────
 
 @router.post("/topic/exam")

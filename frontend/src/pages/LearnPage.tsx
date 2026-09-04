@@ -24,6 +24,7 @@ import { useAuthStore } from '../stores/authStore'
 import confetti from 'canvas-confetti'
 import MermaidDiagram from '../components/MermaidDiagram'
 import StudyNotesCard, { extractDocTitle } from '../components/StudyNotesCard'
+import FlashcardQuizCard from '../components/FlashcardQuizCard'
 import ConfirmModal from '../components/ConfirmModal'
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
@@ -1698,6 +1699,20 @@ export default function LearnPage() {
                                           </span>
                                         )
                                       })}
+                                  </div>
+                                ) : msg.quiz_data ? (
+                                  /* Inline Dual-Mode Flashcard & Quiz Widget Response */
+                                  <div className="w-full">
+                                    <div className="markdown-content mb-3">
+                                      <ReactMarkdown
+                                        remarkPlugins={[remarkGfm, remarkMath]}
+                                        rehypePlugins={[rehypeKatex]}
+                                        components={customMarkdownComponents}
+                                      >
+                                        {msg.text}
+                                      </ReactMarkdown>
+                                    </div>
+                                    <FlashcardQuizCard quizData={msg.quiz_data} />
                                   </div>
                                 ) : isStudyNotes ? (
                                   /* Study Notes Response (Matching Claude design) */
