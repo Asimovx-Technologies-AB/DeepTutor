@@ -509,14 +509,17 @@ def get_session_documents(session_id: str) -> List[Dict[str, Any]]:
 
 # ─── Global Sessions Registry (sessions_registry.json) ──────────────────────
 
-def list_registry_sessions() -> List[Dict[str, Any]]:
-    """List all sessions recorded in sessions_registry.json."""
+def list_registry_sessions(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """List all sessions recorded in sessions_registry.json, filtered by user_id if provided."""
     ensure_data_directories()
     with _registry_lock:
         try:
             if REGISTRY_PATH.exists():
                 with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    all_sessions = json.load(f)
+                    if user_id:
+                        return [s for s in all_sessions if s.get("user_id") == user_id]
+                    return all_sessions
         except Exception:
             pass
     return []
@@ -535,9 +538,10 @@ def register_or_update_session(
     subject: str = "General Study",
     title: str = "Study Room Session",
     status: str = "ready",
-    document_name: Optional[str] = None
+    document_name: Optional[str] = None,
+    user_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Add or update session metadata in registry."""
+    """Add or update session metadata in registry with user isolation."""
     ensure_data_directories()
     with _registry_lock:
         sessions = []
@@ -555,11 +559,13 @@ def register_or_update_session(
             if title: existing["title"] = title
             if status: existing["status"] = status
             if document_name: existing["document_name"] = document_name
+            if user_id: existing["user_id"] = user_id
             existing["last_active"] = now_iso
             res = existing
         else:
             res = {
                 "id": session_id,
+                "user_id": user_id or "guest-user",
                 "subject": subject,
                 "title": title,
                 "document_name": document_name or "",

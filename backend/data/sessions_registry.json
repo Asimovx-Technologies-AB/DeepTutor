@@ -1,79 +1,26 @@
 [
   {
-    "id": "session_7803109750",
-    "subject": "Machine Learning",
-    "title": "Docscanner 17-Nov-2025 2-09 Pm Study Room",
-    "document_name": "DocScanner 17-Nov-2025 2-09 pm.pdf",
-    "status": "text_ready",
-    "topic_count": 5,
-    "message_count": 4,
-    "created_at": "2026-09-03T12:40:32.358757+00:00",
-    "last_active": "2026-09-03T12:45:27.709891+00:00"
-  },
-  {
-    "id": "session_3826522011",
-    "subject": "Machine Learning",
-    "title": "Hsslive-19 Chemistry Eng Study Room",
-    "document_name": "Hsslive-19_Chemistry Eng.pdf",
-    "status": "text_ready",
-    "topic_count": 6,
-    "message_count": 20,
-    "created_at": "2026-09-03T11:55:05.006804+00:00",
-    "last_active": "2026-09-03T12:56:25.779577+00:00"
-  },
-  {
-    "id": "session_5813982615",
-    "subject": "Machine Learning",
-    "title": "Ncert-Class-10-History Study Room",
-    "document_name": "NCERT-Class-10-History.pdf",
-    "status": "text_ready",
-    "topic_count": 3,
-    "message_count": 2,
-    "created_at": "2026-09-03T11:50:53.339912+00:00",
-    "last_active": "2026-09-03T11:52:10.232075+00:00"
-  },
-  {
-    "id": "session_7887786038",
+    "id": "session_3862000107",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
     "subject": "General Study",
-    "title": "New Study Workspace",
+    "title": "Default Study Room",
     "document_name": "",
     "status": "ready",
     "topic_count": 0,
     "message_count": 0,
-    "created_at": "2026-09-03T11:45:47.321227+00:00",
-    "last_active": "2026-09-03T11:45:47.321227+00:00"
+    "created_at": "2026-09-04T05:36:33.693254+00:00",
+    "last_active": "2026-09-04T05:36:33.693254+00:00"
   },
   {
-    "id": "session_250558229",
-    "subject": "Machine Learning",
-    "title": "Attention All U Need Study Room",
-    "document_name": "Attention all u need.pdf",
-    "status": "text_ready",
-    "topic_count": 4,
-    "message_count": 12,
-    "created_at": "2026-09-03T11:13:26.776889+00:00",
-    "last_active": "2026-09-03T11:16:38.903663+00:00"
-  },
-  {
-    "id": "session_3035732715",
-    "subject": "Machine Learning",
-    "title": "Ml Algorithams Study Room",
-    "document_name": "ml algorithams.pdf",
-    "status": "text_ready",
-    "topic_count": 5,
-    "message_count": 4,
-    "created_at": "2026-09-03T11:03:04.144955+00:00",
-    "last_active": "2026-09-03T11:11:10.938156+00:00"
-  },
-  {
-    "id": "session_2404660758",
-    "subject": "maths",
-    "title": "Hsslive-35 Maths Eng Study Room",
-    "document_name": "Hsslive-35_Maths Eng.pdf",
-    "status": "text_ready",
-    "topic_count": 7,
-    "message_count": 10,
-    "created_at": "2026-09-03T10:52:04.471765+00:00",
-    "last_active": "2026-09-03T10:59:25.540102+00:00"
+    "id": "session_8957569891",
+    "user_id": "4ae9aa5d-b3ab-4c98-847e-4d3f272ec1ab",
+    "subject": "Physics",
+    "title": "Admin Physics Room",
+    "document_name": "",
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-04T05:22:28.932047+00:00",
+    "last_active": "2026-09-04T05:22:28.932047+00:00"
   }
 ]

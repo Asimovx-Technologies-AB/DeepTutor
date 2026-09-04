@@ -72,8 +72,10 @@ function GlobalSessionLoader() {
       return
     }
 
-    // User switched (different account): clear old data before loading new
-    if (prevUserIdRef.current !== null && prevUserIdRef.current !== currentUserId) {
+    // User changed (new login, signup, or account switch):
+    // Always clear the in-memory store so stale data from another account
+    // can't flash before the fresh fetch resolves.
+    if (prevUserIdRef.current !== currentUserId) {
       setSessions([])
       setActiveSession(null)
       queryClient.clear()
@@ -88,6 +90,7 @@ function GlobalSessionLoader() {
 
   return null
 }
+
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)

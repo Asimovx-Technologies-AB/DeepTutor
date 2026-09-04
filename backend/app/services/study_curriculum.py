@@ -7,6 +7,7 @@ Features:
 - Curriculum Reasoning Agent: Syllabus / TOC prioritization, 4-10 progressive topic roadmap
 """
 
+import os
 import re
 import json
 import asyncio

@@ -37,14 +37,18 @@ Write comprehensive, authoritative master study notes for the topic: "{day_topic
 Key concepts to cover: {", ".join(key_concepts) if key_concepts else "Core principles"}.
 
 FORMAT REQUIREMENTS:
-- Use clean Markdown with headers (# and ##).
-- Clean human-readable mathematics (e.g. y = mx + c, F = m * a).
-- Include:
-  1. The Big Picture & Foundational Purpose
-  2. Core Governing Principles & Mathematical Framework
-  3. Step-by-step Problem-Solving Mechanism
-  4. Common Pitfalls & High-Yield Exam Traps
-- Zero emojis. Maintain an articulate, elite academic tone.
+- Use clean Markdown (# and ## headings).
+- Zero emojis. Maintain an articulate, authoritative academic tone.
+- Follow this exact structure:
+  1. # {day_topic} — Study Notes
+  2. > **TL;DR / Summary**: 3-5 line essence box.
+  3. ## Core Governing Principles & Mathematical Framework (Highlight all formulas in $$ ... $$ or formatted blocks).
+  4. ## Step-by-Step Problem-Solving & Concrete Examples
+  5. ## Comparison & Trade-Offs (Use Markdown comparison tables wherever relevant).
+  6. ## Commonly Confused / High-Yield Gotchas (Common student pitfalls, traps, edge cases).
+  7. ## Self-Check Active Recall (5-8 testable questions labeled [High-yield] or [Good-to-know], with answers in a collapsible `<details><summary>Click to reveal answers</summary>...</details>` block).
+  8. ## Quick-Reference Glossary (Two-column Markdown table of key terms and concise definitions).
+  9. **Topics to expand next:** (1 line suggestion of next logical study topic).
 """
     notes = await ollama.chat([{"role": "user", "content": prompt}], temperature=0.2)
     return notes.strip()

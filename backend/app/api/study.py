@@ -21,11 +21,12 @@ import asyncio
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Response
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Response, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.api.auth import get_current_user
 from app.services.study_storage import (
     init_session_db,
     save_session_message,
@@ -119,7 +120,8 @@ class AddMemoryFactRequest(BaseModel):
 async def upload_document(
     file: UploadFile = File(...),
     subject: str = Form("General Study"),
-    session_id: Optional[str] = Form(None)
+    session_id: Optional[str] = Form(None),
+    user: dict = Depends(get_current_user)
 ):
     """
     Zero-wait parallel ingestion:
@@ -169,14 +171,15 @@ async def upload_document(
     if topics:
         save_session_topics(study_id, topics)
 
-    # Update global registry
+    # Update global registry with user isolation
     clean_title = Path(file.filename).stem.replace("_", " ").title()
     register_or_update_session(
         session_id=study_id,
         subject=subject,
         title=f"{clean_title} Study Room",
         status="text_ready",
-        document_name=file.filename
+        document_name=file.filename,
+        user_id=user["id"]
     )
 
     # Dispatch Stage 2 & 3 Non-blocking Background Enrichment Workers
@@ -355,29 +358,33 @@ async def export_notes_markdown(body: ExportMarkdownRequest):
 # ─── 8. Workspace & Multi-Session Management ────────────────────────────────
 
 @router.get("/sessions")
-async def list_study_sessions():
-    """Lists all active study workspaces with metadata."""
-    return list_registry_sessions()
+async def list_study_sessions(user: dict = Depends(get_current_user)):
+    """Lists all active study workspaces for the current user."""
+    return list_registry_sessions(user_id=user["id"])
 
 
 @router.post("/sessions/new")
-async def create_new_session(body: CreateSessionRequest):
+async def create_new_session(
+    body: CreateSessionRequest,
+    user: dict = Depends(get_current_user)
+):
     """Creates a fresh workspace and initializes physical SQLite DB."""
     new_id = f"session_{int(uuid.uuid4().int % 10000000000)}"
     meta = register_or_update_session(
         session_id=new_id,
         subject=body.subject or "General Study",
-        title=body.title or "New Course Workspace"
+        title=body.title or "New Course Workspace",
+        user_id=user["id"]
     )
     return meta
 
 
 @router.get("/sessions/{session_id}")
-async def get_session_details(session_id: str):
+async def get_session_details(session_id: str, user: dict = Depends(get_current_user)):
     """Loads persisted conversation, topics, and documents for a session."""
     meta = get_registry_session(session_id)
     if not meta:
-        meta = register_or_update_session(session_id)
+        meta = register_or_update_session(session_id, user_id=user["id"])
     messages = get_session_messages(session_id)
     topics = get_session_topics(session_id)
     documents = get_session_documents(session_id)

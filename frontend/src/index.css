@@ -56,9 +56,15 @@
   --color-success-soft: #ECFDF5;
   --color-error: #DC2626;
   --color-error-soft: #FEF2F2;
+  --color-warning: #F59E0B;
+  --color-warning-soft: #FEF3C7;
+  --color-info: #2563EB;
+  --color-info-soft: #EFF6FF;
+  --color-brand-primary-accent: #1D4ED8;
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 14px -2px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.08);
   --shadow-pill: 0 4px 20px rgba(0, 0, 0, 0.07);
 }
 

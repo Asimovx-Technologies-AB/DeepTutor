@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { Mail, Lock, User, ArrowRight, Eye, EyeOff, Sparkles, Brain, Globe, Send } from 'lucide-react'
 import { authApi } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
+import { clearAllUserData } from '../stores/authStore'
 import { TextInput } from '../components/ui/TextInput'
 import { Button } from '../components/ui/Button'
 
@@ -32,6 +33,7 @@ export default function RegisterPage() {
         password: form.password,
       })
       const { access_token, user } = res.data
+      clearAllUserData()  // wipe any previous user's cached data first
       login(user, access_token)
       navigate('/dashboard')
     } catch (err: any) {
@@ -46,6 +48,7 @@ export default function RegisterPage() {
   }
 
   const handleGoogleSignup = () => {
+    clearAllUserData()  // wipe any previous user's cached data first
     login(
       { id: 'google-user', username: 'Google Learner', email: 'google.student@indietutor.ai', role: 'student' },
       'demo-google-token'

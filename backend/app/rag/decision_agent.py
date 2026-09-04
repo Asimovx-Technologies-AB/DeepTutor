@@ -74,28 +74,22 @@ RESPONSE GUIDELINES:
     5. End with a natural yes/no conversational question (e.g., *"Would you like to explore how data flows through the next layer in this architecture?"*).
   - **study_notes** (student wants a standalone reference document, not a conversational answer):
     1. Start with a single H1 title: `# {Topic} — Study Notes`.
-    2. If the student's memory shows related prior topics, add one italic line:
-       `*Builds on: {prior topics}*`.
-    3. Break the topic into 5-9 numbered `## ` sections covering, in order: core definition/overview,
-       key mechanisms or sub-concepts, how it's used/applied, common variants or techniques, key
-       limitations or trade-offs, and how it's evaluated or tested (skip any section that doesn't
-       apply to the topic).
-    4. Wherever the material has comparable items (algorithms, methods, terms), render them as a
-       Markdown table rather than prose — this is what makes notes scannable for revision.
-    5. Wherever the topic involves a process, pipeline, decision flow, or hierarchical structure
-       (e.g. a training pipeline, a data-split strategy, an architecture, a decision tree), include
-       ONE Mermaid diagram in a fenced ` ```mermaid ` code block using `graph TD` / `graph LR` /
-       `pie` syntax as appropriate. Keep it to 4-8 nodes maximum — do not diagram simple linear
-       definitions or single-concept explanations that don't have real structure to show.
-    6. End with a `## Quick-Reference Glossary` — a two-column Markdown table of the 6-10 most
-       important terms and one-line definitions.
-    7. Close with one line: `**Suggested next step:** ...` — a natural follow-on topic, grounded in
-       the student's memory/current subject if available, otherwise grounded in what a learner would
-       logically study next.
-    8. Use ONLY the retrieved course material for facts; if the material doesn't cover the topic at
+    2. If the student's memory shows related prior topics, add one italic line: `*Builds on: {prior topics}*`.
+    3. **TL;DR / Summary Box**: Include a 3-5 line blockquote summary at the top (`> **TL;DR**: ...`) providing the foundational essence.
+    4. **Hierarchical Concept Sections**: Break the topic into numbered `## ` sections covering core definitions, mechanisms, concrete examples, and trade-offs:
+       - Format definitions consistently as `**Term** — definition`.
+       - Highlight key formulas and equations in standalone block math `$$ ... $$`.
+       - Render comparisons as Markdown tables (`| Concept / Algorithm | X | Y | Key Differences |`) instead of prose.
+       - Wherever the topic involves a pipeline, architecture, or flow, include ONE Mermaid diagram in fenced ` ```mermaid ` code block (4-8 nodes max) or structured ASCII.
+       - Provide short, concrete examples to anchor each concept.
+    5. **Commonly Confused / High-Yield Gotchas**: Include a dedicated `## Commonly Confused / Gotchas` section detailing common student pitfalls, exam traps, and edge cases.
+    6. **Self-Check Active Recall Quiz**: End with a `## Self-Check Active Recall` section featuring 5-8 testable questions marked with `[High-yield]` or `[Good-to-know]`, followed by answers in a `<details><summary>Click to reveal answers</summary>...</details>` block.
+    7. **Quick-Reference Glossary**: Include a `## Quick-Reference Glossary` two-column table of 6-10 essential terms and definitions.
+    8. **Expansion Cue**: Close with `**Topics to expand next:** ...` suggesting the next logical subtopic to study.
+    9. Use ONLY the retrieved course material for facts; if the material doesn't cover the topic at
        all, do not silently fall back to general knowledge — use the standard "not found in material"
        rule instead of producing generic notes.
-    9. This format must render as clean, valid Markdown only — no HTML tags, no page citations — since
+    10. This format must render as clean, valid Markdown only (no page citations) since
        it is rendered directly in the chat UI's Markdown viewer and also offered as a downloadable
        `.md` file as-is.
   - If the plan flags multiple sub_questions (a compound question), answer each sub-question in its own
@@ -171,7 +165,7 @@ Respond with ONLY this JSON object:
 }
 """
 
-    def __init__(self, max_retries: int = 1, enable_self_critique: bool = False):
+    def __init__(self, max_retries: int = 1, enable_self_critique: bool = True):
         self.max_retries = max_retries
         self.enable_self_critique = enable_self_critique
 

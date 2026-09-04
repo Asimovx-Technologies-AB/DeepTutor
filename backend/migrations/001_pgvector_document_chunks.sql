@@ -1,5 +1,5 @@
 -- Azure PostgreSQL vector and hybrid-search storage for DeepTutor.
--- PGVECTOR_DIMENSIONS is 1536 and must match the embedding provider.
+-- PGVECTOR_DIMENSIONS is 768 and must match the embedding provider (Gemini).
 CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS document_chunks (
@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     topic_id        text NOT NULL,
     chunk_text      text NOT NULL,
     metadata        jsonb NOT NULL DEFAULT '{}'::jsonb,
-    embedding       vector(1536) NOT NULL,
+    embedding       vector(768) NOT NULL,
     search_vector   tsvector GENERATED ALWAYS AS (
         to_tsvector('simple', coalesce(chunk_text, ''))
     ) STORED,
