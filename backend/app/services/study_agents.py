@@ -317,9 +317,41 @@ class DecisionAgent:
             if prev_words:
                 search_terms = [" ".join(prev_words[-6:]), " ".join(prev_words[:4])]
 
+        # Detect if student asks for a large response, detailed explanation, big answer, or related questions
+        is_large_request = any(k in user_query.lower() for k in (
+            "large", "big", "detailed", "detail", "comprehensive", "deep dive", "in-depth", "in depth", 
+            "full breakdown", "everything", "complete", "long response", "explain fully", "all about", 
+            "related questions", "big response", "large response", "more details", "thorough", "exhaustive",
+            "explain more", "tell me more", "elaborate", "expand on", "break down further"
+        ))
+
+        # Detect if student specifically asks to explain more about the PREVIOUS response / answer
+        is_prev_explain_req = any(k in user_query.lower() for k in (
+            "previous response", "previous answer", "previous explanation", "last response", "last answer", 
+            "above response", "above answer", "this response", "this answer", "what you said", "explain more about this", 
+            "explain more about the previous", "elaborate on that"
+        ))
+
+        if is_prev_explain_req and history:
+            prev_assistant_turn = ""
+            for m in reversed(history):
+                if m.get("role") == "assistant" and m.get("text"):
+                    prev_assistant_turn = m.get("text")
+                    break
+            if prev_assistant_turn:
+                prev_keywords = [w for w in re.findall(r"[a-zA-Z0-9]+", prev_assistant_turn) if len(w) > 4 and w.lower() not in (
+                    "about", "which", "there", "these", "those", "where", "after", "before", "their", "under", "result", "answer", "question", "material"
+                )]
+                if prev_keywords:
+                    search_terms.insert(0, " ".join(prev_keywords[:6]))
+                    if len(prev_keywords) > 6:
+                        search_terms.insert(1, " ".join(prev_keywords[6:12]))
+
+        chunk_limit = 8 if is_large_request else 4
+
         for q in search_terms:
             src = "table" if plan.get("requires_table_data") else None
-            chunks = search_fts_chunks(session_id, q, limit=4, source_type=src)
+            chunks = search_fts_chunks(session_id, q, limit=chunk_limit, source_type=src)
             for c in chunks:
                 if c["chunk_id"] not in seen_ids:
                     seen_ids.add(c["chunk_id"])
@@ -328,9 +360,9 @@ class DecisionAgent:
         if not retrieved_chunks:
             # Broad search fallback
             if is_boolean_yes:
-                retrieved_chunks = get_all_chunks(session_id, limit=5)
+                retrieved_chunks = get_all_chunks(session_id, limit=8)
             else:
-                retrieved_chunks = search_fts_chunks(session_id, user_query, limit=5)
+                retrieved_chunks = search_fts_chunks(session_id, user_query, limit=8 if is_large_request else 5)
 
         # 3. Format Recent Conversation History
         history_block = ""
@@ -356,12 +388,50 @@ class DecisionAgent:
             elif any(w in user_query.lower() for w in ("advanced", "expert", "deep", "complex")):
                 explanation_level = "advanced"
 
-            # Clean topic title from query
-            clean_title = re.sub(
-                r"(?i)\b(create|make|generate|build|give me|show|flashcards|flashcard|quiz|deck|on the topic|about|on|me)\b",
-                "",
-                user_query
-            ).strip() or "Course Material"
+            # Check if student requested flashcards/quiz based on the PREVIOUS assistant response
+            is_prev_resp_req = any(k in user_query.lower() for k in (
+                "previous response", "previous answer", "previous explanation", "last response", "last answer", 
+                "above response", "above answer", "this response", "this answer", "previous turn", "from previous", 
+                "based on previous", "from the previous", "from this", "on this", "for this", "for the above", "for it"
+            ))
+
+            override_ctx = None
+            clean_title = "Course Material"
+
+            if is_prev_resp_req and history:
+                for m in reversed(history):
+                    if m.get("role") == "assistant" and m.get("text"):
+                        override_ctx = m.get("text")
+                        # Try extracting a clean title from the heading of the previous response
+                        h_match = re.search(r"^#+\s*(.+)$", override_ctx, re.MULTILINE)
+                        if h_match:
+                            clean_title = h_match.group(1).strip()
+                        else:
+                            clean_title = "Previous Response Concepts"
+                        break
+
+            if not override_ctx:
+                # Clean topic title from query
+                clean_title = re.sub(
+                    r"(?i)\b(create|make|generate|build|give me|show|flashcards|flashcard|quiz|deck|on the topic|about|on|me|based|previous|response|answer|for|a|this|it)\b",
+                    "",
+                    user_query
+                ).strip()
+
+                # If clean_title ended up empty or generic ("a for this", "for this", "this"), fallback to previous response if available
+                if (not clean_title or clean_title.lower() in ("a", "this", "it", "course material", "for this")) and history:
+                    for m in reversed(history):
+                        if m.get("role") == "assistant" and m.get("text"):
+                            override_ctx = m.get("text")
+                            h_match = re.search(r"^#+\s*(.+)$", override_ctx, re.MULTILINE)
+                            if h_match:
+                                clean_title = h_match.group(1).strip()
+                            else:
+                                clean_title = "Previous Response Concepts"
+                            break
+
+                if not clean_title:
+                    clean_title = "Course Material"
 
             deck = await generate_flashcard_deck(
                 session_id=session_id,
@@ -370,7 +440,8 @@ class DecisionAgent:
                 subject=subject,
                 num_cards=8,
                 explanation_level=explanation_level,
-                initial_mode="quiz" if ("quiz" in user_query.lower() and "flashcard" not in user_query.lower()) else "flashcards"
+                initial_mode="quiz" if ("quiz" in user_query.lower() and "flashcard" not in user_query.lower()) else "flashcards",
+                override_context=override_ctx
             )
 
             if deck.get("out_of_topic"):
@@ -439,11 +510,12 @@ class DecisionAgent:
             chunks_by_doc[d_name].append(c)
 
         # Build clear multi-document context blocks
+        max_chunks_per_doc = 10 if is_large_request else 5
         formatted_doc_blocks = []
         for doc_name, doc_chunks in chunks_by_doc.items():
             block = f"=== UPLOADED MATERIAL: {doc_name} ===\n" + "\n\n".join(
                 f"--- CHUNK [Document: {doc_name} | Chunk ID: {c['chunk_id']} | Page {c['page']} | Type: {c['source_type']}] ---\n{c['content']}"
-                for c in doc_chunks[:5]
+                for c in doc_chunks[:max_chunks_per_doc]
             )
             formatted_doc_blocks.append(block)
 
@@ -482,22 +554,32 @@ STRICT RULES:
    - Stage 3: Row-by-Row Independent Computation: Compute EVERY single row, sequence, or test case individually from first principles. Double-check from both directions/perspectives (e.g., number carbons from both left and right and select the lowest locant set).
    - Stage 4: Sanity & Verification Check: Verify dimensional consistency, IUPAC validity, or algebraic balance before finalizing the table.
    - Stage 5: Complete Solved Markdown Table: Output the 100% complete Markdown table with EVERY row, position, value, and name fully populated. Strictly do NOT use ellipses (...) or placeholders. Show clear step-by-step reasoning for each row above or below the table.
-4. Mathematics: Format ALL formulas in standalone block KaTeX:
+6. Mathematics: Format ALL formulas in standalone block KaTeX:
    $$
    formula
    $$
    or inline $...$.
-5. Tone: Articulate, authoritative, engaging academic tone. Strictly ZERO emojis.
-6. Chain-of-Thought: Provide a dedicated thought process detailing your reasoning and verification before the answer.
-7. Interactive Follow-up Question (Conversational Closing):
+7. Tone: Articulate, authoritative, engaging academic tone. Strictly ZERO emojis.
+8. Chain-of-Thought: Provide a dedicated thought process detailing your reasoning and verification before the answer.
+9. Interactive Follow-up Question (Conversational Closing):
    ALWAYS end your response with a natural, conversational follow-up question in bold (e.g., "**Would you like to solve another problem from this section?**" or "**Shall we see how this applies to negative differences, or test this with a quick 1-question practice?**") that the student can easily answer with a simple 'Yes' or 'No'.
-8. Quiz Mode: If the student asks for a quiz or format is 'quiz', present ONE question with 4 multiple-choice options (A, B, C, D) and wait for the student's answer.
-9. Study Notes Mode: If format is 'study_notes':
-   - Start with '# {{Topic}} — Study Notes'
-   - Break into 5-9 numbered '## ' sections covering definitions, mechanisms, applications, and trade-offs
-   - Use Markdown tables for scannable comparison
-   - If a process, pipeline, or architecture is involved, include ONE Mermaid diagram in fenced ```mermaid ... ``` (4-8 nodes max)
-   - End with '## Quick-Reference Glossary' (two-column table of terms) and '**Suggested next step:** ...'
+10. Large, 'Explain More', & Previous Response Expansion Protocol:
+   - When the student asks to 'explain more about [particular topic]' OR 'explain more about the previous response / answer':
+   - You MUST generate an exhaustive, in-depth academic master response (minimum 5-8 detailed Markdown sections).
+   - Do NOT output short 1-paragraph summaries when an 'explain more' or detailed response is requested.
+   - **If expanding a particular topic** (e.g. 'explain more about multi-head attention'):
+     - Provide full mathematical derivations in centered block KaTeX `$$ ... $$`, architectural sub-component breakdowns under `###` subheadings, scannable Markdown comparison tables, worked step-by-step calculations, and exam traps.
+   - **If expanding the previous response** (e.g. 'explain more about the previous answer'):
+     - Reference key concepts, mechanisms, and formulas introduced in the previous turn.
+     - Elaborate on every single sub-component, provide concrete numerical/worked examples, explain underlying intuition, and detail edge cases.
+   - Structure for Detailed Response:
+     - '# [Topic / Query Title] — Exhaustive Master Explanation'
+     - '## 1. High-Level Intuition & Fundamental Motivation'
+     - '## 2. Governing Principles & Mathematical Formulation' (with centered block KaTeX $$ ... $$)
+     - '## 3. Step-by-Step Component Breakdown & Sub-Question Analysis' (with dedicated '### ' subsections for each sub-question/related concept)
+     - '## 4. Scannable Comparison & Markdown Tables' (scannable tabular summary)
+     - '## 5. Exam Traps, Misconceptions & Subtle Edge Cases'
+     - '## 6. Comprehensive Summary & Actionable Key Takeaways'
 
 Return ONLY valid JSON in this exact structure:
 {{

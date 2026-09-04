@@ -100,6 +100,7 @@ async def generate_flashcard_deck(
     num_cards: int = 8,
     explanation_level: str = "standard",
     initial_mode: str = "flashcards",
+    override_context: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Generates a grounded flashcard/quiz deck for a topic with strict out-of-scope validation.
@@ -109,16 +110,17 @@ async def generate_flashcard_deck(
     session_topics = get_session_topics(session_id)
     syllabus_titles = [t.get("title", "") for t in session_topics if t.get("title")]
 
-    chunks = search_fts_chunks(session_id, topic_title, limit=8)
-    context = "\n\n".join(
-        f"--- CHUNK [{c['chunk_id']} | Page {c['page']}] ---\n{c['content']}"
-        for c in chunks
-    ) if chunks else ""
+    if override_context:
+        context = override_context
+    else:
+        chunks = search_fts_chunks(session_id, topic_title, limit=8)
+        context = "\n\n".join(
+            f"--- CHUNK [{c['chunk_id']} | Page {c['page']}] ---\n{c['content']}"
+            for c in chunks
+        ) if chunks else ""
 
-    # 1. Out-of-Scope / Grounding Validation Check
-    # If the user specifically named a topic, verify it isn't an accidental keyword collision
-    # or completely out of the syllabus (e.g. asking for 'indian forest' on an ML textbook)
-    if topic_title and topic_title.lower() not in ("course material", "all topics", "general", "full material", "overview"):
+    # 1. Out-of-Scope / Grounding Validation Check (bypass if override_context is explicitly provided)
+    if not override_context and topic_title and topic_title.lower() not in ("course material", "all topics", "general", "full material", "overview"):
         verify_prompt = f"""You are a strict syllabus relevance and academic grounding auditor.
 Course Subject: {subject}
 Syllabus Topics Covered in Material:
