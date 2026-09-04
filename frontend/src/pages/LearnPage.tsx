@@ -23,6 +23,7 @@ import { useAuthStore } from '../stores/authStore'
 import confetti from 'canvas-confetti'
 import MermaidDiagram from '../components/MermaidDiagram'
 import StudyNotesCard, { extractDocTitle } from '../components/StudyNotesCard'
+import ConfirmModal from '../components/ConfirmModal'
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
@@ -720,9 +721,18 @@ export default function LearnPage() {
     }
   }
 
-  const handleDeleteSession = async (sid: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!confirm('Are you sure you want to permanently delete this study session and its database?')) return
+  const [sessionToDelete, setSessionToDelete] = useState<{ id: string; title: string } | null>(null)
+  const [isDeletingSession, setIsDeletingSession] = useState(false)
+
+  const handleDeleteSession = (sid: string, title?: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    setSessionToDelete({ id: sid, title: title || 'this study workspace' })
+  }
+
+  const confirmDeleteSession = async () => {
+    if (!sessionToDelete) return
+    setIsDeletingSession(true)
+    const sid = sessionToDelete.id
     try {
       await studyApi.deleteSession(sid)
       setSessions((prev) => prev.filter((s) => s.id !== sid))
@@ -736,8 +746,11 @@ export default function LearnPage() {
           setTopics([])
         }
       }
+      setSessionToDelete(null)
     } catch (err) {
       console.error('Delete session failed:', err)
+    } finally {
+      setIsDeletingSession(false)
     }
   }
 
@@ -944,7 +957,7 @@ export default function LearnPage() {
                             </p>
                           </div>
                           <button
-                            onClick={(e) => handleDeleteSession(s.id, e)}
+                            onClick={(e) => handleDeleteSession(s.id, s.title, e)}
                             className="opacity-0 group-hover:opacity-100 p-1 rounded-lg transition hover:bg-slate-200/70 text-slate-400 hover:text-red-600"
                           >
                             <Trash2 size={13} />
@@ -1947,6 +1960,16 @@ export default function LearnPage() {
         )}
       </AnimatePresence>
 
+      {/* Delete Workspace Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!sessionToDelete}
+        title="Delete Study Workspace?"
+        itemName={sessionToDelete?.title}
+        warningNote="Permanent Data Removal: All chat messages, generated notes, and database records for this session will be permanently deleted."
+        isLoading={isDeletingSession}
+        onConfirm={confirmDeleteSession}
+        onCancel={() => setSessionToDelete(null)}
+      />
     </div>
   )
 
