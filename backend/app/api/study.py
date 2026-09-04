@@ -183,6 +183,34 @@ async def upload_document(
         user_id=user["id"]
     )
 
+    # Record in main database so it persists in the global study materials library
+    try:
+        from app.core import database as db
+        from app.rag.document_dedup import get_file_hash, link_document_to_session
+        doc_hash = get_file_hash(content)
+        ext = Path(file.filename).suffix.lower().lstrip(".")
+        db_doc = db.create_document(
+            user_id=user["id"],
+            topic_id=study_id,
+            file_name=file.filename,
+            file_path=file_path,
+            file_type=ext,
+            doc_hash=doc_hash,
+            status="completed",
+        )
+        link_document_to_session(doc_hash, study_id, user["id"], db=db)
+        topic_titles = [t.get("title", "") for t in topics if t.get("title")]
+        db.update_document_stats(
+            doc_id=db_doc["id"],
+            indexed=True,
+            entity_count=len(topic_titles),
+            chunk_count=ingest_result.get("chunk_count", 0),
+            key_topics=[f"__subject__:{effective_subject}", *topic_titles],
+            status="completed",
+        )
+    except Exception as e:
+        print(f"[study.upload] Warning: failed to save document to main db: {e}")
+
     # Dispatch Stage 2 & 3 Non-blocking Background Enrichment Workers
     asyncio.create_task(
         doc_processor.run_background_enrichment(study_id, doc_id, file_path)

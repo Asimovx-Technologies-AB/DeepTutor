@@ -34,11 +34,17 @@ async def list_user_documents(
     topic_id: Optional[str] = None,
     user: dict = Depends(get_current_user),
 ):
-    docs = (
-        db.get_documents_for_user_and_topic(user["id"], topic_id)
-        if topic_id
-        else db.get_documents_for_user(user["id"])
-    )
+    docs = []
+    try:
+        docs = (
+            db.get_documents_for_user_and_topic(user["id"], topic_id)
+            if topic_id
+            else db.get_documents_for_user(user["id"])
+        )
+    except Exception as e:
+        print(f"[documents.list] DB fetch error: {e}")
+        docs = []
+
     for doc in docs:
         topics = doc.get("key_topics") or []
         subject_marker = next((topic for topic in topics if str(topic).startswith("__subject__:")), "")
@@ -48,6 +54,47 @@ async def list_user_documents(
         doc["index_status"] = status.get("status") if status else ("done" if doc.get("indexed") else "pending")
         doc["index_progress"] = status.get("progress", 0) if status else (100 if doc.get("indexed") else 0)
         doc["index_stats"] = status.get("stats", {}) if status else {}
+
+    # Merge materials uploaded through Study Room / Learn Page sessions
+    try:
+        from app.services.study_storage import list_registry_sessions, get_session_topics
+        sessions = list_registry_sessions(user_id=user["id"])
+        existing_filenames = {d["file_name"].lower() for d in docs if d.get("file_name")}
+        existing_topics = {d.get("topic_id") for d in docs if d.get("topic_id")}
+
+        for s in sessions:
+            fn = s.get("document_name")
+            sid = s.get("id")
+            if not fn or fn.lower() in existing_filenames or sid in existing_topics:
+                continue
+            if topic_id and sid != topic_id:
+                continue
+            existing_filenames.add(fn.lower())
+            existing_topics.add(sid)
+            session_topics = get_session_topics(sid)
+            topic_titles = [t.get("title", "") for t in session_topics if t.get("title")]
+            clean_title = Path(fn).stem.replace("_", " ").title()
+            subject_name = s.get("subject") or clean_title
+            docs.append({
+                "id": sid,
+                "user_id": s.get("user_id", user["id"]),
+                "topic_id": sid,
+                "file_name": fn,
+                "file_path": str(Path(settings.UPLOAD_DIR) / sid / fn),
+                "file_type": Path(fn).suffix.lower().lstrip(".") or "pdf",
+                "indexed": True,
+                "entity_count": len(topic_titles),
+                "chunk_count": s.get("topic_count", 0),
+                "detected_subject": subject_name,
+                "key_topics": topic_titles,
+                "index_status": "done",
+                "index_progress": 100,
+                "index_stats": {},
+                "created_at": s.get("created_at"),
+            })
+    except Exception as e:
+        print(f"[documents.list] Error merging study session materials: {e}")
+
     return docs
 
 
@@ -346,9 +393,17 @@ async def delete_section_documents(section_id: str, user: dict = Depends(get_cur
 @router.delete("/{doc_id}")
 async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
     user_id = user["id"]
+    if doc_id.startswith("session_"):
+        from app.services.study_storage import delete_registry_session
+        delete_registry_session(doc_id)
+        return {"ok": True, "doc_id": doc_id, "file_name": doc_id, "message": f"Deleted session material '{doc_id}'."}
+
     doc = db.delete_document(doc_id=doc_id, user_id=user_id)
     if not doc:
-        raise HTTPException(status_code=404, detail="Document not found or access denied.")
+        # Check if it was a session ID
+        from app.services.study_storage import delete_registry_session
+        delete_registry_session(doc_id)
+        return {"ok": True, "doc_id": doc_id, "file_name": doc_id, "message": f"Deleted session material '{doc_id}'."}
 
     file_path = doc.get("file_path")
     if file_path and os.path.exists(file_path):
