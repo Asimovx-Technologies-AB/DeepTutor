@@ -77,9 +77,10 @@ QUESTION QUALITY RULES:
 5. No duplicate or near-duplicate questions testing the same fact twice.
 6. Explanations must do real teaching: state WHY the correct answer holds and, briefly, why the most tempting \
    distractor is wrong.
-7. Mathematics/formulas: standalone block KaTeX ($$...$$) for anything requiring its own line, inline ($...$) \
-   for short in-sentence terms. Never use plain-text pseudo-math ("x^2" instead of "$x^2$").
-8. Tone: clear, precise, encouraging. Zero emojis.
+7. Mathematics and Technical Formulas: Format all mathematical and technical expressions in clean, valid KaTeX syntax. \
+For in-sentence or inline equations, ALWAYS use single dollar signs `$equation$` (for example `$d_k$`, `$\\text{{Attention}}(Q, K, V) = \\text{{softmax}}\\left(\\frac{{QK^T}}{{\\sqrt{{d_k}}}}\\right)V$`). \
+NEVER use double dollar signs `$$` inside the middle of a sentence or inside options. Use double dollar signs `$$...$$` ONLY for standalone display block equations on their own separate line.
+8. Noisy Text Removal & Clear Tone: Keep prompts, options, and explanations direct, clear, and focused. Avoid noisy meta-commentary (e.g., 'According to the text...', 'As mentioned above...'). Zero emojis.
 
 Topic: {topic_title}
 Subject: {subject}
@@ -125,6 +126,11 @@ async def generate_flashcard_deck(
     syllabus_titles = [t.get("title", "") for t in session_topics if t.get("title")]
 
     clean_topic = sanitize_topic_title(topic_title)
+    
+    # Meta-referential query safety fallback when no override_context is supplied
+    from app.services.study_agents import is_meta_referential_query
+    if is_meta_referential_query(clean_topic) and not override_context:
+        clean_topic = sanitize_topic_title(subject)
 
     if override_context:
         context = override_context
@@ -224,15 +230,73 @@ Return ONLY valid JSON:
         title = parsed.get("title") if parsed else None
         title = sanitize_topic_title(title or clean_topic)
         desc = parsed.get("description") if parsed else None
-        return {
+        deck = {
             "title": title,
             "description": desc or f"Flashcards covering {title}",
             "initial_mode": initial_mode,
             "questions": questions
         }
+        return _sanitize_deck_content(deck)
 
     # Deterministic multi-card fallback if the LLM call/parse failed entirely
-    return _fallback_deck(clean_topic, subject, initial_mode)
+    return _sanitize_deck_content(_fallback_deck(clean_topic, subject, initial_mode))
+
+
+def _clean_math_and_noise(text: str) -> str:
+    """Normalizes inline KaTeX delimiters and removes noisy meta-commentary."""
+    if not text or not isinstance(text, str):
+        return text or ""
+    # Convert inline $$...$$ inside a sentence to $...$
+    cleaned = re.sub(r"\$\$([^$\n]+?)\$\$", r"$\1$", text)
+    # Strip unnecessary noisy intros like "According to the passage, " or "Based on the provided text, "
+    cleaned = re.sub(
+        r"^(According to (the )?(text|passage|module|notes|material),?\s*|Based on (the )?(text|passage|module|notes|material),?\s*)",
+        "",
+        cleaned,
+        flags=re.IGNORECASE
+    )
+    return cleaned.strip()
+
+
+def _sanitize_deck_content(deck: Dict[str, Any]) -> Dict[str, Any]:
+    """Applies math KaTeX normalization and noise removal across all questions, options, and explanations."""
+    if not deck or not isinstance(deck, dict):
+        return deck
+    
+    questions = deck.get("questions") or []
+    sanitized_questions = []
+    for q in questions:
+        if not isinstance(q, dict):
+            continue
+        prompt = _clean_math_and_noise(q.get("prompt", ""))
+        explanation = _clean_math_and_noise(q.get("explanation", ""))
+        hint = _clean_math_and_noise(q.get("hint", "")) if q.get("hint") else None
+        correct_fb = _clean_math_and_noise(q.get("correct_feedback", "")) if q.get("correct_feedback") else None
+        incorrect_fb = _clean_math_and_noise(q.get("incorrect_feedback", "")) if q.get("incorrect_feedback") else None
+        
+        options = []
+        for opt in q.get("options", []):
+            if isinstance(opt, dict):
+                options.append({
+                    "id": str(opt.get("id", "")).strip().lower(),
+                    "text": _clean_math_and_noise(opt.get("text", ""))
+                })
+        
+        sanitized_q = dict(q)
+        sanitized_q["prompt"] = prompt
+        sanitized_q["explanation"] = explanation
+        sanitized_q["options"] = options
+        if hint is not None:
+            sanitized_q["hint"] = hint
+        if correct_fb is not None:
+            sanitized_q["correct_feedback"] = correct_fb
+        if incorrect_fb is not None:
+            sanitized_q["incorrect_feedback"] = incorrect_fb
+            
+        sanitized_questions.append(sanitized_q)
+        
+    deck["questions"] = sanitized_questions
+    return deck
 
 
 def _parse_json_relaxed(raw: str) -> Optional[Dict[str, Any]]:

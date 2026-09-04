@@ -63,6 +63,23 @@ class GeminiClient:
         key = self.api_key
         return bool(key and len(key.strip()) > 10 and key != "your_gemini_api_key_here")
 
+    def _format_messages_for_gemini(self, messages: List[Dict[str, str]]) -> Dict[str, Any]:
+        system_text = ""
+        contents = []
+        for m in messages:
+            role = m.get("role", "user")
+            content = m.get("content", "")
+            if role == "system":
+                system_text = content
+            elif role in ("user", "human"):
+                contents.append({"role": "user", "parts": [{"text": content}]})
+            elif role in ("assistant", "model"):
+                contents.append({"role": "model", "parts": [{"text": content}]})
+        payload: Dict[str, Any] = {"contents": contents}
+        if system_text:
+            payload["system_instruction"] = {"parts": [{"text": system_text}]}
+        return payload
+
     def _format_payload(self, messages: List[Dict[str, str]], temperature: float = 0.3) -> Dict[str, Any]:
         system_texts = []
         conversation_turns: List[Dict[str, Any]] = []
@@ -231,5 +248,106 @@ class GeminiClient:
         )
 
 
+class UnifiedLLMClient:
+    """Unified LLM client that routes requests to the configured LLM provider (OpenAI, Azure OpenAI, Gemini, Ollama)."""
+
+    def __init__(self):
+        from app.core.config import get_settings
+        self._settings = get_settings()
+        self._gemini = GeminiClient()
+
+    @property
+    def provider(self) -> str:
+        env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+        if env_path.exists():
+            vals = dotenv_values(env_path)
+            p = vals.get("LLM_PROVIDER", "")
+            if p:
+                return p.strip()
+        return getattr(self._settings, "LLM_PROVIDER", "openai")
+
+    async def is_available(self) -> bool:
+        p = self.provider.lower()
+        if p == "azure_openai":
+            from app.rag.azure_openai_client import azure_openai
+            if await azure_openai.is_available():
+                return True
+        elif p == "openai":
+            from app.rag.azure_openai_client import openai_client
+            if await openai_client.is_available():
+                return True
+        elif p == "gemini":
+            if await self._gemini.is_available():
+                return True
+        return await self._gemini.is_available()
+
+    async def get_working_chat_model(self, requested_model: Optional[str] = None) -> str:
+        p = self.provider.lower()
+        if p == "azure_openai":
+            from app.rag.azure_openai_client import azure_openai
+            if await azure_openai.is_available():
+                return await azure_openai.get_working_chat_model(requested_model)
+        elif p == "openai":
+            from app.rag.azure_openai_client import openai_client
+            if await openai_client.is_available():
+                return await openai_client.get_working_chat_model(requested_model)
+        elif p == "gemini":
+            return self._gemini.model
+        return getattr(self._settings, "GEMINI_MODEL", "gemini-3.1-flash-lite")
+
+    async def chat(
+        self,
+        messages: List[Dict[str, Any]],
+        temperature: float = 0.2,
+        model: Optional[str] = None,
+        options: Optional[Dict] = None,
+    ) -> str:
+        p = self.provider.lower()
+        if p == "azure_openai":
+            from app.rag.azure_openai_client import azure_openai
+            if await azure_openai.is_available():
+                try:
+                    return await azure_openai.chat(messages, model=model, temperature=temperature, options=options)
+                except Exception:
+                    pass
+        elif p == "openai":
+            from app.rag.azure_openai_client import openai_client
+            if await openai_client.is_available():
+                try:
+                    return await openai_client.chat(messages, model=model, temperature=temperature, options=options)
+                except Exception:
+                    pass
+        return await self._gemini.chat(messages, temperature=temperature, model=model, options=options)
+
+    async def stream(
+        self,
+        messages: List[Dict[str, Any]],
+        temperature: float = 0.2,
+        model: Optional[str] = None,
+        options: Optional[Dict] = None,
+    ) -> AsyncGenerator[str, None]:
+        p = self.provider.lower()
+        if p == "azure_openai":
+            from app.rag.azure_openai_client import azure_openai
+            if await azure_openai.is_available():
+                try:
+                    async for chunk in azure_openai.stream(messages, model=model, temperature=temperature, options=options):
+                        yield chunk
+                    return
+                except Exception:
+                    pass
+        elif p == "openai":
+            from app.rag.azure_openai_client import openai_client
+            if await openai_client.is_available():
+                try:
+                    async for chunk in openai_client.stream(messages, model=model, temperature=temperature, options=options):
+                        yield chunk
+                    return
+                except Exception:
+                    pass
+        async for chunk in self._gemini.stream(messages, temperature=temperature, model=model, options=options):
+            yield chunk
+
+
 # Singleton instance
-ollama = GeminiClient()
+ollama = UnifiedLLMClient()

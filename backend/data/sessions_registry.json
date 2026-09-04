@@ -1,5 +1,35 @@
 [
   {
+    "id": "session_974946438",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "Ncert-Class-10-History",
+    "title": "Ncert-Class-10-History Study Room",
+    "document_name": "NCERT-Class-10-History.pdf",
+    "documents": [
+      "NCERT-Class-10-History.pdf"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 6,
+    "message_count": 4,
+    "created_at": "2026-09-04T16:09:21.110470+00:00",
+    "last_active": "2026-09-04T16:11:55.885798+00:00"
+  },
+  {
+    "id": "session_3330306284",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "General Study",
+    "title": "New Study Workspace",
+    "document_name": "",
+    "documents": [],
+    "document_count": 0,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-04T16:09:19.973934+00:00",
+    "last_active": "2026-09-04T16:09:19.973934+00:00"
+  },
+  {
     "id": "session_2001199939",
     "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
     "subject": "An Introduction To Data Science - By Jeffrey Stanton - (Data Science Books)",
@@ -27,9 +57,9 @@
     "document_count": 1,
     "status": "text_ready",
     "topic_count": 6,
-    "message_count": 2,
+    "message_count": 14,
     "created_at": "2026-09-04T13:10:35.270572+00:00",
-    "last_active": "2026-09-04T13:13:35.491248+00:00"
+    "last_active": "2026-09-04T16:32:34.719088+00:00"
   },
   {
     "id": "session_2536661296",
@@ -186,9 +216,9 @@
     "document_name": "ml algorithams.pdf",
     "status": "text_ready",
     "topic_count": 6,
-    "message_count": 22,
+    "message_count": 24,
     "created_at": "2026-09-04T06:09:24.710390+00:00",
-    "last_active": "2026-09-04T14:03:59.113538+00:00"
+    "last_active": "2026-09-04T16:09:03.410128+00:00"
   },
   {
     "id": "session_3862000107",
@@ -198,9 +228,9 @@
     "document_name": "Hsslive-35_Maths Eng.pdf",
     "status": "text_ready",
     "topic_count": 3,
-    "message_count": 6,
+    "message_count": 8,
     "created_at": "2026-09-04T05:36:33.693254+00:00",
-    "last_active": "2026-09-04T05:45:27.748705+00:00"
+    "last_active": "2026-09-04T16:13:32.619419+00:00"
   },
   {
     "id": "session_8957569891",

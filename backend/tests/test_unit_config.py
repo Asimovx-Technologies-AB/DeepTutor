@@ -23,7 +23,7 @@ def test_config_loads_defaults():
     assert settings.APP_NAME in ("Deep Tutor API", "Indie Tutor")
     assert settings.ALGORITHM == "HS256"
     assert settings.ACCESS_TOKEN_EXPIRE_MINUTES == 60 * 24 * 7
-    assert settings.LLM_PROVIDER in ("gemini", "azure_openai", "ollama")
+    assert settings.LLM_PROVIDER in ("gemini", "azure_openai", "ollama", "openai")
     assert settings.OLLAMA_NUM_CTX > 0
     assert settings.UPLOAD_DIR, "UPLOAD_DIR must not be empty"
 

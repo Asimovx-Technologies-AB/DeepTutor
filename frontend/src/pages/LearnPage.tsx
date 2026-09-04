@@ -2167,7 +2167,17 @@ export default function LearnPage() {
                               {coreIdeaData.key_takeaways?.map((item: string, i: number) => (
                                 <li key={i} className="flex items-start gap-2.5 text-sm text-slate-800">
                                   <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0 mt-0.5" />
-                                  <span>{item}</span>
+                                  <div className="flex-1 min-w-0 markdown-content leading-relaxed">
+                                    <ReactMarkdown
+                                      remarkPlugins={[remarkGfm, remarkMath]}
+                                      rehypePlugins={[rehypeKatex]}
+                                      components={{
+                                        p: ({ children }) => <span className="inline">{children}</span>,
+                                      }}
+                                    >
+                                      {item}
+                                    </ReactMarkdown>
+                                  </div>
                                 </li>
                               ))}
                             </ul>
@@ -2182,7 +2192,17 @@ export default function LearnPage() {
                               {coreIdeaData.common_pitfalls?.map((item: string, i: number) => (
                                 <li key={i} className="flex items-start gap-2.5 text-sm text-slate-800">
                                   <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
-                                  <span>{item}</span>
+                                  <div className="flex-1 min-w-0 markdown-content leading-relaxed">
+                                    <ReactMarkdown
+                                      remarkPlugins={[remarkGfm, remarkMath]}
+                                      rehypePlugins={[rehypeKatex]}
+                                      components={{
+                                        p: ({ children }) => <span className="inline">{children}</span>,
+                                      }}
+                                    >
+                                      {item}
+                                    </ReactMarkdown>
+                                  </div>
                                 </li>
                               ))}
                             </ul>

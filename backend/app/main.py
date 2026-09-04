@@ -26,9 +26,25 @@ async def lifespan(app: FastAPI):
     for dir_path in dirs:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
 
+    llm_model = (
+        settings.OPENAI_CHAT_MODEL if settings.LLM_PROVIDER == "openai"
+        else settings.AZURE_OPENAI_CHAT_DEPLOYMENT if settings.LLM_PROVIDER == "azure_openai"
+        else settings.GEMINI_MODEL
+    )
+    embed_model = (
+        settings.OPENAI_EMBED_MODEL if settings.EMBEDDING_PROVIDER == "openai"
+        else settings.AZURE_OPENAI_EMBED_DEPLOYMENT if settings.EMBEDDING_PROVIDER == "azure_openai"
+        else settings.GEMINI_EMBED_MODEL
+    )
+    vlm_provider = getattr(settings, "VLM_PROVIDER", "openai").upper()
+    vlm_model = (
+        settings.OPENAI_VLM_MODEL if vlm_provider in ("OPENAI", "AZURE_OPENAI")
+        else settings.GEMINI_VLM_MODEL
+    )
     print(f"[START] {settings.APP_NAME} v{settings.APP_VERSION}")
-    print(f"[LLM]   Provider: {settings.LLM_PROVIDER.upper()} | Model: {settings.GEMINI_MODEL}")
-    print(f"[EMBED] Provider: {settings.EMBEDDING_PROVIDER.upper()} | Model: {settings.GEMINI_EMBED_MODEL}")
+    print(f"[LLM]   Provider: {settings.LLM_PROVIDER.upper()} | Model: {llm_model}")
+    print(f"[VLM]   Provider: {vlm_provider} | Model: {vlm_model}")
+    print(f"[EMBED] Provider: {settings.EMBEDDING_PROVIDER.upper()} | Model: {embed_model} ({settings.PGVECTOR_DIMENSIONS}d)")
 
     # Report active parser
     try:

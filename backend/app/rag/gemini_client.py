@@ -37,8 +37,13 @@ class GeminiClientAdapter(TextGeminiClient):
         else:
             return ""
 
-        b64_data = base64.b64encode(img_bytes).decode("utf-8")
         actual_prompt = prompt or "Extract and describe all educational content in this image."
+
+        # If OpenAI or Azure is active provider, route through vlm_client
+        if vlm_client.provider.lower() in ("openai", "azure_openai"):
+            res = await vlm_client.extract_text_from_image(img_bytes, context_hint=actual_prompt)
+            if res and res.strip():
+                return res.strip()
 
         payload = {
             "contents": [

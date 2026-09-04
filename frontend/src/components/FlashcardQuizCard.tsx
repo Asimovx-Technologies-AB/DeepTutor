@@ -39,6 +39,29 @@ interface FlashcardQuizCardProps {
   className?: string
 }
 
+export const MarkdownText: React.FC<{ content: string; className?: string; inline?: boolean }> = ({ content, className = '', inline = false }) => {
+  if (!content) return null
+  // Format inline $$...$$ inside text into clean $...$ so remarkMath and KaTeX parse correctly
+  const formatted = content
+    .replace(/\$\$([^$\n]+?)\$\$/g, (_m, math) => `$${math.trim()}$`)
+    .replace(/\\\[([\s\S]*?)\\\]/g, (_m, math) => `\n$$\n${math.trim()}\n$$\n`)
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_m, math) => `$${math.trim()}$`)
+
+  return (
+    <div className={`markdown-content ${inline ? 'inline-block' : ''} ${className}`}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          p: ({ children }) => <span className={inline ? 'inline' : 'block leading-snug'}>{children}</span>,
+        }}
+      >
+        {formatted}
+      </ReactMarkdown>
+    </div>
+  )
+}
+
 export const FlashcardQuizCard: React.FC<FlashcardQuizCardProps> = ({ quizData, className = '' }) => {
   const questions = quizData?.questions || []
   const [mode, setMode] = useState<'flashcards' | 'quiz'>(quizData?.initial_mode || 'flashcards')
@@ -198,9 +221,9 @@ export const FlashcardQuizCard: React.FC<FlashcardQuizCardProps> = ({ quizData, 
                     transition={{ duration: 0.15 }}
                     className="text-center"
                   >
-                    <h4 className="text-lg sm:text-xl font-bold text-[#1F1E1D] leading-snug font-serif max-w-xl mx-auto">
-                      {currentQ.prompt}
-                    </h4>
+                    <div className="text-lg sm:text-xl font-bold text-[#1F1E1D] leading-snug font-serif max-w-xl mx-auto">
+                      <MarkdownText content={currentQ.prompt} />
+                    </div>
                   </motion.div>
                 ) : (
                   /* BACK: Claude-style Bold Answer Headline + Explanation Paragraph */
@@ -213,16 +236,14 @@ export const FlashcardQuizCard: React.FC<FlashcardQuizCardProps> = ({ quizData, 
                     className="text-center space-y-3.5 max-w-xl mx-auto"
                   >
                     {/* Bold Answer Title (Referencing Screenshot 2) */}
-                    <h4 className="text-lg sm:text-xl font-bold text-[#1F1E1D] leading-snug font-serif">
-                      {answerHeadline}
-                    </h4>
+                    <div className="text-lg sm:text-xl font-bold text-[#1F1E1D] leading-snug font-serif">
+                      <MarkdownText content={answerHeadline} />
+                    </div>
 
                     {/* Markdown / LaTeX Explanation */}
                     {currentQ.explanation && (
-                      <div className="markdown-content text-sm sm:text-[15px] text-[#4A4843] leading-relaxed font-serif text-center pt-1">
-                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-                          {currentQ.explanation}
-                        </ReactMarkdown>
+                      <div className="text-sm sm:text-[15px] text-[#4A4843] leading-relaxed font-serif text-center pt-1">
+                        <MarkdownText content={currentQ.explanation} />
                       </div>
                     )}
                   </motion.div>
@@ -346,21 +367,21 @@ export const FlashcardQuizCard: React.FC<FlashcardQuizCardProps> = ({ quizData, 
                           {idx + 1}
                         </span>
                         <div>
-                          <p className="text-xs sm:text-sm font-semibold text-[#1F1E1D] font-serif leading-snug">
-                            {q.prompt}
-                          </p>
+                          <div className="text-xs sm:text-sm font-semibold text-[#1F1E1D] font-serif leading-snug">
+                            <MarkdownText content={q.prompt} />
+                          </div>
                           <div className="mt-1.5 text-xs font-sans flex flex-wrap items-center gap-2">
                             {isCorrect ? (
                               <span className="text-[#2E7D32] flex items-center gap-1 font-medium">
-                                <CheckCircle2 size={13} /> {correctOptionObj?.text || `Option ${q.correct_option_id.toUpperCase()}`}
+                                <CheckCircle2 size={13} /> <MarkdownText content={correctOptionObj?.text || `Option ${q.correct_option_id.toUpperCase()}`} inline={true} />
                               </span>
                             ) : (
                               <>
-                                <span className="text-[#C62828] line-through opacity-80">
-                                  {userOptionObj?.text || `Option ${userAns?.toUpperCase() || 'Skipped'}`}
+                                <span className="text-[#C62828] line-through opacity-80 flex items-center gap-1">
+                                  <MarkdownText content={userOptionObj?.text || `Option ${userAns?.toUpperCase() || 'Skipped'}`} inline={true} />
                                 </span>
                                 <span className="text-[#2E7D32] font-semibold flex items-center gap-1">
-                                  <ArrowRight size={11} /> {correctOptionObj?.text || `Option ${q.correct_option_id.toUpperCase()}`}
+                                  <ArrowRight size={11} /> <MarkdownText content={correctOptionObj?.text || `Option ${q.correct_option_id.toUpperCase()}`} inline={true} />
                                 </span>
                               </>
                             )}
@@ -403,9 +424,9 @@ export const FlashcardQuizCard: React.FC<FlashcardQuizCardProps> = ({ quizData, 
           </div>
 
           {/* Question Prompt */}
-          <h4 className="text-base sm:text-lg font-bold text-[#1F1E1D] leading-snug font-serif">
-            {currentQ.prompt}
-          </h4>
+          <div className="text-base sm:text-lg font-bold text-[#1F1E1D] leading-snug font-serif">
+            <MarkdownText content={currentQ.prompt} />
+          </div>
 
           {/* Options */}
           <div className="space-y-2.5 pt-1">
@@ -433,7 +454,7 @@ export const FlashcardQuizCard: React.FC<FlashcardQuizCardProps> = ({ quizData, 
                   disabled={!!selectedOption}
                   className={`w-full p-3.5 rounded-xl border text-left text-xs sm:text-sm transition flex items-center justify-between cursor-pointer font-serif ${buttonStyle}`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
                     <span className={`w-6 h-6 rounded-full border text-xs font-mono font-medium flex items-center justify-center shrink-0 ${
                       isSelected && isCorrectOpt
                         ? 'bg-[#2E7D32] text-white border-[#2E7D32]'
@@ -445,7 +466,9 @@ export const FlashcardQuizCard: React.FC<FlashcardQuizCardProps> = ({ quizData, 
                     }`}>
                       {opt.id.toUpperCase()}
                     </span>
-                    <span className="leading-normal">{opt.text}</span>
+                    <div className="leading-normal flex-1 min-w-0">
+                      <MarkdownText content={opt.text} inline={true} />
+                    </div>
                   </div>
 
                   {selectedOption && isCorrectOpt && (
@@ -485,9 +508,7 @@ export const FlashcardQuizCard: React.FC<FlashcardQuizCardProps> = ({ quizData, 
               </div>
 
               <div className="markdown-content text-xs leading-relaxed font-serif pt-1">
-                <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-                  {currentQ.explanation}
-                </ReactMarkdown>
+                <MarkdownText content={currentQ.explanation} />
               </div>
             </motion.div>
           )}

@@ -31,8 +31,13 @@ class Settings(BaseSettings):
     ALLOW_SQLITE_FALLBACK: bool = True
 
     # ── LLM / Chat Provider ──────────────────────────────────────────────────
-    # Switch via .env: LLM_PROVIDER=azure_openai | gemini | ollama
-    LLM_PROVIDER: str = "gemini"
+    # Switch via .env: LLM_PROVIDER=openai | azure_openai | gemini | ollama
+    LLM_PROVIDER: str = "openai"
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_VLM_MODEL: str = "gpt-4o"
     GEMINI_API_KEY: str = ""
     GEMINI_CHAT_MODEL: str = "gemini-3.1-flash-lite"
     GEMINI_MODEL: str = "gemini-3.1-flash-lite"
@@ -48,9 +53,8 @@ class Settings(BaseSettings):
     OLLAMA_NUM_PREDICT: int = 2048
 
     # ── Stage 2: Embedding Provider ─────────────────────────────────────────
-    # Switch via .env: EMBEDDING_PROVIDER=azure_openai | ollama | openai | gemini
-    EMBEDDING_PROVIDER: str = "gemini"
-    OPENAI_API_KEY: str = ""
+    # Switch via .env: EMBEDDING_PROVIDER=openai | azure_openai | ollama | gemini
+    EMBEDDING_PROVIDER: str = "openai"
     OPENAI_EMBED_MODEL: str = "text-embedding-3-small"   # or text-embedding-3-large
     AZURE_OPENAI_ENDPOINT: str = ""
     AZURE_OPENAI_API_KEY: str = ""  # local fallback only; Azure uses managed identity
@@ -96,7 +100,8 @@ class Settings(BaseSettings):
     DOCLING_OCR_ENGINE: str = "easyocr"     # "easyocr" | "tesseract" | "rapidocr"
 
     # ── VLM (Vision-Language Model) Document & Image Parser ────────────────
-    ENABLE_VLM_PARSER: bool = True           # Use Gemini Flash VLM for diagrams, images, and scanned PDFs
+    ENABLE_VLM_PARSER: bool = True           # Use VLM for diagrams, images, and scanned PDFs
+    VLM_PROVIDER: str = "openai"             # "openai" | "azure_openai" | "gemini"
     GEMINI_VLM_MODEL: str = "gemini-3.6-flash"  # "gemini-3.6-flash" | "gemini-3.5-flash" | "gemini-flash-latest"
     VLM_MIN_WORDS_THRESHOLD: int = 50        # Flag page for VLM if word count < this threshold
     VLM_IMAGE_COVERAGE_THRESHOLD: float = 0.70  # Flag page for VLM if image coverage > this percentage

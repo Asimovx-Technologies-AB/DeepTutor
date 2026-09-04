@@ -38,8 +38,30 @@ async def call_gemini_vision(
     system_instruction: str = "",
     temperature: float = 0.1
 ) -> str:
-    """Invokes Google Gemini Vision directly with high-resolution page rendering."""
+    """Universal VLM Caller: routes to OpenAI (GPT-4o), Azure OpenAI, or Google Gemini Vision."""
     settings = get_settings()
+
+    # 1. Direct OpenAI Vision (GPT-4o)
+    try:
+        from app.rag.azure_openai_client import openai_client
+        if await openai_client.is_available():
+            resp = await openai_client.chat_vision(prompt, image_bytes, system_instruction, temperature)
+            if resp and resp.strip():
+                return resp.strip()
+    except Exception:
+        pass
+
+    # 2. Azure OpenAI Vision
+    try:
+        from app.rag.azure_openai_client import azure_openai
+        if await azure_openai.is_available():
+            resp = await azure_openai.chat_vision(prompt, image_bytes, system_instruction, temperature)
+            if resp and resp.strip():
+                return resp.strip()
+    except Exception:
+        pass
+
+    # 3. Google Gemini Vision Fallback
     key = settings.GEMINI_API_KEY
     if not key:
         return ""
@@ -83,6 +105,9 @@ async def call_gemini_vision(
             continue
     return ""
 
+call_openai_vision = call_gemini_vision
+call_vlm = call_gemini_vision
+
 
 async def call_llm(
     prompt: str,
@@ -90,7 +115,7 @@ async def call_llm(
     temperature: float = 0.2,
     image_bytes: Optional[bytes] = None
 ) -> str:
-    """Fast Async Cascade: Google Gemini Vision -> Gemini REST -> Google GenAI SDK -> NVIDIA NIM -> Local Ollama."""
+    """Universal Async LLM: OpenAI -> Azure OpenAI -> Unified LLM -> Google Gemini -> NVIDIA NIM -> Ollama."""
     settings = get_settings()
 
     # 0. High-Precision Vision Mode (for technical tables, circuits, formulas, diagrams)
@@ -99,7 +124,37 @@ async def call_llm(
         if vision_resp and vision_resp.strip():
             return vision_resp.strip()
 
-    # 1. Ultra-fast direct Gemini REST Client (Async, Sub-second)
+    # 1. Direct OpenAI Client (GPT-4o-mini / GPT-4o)
+    provider = getattr(settings, "LLM_PROVIDER", "openai").lower()
+    if provider in ("openai", "azure_openai"):
+        if provider == "openai":
+            try:
+                from app.rag.azure_openai_client import openai_client
+                if await openai_client.is_available():
+                    msgs = []
+                    if system_instruction:
+                        msgs.append({"role": "system", "content": system_instruction})
+                    msgs.append({"role": "user", "content": prompt})
+                    resp = await openai_client.chat(msgs, temperature=temperature)
+                    if resp and resp.strip():
+                        return resp.strip()
+            except Exception:
+                pass
+        elif provider == "azure_openai":
+            try:
+                from app.rag.azure_openai_client import azure_openai
+                if await azure_openai.is_available():
+                    msgs = []
+                    if system_instruction:
+                        msgs.append({"role": "system", "content": system_instruction})
+                    msgs.append({"role": "user", "content": prompt})
+                    resp = await azure_openai.chat(msgs, temperature=temperature)
+                    if resp and resp.strip():
+                        return resp.strip()
+            except Exception:
+                pass
+
+    # 2. Unified Client Router
     try:
         from app.rag.ollama_client import ollama
         if await ollama.is_available():
@@ -157,6 +212,79 @@ async def call_llm(
             pass
 
     return ""
+
+
+# ─── Meta-Referential Context & Anaphora Resolution Helpers ───────────────────
+
+def is_meta_referential_query(query: str) -> bool:
+    """Detects if query references previous conversation turns/modules rather than an explicit topic."""
+    if not query:
+        return False
+    q = query.lower().strip()
+    patterns = [
+        r"\b(above|previous|last|prior|preceding)\s+(module|response|answer|explanation|topic|turn|content|lecture|lesson|section|material|chapter|discussion)\b",
+        r"\b(what|that)\s+(you|we)\s+(gave|explained|discussed|covered|provided|wrote|taught|generated)\b",
+        r"\b(module|content|topic|answer|response|concept|material)\s+(you|we)\s+(gave|gave me|explained|discussed|provided|wrote|taught)\b",
+        r"\b(from|on|about|based on|for)\s+(the\s+)?(above|previous|last|this)\b",
+        r"^(make|create|generate|give me|build|show)?\s*(a\s+)?(flashcards?|quiz|test|deck)\s+(on|for|about|from)?\s*(this|it|above|previous|the above|what you gave|what you gave me|above module|the above module|previous module|above content)?\s*$",
+    ]
+    for pat in patterns:
+        if re.search(pat, q):
+            return True
+    meta_phrases = (
+        "above module", "previous module", "module you gave", "module above", "module you gave me",
+        "above response", "above answer", "above explanation", "above content", "above topic", "above text",
+        "previous response", "previous answer", "previous explanation", "previous turn", "previous topic", "previous content",
+        "last response", "last answer", "last explanation", "last topic", "last module", "last content",
+        "what you gave", "what you gave me", "what you just gave", "what you just explained", "what you explained",
+        "what we discussed", "what we just discussed", "what you wrote", "what you just taught", "what you taught",
+        "based on previous", "from previous", "from the previous", "from above", "on the above", "on above",
+        "from this", "on this", "for this", "for the above", "for it", "this topic", "this module", "this concept"
+    )
+    return any(p in q for p in meta_phrases)
+
+
+def extract_previous_assistant_response(history: Optional[List[Dict[str, Any]]]) -> Optional[str]:
+    """Extracts text of the most recent assistant response from conversation history."""
+    if not history:
+        return None
+    for m in reversed(history):
+        role = (m.get("role") or m.get("sender") or "").lower()
+        text = (m.get("text") or m.get("content") or m.get("message") or "").strip()
+        if role in ("assistant", "model", "bot", "ai") and text:
+            return text
+    return None
+
+
+async def resolve_topic_from_text(text: str, default_subject: str = "Course Material") -> str:
+    """Extracts or summarizes the primary academic topic heading from educational text."""
+    from app.services.study_quiz_engine import sanitize_topic_title
+    if not text:
+        return sanitize_topic_title(default_subject)
+    # 1. Look for # Main Title Heading
+    h_matches = re.findall(r"^#+\s*(.+)$", text, re.MULTILINE)
+    for h in h_matches:
+        cand = sanitize_topic_title(h.strip())
+        if cand and len(cand) > 2 and cand.lower() not in ("overview", "summary", "notes", "key insights", "core concepts", "definitions", "module"):
+            return cand
+    # 2. Look for **Bold Heading**
+    b_matches = re.findall(r"\*\*([A-Za-z0-9\s\-_–—:,]+)\*\*", text)
+    for b in b_matches:
+        cand = sanitize_topic_title(b.strip())
+        if cand and 3 <= len(cand) <= 50 and cand.lower() not in ("overview", "summary", "key insights", "note", "important", "definition", "concept"):
+            return cand
+    # 3. Fast Agent / LLM Topic Summary
+    try:
+        topic_summary = await call_llm(
+            f"Extract the primary 2-5 word academic topic title for this educational text:\n\n{text[:1200]}",
+            "You are an academic parser. Return ONLY the 2-5 word topic title. No quotes, no preamble.",
+            temperature=0.1
+        )
+        if topic_summary and 2 < len(topic_summary.strip()) < 80:
+            return sanitize_topic_title(topic_summary.strip())
+    except Exception:
+        pass
+    return sanitize_topic_title(default_subject)
 
 
 # ─── 1. Planner Agent (Instant Zero-Latency Fast-Path) ───────────────────────
@@ -286,6 +414,32 @@ class QueryAnalyzerAgent:
             if exp not in bm25_queries:
                 bm25_queries.append(exp)
 
+        # Check if query is anaphoric / meta-referential to previous interaction
+        is_meta_ref = is_meta_referential_query(user_query)
+        resolved_topic = ""
+        prev_assistant_text = ""
+        if is_meta_ref and history:
+            prev_assistant_text = extract_previous_assistant_response(history) or ""
+            if prev_assistant_text:
+                h_match = re.search(r"^#+\s*(.+)$", prev_assistant_text, re.MULTILINE)
+                if h_match:
+                    clean_h = re.sub(r"[\*#_`~]", "", h_match.group(1)).strip()
+                    if clean_h and len(clean_h) > 2 and clean_h.lower() not in ("overview", "summary", "notes", "key insights", "definitions", "module"):
+                        resolved_topic = clean_h
+                if not resolved_topic:
+                    b_match = re.search(r"\*\*([A-Za-z0-9\s\-_–—:,]+)\*\*", prev_assistant_text)
+                    if b_match:
+                        clean_b = re.sub(r"[\*#_`~]", "", b_match.group(1)).strip()
+                        if clean_b and 3 <= len(clean_b) <= 50 and clean_b.lower() not in ("overview", "summary", "key insights", "note", "important"):
+                            resolved_topic = clean_b
+            if resolved_topic:
+                if resolved_topic not in bm25_queries:
+                    bm25_queries.insert(0, resolved_topic)
+            elif prev_assistant_text:
+                prev_kw = [w for w in re.findall(r"[a-z0-9_]+", prev_assistant_text.lower()) if len(w) > 4 and w not in stopwords]
+                if prev_kw:
+                    bm25_queries.insert(0, " ".join(prev_kw[:5]))
+
         if subject and subject.lower() not in clean_noun_phrase.lower() and subject != "General Study":
             bm25_queries.append(f"{clean_noun_phrase} {subject}")
 
@@ -299,6 +453,9 @@ class QueryAnalyzerAgent:
             "explanation_level": explanation_level,
             "is_compound": len(sub_intents) > 1,
             "cross_ref_concepts": cross_ref_concepts,
+            "is_meta_referential": is_meta_ref,
+            "resolved_topic": resolved_topic,
+            "prev_assistant_text": prev_assistant_text,
             "confidence": 0.95,
             "needs_clarification": False
         }
@@ -613,18 +770,18 @@ class DecisionAgent:
         ))
 
         # Detect if student specifically asks to explain more about the PREVIOUS response / answer
-        is_prev_explain_req = any(k in user_query.lower() for k in (
-            "previous response", "previous answer", "previous explanation", "last response", "last answer", 
-            "above response", "above answer", "this response", "this answer", "what you said", "explain more about this", 
-            "explain more about the previous", "elaborate on that"
-        ))
+        is_prev_explain_req = (
+            bool(plan.get("is_meta_referential"))
+            or is_meta_referential_query(user_query)
+            or any(k in user_query.lower() for k in (
+                "previous response", "previous answer", "previous explanation", "last response", "last answer", 
+                "above response", "above answer", "this response", "this answer", "what you said", "explain more about this", 
+                "explain more about the previous", "elaborate on that"
+            ))
+        )
 
         if is_prev_explain_req and history:
-            prev_assistant_turn = ""
-            for m in reversed(history):
-                if m.get("role") == "assistant" and m.get("text"):
-                    prev_assistant_turn = m.get("text")
-                    break
+            prev_assistant_turn = extract_previous_assistant_response(history) or ""
             if prev_assistant_turn:
                 prev_keywords = [w for w in re.findall(r"[a-zA-Z0-9]+", prev_assistant_turn) if len(w) > 4 and w.lower() not in (
                     "about", "which", "there", "these", "those", "where", "after", "before", "their", "under", "result", "answer", "question", "material"
@@ -664,9 +821,9 @@ class DecisionAgent:
         history_block = ""
         if history:
             history_lines = [
-                f"{m.get('role', 'user').capitalize()}: {m.get('text', '')}"
+                f"{(m.get('role') or m.get('sender') or 'user').capitalize()}: {(m.get('text') or m.get('content') or m.get('message') or '')}"
                 for m in history[-3:]
-                if m.get('text')
+                if (m.get('text') or m.get('content') or m.get('message'))
             ]
             if history_lines:
                 history_block = "Recent Conversation History:\n" + "\n".join(history_lines) + "\n\n"
@@ -675,7 +832,7 @@ class DecisionAgent:
         sub_intents = plan.get("sub_intents") or []
         is_compound_quiz = "quiz" in sub_intents and any(it in sub_intents for it in ("conceptual", "solve", "study_notes"))
         is_quiz_or_flashcard = not is_compound_quiz and any(k in user_query.lower() for k in (
-            "flashcard", "flashcards", "quiz", "quiz me", "test me", "flash card", "flash cards", "make a flashcard", "create a flashcard", "generate quiz"
+            "flashcard", "flashcards", "quiz", "quiz me", "test me", "flash card", "flash cards", "make a flashcard", "create a flashcard", "generate quiz", "make flashcard", "create flashcard"
         ))
 
         if is_quiz_or_flashcard:
@@ -687,45 +844,42 @@ class DecisionAgent:
                 explanation_level = "advanced"
 
             # Check if student requested flashcards/quiz based on the PREVIOUS assistant response
-            is_prev_resp_req = any(k in user_query.lower() for k in (
-                "previous response", "previous answer", "previous explanation", "last response", "last answer", 
-                "above response", "above answer", "this response", "this answer", "previous turn", "from previous", 
-                "based on previous", "from the previous", "from this", "on this", "for this", "for the above", "for it"
-            ))
+            is_prev_resp_req = (
+                bool(plan.get("is_meta_referential"))
+                or is_meta_referential_query(user_query)
+            )
 
             override_ctx = None
-            clean_title = "Course Material"
+            clean_title = ""
 
-            if is_prev_resp_req and history:
-                for m in reversed(history):
-                    if m.get("role") == "assistant" and m.get("text"):
-                        override_ctx = m.get("text")
-                        h_match = re.search(r"^#+\s*(.+)$", override_ctx, re.MULTILINE)
-                        if h_match:
-                            clean_title = sanitize_topic_title(h_match.group(1).strip())
-                        else:
-                            clean_title = "Previous Response Concepts"
-                        break
+            prev_resp = extract_previous_assistant_response(history)
+
+            if is_prev_resp_req and prev_resp:
+                override_ctx = prev_resp
+                clean_title = await resolve_topic_from_text(prev_resp, default_subject=subject)
 
             if not override_ctx:
                 clean_title = re.sub(
-                    r"(?i)\b(create|make|generate|build|give me|show|flashcards|flashcard|quiz|deck|on the topic|about|on|me|based|previous|response|answer|for|a|this|it)\b",
+                    r"(?i)\b(create|make|generate|build|give me|show|flashcards|flashcard|quiz|deck|on the topic|about|on|me|based|previous|response|answer|for|a|this|it|module|you|gave|just|explained|discussed|above|content)\b",
                     "",
                     user_query
                 ).strip()
 
-                if (not clean_title or clean_title.lower() in ("a", "this", "it", "course material", "for this")) and history:
-                    for m in reversed(history):
-                        if m.get("role") == "assistant" and m.get("text"):
-                            override_ctx = m.get("text")
-                            h_match = re.search(r"^#+\s*(.+)$", override_ctx, re.MULTILINE)
-                            if h_match:
-                                clean_title = sanitize_topic_title(h_match.group(1).strip())
-                            else:
-                                clean_title = "Previous Response Concepts"
-                            break
+                if (not clean_title or is_meta_referential_query(clean_title) or clean_title.lower() in ("a", "this", "it", "course material", "for this", "module", "above module", "you gave")) and prev_resp:
+                    override_ctx = prev_resp
+                    clean_title = await resolve_topic_from_text(prev_resp, default_subject=subject)
+                elif not clean_title:
+                    clean_title = subject
 
                 clean_title = sanitize_topic_title(clean_title)
+
+            # If clean_title is still a generic meta phrase, resolve it from subject or syllabus
+            if is_meta_referential_query(clean_title) or clean_title.lower() in ("above module you gave", "above module", "module you gave", "what you gave me", "above content"):
+                if prev_resp:
+                    override_ctx = prev_resp
+                    clean_title = await resolve_topic_from_text(prev_resp, default_subject=subject)
+                else:
+                    clean_title = sanitize_topic_title(subject)
 
             deck = await generate_flashcard_deck(
                 session_id=session_id,
@@ -765,13 +919,13 @@ class DecisionAgent:
                 }
 
             resp_text = (
-                f"I have generated an interactive dual-mode **Flashcard & Quiz Deck** for **{deck.get('title', clean_title)}** "
-                f"({len(deck.get('questions', []))} cards grounded in your course materials).\n\n"
-                f"You can flip cards in 3D, view KaTeX mathematical explanations, or switch to **Quiz Mode** for interactive self-testing below!"
+                f"I have analyzed the previous module on **{deck.get('title', clean_title)}** and generated an interactive **Flashcard & Quiz Deck** "
+                f"({len(deck.get('questions', []))} cards directly covering the concepts and mechanisms discussed above).\n\n"
+                f"You can flip cards in 3D to review key definitions and formulas, or switch to **Quiz Mode** for interactive self-testing below!"
             )
 
             return {
-                "thought_process": f"Detected flashcard/quiz request '{user_query}'. Generated grounded {len(deck.get('questions', []))}-card dual-mode JSON deck with explanation level '{explanation_level}'.",
+                "thought_process": f"Detected flashcard/quiz request '{user_query}' for topic '{clean_title}'. Generated grounded {len(deck.get('questions', []))}-card dual-mode JSON deck with explanation level '{explanation_level}'.",
                 "response": resp_text,
                 "sources": [{"chunk_id": c["chunk_id"], "page": c["page"]} for c in retrieved_chunks[:3]],
                 "quiz_data": deck,
@@ -1142,6 +1296,17 @@ JSON Structure:
 
     parsed = robust_json_parse(raw)
     if parsed and isinstance(parsed, dict) and "big_picture" in parsed:
+        def _clean_item(text: str) -> str:
+            if not text or not isinstance(text, str):
+                return text or ""
+            return re.sub(r"\$\$([^$\n]+?)\$\$", r"$\1$", text).strip()
+
+        parsed["big_picture"] = str(parsed.get("big_picture", "")).strip()
+        parsed["core_principle"] = str(parsed.get("core_principle", "")).strip()
+        if isinstance(parsed.get("key_takeaways"), list):
+            parsed["key_takeaways"] = [_clean_item(x) for x in parsed["key_takeaways"] if x]
+        if isinstance(parsed.get("common_pitfalls"), list):
+            parsed["common_pitfalls"] = [_clean_item(x) for x in parsed["common_pitfalls"] if x]
         return parsed
 
     return {

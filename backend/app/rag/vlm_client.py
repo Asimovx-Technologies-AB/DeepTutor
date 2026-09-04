@@ -47,10 +47,33 @@ class GeminiVLMClient:
         self.timeout = 20.0
 
     @property
+    def provider(self) -> str:
+        env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+        if env_path.exists():
+            vals = dotenv_values(env_path)
+            p = vals.get("VLM_PROVIDER", "")
+            if p:
+                return p.strip()
+            llm_p = vals.get("LLM_PROVIDER", "")
+            if llm_p:
+                return llm_p.strip()
+        from app.core.config import get_settings
+        return getattr(get_settings(), "VLM_PROVIDER", "openai")
+
+    @property
     def api_key(self) -> str:
         return _get_active_gemini_key()
 
     def is_configured(self) -> bool:
+        p = self.provider.lower()
+        if p == "azure_openai":
+            from app.core.config import get_settings
+            endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT") or getattr(get_settings(), "AZURE_OPENAI_ENDPOINT", "")
+            return bool(endpoint and len(endpoint.strip()) > 5)
+        elif p == "openai":
+            from app.core.config import get_settings
+            key = os.environ.get("OPENAI_API_KEY") or getattr(get_settings(), "OPENAI_API_KEY", "")
+            return bool(key and len(key.strip()) > 10 and key != "your_openai_api_key_here")
         key = self.api_key
         return bool(key and len(key.strip()) > 10 and key != "your_gemini_api_key_here")
 
@@ -114,6 +137,27 @@ class GeminiVLMClient:
             "4. Maintain proper paragraph hierarchy and reading sequence.\n"
             "5. Output ONLY the extracted text content. Do NOT include conversational commentary like 'Here is the text:' or markdown wrappers."
         )
+
+        # 1. Try OpenAI / Azure OpenAI Vision
+        p = self.provider.lower()
+        if p == "azure_openai":
+            try:
+                from app.rag.azure_openai_client import azure_openai
+                if await azure_openai.is_available():
+                    text = await azure_openai.chat_vision(prompt, image_bytes, temperature=0.1)
+                    if text and text.strip():
+                        return text.strip()
+            except Exception as e:
+                print(f"[AzureVLM] extract_text_from_image error: {e}")
+        elif p == "openai":
+            try:
+                from app.rag.azure_openai_client import openai_client
+                if await openai_client.is_available():
+                    text = await openai_client.chat_vision(prompt, image_bytes, temperature=0.1)
+                    if text and text.strip():
+                        return text.strip()
+            except Exception as e:
+                print(f"[OpenAIVLM] extract_text_from_image error: {e}")
 
         payload = {
             "contents": [
@@ -221,6 +265,54 @@ class GeminiVLMClient:
             "}\n"
             "Return raw JSON only, no markdown backticks, no other text."
         )
+
+        # 1. Try OpenAI / Azure OpenAI Vision
+        p = self.provider.lower()
+        if p in ("openai", "azure_openai"):
+            try:
+                raw_text = ""
+                if p == "azure_openai":
+                    from app.rag.azure_openai_client import azure_openai
+                    if await azure_openai.is_available():
+                        raw_text = await azure_openai.chat_vision(prompt, image_bytes, temperature=0.2)
+                elif p == "openai":
+                    from app.rag.azure_openai_client import openai_client
+                    if await openai_client.is_available():
+                        raw_text = await openai_client.chat_vision(prompt, image_bytes, temperature=0.2)
+
+                if raw_text and raw_text.strip():
+                    cleaned = raw_text.strip()
+                    if cleaned.startswith("```"):
+                        cleaned = cleaned.split("\n", 1)[1]
+                        if cleaned.endswith("```"):
+                            cleaned = cleaned.rsplit("\n", 1)[0]
+                        if cleaned.startswith("json"):
+                            cleaned = cleaned[4:].strip()
+                    parsed = json.loads(cleaned)
+                    if isinstance(parsed, dict):
+                        if parsed.get("is_study_material") is False:
+                            return {
+                                "is_study_material": False,
+                                "detected_document_type": parsed.get("detected_document_type", "Non-Academic Image"),
+                                "validation_reason": parsed.get(
+                                    "validation_reason",
+                                    "This image does not contain academic coursework or study material. IndieTutor only processes educational study materials."
+                                ),
+                                "thought_process": parsed.get("thought_process", "VLM guardrail identified non-educational visual content."),
+                                "subject": "Non-Study Material",
+                                "title": parsed.get("detected_document_type", "Non-Academic Image"),
+                                "topics": [],
+                            }
+                        if "topics" in parsed and len(parsed["topics"]) > 0:
+                            for i, t in enumerate(parsed["topics"]):
+                                if not t.get("id"):
+                                    t["id"] = f"topic_{i+1}"
+                            parsed["is_study_material"] = True
+                            if not parsed.get("detected_document_type"):
+                                parsed["detected_document_type"] = "Study Material Image"
+                            return parsed
+            except Exception as e:
+                print(f"[VLM] OpenAI/Azure analyze error: {e}")
 
         payload = {
             "contents": [
