@@ -32,6 +32,8 @@ interface StudySessionMeta {
   subject: string
   title: string
   document_name?: string
+  documents?: string[]
+  document_count?: number
   status: string
   topic_count: number
   message_count: number
@@ -46,6 +48,7 @@ interface CurriculumTopic {
   difficulty: string
   key_concepts: string[]
   estimated_study_time: string
+  document_name?: string
 }
 
 interface ChatMessage {
@@ -144,6 +147,11 @@ export default function LearnPage() {
   const [activeSubject, setActiveSubject] = useState<string>('Machine Learning & AI')
   const [documentName, setDocumentName] = useState<string>('')
   const [docStatus, setDocStatus] = useState<string>('text_ready')
+  const [sessionDocuments, setSessionDocuments] = useState<any[]>([])
+  const [selectedMaterialFilter, setSelectedMaterialFilter] = useState<string>('all')
+  const [isMaterialsPopoverOpen, setIsMaterialsPopoverOpen] = useState(false)
+  const materialsPopoverRef = useRef<HTMLDivElement | null>(null)
+  const addMaterialInputRef = useRef<HTMLInputElement | null>(null)
 
   // Option A & B Navigation & Search states
   const [courseDropdownOpen, setCourseDropdownOpen] = useState(false)
@@ -207,12 +215,42 @@ export default function LearnPage() {
     }
   }, [courseDropdownOpen])
 
+  // Close materials popover on click outside
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (materialsPopoverRef.current && !materialsPopoverRef.current.contains(event.target as Node)) {
+        setIsMaterialsPopoverOpen(false)
+      }
+    }
+    if (isMaterialsPopoverOpen) {
+      document.addEventListener('mousedown', handleOutsideClick)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick)
+    }
+  }, [isMaterialsPopoverOpen])
+
   // Active Mode Tab
   const [activeTab, setActiveTab] = useState<ActiveTab>('chat')
 
   // Curriculum Topics
   const [topics, setTopics] = useState<CurriculumTopic[]>([])
   const [activeTopic, setActiveTopic] = useState<CurriculumTopic | null>(null)
+
+  // Filter topics by selected material
+  const filteredTopics = useMemo(() => {
+    if (selectedMaterialFilter === 'all' || sessionDocuments.length <= 1) return topics
+    return topics.filter((t, idx) => {
+      if (t.document_name) {
+        return t.document_name === selectedMaterialFilter
+      }
+      const firstDoc = sessionDocuments[0]?.filename
+      const secondDoc = sessionDocuments[1]?.filename
+      if (selectedMaterialFilter === firstDoc) return idx < 3
+      if (selectedMaterialFilter === secondDoc) return idx >= 3
+      return true
+    })
+  }, [topics, selectedMaterialFilter, sessionDocuments])
 
   // Grounded Chat
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -324,6 +362,8 @@ export default function LearnPage() {
         setDocumentName(data.meta.document_name || '')
         setDocStatus(data.meta.status || 'text_ready')
       }
+      setSessionDocuments(data.documents || [])
+      setSelectedMaterialFilter('all')
       setMessages(data.messages || [])
       setTopics(data.topics || [])
       if (data.topics && data.topics.length > 0) {
@@ -391,10 +431,23 @@ export default function LearnPage() {
       setActiveSessionId(data.session_id)
       setDocumentName(data.filename)
       setDocStatus(data.status)
+      if (data.documents) {
+        setSessionDocuments(data.documents)
+      } else {
+        studyApi.getSession(data.session_id).then((r) => {
+          if (r.data?.documents) setSessionDocuments(r.data.documents)
+        }).catch(() => {})
+      }
+
       if (data.topics && data.topics.length > 0) {
         setTopics(data.topics)
         setActiveTopic(data.topics[0])
       }
+
+      const docCount = data.document_count || (data.documents ? data.documents.length : 1)
+      const welcomeText = docCount > 1
+        ? `Added **${data.filename}** to this study room! You now have **${docCount} materials** in this workspace.\n\nI can search across all your materials to answer queries, compare concepts, or solve exercises from any of them. What would you like to explore?`
+        : `Welcome! I have prepared your study material for **${data.filename}**.\n\nYou can ask me to:\n- **Explain any concept or topic** with simple step-by-step intuition\n- **Solve exercises and fill tables** from any page in the book\n- **Generate quick revision notes, formulas, or practice quizzes**\n\nWhat would you like to explore first?`
 
       // Add student-friendly interactive welcome message in chat
       setMessages((prev) => [
@@ -402,8 +455,8 @@ export default function LearnPage() {
         {
           id: `sys-${Date.now()}`,
           role: 'assistant',
-          text: `Welcome! I have prepared your study material for **${data.filename}**.\n\nYou can ask me to:\n- **Explain any concept or topic** with simple step-by-step intuition\n- **Solve exercises and fill tables** from any page in the book\n- **Generate quick revision notes, formulas, or practice quizzes**\n\nWhat would you like to explore first?`,
-          thought_process: 'Study material loaded and ready for interactive learning.',
+          text: welcomeText,
+          thought_process: `Loaded ${docCount} study materials into unified session memory.`,
           format: 'conceptual'
         }
       ])
@@ -794,6 +847,8 @@ export default function LearnPage() {
       const newSid = res.data.id
       setActiveSessionId(newSid)
       fetchSessions()
+      setSessionDocuments([])
+      setSelectedMaterialFilter('all')
       setMessages([])
       setTopics([])
       setActiveTopic(null)
@@ -1103,7 +1158,9 @@ export default function LearnPage() {
                                     isActive ? 'text-indigo-600/80' : 'text-slate-500'
                                   }`}
                                 >
-                                  {s.document_name || s.subject}
+                                  {s.document_count && s.document_count > 1
+                                    ? `📚 ${s.document_count} materials`
+                                    : (s.document_name || s.subject)}
                                 </p>
                               </div>
                             </div>
@@ -1201,6 +1258,79 @@ export default function LearnPage() {
                       }`}
                     />
                   </button>
+
+                  {/* Attached Materials Badge & Popover */}
+                  {sessionDocuments && sessionDocuments.length > 0 && (
+                    <div className="relative" ref={materialsPopoverRef}>
+                      <button
+                        onClick={() => setIsMaterialsPopoverOpen(!isMaterialsPopoverOpen)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-indigo-50 hover:bg-indigo-100/80 text-indigo-700 border border-indigo-200/60 transition cursor-pointer shadow-2xs"
+                        title="View attached study materials in this room"
+                      >
+                        <Layers size={12} className="text-indigo-600" />
+                        <span>{sessionDocuments.length} Material{sessionDocuments.length > 1 ? 's' : ''}</span>
+                        <ChevronDown
+                          size={11}
+                          className={`text-indigo-500 transition-transform duration-200 ${
+                            isMaterialsPopoverOpen ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+
+                      <AnimatePresence>
+                        {isMaterialsPopoverOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                            transition={{ duration: 0.15 }}
+                            className="absolute left-0 top-full mt-2 w-76 bg-white/98 backdrop-blur-xl border border-slate-200/90 rounded-2xl shadow-xl p-3 z-50 font-sans"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                              <div className="flex items-center gap-1.5">
+                                <BookOpen size={13} className="text-indigo-600" />
+                                <span className="text-xs font-bold text-slate-800">Materials in this Room</span>
+                              </div>
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100/70 text-indigo-700">
+                                {sessionDocuments.length}
+                              </span>
+                            </div>
+
+                            <div className="space-y-1.5 max-h-52 overflow-y-auto pr-0.5">
+                              {sessionDocuments.map((doc: any, i: number) => (
+                                <div key={doc.id || i} className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50/80 hover:bg-slate-100/70 border border-slate-200/60 text-left transition">
+                                  <div className="w-7 h-7 rounded-lg bg-indigo-100/70 flex items-center justify-center shrink-0">
+                                    <FileText size={14} className="text-indigo-600" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[11px] font-semibold text-slate-800 truncate" title={doc.filename}>{doc.filename}</p>
+                                    <p className="text-[10px] text-slate-400">
+                                      {doc.page_count ? `${doc.page_count} pages • ` : ''}
+                                      <span className={doc.status === 'fully_processed' ? 'text-emerald-600 font-medium' : 'text-amber-600 font-medium'}>
+                                        {doc.status === 'fully_processed' ? 'Fully Ready' : 'Text Ready'}
+                                      </span>
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+
+                            <button
+                              onClick={() => {
+                                setIsMaterialsPopoverOpen(false)
+                                addMaterialInputRef.current?.click()
+                              }}
+                              className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-xs transition cursor-pointer"
+                            >
+                              <Plus size={13} />
+                              <span>Add Another Material</span>
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
                 </div>
 
                 {/* Option A Floating Dropdown Card */}
@@ -1291,7 +1421,7 @@ export default function LearnPage() {
                                         isActive ? 'text-indigo-600/80' : 'text-slate-400'
                                       }`}
                                     >
-                                      {s.document_name || s.subject} • {s.topic_count} Topics
+                                      {s.document_count && s.document_count > 1 ? `📚 ${s.document_count} materials` : (s.document_name || s.subject)} • {s.topic_count} Topics
                                     </p>
                                   </div>
                                 </div>
@@ -2231,15 +2361,118 @@ export default function LearnPage() {
                 </button>
               </div>
 
+              {/* Attached Materials Section */}
+              <div className="mt-3 pb-3 border-b border-slate-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-bold text-slate-700 tracking-wider uppercase flex items-center gap-1.5">
+                    <Layers size={13} className="text-indigo-600" />
+                    Materials ({sessionDocuments.length})
+                  </span>
+                  <button
+                    onClick={() => addMaterialInputRef.current?.click()}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/50 transition cursor-pointer"
+                    title="Add another material to this room"
+                  >
+                    <Plus size={11} />
+                    <span>Add</span>
+                  </button>
+                  <input
+                    type="file"
+                    ref={addMaterialInputRef}
+                    className="hidden"
+                    accept=".pdf,.docx,.doc,.pptx,.ppt,.png,.jpg,.jpeg,.txt"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleFileUpload(file)
+                      if (e.target) e.target.value = ''
+                    }}
+                  />
+                </div>
+
+                {sessionDocuments.length === 0 ? (
+                  <p className="text-[11px] text-slate-400 italic">No materials uploaded yet.</p>
+                ) : (
+                  <div className="space-y-1 max-h-28 overflow-y-auto pr-0.5">
+                    {sessionDocuments.map((doc: any, i: number) => {
+                      const isFilterActive = selectedMaterialFilter === doc.filename
+                      return (
+                        <div
+                          key={doc.id || i}
+                          onClick={() => setSelectedMaterialFilter(isFilterActive ? 'all' : doc.filename)}
+                          className={`flex items-center gap-1.5 px-2 py-1.5 rounded-xl border text-[11px] font-medium transition cursor-pointer ${
+                            isFilterActive
+                              ? 'bg-indigo-50 border-indigo-300 text-indigo-900 shadow-2xs'
+                              : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200/60 text-slate-700'
+                          }`}
+                          title={`Click to filter topics for ${doc.filename}`}
+                        >
+                          <FileText size={12} className={isFilterActive ? 'text-indigo-700 shrink-0' : 'text-indigo-600 shrink-0'} />
+                          <span className="truncate flex-1">{doc.filename}</span>
+                          <span className={`text-[9px] px-1 py-0.2 rounded shrink-0 ${isFilterActive ? 'bg-indigo-200/70 text-indigo-800 font-bold' : 'bg-white text-slate-500'}`}>
+                            {doc.status === 'fully_processed' ? 'Ready' : 'Indexing'}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Material Switcher Filter Tabs */}
+                {sessionDocuments.length > 1 && (
+                  <div className="mt-2.5 pt-2 border-t border-slate-100/80">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Filter by Material</p>
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                      <button
+                        onClick={() => setSelectedMaterialFilter('all')}
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition shrink-0 cursor-pointer ${
+                          selectedMaterialFilter === 'all'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                        }`}
+                      >
+                        All ({topics.length})
+                      </button>
+                      {sessionDocuments.map((doc: any, i: number) => {
+                        const isSelected = selectedMaterialFilter === doc.filename
+                        const count = topics.filter((t, idx) => {
+                          if (t.document_name) return t.document_name === doc.filename
+                          if (i === 0) return idx < 3
+                          return idx >= 3
+                        }).length
+                        const cleanName = doc.filename.replace(/\.pdf$/i, '')
+                        const shortName = cleanName.length > 12 ? cleanName.slice(0, 11) + '..' : cleanName
+                        return (
+                          <button
+                            key={doc.id || doc.filename}
+                            onClick={() => setSelectedMaterialFilter(isSelected ? 'all' : doc.filename)}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition shrink-0 cursor-pointer max-w-[130px] truncate ${
+                              isSelected
+                                ? 'bg-indigo-600 text-white shadow-xs'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                            }`}
+                            title={doc.filename}
+                          >
+                            {shortName} ({count})
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Topic Stepper List */}
               <div className="mt-3 flex-1 overflow-y-auto space-y-2 pr-1">
-                {topics.length === 0 ? (
+                {filteredTopics.length === 0 ? (
                   <div className="py-12 text-center text-xs text-slate-400 font-serif">
-                    Upload a syllabus or textbook to generate your progressive curriculum roadmap.
+                    {topics.length === 0
+                      ? 'Upload a syllabus or textbook to generate your progressive curriculum roadmap.'
+                      : 'No topics found for the selected material filter.'}
                   </div>
                 ) : (
-                  topics.map((t, idx) => {
+                  filteredTopics.map((t, idx) => {
                     const isSelected = activeTopic?.id === t.id
+                    const docTag = t.document_name || (sessionDocuments.length > 1 ? (idx < 3 ? sessionDocuments[0]?.filename : sessionDocuments[1]?.filename) : undefined)
                     return (
                       <div
                         key={t.id}
@@ -2254,7 +2487,17 @@ export default function LearnPage() {
                           }`}
                       >
                         <div className="flex items-center justify-between mb-1">
-                          <span className="learn-caption font-bold text-slate-500">Topic {idx + 1}</span>
+                          <div className="flex items-center gap-1.5 min-w-0 pr-1">
+                            <span className="learn-caption font-bold text-slate-500">Topic {idx + 1}</span>
+                            {docTag && (
+                              <span
+                                className="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-500 font-sans truncate max-w-[110px]"
+                                title={docTag}
+                              >
+                                {docTag.replace(/\.pdf$/i, '')}
+                              </span>
+                            )}
+                          </div>
                           <span className={`text-[11px] ${isSelected ? 'text-slate-900 font-bold' : 'text-slate-500 font-medium'}`}>Select →</span>
                         </div>
                         <h4 className="text-xs font-bold line-clamp-1 text-slate-900">{t.title}</h4>
@@ -2376,9 +2619,9 @@ export default function LearnPage() {
         </div>
 
         {/* Artifact Content Canvas */}
-        <div className="flex-1 overflow-y-auto p-4 bg-white">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-white">
           {artifactTab === 'preview' ? (
-            <div className="artifact-md-viewer prose prose-sm max-w-none font-serif leading-relaxed">
+            <div className="artifact-md-viewer max-w-[800px] mx-auto leading-relaxed">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkMath]}
                 rehypePlugins={[rehypeKatex]}
@@ -2388,11 +2631,13 @@ export default function LearnPage() {
               </ReactMarkdown>
             </div>
           ) : (
-            <textarea
-              value={currentArtifactMarkdown}
-              onChange={(e) => setCurrentArtifactMarkdown(e.target.value)}
-              className="w-full h-full font-mono text-xs text-slate-700 bg-slate-50 p-4 rounded-2xl border border-slate-200 focus:outline-hidden"
-            />
+            <div className="max-w-[800px] mx-auto h-full">
+              <textarea
+                value={currentArtifactMarkdown}
+                onChange={(e) => setCurrentArtifactMarkdown(e.target.value)}
+                className="w-full h-full font-mono text-xs text-slate-700 bg-slate-50 p-4 rounded-2xl border border-slate-200 focus:outline-hidden"
+              />
+            </div>
           )}
         </div>
       </div>

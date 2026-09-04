@@ -159,6 +159,7 @@ class StudyDocumentProcessor:
         chunks: List[Dict[str, Any]] = []
         sample_parts: List[str] = []
 
+        fname = Path(file_path).name
         # Process digital pages immediately
         for page_num, p_text in digital_pages:
             sample_parts.append(p_text)
@@ -168,7 +169,7 @@ class StudyDocumentProcessor:
                     "chunk_id": f"{doc_id}_p{page_num}_{c_idx}",
                     "page": page_num,
                     "source_type": "text",
-                    "content": f"[Page {page_num} | Type: text] {c_text}"
+                    "content": f"[Doc: {fname} | Page {page_num} | Type: text] {c_text}"
                 })
 
         # Process scanned pages in parallel (asyncio.gather)
@@ -187,7 +188,7 @@ class StudyDocumentProcessor:
                             "chunk_id": f"{doc_id}_p{p_num}_ocr_{c_idx}",
                             "page": p_num,
                             "source_type": "scanned_vlm",
-                            "content": f"[Page {p_num} | Type: scanned_vlm] {c_text}"
+                            "content": f"[Doc: {fname} | Page {p_num} | Type: scanned_vlm] {c_text}"
                         })
 
         doc.close()
@@ -244,6 +245,7 @@ class StudyDocumentProcessor:
         chunks: List[Dict[str, Any]] = []
         sample_parts = []
 
+        fname = Path(file_path).name
         for idx, slide in enumerate(prs.slides):
             slide_texts = []
             for shape in slide.shapes:
@@ -257,7 +259,7 @@ class StudyDocumentProcessor:
                         "chunk_id": f"{doc_id}_s{idx+1}_{c_idx}",
                         "page": idx + 1,
                         "source_type": "slide",
-                        "content": f"[Slide {idx+1}] {c}"
+                        "content": f"[Doc: {fname} | Slide {idx+1} | Type: slide] {c}"
                     })
 
         return slide_count, chunks, "\n\n".join(sample_parts)
@@ -295,7 +297,7 @@ class StudyDocumentProcessor:
             "chunk_id": f"{doc_id}_img_1",
             "page": 1,
             "source_type": "image_caption",
-            "content": f"[Image Note: {Path(file_path).name}] {transcription}"
+            "content": f"[Doc: {Path(file_path).name} | Image Note] {transcription}"
         }]
         return 1, chunks, transcription
 
@@ -304,13 +306,14 @@ class StudyDocumentProcessor:
     async def _process_text_file(self, file_path: str, doc_id: str) -> Tuple[int, List[Dict[str, Any]], str]:
         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
             text = f.read()
+        fname = Path(file_path).name
         chunks: List[Dict[str, Any]] = []
         for i, c in enumerate(_chunk_text(text)):
             chunks.append({
                 "chunk_id": f"{doc_id}_c{i}",
                 "page": 1,
                 "source_type": "text",
-                "content": c
+                "content": f"[Doc: {fname} | Type: text] {c}"
             })
         return 1, chunks, text
 
@@ -349,7 +352,7 @@ class StudyDocumentProcessor:
                                 "chunk_id": f"{doc_id}_tbl_p{p_idx+1}_{t_idx}",
                                 "page": p_idx + 1,
                                 "source_type": "table",
-                                "content": f"[Page {p_idx+1} | Type: table]\n{md_table}"
+                                "content": f"[Doc: {path.name} | Page {p_idx+1} | Type: table]\n{md_table}"
                             })
         except Exception:
             pass
@@ -385,7 +388,7 @@ class StudyDocumentProcessor:
                                         "chunk_id": f"{doc_id}_fig_p{p_idx+1}_{img_idx}",
                                         "page": p_idx + 1,
                                         "source_type": "image_caption",
-                                        "content": f"[Page {p_idx+1} | Type: figure_diagram] {resp.text}"
+                                        "content": f"[Doc: {path.name} | Page {p_idx+1} | Type: figure_diagram] {resp.text}"
                                     })
                                     extracted_img_count += 1
             doc.close()

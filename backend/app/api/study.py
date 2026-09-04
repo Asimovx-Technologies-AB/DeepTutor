@@ -150,6 +150,10 @@ async def upload_document(
     async def _safe_extract_topics(sample_text: str):
         return await extract_topics_and_validate(sample_text, subject=effective_subject, filename=file.filename)
 
+    # Check if session already has documents
+    existing_docs = get_session_documents(study_id)
+    is_existing_session = bool(existing_docs and len(existing_docs) > 0)
+
     # 1. First run fast-path ingestion
     ingest_result = await doc_processor.ingest_document(
         doc_id=doc_id,
@@ -169,15 +173,23 @@ async def upload_document(
             detail=f"Relevance Guardrail: {message}"
         )
 
-    # Persist topics to session database
+    # Persist topics to session database - merge if existing session
+    all_session_topics = topics
     if topics:
-        save_session_topics(study_id, topics)
+        for t in topics:
+            t["document_name"] = file.filename
+        all_session_topics = save_session_topics(study_id, topics, append=is_existing_session, document_name=file.filename)
 
-    # Update global registry with user isolation
+    # Update global registry with user isolation & multi-material tracking
+    existing_reg = get_registry_session(study_id)
+    prev_title = existing_reg.get("title") if existing_reg else None
+    is_generic_title = not prev_title or prev_title in ("New Study Workspace", "New Course Workspace", "Study Room Session", "Default Study Room")
+    session_title = f"{clean_title} Study Room" if is_generic_title else prev_title
+
     register_or_update_session(
         session_id=study_id,
         subject=effective_subject,
-        title=f"{clean_title} Study Room",
+        title=session_title,
         status="text_ready",
         document_name=file.filename,
         user_id=user["id"]
@@ -199,7 +211,7 @@ async def upload_document(
             status="completed",
         )
         link_document_to_session(doc_hash, study_id, user["id"], db=db)
-        topic_titles = [t.get("title", "") for t in topics if t.get("title")]
+        topic_titles = [t.get("title", "") for t in (all_session_topics or topics) if t.get("title")]
         db.update_document_stats(
             doc_id=db_doc["id"],
             indexed=True,
@@ -216,15 +228,18 @@ async def upload_document(
         doc_processor.run_background_enrichment(study_id, doc_id, file_path)
     )
 
+    all_docs = get_session_documents(study_id)
     return {
         "status": "text_ready",
         "session_id": study_id,
         "doc_id": doc_id,
         "filename": file.filename,
+        "documents": all_docs,
+        "document_count": len(all_docs),
         "page_count": ingest_result.get("page_count", 1),
         "chunk_count": ingest_result.get("chunk_count", 0),
-        "topics": topics,
-        "message": "Document indexed successfully. Chat and Study Map are now active."
+        "topics": all_session_topics or topics,
+        "message": f"'{file.filename}' added to workspace ({len(all_docs)} total material{'s' if len(all_docs) > 1 else ''}). Chat and Study Map are now active."
     }
 
 

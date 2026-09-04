@@ -1,15 +1,32 @@
 [
   {
+    "id": "session_2919558626",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "Ml Algorithams",
+    "title": "Attention All U Need Study Room",
+    "document_name": "ml algorithams.pdf",
+    "documents": [
+      "Attention all u need.pdf",
+      "ml algorithams.pdf"
+    ],
+    "document_count": 2,
+    "status": "text_ready",
+    "topic_count": 7,
+    "message_count": 4,
+    "created_at": "2026-09-04T07:16:48.977636+00:00",
+    "last_active": "2026-09-04T07:21:39.918229+00:00"
+  },
+  {
     "id": "session_7629085165",
     "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
-    "subject": "General Study",
-    "title": "New Study Workspace",
-    "document_name": "",
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 0,
+    "subject": "chemistry",
+    "title": "Hsslive-19 Chemistry Eng Study Room",
+    "document_name": "Hsslive-19_Chemistry Eng.pdf",
+    "status": "text_ready",
+    "topic_count": 4,
+    "message_count": 2,
     "created_at": "2026-09-04T06:44:20.763220+00:00",
-    "last_active": "2026-09-04T06:44:20.763220+00:00"
+    "last_active": "2026-09-04T06:58:12.353156+00:00"
   },
   {
     "id": "session_6387462719",
@@ -34,18 +51,6 @@
     "message_count": 2,
     "created_at": "2026-09-04T06:09:24.710390+00:00",
     "last_active": "2026-09-04T06:44:05.053880+00:00"
-  },
-  {
-    "id": "session_5074867722",
-    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
-    "subject": "Class-10-Geography",
-    "title": "Class-10-Geography Study Room",
-    "document_name": "Class-10-Geography.pdf",
-    "status": "text_ready",
-    "topic_count": 8,
-    "message_count": 0,
-    "created_at": "2026-09-04T05:40:13.816299+00:00",
-    "last_active": "2026-09-04T05:48:38.795710+00:00"
   },
   {
     "id": "session_3862000107",

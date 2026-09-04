@@ -104,9 +104,14 @@ def init_session_db(session_id: str) -> Path:
                 summary TEXT,
                 difficulty TEXT,
                 key_concepts_json TEXT,
-                estimated_study_time TEXT
+                estimated_study_time TEXT,
+                document_name TEXT DEFAULT ''
             );
         """)
+        try:
+            cur.execute("ALTER TABLE session_topics ADD COLUMN document_name TEXT DEFAULT ''")
+        except Exception:
+            pass
 
         # 4. Persisted Ingested Documents
         cur.execute("""
@@ -388,40 +393,64 @@ def get_session_messages(session_id: str, limit: Optional[int] = None) -> List[D
 
 # ─── Session Curriculum Topics CRUD ─────────────────────────────────────────
 
-def save_session_topics(session_id: str, topics: List[Dict[str, Any]]):
-    """Batch save extracted topics to session_topics."""
+def save_session_topics(
+    session_id: str,
+    topics: List[Dict[str, Any]],
+    append: bool = False,
+    document_name: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Batch save extracted topics to session_topics with document_name attribution."""
     init_session_db(session_id)
     db_path = get_session_db_path(session_id)
     conn = sqlite3.connect(str(db_path))
     try:
         cur = conn.cursor()
-        cur.execute("DELETE FROM session_topics")
+        existing_titles = set()
+        if append:
+            cur.execute("SELECT title FROM session_topics")
+            existing_titles = {str(row[0]).strip().lower() for row in cur.fetchall() if row[0]}
+        else:
+            cur.execute("DELETE FROM session_topics")
+
         for t in topics:
+            title = str(t.get("title", "")).strip()
+            if not title:
+                continue
+            if append and title.lower() in existing_titles:
+                continue
+
+            topic_id = str(t.get("id", "")) or f"topic_{uuid.uuid4().hex[:8]}"
+            doc_name = str(t.get("document_name") or document_name or "").strip()
             cur.execute(
                 """
                 INSERT OR REPLACE INTO session_topics(
-                    id, title, summary, difficulty, key_concepts_json, estimated_study_time
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    id, title, summary, difficulty, key_concepts_json, estimated_study_time, document_name
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    str(t.get("id", "")),
-                    str(t.get("title", "")),
+                    topic_id,
+                    title,
                     str(t.get("summary", "")),
                     str(t.get("difficulty", "Intermediate")),
                     json.dumps(t.get("key_concepts", [])),
                     str(t.get("estimated_study_time", "15 mins")),
+                    doc_name,
                 )
             )
+            existing_titles.add(title.lower())
         conn.commit()
     finally:
         conn.close()
 
-    update_session_topic_count(session_id, len(topics))
+    total_topics = get_session_topics(session_id)
+    update_session_topic_count(session_id, len(total_topics))
     schedule_s3_db_backup(session_id)
+    return total_topics
+
 
 
 def get_session_topics(session_id: str) -> List[Dict[str, Any]]:
-    """Retrieve saved topics for a session."""
+    """Retrieve saved topics for a session, including document_name."""
     db_path = get_session_db_path(session_id)
     if not db_path.exists():
         return []
@@ -434,6 +463,8 @@ def get_session_topics(session_id: str) -> List[Dict[str, Any]]:
         rows = cur.fetchall()
         topics = []
         for r in rows:
+            row_keys = r.keys()
+            doc_name = r["document_name"] if "document_name" in row_keys and r["document_name"] else ""
             topics.append({
                 "id": r["id"],
                 "title": r["title"],
@@ -441,6 +472,7 @@ def get_session_topics(session_id: str) -> List[Dict[str, Any]]:
                 "difficulty": r["difficulty"],
                 "key_concepts": json.loads(r["key_concepts_json"]) if r["key_concepts_json"] else [],
                 "estimated_study_time": r["estimated_study_time"],
+                "document_name": doc_name,
             })
         return topics
     finally:
@@ -494,7 +526,7 @@ def update_document_status(session_id: str, doc_id: str, status: str):
 
 
 def get_session_documents(session_id: str) -> List[Dict[str, Any]]:
-    """Retrieve list of documents uploaded to this session."""
+    """Retrieve list of documents uploaded to this session in chronological order."""
     db_path = get_session_db_path(session_id)
     if not db_path.exists():
         return []
@@ -502,7 +534,7 @@ def get_session_documents(session_id: str) -> List[Dict[str, Any]]:
     conn.row_factory = sqlite3.Row
     try:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM session_documents ORDER BY created_at DESC")
+        cur.execute("SELECT * FROM session_documents ORDER BY created_at ASC")
         return [dict(r) for r in cur.fetchall()]
     finally:
         conn.close()
@@ -542,7 +574,7 @@ def register_or_update_session(
     document_name: Optional[str] = None,
     user_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Add or update session metadata in registry with user isolation."""
+    """Add or update session metadata in registry with user isolation and multi-material tracking."""
     ensure_data_directories()
     with _registry_lock:
         sessions = []
@@ -556,20 +588,43 @@ def register_or_update_session(
         now_iso = datetime.now(timezone.utc).isoformat()
         existing = next((s for s in sessions if s.get("id") == session_id), None)
         if existing:
-            if subject: existing["subject"] = subject
-            if title: existing["title"] = title
-            if status: existing["status"] = status
-            if document_name: existing["document_name"] = document_name
-            if user_id: existing["user_id"] = user_id
+            if subject and subject != "General Study":
+                existing["subject"] = subject
+            # Preserve room title if already meaningful
+            curr_title = existing.get("title", "")
+            is_placeholder = curr_title in ("New Study Workspace", "New Course Workspace", "Study Room Session", "Default Study Room", "")
+            if is_placeholder and title:
+                existing["title"] = title
+
+            if status:
+                existing["status"] = status
+
+            # Multi-document list tracking
+            doc_list = existing.get("documents", [])
+            if not isinstance(doc_list, list):
+                doc_list = [existing.get("document_name")] if existing.get("document_name") else []
+            if document_name and document_name not in doc_list:
+                doc_list.append(document_name)
+
+            existing["documents"] = doc_list
+            existing["document_count"] = len(doc_list)
+            if document_name:
+                existing["document_name"] = document_name
+
+            if user_id:
+                existing["user_id"] = user_id
             existing["last_active"] = now_iso
             res = existing
         else:
+            initial_docs = [document_name] if document_name else []
             res = {
                 "id": session_id,
                 "user_id": user_id or "guest-user",
                 "subject": subject,
                 "title": title,
                 "document_name": document_name or "",
+                "documents": initial_docs,
+                "document_count": len(initial_docs),
                 "status": status,
                 "topic_count": 0,
                 "message_count": 0,

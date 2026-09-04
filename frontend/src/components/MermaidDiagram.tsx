@@ -12,8 +12,8 @@ mermaid.initialize({
     lineColor: '#6366F1',
     secondaryColor: '#FFFFFF',
     tertiaryColor: '#FFFFFF',
-    fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-    fontSize: '12.5px',
+    fontFamily: "'CMU Serif', 'Latin Modern Roman', 'Computer Modern Roman', 'Computer Modern Serif', Georgia, serif",
+    fontSize: '13.5px',
     nodeBorder: '1.5px',
     clusterBkg: 'transparent',
     clusterBorder: '#CBD5E1',
@@ -279,12 +279,20 @@ export default function MermaidDiagram({ chart }: Props) {
           height: 100% !important;
           padding: 4px 8px !important;
           box-sizing: border-box !important;
-          font-size: 12.5px !important;
+          font-family: 'CMU Serif', 'Latin Modern Roman', 'Computer Modern Roman', 'Computer Modern Serif', Georgia, serif !important;
+          font-size: 13.5px !important;
           font-weight: 500 !important;
           line-height: 1.35 !important;
           color: #1E293B !important;
           word-break: normal !important;
           white-space: normal !important;
+        }
+
+        .mermaid-wrapper .node text {
+          font-family: 'CMU Serif', 'Latin Modern Roman', 'Computer Modern Roman', 'Computer Modern Serif', Georgia, serif !important;
+          font-size: 13.5px !important;
+          line-height: 1.35 !important;
+          text-anchor: middle !important;
         }
 
         .mermaid-wrapper .edgePath path {
