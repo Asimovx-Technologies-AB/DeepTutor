@@ -11,11 +11,12 @@ from typing import AsyncGenerator, List, Dict, Optional, Any
 from dotenv import dotenv_values
 
 CASCADE_MODELS = [
-    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
     "gemini-3.6-flash",
     "gemini-flash-latest",
     "gemini-3.7-flash",
-    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
 ]
 
 
@@ -37,7 +38,7 @@ def _get_active_gemini_model() -> str:
         model = vals.get("GEMINI_MODEL", "")
         if model and model.strip():
             return model.strip()
-    return "gemini-3.5-flash-lite"
+    return "gemini-3.1-flash-lite"
 
 
 

@@ -118,7 +118,7 @@ async def call_llm(
         try:
             import google.generativeai as genai
             genai.configure(api_key=settings.GEMINI_API_KEY)
-            model_name = getattr(settings, "GEMINI_MODEL", "gemini-3.7-flash")
+            model_name = getattr(settings, "GEMINI_MODEL", "gemini-3.1-flash-lite")
             clean_name = model_name.replace("models/", "")
             model = genai.GenerativeModel(
                 model_name=clean_name,
@@ -283,7 +283,18 @@ class DecisionAgent:
             topics = get_session_topics(session_id)
             topic_bullets = ""
             if topics:
-                topic_bullets = "\n\nHere are some key topics from your uploaded course materials:\n" + "\n".join(f"- **{t}**" for t in topics[:5])
+                formatted_bullets = []
+                for t in topics[:5]:
+                    if isinstance(t, dict):
+                        title = t.get("title") or t.get("name") or "Topic"
+                        summary = t.get("summary") or ""
+                        if summary:
+                            formatted_bullets.append(f"- **{title}**: {summary}")
+                        else:
+                            formatted_bullets.append(f"- **{title}**")
+                    else:
+                        formatted_bullets.append(f"- **{t}**")
+                topic_bullets = "\n\nHere are some key topics from your uploaded course materials:\n\n" + "\n".join(formatted_bullets)
 
             greeting_response = (
                 f"Hello! I am **DeepTutor**, your AI academic tutor for **{subject}**.\n\n"
@@ -381,7 +392,7 @@ class DecisionAgent:
         ))
 
         if is_quiz_or_flashcard:
-            from app.services.study_quiz_engine import generate_flashcard_deck
+            from app.services.study_quiz_engine import generate_flashcard_deck, sanitize_topic_title
             explanation_level = "standard"
             if any(w in user_query.lower() for w in ("simply", "simple", "eli5", "basic")):
                 explanation_level = "simple"
@@ -405,7 +416,7 @@ class DecisionAgent:
                         # Try extracting a clean title from the heading of the previous response
                         h_match = re.search(r"^#+\s*(.+)$", override_ctx, re.MULTILINE)
                         if h_match:
-                            clean_title = h_match.group(1).strip()
+                            clean_title = sanitize_topic_title(h_match.group(1).strip())
                         else:
                             clean_title = "Previous Response Concepts"
                         break
@@ -425,13 +436,12 @@ class DecisionAgent:
                             override_ctx = m.get("text")
                             h_match = re.search(r"^#+\s*(.+)$", override_ctx, re.MULTILINE)
                             if h_match:
-                                clean_title = h_match.group(1).strip()
+                                clean_title = sanitize_topic_title(h_match.group(1).strip())
                             else:
                                 clean_title = "Previous Response Concepts"
                             break
 
-                if not clean_title:
-                    clean_title = "Course Material"
+                clean_title = sanitize_topic_title(clean_title)
 
             deck = await generate_flashcard_deck(
                 session_id=session_id,
@@ -794,7 +804,7 @@ async def generate_core_idea(session_id: str, topic_id: str, topic_title: str, t
                 "topic_id": topic_id,
                 "topic_title": topic_title,
                 "reason": f"The requested topic \"{topic_title}\" is out of the scope of your uploaded course materials.",
-                "suggested_topics": session_topics[:6] if session_topics else []
+                "suggested_topics": [t.get("title") if isinstance(t, dict) else str(t) for t in session_topics[:6] if t]
             }
         else:
             chunks = broad_chunks

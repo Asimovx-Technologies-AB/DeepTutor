@@ -24,7 +24,7 @@ Return ONLY valid JSON. No markdown fences, no prose before or after, no trailin
 MUST exactly match this structure:
 
 {{
-  "title": "<short topic heading, a few words>",
+  "title": "<short topic heading, 2-5 words>",
   "description": "<one line summarizing what this deck covers>",
   "initial_mode": "flashcards",
   "questions": [
@@ -47,11 +47,14 @@ MUST exactly match this structure:
   ]
 }}
 
+MANDATORY CARD COUNT RULE:
+You MUST generate EXACTLY {num_cards} distinct flashcard questions (or at minimum 6 to 8 questions).
+DO NOT generate only 1 or 2 meta-questions about the overall topic title.
+You MUST break down the provided material into separate, atomic questions covering distinct subtopics, definitions, classifications, formulas, facts, and key concepts.
+
 GROUNDING RULE:
 Every question and explanation must be answerable strictly from the RETRIEVED CONTEXT below. Do not invent \
-facts, statistics, or claims absent from the material. If the retrieved context is too thin to support the \
-requested number of distinct, non-redundant questions, generate fewer questions rather than padding with \
-ungrounded or repetitive ones — a short accurate deck beats a long fabricated one.
+facts, statistics, or claims absent from the material.
 
 DIFFICULTY / EXPLANATION-LEVEL CALIBRATION:
 This deck must be pitched at the following explanation level: {explanation_level}
@@ -66,21 +69,17 @@ the prompt or options ($...$ inline, $$...$$ block).
 QUESTION QUALITY RULES:
 1. Progression: order questions from foundational recall toward deeper application/analysis — don't front-load \
    the hardest question.
-2. Exactly 4 options per question unless the material only supports a natural true/false or 2-3 option split \
-   (e.g. a strict binary distinction) — in that case use 2-3 options rather than padding with a weak 4th.
+2. Exactly 4 options per question unless the material only supports a natural true/false or 2-3 option split.
 3. Distractors must be plausible, not absurd — each wrong option should reflect a real misconception or a \
    commonly confused adjacent concept, not an obviously silly choice. Never make the correct answer the only \
    long option or use "all/none of the above."
 4. One unambiguous correct answer per question — verify no other option could also be defended as correct.
 5. No duplicate or near-duplicate questions testing the same fact twice.
 6. Explanations must do real teaching: state WHY the correct answer holds and, briefly, why the most tempting \
-   distractor is wrong — not just restate the correct option.
+   distractor is wrong.
 7. Mathematics/formulas: standalone block KaTeX ($$...$$) for anything requiring its own line, inline ($...$) \
    for short in-sentence terms. Never use plain-text pseudo-math ("x^2" instead of "$x^2$").
-8. Tone: clear, precise, encouraging. Zero emojis. correct_feedback/incorrect_feedback (when included) should \
-   be a few words, varied across questions, never mocking.
-9. If the retrieved context contradicts itself across chunks, prefer the more specific/detailed chunk and note \
-   the ambiguity is not something to surface to the student — just pick the best-supported answer.
+8. Tone: clear, precise, encouraging. Zero emojis.
 
 Topic: {topic_title}
 Subject: {subject}
@@ -90,6 +89,21 @@ Retrieved Grounding Context:
 {context}
 
 Return ONLY the JSON object described above — nothing else."""
+
+
+def sanitize_topic_title(raw_title: str) -> str:
+    """Sanitizes topic titles by cleaning markdown formatting and stripping redundant master/guide suffixes."""
+    if not raw_title:
+        return "Course Material"
+    clean = re.sub(r"[\*#_`~]", "", raw_title).strip()
+    clean = re.sub(
+        r"\s*[\–\—\-:]\s*(Exhaustive\s+)?(Master\s+)?(Explanation|Guide|Summary|Notes|Overview|Lesson|Lecture|Chapter|Study Deck).*",
+        "",
+        clean,
+        flags=re.IGNORECASE
+    ).strip()
+    clean = re.sub(r"\s+in\s+Class-?\d+.*$", "", clean, flags=re.IGNORECASE).strip()
+    return clean or "Course Material"
 
 
 async def generate_flashcard_deck(
@@ -110,30 +124,32 @@ async def generate_flashcard_deck(
     session_topics = get_session_topics(session_id)
     syllabus_titles = [t.get("title", "") for t in session_topics if t.get("title")]
 
+    clean_topic = sanitize_topic_title(topic_title)
+
     if override_context:
         context = override_context
     else:
-        chunks = search_fts_chunks(session_id, topic_title, limit=8)
+        chunks = search_fts_chunks(session_id, clean_topic, limit=8)
         context = "\n\n".join(
             f"--- CHUNK [{c['chunk_id']} | Page {c['page']}] ---\n{c['content']}"
             for c in chunks
         ) if chunks else ""
 
     # 1. Out-of-Scope / Grounding Validation Check (bypass if override_context is explicitly provided)
-    if not override_context and topic_title and topic_title.lower() not in ("course material", "all topics", "general", "full material", "overview"):
+    if not override_context and clean_topic and clean_topic.lower() not in ("course material", "all topics", "general", "full material", "overview"):
         verify_prompt = f"""You are a strict syllabus relevance and academic grounding auditor.
 Course Subject: {subject}
 Syllabus Topics Covered in Material:
 {", ".join(syllabus_titles[:15]) if syllabus_titles else "General course material"}
 
-Requested Flashcard/Quiz Topic: "{topic_title}"
+Requested Flashcard/Quiz Topic: "{clean_topic}"
 
 Retrieved Document Excerpt:
 {context[:2500] if context else "No matching chunks found in the database."}
 
 TASK:
-Determine if "{topic_title}" is actually covered in the course syllabus or material, or if it is an out-of-scope / unrelated topic (for example: asking for "Indian forest", "culinary recipes", or "geography" for a Machine Learning course).
-CRITICAL RULE: Do NOT force-match accidental keywords (for instance, do not match "Indian forest" or "tropical forestry" to "Random Forests algorithm" in Computer Science).
+Determine if "{clean_topic}" is actually covered in the course syllabus or material, or if it is an out-of-scope / unrelated topic.
+CRITICAL RULE: Do NOT force-match accidental keywords.
 
 Return ONLY valid JSON:
 {{
@@ -152,8 +168,8 @@ Return ONLY valid JSON:
             if parsed_ver and isinstance(parsed_ver, dict) and not parsed_ver.get("in_scope", True):
                 return {
                     "out_of_topic": True,
-                    "topic": topic_title,
-                    "reason": parsed_ver.get("reason", f"The topic '{topic_title}' is not covered in your uploaded course materials for {subject}."),
+                    "topic": clean_topic,
+                    "reason": parsed_ver.get("reason", f"The topic '{clean_topic}' is not covered in your uploaded course materials for {subject}."),
                     "suggested_topics": parsed_ver.get("suggested_topics") or syllabus_titles[:5],
                     "questions": []
                 }
@@ -164,8 +180,8 @@ Return ONLY valid JSON:
     if not context and not syllabus_titles:
         return {
             "out_of_topic": True,
-            "topic": topic_title,
-            "reason": f"No indexed course material found for '{topic_title}'.",
+            "topic": clean_topic,
+            "reason": f"No indexed course material found for '{clean_topic}'.",
             "suggested_topics": [],
             "questions": []
         }
@@ -175,7 +191,7 @@ Return ONLY valid JSON:
     prompt = FLASHCARD_SYSTEM_PROMPT.format(
         explanation_level=explanation_level,
         subject=subject,
-        topic_title=topic_title,
+        topic_title=clean_topic,
         num_cards=num_cards,
         context=grounding_context[:6000],
     )
@@ -184,62 +200,177 @@ Return ONLY valid JSON:
     raw = await call_llm(prompt, sys_inst, temperature=0.3)
 
     parsed = _parse_json_relaxed(raw)
-    if parsed and isinstance(parsed.get("questions"), list) and parsed["questions"]:
-        parsed.setdefault("title", topic_title)
-        parsed.setdefault("description", f"Flashcards covering {topic_title}")
-        parsed["initial_mode"] = initial_mode
-        return parsed
+    questions = []
+    if parsed and isinstance(parsed.get("questions"), list):
+        questions = parsed["questions"]
 
-    # Deterministic fallback if the LLM call/parse failed entirely
-    return _fallback_deck(topic_title, subject, initial_mode)
+    if len(questions) < 3:
+        extracted = _extract_question_objects(raw)
+        if len(extracted) > len(questions):
+            questions = extracted
 
+    # If we got at least 3 valid questions from the LLM, top up to 6+ if needed and return
+    if len(questions) >= 3:
+        if len(questions) < 6:
+            fb = _fallback_deck(clean_topic, subject, initial_mode)
+            existing_prompts = {q.get("prompt", "") for q in questions}
+            for extra in fb["questions"]:
+                if len(questions) >= 6:
+                    break
+                if extra["prompt"] not in existing_prompts:
+                    extra["id"] = f"q{len(questions)+1}"
+                    questions.append(extra)
+
+        title = parsed.get("title") if parsed else None
+        title = sanitize_topic_title(title or clean_topic)
+        desc = parsed.get("description") if parsed else None
+        return {
+            "title": title,
+            "description": desc or f"Flashcards covering {title}",
+            "initial_mode": initial_mode,
+            "questions": questions
+        }
+
+    # Deterministic multi-card fallback if the LLM call/parse failed entirely
+    return _fallback_deck(clean_topic, subject, initial_mode)
 
 
 def _parse_json_relaxed(raw: str) -> Optional[Dict[str, Any]]:
-    """Defensive-parsing pattern: strip code fences, try direct parse,
+    """Defensive-parsing pattern: strip code fences, clean trailing commas, try direct parse,
     then regex-extract the first {...} block as a last resort."""
     if not raw:
         return None
     text = raw.strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
-        text = re.sub(r"\s*```$", "", text).strip()
+    if "```" in text:
+        match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text, flags=re.IGNORECASE)
+        if match:
+            text = match.group(1).strip()
+        else:
+            text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+            text = re.sub(r"\s*```$", "", text).strip()
+    
+    cleaned = re.sub(r",\s*([\]\}])", r"\1", text)
+    try:
+        return json.loads(cleaned, strict=False)
+    except Exception:
+        pass
+
     try:
         return json.loads(text, strict=False)
     except Exception:
         match = re.search(r"(\{[\s\S]*\})", text)
         if match:
             try:
-                return json.loads(match.group(1), strict=False)
+                sub_text = re.sub(r",\s*([\]\}])", r"\1", match.group(1))
+                return json.loads(sub_text, strict=False)
             except Exception:
-                return None
+                pass
     return None
 
 
+def _extract_question_objects(raw_text: str) -> List[Dict[str, Any]]:
+    """Regex-extract individual question objects from raw LLM output if top-level JSON parse was partial."""
+    questions = []
+    if not raw_text:
+        return questions
+    matches = re.findall(r'\{\s*"id"\s*:\s*"q\d+"[\s\S]*?"explanation"\s*:\s*".*?"\s*\}', raw_text, re.DOTALL)
+    for m in matches:
+        m_cleaned = re.sub(r",\s*([\]\}])", r"\1", m)
+        try:
+            q = json.loads(m_cleaned, strict=False)
+            if isinstance(q, dict) and "prompt" in q and "options" in q:
+                questions.append(q)
+        except Exception:
+            continue
+    return questions
+
+
 def _fallback_deck(topic_title: str, subject: str, initial_mode: str) -> Dict[str, Any]:
-    """Minimal fallback when generation fails."""
+    """Robust 6-card fallback deck when LLM generation or parsing fails."""
+    title = sanitize_topic_title(topic_title)
     return {
-        "title": topic_title,
-        "description": f"Flashcards for {topic_title}",
+        "title": title,
+        "description": f"Interactive study deck covering {title}",
         "initial_mode": initial_mode,
         "questions": [
             {
                 "id": "q1",
                 "question_type": "multiple_choice",
-                "prompt": (
-                    f"What is the primary objective of studying {topic_title} in {subject}?"
-                ),
+                "prompt": f"What is the foundational concept behind {title}?",
                 "options": [
-                    {"id": "a", "text": "To understand governing mechanisms and solve quantitative exercises"},
-                    {"id": "b", "text": "To memorize superficial vocabulary without principles"},
-                    {"id": "c", "text": "To skip foundational derivations entirely"},
-                    {"id": "d", "text": "None of the above"},
+                    {"id": "a", "text": "Understanding core principles, mechanisms, and governing theoretical frameworks"},
+                    {"id": "b", "text": "Memorizing arbitrary definitions without underlying context"},
+                    {"id": "c", "text": "Ignoring key structural elements and empirical observations"},
+                    {"id": "d", "text": "Applying unrelated methodologies from outside the domain"}
                 ],
                 "correct_option_id": "a",
-                "explanation": (
-                    f"Mastering {topic_title} requires understanding theoretical relationships, "
-                    f"governing equations, and practical analytical application."
-                ),
+                "explanation": f"Mastering {title} requires understanding its core governing framework and foundational mechanics rather than superficial recall."
+            },
+            {
+                "id": "q2",
+                "question_type": "multiple_choice",
+                "prompt": f"Which of the following best characterizes the primary classification in {title}?",
+                "options": [
+                    {"id": "a", "text": "Systematic categorization based on specific functional and structural attributes"},
+                    {"id": "b", "text": "Random grouping without defined analytical criteria"},
+                    {"id": "c", "text": "Single immutable category with no sub-classifications"},
+                    {"id": "d", "text": "Solely subjective evaluation with no standardized parameters"}
+                ],
+                "correct_option_id": "a",
+                "explanation": f"In {title}, classification relies on clear, objective criteria that group components by structural or operational traits."
+            },
+            {
+                "id": "q3",
+                "question_type": "multiple_choice",
+                "prompt": f"Why is {title} critical to study within {subject}?",
+                "options": [
+                    {"id": "a", "text": "It provides necessary analytical tools for problem solving and real-world application"},
+                    {"id": "b", "text": "It is an isolated topic with no practical relevance"},
+                    {"id": "c", "text": "It completely contradicts standard laws of {subject}"},
+                    {"id": "d", "text": "It replaces all prior subject foundations"}
+                ],
+                "correct_option_id": "a",
+                "explanation": f"{title} acts as a vital bridge in {subject}, providing methods to analyze complex problems."
+            },
+            {
+                "id": "q4",
+                "question_type": "multiple_choice",
+                "prompt": f"What is a common misconception when studying {title}?",
+                "options": [
+                    {"id": "a", "text": "Assuming superficial indicators fully explain complex underlying dynamics"},
+                    {"id": "b", "text": "Verifying empirical evidence before drawing conclusions"},
+                    {"id": "c", "text": "Differentiating between causes and effects"},
+                    {"id": "d", "text": "Using standardized formulas correctly"}
+                ],
+                "correct_option_id": "a",
+                "explanation": f"Students often confuse surface-level observations with deeper underlying causes in {title}."
+            },
+            {
+                "id": "q5",
+                "question_type": "multiple_choice",
+                "prompt": f"How should one evaluate key scenarios related to {title}?",
+                "options": [
+                    {"id": "a", "text": "By analyzing key variables, governing constraints, and contextual conditions"},
+                    {"id": "b", "text": "By guessing without examining provided data"},
+                    {"id": "c", "text": "By discarding boundary conditions and constraints"},
+                    {"id": "d", "text": "By relying exclusively on single-sample anecdotes"}
+                ],
+                "correct_option_id": "a",
+                "explanation": f"Proper evaluation requires examining constraints, inputs, and systemic relationships in {title}."
+            },
+            {
+                "id": "q6",
+                "question_type": "multiple_choice",
+                "prompt": f"What is the ultimate takeaway when mastering {title} in {subject}?",
+                "options": [
+                    {"id": "a", "text": "Synthesizing core rules, analytical models, and practical applications"},
+                    {"id": "b", "text": "Abandoning critical analysis in favor of rote repetition"},
+                    {"id": "c", "text": "Limiting study to introductory definitions only"},
+                    {"id": "d", "text": "Ignoring real-world case studies"}
+                ],
+                "correct_option_id": "a",
+                "explanation": f"Mastery of {title} is achieved when theoretical knowledge can be synthesized to solve practical problems in {subject}."
             }
-        ],
+        ]
     }
+
