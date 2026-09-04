@@ -474,6 +474,14 @@ async def delete_study_session(session_id: str):
     return {"success": True, "session_id": session_id}
 
 
+@router.delete("/sessions/{session_id}/documents/{doc_name_or_id:path}")
+async def delete_session_document_endpoint(session_id: str, doc_name_or_id: str):
+    """Deletes a specific material document from a study room session."""
+    from app.services.study_storage import delete_session_document
+    ok = delete_session_document(session_id, doc_name_or_id)
+    return {"success": ok, "session_id": session_id, "deleted_material": doc_name_or_id}
+
+
 # ─── 9. Student Episodic Memory ─────────────────────────────────────────────
 
 @router.get("/memory/{user_id}")

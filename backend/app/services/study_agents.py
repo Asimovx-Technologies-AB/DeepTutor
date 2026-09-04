@@ -66,7 +66,7 @@ async def call_gemini_vision(
     if system_instruction:
         payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
 
-    models = ["gemini-3.7-flash", "gemini-3.8-flash", "gemini-2.5-flash"]
+    models = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest"]
     for m in models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key}"
         try:

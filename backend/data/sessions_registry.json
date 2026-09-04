@@ -1,5 +1,37 @@
 [
   {
+    "id": "session_2001199939",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "An Introduction To Data Science - By Jeffrey Stanton - (Data Science Books)",
+    "title": "An Introduction To Data Science - By Jeffrey Stanton - (Data Science Books) Study Room",
+    "document_name": "An Introduction to Data Science - By Jeffrey Stanton - (Data Science Books).pdf",
+    "documents": [
+      "An Introduction to Data Science - By Jeffrey Stanton - (Data Science Books).pdf"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 7,
+    "message_count": 2,
+    "created_at": "2026-09-04T13:21:21.785260+00:00",
+    "last_active": "2026-09-04T13:22:27.780569+00:00"
+  },
+  {
+    "id": "session_6863256170",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "Attention All U Need",
+    "title": "Attention All U Need Study Room",
+    "document_name": "Attention all u need.pdf",
+    "documents": [
+      "Attention all u need.pdf"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 6,
+    "message_count": 2,
+    "created_at": "2026-09-04T13:10:35.270572+00:00",
+    "last_active": "2026-09-04T13:13:35.491248+00:00"
+  },
+  {
     "id": "session_2536661296",
     "user_id": "guest-user",
     "subject": "Attention All U Need",

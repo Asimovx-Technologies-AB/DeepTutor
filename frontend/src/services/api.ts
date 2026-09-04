@@ -401,6 +401,8 @@ export const studyApi = {
     api.post('/study/sessions/new', payload || {}),
   getSession: (sessionId: string) => api.get(`/study/sessions/${sessionId}`),
   deleteSession: (sessionId: string) => api.delete(`/study/sessions/${sessionId}`),
+  deleteDocument: (sessionId: string, docNameOrId: string) =>
+    api.delete(`/study/sessions/${sessionId}/documents/${encodeURIComponent(docNameOrId)}`),
   getMemory: (userId: string) => api.get(`/study/memory/${userId}`),
   addMemoryFact: (userId: string, factData: any) =>
     api.post(`/study/memory/${userId}/fact`, factData),

@@ -409,6 +409,24 @@ export default function LearnPage() {
     }
   }, [activeSessionId, loadSessionDetails])
 
+  const handleDeleteMaterial = async (materialNameOrId: string) => {
+    if (!activeSessionId) return
+    try {
+      await studyApi.deleteDocument(activeSessionId, materialNameOrId)
+      setSessionDocuments((prev) => prev.filter((d) => (d.id || d.filename) !== materialNameOrId && d.filename !== materialNameOrId))
+      if (selectedMaterialFilter === materialNameOrId) {
+        setSelectedMaterialFilter('all')
+      }
+      const res = await studyApi.getSession(activeSessionId)
+      if (res.data) {
+        if (res.data.documents) setSessionDocuments(res.data.documents)
+        if (res.data.topics) setTopics(res.data.topics)
+      }
+    } catch (err) {
+      console.error('Failed to delete material document:', err)
+    }
+  }
+
   // ─── 3. Load Student Memory Profile ───
   useEffect(() => {
     const uid = user?.id || 'default-user'
@@ -1263,11 +1281,11 @@ export default function LearnPage() {
           {/* ─── Central Active Workspace View ─── */}
           <main className="flex-1 flex flex-col h-full overflow-hidden relative">
 
-            {/* ─── Top Header & Controls (Floating Translucent Ambient Bar like Chatbox) ─── */}
-            <header className="absolute top-0 inset-x-0 pt-3.5 pb-6 px-4 sm:px-6 bg-transparent flex items-center justify-between gap-3 flex-shrink-0 z-20 pointer-events-none floating-header-gradient">
+            {/* ─── Top Header & Controls (Responsive Non-Overlapping Top Navbar) ─── */}
+            <header className="sticky top-0 inset-x-0 py-2.5 px-3 sm:px-6 bg-white/95 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between gap-2 shrink-0 z-30 shadow-2xs font-sans">
               {/* Left Course / Document Pill with Option A Dropdown Switcher */}
-              <div className="relative flex items-center gap-2 pointer-events-auto shrink-0 max-w-[34%] sm:max-w-[38%]" ref={dropdownRef}>
-                <div className="flex items-center gap-1.5 p-1 sm:px-2 sm:py-1 rounded-full bg-white/95 border border-slate-200/90 shadow-[0_2px_14px_rgba(0,0,0,0.05)] backdrop-blur-md min-w-0">
+              <div className="relative flex items-center gap-2 shrink-0 max-w-[40%] sm:max-w-[45%]" ref={dropdownRef}>
+                <div className="flex items-center gap-1.5 p-1 sm:px-2 sm:py-1 rounded-full bg-white border border-slate-200/90 shadow-2xs backdrop-blur-md min-w-0">
                   {/* Quick toggle for Option B Drawer */}
                   <button
                     onClick={() => setWorkspaceOpen(true)}
@@ -1297,7 +1315,7 @@ export default function LearnPage() {
                         </span>
                       )
                     })()}
-                    <span className="text-xs font-semibold text-slate-800 font-sans truncate max-w-[110px] sm:max-w-[170px] md:max-w-[210px]">
+                    <span className="text-xs font-semibold text-slate-800 font-sans truncate max-w-[90px] sm:max-w-[170px] md:max-w-[210px]">
                       {documentName || activeSubject || 'Select Course'}
                     </span>
                     <ChevronDown
@@ -1310,14 +1328,15 @@ export default function LearnPage() {
 
                   {/* Attached Materials Badge & Popover */}
                   {sessionDocuments && sessionDocuments.length > 0 && (
-                    <div className="relative" ref={materialsPopoverRef}>
+                    <div className="relative shrink-0" ref={materialsPopoverRef}>
                       <button
                         onClick={() => setIsMaterialsPopoverOpen(!isMaterialsPopoverOpen)}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-indigo-50 hover:bg-indigo-100/80 text-indigo-700 border border-indigo-200/60 transition cursor-pointer shadow-2xs"
+                        className="flex items-center gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[11px] font-semibold bg-indigo-50 hover:bg-indigo-100/80 text-indigo-700 border border-indigo-200/60 transition cursor-pointer shadow-2xs"
                         title="View attached study materials in this room"
                       >
-                        <Layers size={12} className="text-indigo-600" />
-                        <span>{sessionDocuments.length} Material{sessionDocuments.length > 1 ? 's' : ''}</span>
+                        <Layers size={12} className="text-indigo-600 shrink-0" />
+                        <span className="hidden sm:inline">{sessionDocuments.length} Material{sessionDocuments.length > 1 ? 's' : ''}</span>
+                        <span className="sm:hidden">{sessionDocuments.length}</span>
                         <ChevronDown
                           size={11}
                           className={`text-indigo-500 transition-transform duration-200 ${
@@ -1348,7 +1367,7 @@ export default function LearnPage() {
 
                             <div className="space-y-1.5 max-h-52 overflow-y-auto pr-0.5">
                               {sessionDocuments.map((doc: any, i: number) => (
-                                <div key={doc.id || i} className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50/80 hover:bg-slate-100/70 border border-slate-200/60 text-left transition">
+                                <div key={doc.id || i} className="group flex items-center gap-2.5 p-2 rounded-xl bg-slate-50/80 hover:bg-slate-100/70 border border-slate-200/60 text-left transition">
                                   <div className="w-7 h-7 rounded-lg bg-indigo-100/70 flex items-center justify-center shrink-0">
                                     <FileText size={14} className="text-indigo-600" />
                                   </div>
@@ -1361,6 +1380,16 @@ export default function LearnPage() {
                                       </span>
                                     </p>
                                   </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleDeleteMaterial(doc.filename || doc.id)
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition opacity-80 group-hover:opacity-100 cursor-pointer"
+                                    title="Delete material"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
                                 </div>
                               ))}
                             </div>
@@ -1533,65 +1562,69 @@ export default function LearnPage() {
                 </AnimatePresence>
               </div>
 
-              {/* Mode Switcher Tabs (Individual Centered Floating Pills with Gap) */}
-              <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 sm:gap-2 pointer-events-auto z-10">
+              {/* Mode Switcher Tabs (Responsive Centered Flex Pill Row) */}
+              <div className="flex items-center justify-center gap-1 sm:gap-1.5 shrink-0 py-0.5">
                 <button
                   onClick={() => setActiveTab('chat')}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md ${activeTab === 'chat'
-                    ? 'bg-white text-slate-900 font-bold border border-slate-300 shadow-sm'
-                    : 'bg-white/85 text-slate-600 hover:text-slate-900 hover:bg-white border border-slate-200/80 shadow-2xs'
+                  className={`px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md ${activeTab === 'chat'
+                    ? 'bg-slate-900 text-white font-bold shadow-xs'
+                    : 'bg-slate-100/90 text-slate-700 hover:text-slate-900 hover:bg-slate-200/80 border border-slate-200/80 shadow-2xs'
                     }`}
+                  title="Tutor Chat"
                 >
-                  <BookOpen size={13} className={activeTab === 'chat' ? 'text-slate-900' : 'text-slate-500'} />
+                  <BookOpen size={13} className={activeTab === 'chat' ? 'text-white' : 'text-slate-500'} />
                   <span className="hidden sm:inline">Tutor Chat</span>
                 </button>
 
                 <button
                   onClick={() => setActiveTab('normal')}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md ${activeTab === 'normal'
-                    ? 'bg-white text-slate-900 font-bold border border-slate-300 shadow-sm'
-                    : 'bg-white/85 text-slate-600 hover:text-slate-900 hover:bg-white border border-slate-200/80 shadow-2xs'
+                  className={`px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md ${activeTab === 'normal'
+                    ? 'bg-slate-900 text-white font-bold shadow-xs'
+                    : 'bg-slate-100/90 text-slate-700 hover:text-slate-900 hover:bg-slate-200/80 border border-slate-200/80 shadow-2xs'
                     }`}
+                  title="Normal Mode"
                 >
-                  <Sparkles size={13} className={activeTab === 'normal' ? 'text-slate-900' : 'text-slate-500'} />
+                  <Sparkles size={13} className={activeTab === 'normal' ? 'text-white' : 'text-slate-500'} />
                   <span className="hidden sm:inline">Normal Mode</span>
                 </button>
 
                 <button
                   onClick={() => setActiveTab('teacher')}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md ${activeTab === 'teacher'
-                    ? 'bg-white text-slate-900 font-bold border border-slate-300 shadow-sm'
-                    : 'bg-white/85 text-slate-600 hover:text-slate-900 hover:bg-white border border-slate-200/80 shadow-2xs'
+                  className={`px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md ${activeTab === 'teacher'
+                    ? 'bg-slate-900 text-white font-bold shadow-xs'
+                    : 'bg-slate-100/90 text-slate-700 hover:text-slate-900 hover:bg-slate-200/80 border border-slate-200/80 shadow-2xs'
                     }`}
+                  title="Teacher Mode"
                 >
-                  <GraduationCap size={13} className={activeTab === 'teacher' ? 'text-slate-900' : 'text-slate-500'} />
+                  <GraduationCap size={13} className={activeTab === 'teacher' ? 'text-white' : 'text-slate-500'} />
                   <span className="hidden sm:inline">Teacher Mode</span>
                 </button>
 
                 <button
                   onClick={() => setActiveTab('exam')}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md ${activeTab === 'exam'
-                    ? 'bg-white text-slate-900 font-bold border border-slate-300 shadow-sm'
-                    : 'bg-white/85 text-slate-600 hover:text-slate-900 hover:bg-white border border-slate-200/80 shadow-2xs'
+                  className={`px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md ${activeTab === 'exam'
+                    ? 'bg-slate-900 text-white font-bold shadow-xs'
+                    : 'bg-slate-100/90 text-slate-700 hover:text-slate-900 hover:bg-slate-200/80 border border-slate-200/80 shadow-2xs'
                     }`}
+                  title="Topic Exam"
                 >
-                  <Award size={13} className={activeTab === 'exam' ? 'text-slate-900' : 'text-slate-500'} />
+                  <Award size={13} className={activeTab === 'exam' ? 'text-white' : 'text-slate-500'} />
                   <span className="hidden sm:inline">Topic Exam</span>
                 </button>
               </div>
 
-              {/* Right Action Controls (Floating Pill) */}
-              <div className="flex items-center gap-2 pointer-events-auto shrink-0">
+              {/* Right Action Controls */}
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => setStudyMapOpen(!studyMapOpen)}
-                  className={`px-3 py-1.5 rounded-full border transition text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-[0_2px_12px_rgba(0,0,0,0.04)] backdrop-blur-md ${studyMapOpen
-                    ? 'bg-slate-100 text-slate-900 border-slate-300'
-                    : 'bg-white/95 text-slate-700 hover:text-slate-900 hover:bg-slate-50 border-slate-200/80'
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-full border transition text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs ${studyMapOpen
+                    ? 'bg-indigo-50 text-indigo-900 border-indigo-200'
+                    : 'bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 border-slate-200/80'
                     }`}
                   title="Curriculum Study Map"
                 >
                   <PanelRight size={14} />
-                  <span className="hidden xl:inline">Curriculum</span>
+                  <span className="hidden lg:inline">Curriculum</span>
                 </button>
               </div>
             </header>
@@ -1603,7 +1636,7 @@ export default function LearnPage() {
                 <div
                   ref={chatScrollRef}
                   onScroll={handleChatScroll}
-                  className="flex-1 overflow-y-auto px-4 sm:px-8 pt-24 sm:pt-28 pb-36"
+                  className="flex-1 overflow-y-auto px-3 sm:px-8 pt-4 sm:pt-6 pb-36"
                 >
                   {messages.length === 0 && !isAgentThinking && !isUploading && (
                     <div className="flex flex-col items-center justify-center min-h-[50vh] text-center max-w-lg mx-auto pt-6">
@@ -1980,7 +2013,7 @@ export default function LearnPage() {
 
             {/* TAB 2: NORMAL MODE (4-STEP CORE IDEA) */}
             {activeTab === 'normal' && (
-              <div className="flex-1 overflow-y-auto p-6 pt-28">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pt-4 sm:pt-6">
                 <div className="max-w-3xl mx-auto space-y-6">
                   {/* Custom Topic Input Bar */}
                   <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex items-center gap-3">
@@ -2183,7 +2216,7 @@ export default function LearnPage() {
 
             {/* TAB 3: TEACHER MODE (SSE STREAMED LECTURE) */}
             {activeTab === 'teacher' && (
-              <div className="flex-1 overflow-y-auto p-6 pt-28">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pt-4 sm:pt-6">
                 <div className="max-w-3xl mx-auto space-y-6">
                   {/* Lecture Header */}
                   <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between">
@@ -2373,7 +2406,7 @@ export default function LearnPage() {
 
             {/* TAB 4: TOPIC MASTERY EXAM ENGINE */}
             {activeTab === 'exam' && (
-              <div className="flex-1 overflow-y-auto p-6 pt-28">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pt-4 sm:pt-6">
                 <div className="max-w-3xl mx-auto space-y-6">
                   {/* Exam Header */}
                   <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between">
@@ -2549,7 +2582,7 @@ export default function LearnPage() {
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: 320, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            className="h-full border-l border-slate-200/80 bg-white/80 backdrop-blur-xl flex flex-col justify-between overflow-hidden flex-shrink-0"
+            className="fixed inset-y-0 right-0 z-50 w-80 shadow-2xl bg-white lg:static lg:z-auto lg:h-full lg:border-l lg:border-slate-200/80 lg:bg-white/80 lg:backdrop-blur-xl flex flex-col justify-between overflow-hidden flex-shrink-0"
           >
             <div className="p-4 flex flex-col h-full overflow-hidden">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -2603,7 +2636,7 @@ export default function LearnPage() {
                         <div
                           key={doc.id || i}
                           onClick={() => setSelectedMaterialFilter(isFilterActive ? 'all' : doc.filename)}
-                          className={`flex items-center gap-1.5 px-2 py-1.5 rounded-xl border text-[11px] font-medium transition cursor-pointer ${
+                          className={`group flex items-center gap-1.5 px-2 py-1.5 rounded-xl border text-[11px] font-medium transition cursor-pointer ${
                             isFilterActive
                               ? 'bg-indigo-50 border-indigo-300 text-indigo-900 shadow-2xs'
                               : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200/60 text-slate-700'
@@ -2615,6 +2648,16 @@ export default function LearnPage() {
                           <span className={`text-[9px] px-1 py-0.2 rounded shrink-0 ${isFilterActive ? 'bg-indigo-200/70 text-indigo-800 font-bold' : 'bg-white text-slate-500'}`}>
                             {doc.status === 'fully_processed' ? 'Ready' : 'Indexing'}
                           </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeleteMaterial(doc.filename || doc.id)
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition opacity-70 group-hover:opacity-100 shrink-0 cursor-pointer"
+                            title="Delete material"
+                          >
+                            <Trash2 size={12} />
+                          </button>
                         </div>
                       )
                     })}

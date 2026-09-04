@@ -526,16 +526,40 @@ def update_document_status(session_id: str, doc_id: str, status: str):
 
 
 def get_session_documents(session_id: str) -> List[Dict[str, Any]]:
-    """Retrieve list of documents uploaded to this session in chronological order."""
+    """Retrieve saved document records for a session."""
     db_path = get_session_db_path(session_id)
     if not db_path.exists():
         return []
+
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     try:
         cur = conn.cursor()
         cur.execute("SELECT * FROM session_documents ORDER BY created_at ASC")
-        return [dict(r) for r in cur.fetchall()]
+        rows = cur.fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def delete_session_document(session_id: str, document_name_or_id: str) -> bool:
+    """Deletes a specific material document and its extracted chunks from a study room session database."""
+    db_path = get_session_db_path(session_id)
+    if not db_path.exists():
+        return False
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM session_documents WHERE id = ? OR filename = ?", (document_name_or_id, document_name_or_id))
+        try:
+            cur.execute("DELETE FROM document_fts WHERE doc_id = ? OR chunk_id LIKE ?", (document_name_or_id, f"{document_name_or_id}%"))
+        except Exception:
+            pass
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"[StudyStorage] Error deleting session document: {e}")
+        return False
     finally:
         conn.close()
 
