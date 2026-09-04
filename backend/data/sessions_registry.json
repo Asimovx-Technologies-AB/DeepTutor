@@ -1,19 +1,5 @@
 [
   {
-    "id": "session_2143582319",
-    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
-    "subject": "Machine Learning & AI",
-    "title": "Default Study Room",
-    "document_name": "",
-    "documents": [],
-    "document_count": 0,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 4,
-    "created_at": "2026-09-04T10:30:35.396708+00:00",
-    "last_active": "2026-09-04T10:52:58.592310+00:00"
-  },
-  {
     "id": "fbb9bd44-4654-4136-81a6-8ae5790c3a3d",
     "user_id": "30cc0809-0ce0-4101-8355-77605c809eac",
     "subject": "Neural Networks",
@@ -72,9 +58,9 @@
     "document_count": 2,
     "status": "text_ready",
     "topic_count": 7,
-    "message_count": 10,
+    "message_count": 14,
     "created_at": "2026-09-04T07:16:48.977636+00:00",
-    "last_active": "2026-09-04T10:55:52.682570+00:00"
+    "last_active": "2026-09-04T11:14:07.741942+00:00"
   },
   {
     "id": "session_7629085165",

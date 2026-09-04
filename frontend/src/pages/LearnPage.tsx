@@ -275,9 +275,10 @@ export default function LearnPage() {
   const [feedbackRatings, setFeedbackRatings] = useState<Record<string, 'good' | 'easier' | null>>({})
 
   // Normal Mode 4-Step Cards
-  const [coreIdeaData, setCoreIdeaData] = useState<CoreIdeaData | null>(null)
+  const [coreIdeaData, setCoreIdeaData] = useState<any | null>(null)
   const [coreIdeaStep, setCoreIdeaStep] = useState(0)
   const [isLoadingCoreIdea, setIsLoadingCoreIdea] = useState(false)
+  const [customNormalTopic, setCustomNormalTopic] = useState('')
   const [topicDoubtInput, setTopicDoubtInput] = useState('')
   const [topicDoubtAnswer, setTopicDoubtAnswer] = useState<string | null>(null)
   const [isLoadingDoubt, setIsLoadingDoubt] = useState(false)
@@ -722,6 +723,20 @@ export default function LearnPage() {
     } finally {
       setIsLoadingCoreIdea(false)
     }
+  }
+
+  const handleCustomTopicDistill = (topicOverride?: string) => {
+    const targetTitle = topicOverride || customNormalTopic.trim()
+    if (!targetTitle) return
+    setCustomNormalTopic('')
+    fetchCoreIdea({
+      id: `custom_${Date.now()}`,
+      title: targetTitle,
+      summary: `Custom requested distillation for ${targetTitle}`,
+      difficulty: 'Intermediate',
+      key_concepts: [targetTitle],
+      estimated_study_time: '15 mins'
+    })
   }
 
   const handleAskTopicDoubt = async () => {
@@ -1967,6 +1982,27 @@ export default function LearnPage() {
             {activeTab === 'normal' && (
               <div className="flex-1 overflow-y-auto p-6 pt-28">
                 <div className="max-w-3xl mx-auto space-y-6">
+                  {/* Custom Topic Input Bar */}
+                  <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex items-center gap-3">
+                    <Search size={16} className="text-slate-400 flex-shrink-0 ml-1" />
+                    <input
+                      type="text"
+                      value={customNormalTopic}
+                      onChange={(e) => setCustomNormalTopic(e.target.value)}
+                      placeholder="Type any specific topic from your PDF to distill..."
+                      className="flex-1 text-xs px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:bg-white focus:border-indigo-400 font-sans"
+                      onKeyDown={(e) => e.key === 'Enter' && handleCustomTopicDistill()}
+                    />
+                    <button
+                      onClick={() => handleCustomTopicDistill()}
+                      disabled={!customNormalTopic.trim() || isLoadingCoreIdea}
+                      className="py-2.5 px-4.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold disabled:opacity-50 transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                    >
+                      <Sparkles size={13} className="text-amber-400" />
+                      Distill Topic
+                    </button>
+                  </div>
+
                   {/* Topic Title Header */}
                   <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between">
                     <div>
@@ -1974,7 +2010,7 @@ export default function LearnPage() {
                         Normal Mode · 4-Phase Core Idea Distillation
                       </span>
                       <h2 className="text-xl font-black text-slate-900 mt-1 font-serif">
-                        {activeTopic?.title || 'Select a Topic'}
+                        {coreIdeaData?.topic_title || activeTopic?.title || 'Select a Topic'}
                       </h2>
                       <p className="text-xs text-slate-500 mt-1">{activeTopic?.summary}</p>
                     </div>
@@ -1993,6 +2029,41 @@ export default function LearnPage() {
                     <div className="p-12 text-center">
                       <div className="w-8 h-8 border-2 border-slate-800 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
                       <p className="text-xs font-medium text-slate-500">Distilling 4-Phase Core Mechanics...</p>
+                    </div>
+                  ) : coreIdeaData?.out_of_topic ? (
+                    <div className="p-7 rounded-3xl bg-amber-50/60 border border-amber-200/90 shadow-xs space-y-4 text-left">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2.5 rounded-2xl bg-amber-100 text-amber-800 flex-shrink-0 mt-0.5">
+                          <AlertCircle size={20} />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-amber-950 font-serif">
+                            Topic Out of Syllabus
+                          </h3>
+                          <p className="text-xs text-amber-900 mt-1 leading-relaxed">
+                            {coreIdeaData.reason}
+                          </p>
+                        </div>
+                      </div>
+
+                      {coreIdeaData.suggested_topics?.length > 0 && (
+                        <div className="pt-3 border-t border-amber-200/60 space-y-2">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 block">
+                            Available Syllabus Topics to Distill:
+                          </span>
+                          <div className="flex flex-wrap gap-2">
+                            {coreIdeaData.suggested_topics.map((t: string, idx: number) => (
+                              <button
+                                key={idx}
+                                onClick={() => handleCustomTopicDistill(t)}
+                                className="px-3 py-1.5 rounded-xl bg-white border border-amber-300 text-amber-950 text-xs font-medium hover:bg-amber-100 transition cursor-pointer shadow-xs"
+                              >
+                                {t}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : coreIdeaData ? (
                     <div className="space-y-4">
@@ -2059,7 +2130,7 @@ export default function LearnPage() {
                             <span className="learn-caption font-bold uppercase tracking-wider text-emerald-600">High-Yield Revision</span>
                             <h3 className="text-lg font-serif font-bold text-slate-900 mt-1 mb-3">Key Takeaways</h3>
                             <ul className="space-y-3 font-serif">
-                              {coreIdeaData.key_takeaways?.map((item, i) => (
+                              {coreIdeaData.key_takeaways?.map((item: string, i: number) => (
                                 <li key={i} className="flex items-start gap-2.5 text-sm text-slate-800">
                                   <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0 mt-0.5" />
                                   <span>{item}</span>
@@ -2074,7 +2145,7 @@ export default function LearnPage() {
                             <span className="learn-caption font-bold uppercase tracking-wider text-amber-600">Exam Traps & Misconceptions</span>
                             <h3 className="text-lg font-serif font-bold text-slate-900 mt-1 mb-3">Common Pitfalls</h3>
                             <ul className="space-y-3 font-serif">
-                              {coreIdeaData.common_pitfalls?.map((item, i) => (
+                              {coreIdeaData.common_pitfalls?.map((item: string, i: number) => (
                                 <li key={i} className="flex items-start gap-2.5 text-sm text-slate-800">
                                   <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
                                   <span>{item}</span>
@@ -2104,38 +2175,6 @@ export default function LearnPage() {
                         </div>
                       </motion.div>
 
-                      {/* Embedded Topic Doubt Resolution Chat */}
-                      <div className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-xs">
-                        <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                          <HelpCircle size={15} className="text-slate-700" />
-                          Have a Specific Doubt on this Topic?
-                        </h4>
-                        <div className="mt-3 flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={topicDoubtInput}
-                            onChange={(e) => setTopicDoubtInput(e.target.value)}
-                            placeholder="Ask a clarifying question..."
-                            className="flex-1 text-xs px-4 py-2.5 rounded-full bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:bg-white focus:border-slate-400"
-                            onKeyDown={(e) => e.key === 'Enter' && handleAskTopicDoubt()}
-                          />
-                          <button
-                            onClick={handleAskTopicDoubt}
-                            disabled={!topicDoubtInput.trim() || isLoadingDoubt}
-                            className="py-2.5 px-5 rounded-full bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 transition shadow-xs cursor-pointer"
-                          >
-                            {isLoadingDoubt ? 'Solving...' : 'Resolve'}
-                          </button>
-                        </div>
-
-                        {topicDoubtAnswer && (
-                          <div className="mt-4 p-5 rounded-2xl bg-slate-50/70 border border-slate-200 markdown-content text-sm text-slate-800 leading-relaxed font-serif">
-                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-                              {topicDoubtAnswer}
-                            </ReactMarkdown>
-                          </div>
-                        )}
-                      </div>
                     </div>
                   ) : null}
                 </div>

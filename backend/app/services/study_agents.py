@@ -430,10 +430,24 @@ class DecisionAgent:
                 "format": plan.get("response_format", "conceptual")
             }
 
-        context_text = "\n\n".join(
-            f"--- CHUNK [{c['chunk_id']} | Page {c['page']} | Type: {c['source_type']}] ---\n{c['content']}"
-            for c in retrieved_chunks[:6]
-        )
+        # Group chunks by doc_id (document name) to ensure multi-material balance
+        chunks_by_doc: Dict[str, List[Dict[str, Any]]] = {}
+        for c in retrieved_chunks:
+            d_name = c.get("doc_id") or "Uploaded Material"
+            if d_name not in chunks_by_doc:
+                chunks_by_doc[d_name] = []
+            chunks_by_doc[d_name].append(c)
+
+        # Build clear multi-document context blocks
+        formatted_doc_blocks = []
+        for doc_name, doc_chunks in chunks_by_doc.items():
+            block = f"=== UPLOADED MATERIAL: {doc_name} ===\n" + "\n\n".join(
+                f"--- CHUNK [Document: {doc_name} | Chunk ID: {c['chunk_id']} | Page {c['page']} | Type: {c['source_type']}] ---\n{c['content']}"
+                for c in doc_chunks[:5]
+            )
+            formatted_doc_blocks.append(block)
+
+        context_text = "\n\n".join(formatted_doc_blocks)
 
         # 7. Prompt LLM with Strict Academic Grounding, Conversational Follow-up, & KaTeX Math
         prompt = f"""
@@ -443,7 +457,7 @@ Response Contract: {plan.get('response_format', 'conceptual')}
 Student Weakness Profile: {weaknesses_str}
 Student Goals: {goals_str}
 
-{history_block}Retrieved Grounding Chunks:
+{history_block}Retrieved Grounding Chunks Across Uploaded Materials:
 {context_text}
 
 Student Message:
@@ -452,12 +466,16 @@ Student Message:
 STRICT RULES:
 1. Grounding Rule: Answer strictly and only from the retrieved chunks and conversation history above. If a completely unrelated topic is asked that is absent from the material, state:
    "I could not find the answer to this in your uploaded PDF. Please ask questions specifically related to the concepts and chapters in your uploaded material for {subject}."
-2. Greetings & Salutations:
+2. Multi-Material Grounding Rule:
+   - If the retrieved chunks come from multiple uploaded materials (or if the student asks to explain or compare 'both materials' / 'all materials'):
+     You MUST explicitly analyze and present the content from EACH material under clear section headings (e.g. '### Material 1: [Document Name]' and '### Material 2: [Document Name]').
+     Compare any differences or unique details on that page/topic between both materials. Do NOT skip any uploaded material.
+3. Greetings & Salutations:
    - If the student message is a greeting (e.g., 'Hi', 'Hello', 'Hey', 'Good morning', 'Greetings'), greet them warmly as DeepTutor for **{subject}**, explain your capabilities, and ask what concept from their course materials they'd like to study today. Do NOT say "I could not find the answer to this in your uploaded PDF" for greetings.
-3. Boolean Continuations & Follow-up Acceptance:
+4. Boolean Continuations & Follow-up Acceptance:
    - If the student answers 'Yes', 'Sure', 'Explain that', or 'Continue' to your previous follow-up question, you MUST directly fulfill and explain that topic step-by-step. Do NOT output a refusal message for follow-ups that you offered.
    - If the student answers 'No' / 'Nope', acknowledge politely and ask what other concept from their uploaded material they would like to study.
-3. Universal STEM Problem Solving & Table Completion Protocol:
+5. Universal STEM Problem Solving & Table Completion Protocol:
    When solving, calculating, or filling any table, exercise, or problem across ANY subject (Chemistry, Physics, Mathematics, Biology, Computer Science, Economics):
    - Stage 1: First-Principles Governing Laws: Identify the fundamental laws, governing formulas, or naming conventions (e.g., in Physics: free-body balance, conservation laws, sign conventions; in Chemistry: IUPAC longest continuous chain tracing all branches, lowest locant rule; in Math: algebraic rules, boundary conditions; in CS: state transitions).
    - Stage 2: Structural Inspection & Trap Elimination: Inspect every sub-component for classic textbook traps (e.g., in Chemistry: check if a bent substituent branch is longer than the horizontal chain, e.g. an ethyl group at C2 makes the chain longer; in Physics: verify coordinate directions and units; in Math: check $n=0$ or negative bounds).
@@ -678,6 +696,27 @@ async def generate_core_idea(session_id: str, topic_id: str, topic_title: str, t
     4. Common Pitfalls
     """
     chunks = search_fts_chunks(session_id, topic_title, limit=6)
+    all_chunks = get_all_chunks(session_id, limit=3)
+
+    # Out-of-Syllabus Grounding Check for Custom Typed Topics
+    if not chunks and all_chunks:
+        keywords = [w for w in re.findall(r"[a-zA-Z0-9]+", topic_title.lower()) if len(w) > 3 and w not in ("what", "how", "explain", "topic", "about", "with")]
+        broad_chunks = []
+        for kw in keywords[:3]:
+            broad_chunks.extend(search_fts_chunks(session_id, kw, limit=2))
+        
+        if not broad_chunks:
+            session_topics = get_session_topics(session_id)
+            return {
+                "out_of_topic": True,
+                "topic_id": topic_id,
+                "topic_title": topic_title,
+                "reason": f"The requested topic \"{topic_title}\" is out of the scope of your uploaded course materials.",
+                "suggested_topics": session_topics[:6] if session_topics else []
+            }
+        else:
+            chunks = broad_chunks
+
     context = "\n\n".join(c["content"] for c in chunks) if chunks else topic_summary
 
     prompt = f"""You are DeepTutor's elite academic Normal Mode Core Idea Engine.
