@@ -927,7 +927,7 @@ export default function LearnPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-xs flex"
+            className="fixed inset-0 z-40 bg-transparent flex"
             onClick={() => setWorkspaceOpen(false)}
           >
             <motion.aside
@@ -942,7 +942,7 @@ export default function LearnPage() {
                 {/* Header */}
                 <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 shrink-0">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center shadow-xs">
                       <BookOpen size={16} />
                     </div>
                     <div>
@@ -964,8 +964,8 @@ export default function LearnPage() {
                     onClick={() => setIsUploadDrawerOpen(!isUploadDrawerOpen)}
                     className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl font-semibold text-xs transition shadow-xs cursor-pointer border ${
                       isUploadDrawerOpen
-                        ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                        : 'bg-slate-900 hover:bg-slate-800 text-white border-transparent'
+                        ? 'bg-indigo-100 border-indigo-200 text-indigo-700'
+                        : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200/50'
                     }`}
                   >
                     <UploadCloud size={14} />
@@ -1002,7 +1002,7 @@ export default function LearnPage() {
                           className="w-full text-xs px-3 py-1.5 rounded-xl bg-white border border-slate-200 mb-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400"
                         />
 
-                        <label className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-900 text-white font-semibold text-xs cursor-pointer hover:bg-slate-800 transition shadow-xs">
+                        <label className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200/50 font-semibold text-xs cursor-pointer hover:bg-indigo-100 transition shadow-xs">
                           <UploadCloud size={14} />
                           <span>Choose Document</span>
                           <input
@@ -1077,7 +1077,7 @@ export default function LearnPage() {
                           onClick={() => handleSelectSession(s.id)}
                           className={`group relative p-3 rounded-2xl cursor-pointer transition border ${
                             isActive
-                              ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                              ? 'bg-indigo-50 border-indigo-200/90 shadow-sm'
                               : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80 shadow-2xs hover:border-slate-300'
                           }`}
                         >
@@ -1085,7 +1085,7 @@ export default function LearnPage() {
                             <div className="flex items-start gap-2.5 min-w-0">
                               <div
                                 className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm shrink-0 shadow-2xs ${
-                                  isActive ? 'bg-white/15' : visual.bg
+                                  isActive ? 'bg-white shadow-sm' : visual.bg
                                 }`}
                               >
                                 {visual.emoji}
@@ -1093,14 +1093,14 @@ export default function LearnPage() {
                               <div className="min-w-0 pr-1">
                                 <h4
                                   className={`text-xs font-bold truncate ${
-                                    isActive ? 'text-white' : 'text-slate-900'
+                                    isActive ? 'text-indigo-900' : 'text-slate-900'
                                   }`}
                                 >
                                   {s.title}
                                 </h4>
                                 <p
                                   className={`text-[11px] truncate mt-0.5 ${
-                                    isActive ? 'text-slate-300' : 'text-slate-500'
+                                    isActive ? 'text-indigo-600/80' : 'text-slate-500'
                                   }`}
                                 >
                                   {s.document_name || s.subject}
@@ -1111,7 +1111,7 @@ export default function LearnPage() {
                               onClick={(e) => handleDeleteSession(s.id, s.title, e)}
                               className={`opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition shrink-0 cursor-pointer ${
                                 isActive
-                                  ? 'hover:bg-white/20 text-slate-300 hover:text-red-300'
+                                  ? 'hover:bg-indigo-200/50 text-indigo-400 hover:text-red-500'
                                   : 'hover:bg-slate-200 text-slate-400 hover:text-red-600'
                               }`}
                               title="Delete notebook"
@@ -1124,13 +1124,13 @@ export default function LearnPage() {
                             <span
                               className={`px-2 py-0.5 rounded-full ${
                                 isActive
-                                  ? 'bg-white/15 text-slate-200'
+                                  ? 'bg-indigo-100/80 text-indigo-700 border border-indigo-200/50'
                                   : 'bg-slate-100 text-slate-600'
                               }`}
                             >
                               {s.topic_count} Topics
                             </span>
-                            <span className={isActive ? 'text-slate-300' : 'text-slate-400'}>
+                            <span className={isActive ? 'text-indigo-600' : 'text-slate-400'}>
                               {s.message_count > 0 ? `${s.message_count} Questions` : 'Ready to study'}
                             </span>
                           </div>
@@ -1141,23 +1141,7 @@ export default function LearnPage() {
                 </div>
               </div>
 
-              {/* Student Learning Companion Profile */}
-              <div className="pt-3 mt-3 border-t border-slate-100 shrink-0">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles size={13} className="text-indigo-600" />
-                    <span className="text-xs font-bold text-slate-800">Adaptive Study Mode</span>
-                  </div>
-                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700">
-                    Active
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2">
-                  {studentMemory?.weaknesses?.length > 0
-                    ? `Targeting: ${studentMemory.weaknesses[studentMemory.weaknesses.length - 1]}`
-                    : 'Interactive step-by-step tutoring with KaTeX formulas and visual concept maps.'}
-                </p>
-              </div>
+
             </motion.aside>
           </motion.div>
         )}
@@ -1282,14 +1266,14 @@ export default function LearnPage() {
                                 onClick={() => handleSelectSession(s.id)}
                                 className={`group flex items-center justify-between p-2 rounded-xl cursor-pointer transition ${
                                   isActive
-                                    ? 'bg-slate-900 text-white shadow-xs'
-                                    : 'hover:bg-slate-100 text-slate-800'
+                                    ? 'bg-indigo-50 border border-indigo-100 shadow-sm'
+                                    : 'hover:bg-slate-100 text-slate-800 border border-transparent'
                                 }`}
                               >
                                 <div className="flex items-center gap-2.5 min-w-0 pr-2">
                                   <div
                                     className={`w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0 ${
-                                      isActive ? 'bg-white/15' : visual.bg
+                                      isActive ? 'bg-white shadow-sm' : visual.bg
                                     }`}
                                   >
                                     {visual.emoji}
@@ -1297,14 +1281,14 @@ export default function LearnPage() {
                                   <div className="min-w-0">
                                     <p
                                       className={`text-xs font-semibold truncate ${
-                                        isActive ? 'text-white' : 'text-slate-900'
+                                        isActive ? 'text-indigo-900' : 'text-slate-900'
                                       }`}
                                     >
                                       {s.title}
                                     </p>
                                     <p
                                       className={`text-[10px] truncate ${
-                                        isActive ? 'text-slate-300' : 'text-slate-400'
+                                        isActive ? 'text-indigo-600/80' : 'text-slate-400'
                                       }`}
                                     >
                                       {s.document_name || s.subject} • {s.topic_count} Topics
@@ -1314,7 +1298,7 @@ export default function LearnPage() {
 
                                 <div className="flex items-center gap-1.5 shrink-0">
                                   {isActive ? (
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200/50">
                                       Active
                                     </span>
                                   ) : (

@@ -1,5 +1,17 @@
 [
   {
+    "id": "session_7629085165",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "General Study",
+    "title": "New Study Workspace",
+    "document_name": "",
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-04T06:44:20.763220+00:00",
+    "last_active": "2026-09-04T06:44:20.763220+00:00"
+  },
+  {
     "id": "session_6387462719",
     "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
     "subject": "Class-10-Geography",
@@ -19,9 +31,9 @@
     "document_name": "ml algorithams.pdf",
     "status": "text_ready",
     "topic_count": 6,
-    "message_count": 0,
+    "message_count": 2,
     "created_at": "2026-09-04T06:09:24.710390+00:00",
-    "last_active": "2026-09-04T06:09:40.581018+00:00"
+    "last_active": "2026-09-04T06:44:05.053880+00:00"
   },
   {
     "id": "session_5074867722",
