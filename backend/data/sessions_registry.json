@@ -1,5 +1,21 @@
 [
   {
+    "id": "session_6243776973",
+    "user_id": "7969dca5-437a-4764-abbc-189cd716efe0",
+    "subject": "Module-1 Introduction To Big Data",
+    "title": "Module-1 Introduction To Big Data Study Room",
+    "document_name": "Module-1 Introduction to Big Data.docx",
+    "documents": [
+      "Module-1 Introduction to Big Data.docx"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 7,
+    "message_count": 6,
+    "created_at": "2026-09-04T09:46:45.589534+00:00",
+    "last_active": "2026-09-04T09:50:02.210118+00:00"
+  },
+  {
     "id": "session_2919558626",
     "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
     "subject": "Ml Algorithams",
