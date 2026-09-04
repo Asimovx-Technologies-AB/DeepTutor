@@ -286,6 +286,12 @@ export default function LearnPage() {
   const [currentLecturePhase, setCurrentLecturePhase] = useState('Introduction')
   const [isTeacherStreaming, setIsTeacherStreaming] = useState(false)
   const teacherAbortControllerRef = useRef<AbortController | null>(null)
+  const [customTeacherTopic, setCustomTeacherTopic] = useState('')
+  const [outOfSyllabusAlert, setOutOfSyllabusAlert] = useState<{
+    topic: string
+    reason: string
+    suggested_topics: string[]
+  } | null>(null)
 
   // Mixed Exam Engine
   const [examQuestions, setExamQuestions] = useState<ExamQuestion[]>([])
@@ -737,28 +743,42 @@ export default function LearnPage() {
   }
 
   // ─── 8. Teacher Mode SSE Stream ───
-  const handleStartTeacherLecture = () => {
-    if (!activeTopic || !activeSessionId || isTeacherStreaming) return
+  const handleStartTeacherLecture = (topicTitleOverride?: string, forceOverrideSyllabus = false) => {
+    const targetTitle = topicTitleOverride || customTeacherTopic.trim() || activeTopic?.title
+    if (!targetTitle || !activeSessionId || isTeacherStreaming) return
     setTeacherLectureText('')
+    setOutOfSyllabusAlert(null)
     setIsTeacherStreaming(true)
     setCurrentLecturePhase('Phase 1: Introduction & Intuition')
 
+    const topicId = activeTopic?.id || 'custom-topic'
     const controller = new AbortController()
     teacherAbortControllerRef.current = controller
 
+    let accumulatedText = ''
+
     streamTeacherLecture({
       sessionId: activeSessionId,
-      topicId: activeTopic.id,
-      topicTitle: activeTopic.title,
+      topicId,
+      topicTitle: targetTitle,
+      overrideSyllabus: forceOverrideSyllabus,
+      onOutOfSyllabus: (data) => {
+        setOutOfSyllabusAlert(data)
+        setIsTeacherStreaming(false)
+      },
       onPhaseStart: (phase) => setCurrentLecturePhase(phase),
       onToken: (token) => {
+        accumulatedText += token
         setTeacherLectureText((prev) => prev + token)
+        setCurrentArtifactMarkdown(
+          `# University Masterclass: ${targetTitle}\n\n${accumulatedText}`
+        )
       },
       onPhaseEnd: () => { },
       onDone: () => {
         setIsTeacherStreaming(false)
         setCurrentArtifactMarkdown(
-          `# University Masterclass: ${activeTopic.title}\n\n${teacherLectureText}`
+          `# University Masterclass: ${targetTitle}\n\n${accumulatedText}`
         )
       },
       onError: (err) => {
@@ -957,7 +977,7 @@ export default function LearnPage() {
         return <>{children}</>
       }
       return (
-        <pre className="my-4 p-4 rounded-xl bg-slate-900 text-slate-100 font-mono text-xs overflow-x-auto border border-slate-800" {...props}>
+        <pre className="my-4 p-4 rounded-xl bg-slate-50 text-slate-800 font-mono text-xs overflow-x-auto border border-slate-200" {...props}>
           {children}
         </pre>
       )
@@ -1968,11 +1988,11 @@ export default function LearnPage() {
                             key={idx}
                             onClick={() => setCoreIdeaStep(idx)}
                             className={`p-3 rounded-2xl text-xs font-medium transition text-left border cursor-pointer ${coreIdeaStep === idx
-                              ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                              ? 'bg-indigo-50 text-indigo-950 border-indigo-300 font-bold shadow-xs'
                               : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80'
                               }`}
                           >
-                            <span className={`block learn-caption ${coreIdeaStep === idx ? 'text-slate-300' : 'text-slate-400'}`}>
+                            <span className={`block learn-caption ${coreIdeaStep === idx ? 'text-indigo-600' : 'text-slate-400'}`}>
                               Phase {idx + 1}
                             </span>
                             <span className="truncate block mt-0.5 font-semibold">{title.split('. ')[1]}</span>
@@ -1992,7 +2012,11 @@ export default function LearnPage() {
                             <span className="learn-caption font-bold uppercase tracking-wider text-slate-400">Fundamental Intuition</span>
                             <h3 className="text-lg font-serif font-bold text-slate-900 mt-1 mb-3">The Big Picture</h3>
                             <div className="markdown-content text-slate-800 leading-relaxed font-serif">
-                              <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm, remarkMath]}
+                                rehypePlugins={[rehypeKatex]}
+                                components={customMarkdownComponents}
+                              >
                                 {coreIdeaData.big_picture}
                               </ReactMarkdown>
                             </div>
@@ -2058,7 +2082,7 @@ export default function LearnPage() {
                           <button
                             onClick={() => setCoreIdeaStep((s) => Math.min(3, s + 1))}
                             disabled={coreIdeaStep === 3}
-                            className="py-2 px-5 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 disabled:opacity-40 transition shadow-xs cursor-pointer"
+                            className="py-2 px-5 rounded-full bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-40 transition shadow-xs cursor-pointer"
                           >
                             Next Step →
                           </button>
@@ -2083,7 +2107,7 @@ export default function LearnPage() {
                           <button
                             onClick={handleAskTopicDoubt}
                             disabled={!topicDoubtInput.trim() || isLoadingDoubt}
-                            className="py-2.5 px-5 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 disabled:opacity-50 transition shadow-xs cursor-pointer"
+                            className="py-2.5 px-5 rounded-full bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 transition shadow-xs cursor-pointer"
                           >
                             {isLoadingDoubt ? 'Solving...' : 'Resolve'}
                           </button>
@@ -2114,7 +2138,7 @@ export default function LearnPage() {
                         Teacher Mode · Immersive Live Masterclass
                       </span>
                       <h2 className="text-xl font-black text-slate-900 mt-1 font-serif">
-                        {activeTopic?.title || 'Select a Topic'}
+                        {customTeacherTopic.trim() || activeTopic?.title || 'Select a Topic'}
                       </h2>
                       <div className="flex items-center gap-2 mt-2">
                         <span className="text-xs font-semibold px-3 py-1 rounded-full bg-slate-100 text-slate-800 border border-slate-200">
@@ -2130,6 +2154,17 @@ export default function LearnPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setArtifactViewerOpen(true)
+                          setArtifactTab('preview')
+                        }}
+                        className="py-2.5 px-3.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition flex items-center gap-1.5 border border-slate-200 cursor-pointer"
+                        title="View rendered notes in Academic LaTeX Markdown viewer"
+                      >
+                        <FileText size={13} /> Notes Preview
+                      </button>
+
                       {isTeacherStreaming ? (
                         <button
                           onClick={handleStopTeacherLecture}
@@ -2139,14 +2174,106 @@ export default function LearnPage() {
                         </button>
                       ) : (
                         <button
-                          onClick={handleStartTeacherLecture}
-                          className="py-2.5 px-5 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                          onClick={() => handleStartTeacherLecture()}
+                          className="py-2.5 px-5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
                         >
                           <Play size={14} /> Start Lecture
                         </button>
                       )}
                     </div>
                   </div>
+
+                  {/* Custom Topic Input & Switcher Bar */}
+                  <div className="p-4 rounded-3xl bg-white border border-slate-200/90 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        value={customTeacherTopic}
+                        onChange={(e) => setCustomTeacherTopic(e.target.value)}
+                        placeholder="Or type a custom topic to master (e.g., Backpropagation, Positional Encoding)..."
+                        className="w-full text-xs px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:bg-white focus:border-indigo-400"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && customTeacherTopic.trim()) {
+                            handleStartTeacherLecture(customTeacherTopic.trim())
+                          }
+                        }}
+                      />
+                    </div>
+                    <button
+                      onClick={() => customTeacherTopic.trim() && handleStartTeacherLecture(customTeacherTopic.trim())}
+                      disabled={!customTeacherTopic.trim() || isTeacherStreaming}
+                      className="py-2.5 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer whitespace-nowrap"
+                    >
+                      <Play size={13} /> Teach Custom Topic
+                    </button>
+                  </div>
+
+                  {/* Out-of-Syllabus Guardrail & Guidance Card */}
+                  {outOfSyllabusAlert && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-6 rounded-3xl bg-amber-50/90 border border-amber-200 shadow-xs text-amber-950 space-y-3"
+                    >
+                      <div className="flex items-start gap-3">
+                        <AlertCircle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-bold text-amber-900 font-serif">
+                              Topic Outside Syllabus: &ldquo;{outOfSyllabusAlert.topic}&rdquo;
+                            </h4>
+                            <button
+                              onClick={() => setOutOfSyllabusAlert(null)}
+                              className="text-amber-500 hover:text-amber-800 transition cursor-pointer"
+                              title="Dismiss"
+                            >
+                              <X size={15} />
+                            </button>
+                          </div>
+                          <p className="text-xs text-amber-800 mt-1 font-serif leading-relaxed">
+                            {outOfSyllabusAlert.reason}
+                          </p>
+
+                          {outOfSyllabusAlert.suggested_topics?.length > 0 && (
+                            <div className="mt-3">
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700 block mb-1.5">
+                                Available Syllabus Topics in this Course:
+                              </span>
+                              <div className="flex flex-wrap gap-2">
+                                {outOfSyllabusAlert.suggested_topics.map((sug, i) => (
+                                  <button
+                                    key={i}
+                                    onClick={() => {
+                                      setCustomTeacherTopic(sug)
+                                      handleStartTeacherLecture(sug)
+                                    }}
+                                    className="text-xs px-3 py-1.5 rounded-full bg-white text-amber-900 border border-amber-300 hover:bg-amber-100 font-medium transition cursor-pointer"
+                                  >
+                                    {sug} →
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="mt-4 pt-3 border-t border-amber-200/80 flex items-center gap-3">
+                            <button
+                              onClick={() => handleStartTeacherLecture(outOfSyllabusAlert.topic, true)}
+                              className="text-xs px-4 py-2 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-semibold transition cursor-pointer"
+                            >
+                              Lecture Anyway (Foundational Prerequisite)
+                            </button>
+                            <button
+                              onClick={() => setOutOfSyllabusAlert(null)}
+                              className="text-xs text-amber-700 hover:underline cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
 
                   {/* Streamed Lecture Canvas */}
                   <div className="p-8 rounded-3xl bg-white border border-slate-200/90 shadow-xs min-h-[50vh]">
@@ -2165,7 +2292,7 @@ export default function LearnPage() {
                         <GraduationCap size={38} className="mx-auto text-slate-400 mb-3" />
                         <h4 className="text-sm font-bold text-slate-800">Live University Lecture Stream</h4>
                         <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto font-serif">
-                          Click 'Start Lecture' to begin real-time streaming of first-principles intuition, deep mechanics, worked derivations, and exam traps.
+                          Click &apos;Start Lecture&apos; or type a custom topic to begin real-time streaming of first-principles intuition, deep mechanics, worked derivations, and exam traps.
                         </p>
                       </div>
                     )}
@@ -2179,7 +2306,7 @@ export default function LearnPage() {
                             setActiveTab('exam')
                             if (activeTopic) handleFetchExam(activeTopic)
                           }}
-                          className="py-2.5 px-5 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition flex items-center gap-2 shadow-xs cursor-pointer"
+                          className="py-2.5 px-5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition flex items-center gap-2 shadow-xs cursor-pointer"
                         >
                           Take Topic Mastery Exam →
                         </button>

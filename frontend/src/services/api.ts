@@ -411,9 +411,11 @@ export const streamTeacherLecture = async ({
   sessionId,
   topicId,
   topicTitle,
+  overrideSyllabus = false,
   onPhaseStart,
   onToken,
   onPhaseEnd,
+  onOutOfSyllabus,
   onDone,
   onError,
   signal,
@@ -421,15 +423,17 @@ export const streamTeacherLecture = async ({
   sessionId: string
   topicId: string
   topicTitle: string
+  overrideSyllabus?: boolean
   onPhaseStart?: (phase: string) => void
   onToken: (token: string) => void
   onPhaseEnd?: (phase: string) => void
+  onOutOfSyllabus?: (data: { topic: string; reason: string; suggested_topics: string[] }) => void
   onDone: () => void
   onError: (err: any) => void
   signal?: AbortSignal
 }) => {
   const baseUrl = getApiBaseUrl()
-  const url = `${baseUrl}/study/topic/teach/stream?session_id=${encodeURIComponent(sessionId)}&topic_id=${encodeURIComponent(topicId)}&topic_title=${encodeURIComponent(topicTitle)}`
+  const url = `${baseUrl}/study/topic/teach/stream?session_id=${encodeURIComponent(sessionId)}&topic_id=${encodeURIComponent(topicId)}&topic_title=${encodeURIComponent(topicTitle)}&override_syllabus=${overrideSyllabus ? 'true' : 'false'}`
 
   try {
     const res = await fetch(url, {
@@ -459,7 +463,9 @@ export const streamTeacherLecture = async ({
         const raw = trimmed.slice(6)
         try {
           const evt = JSON.parse(raw)
-          if (evt.type === 'phase_start' && onPhaseStart) {
+          if (evt.type === 'out_of_syllabus' && onOutOfSyllabus) {
+            onOutOfSyllabus(evt)
+          } else if (evt.type === 'phase_start' && onPhaseStart) {
             onPhaseStart(evt.phase)
           } else if (evt.type === 'token') {
             onToken(evt.token)

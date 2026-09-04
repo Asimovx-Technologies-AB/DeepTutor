@@ -25,6 +25,7 @@ from app.services.study_storage import (
     get_student_memory,
     add_student_memory_fact,
     get_session_documents,
+    get_session_topics,
     BACKEND_DIR,
 )
 
@@ -535,72 +536,109 @@ planner_agent = QueryAnalyzerAgent()
 executor_agent = DecisionAgent()
 
 
+# ─── Robust JSON Parsing Helper ──────────────────────────────────────────────
+
+def robust_json_parse(text: str) -> Optional[Dict[str, Any]]:
+    """Robustly extracts and parses JSON even if LLM includes raw unescaped LaTeX backslashes."""
+    if not text:
+        return None
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned.rsplit("\n", 1)[0]
+        if cleaned.startswith("json"):
+            cleaned = cleaned[4:].strip()
+    start_idx = cleaned.find("{")
+    end_idx = cleaned.rfind("}")
+    if start_idx != -1 and end_idx != -1:
+        cleaned = cleaned[start_idx : end_idx + 1]
+
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        pass
+
+    try:
+        # Sanitize unescaped LaTeX backslashes (e.g. \frac, \sigma, \cdot) inside string values
+        sanitized = re.sub(r'\\(?!["\\/bfnrtu]|u[0-9a-fA-F]{4})', r'\\\\', cleaned)
+        return json.loads(sanitized)
+    except Exception:
+        pass
+
+    return None
+
+
 # ─── 3. Normal Mode: 4-Step Core Idea Generator ─────────────────────────────
 
 async def generate_core_idea(session_id: str, topic_id: str, topic_title: str, topic_summary: str) -> Dict[str, Any]:
     """
-    Generates 4-Phase Progressive Cards:
+    Generates 4-Phase Progressive Cards with strict KaTeX mathematical formulation:
     1. The Big Picture
     2. Core Principle
     3. Key Takeaways
     4. Common Pitfalls
     """
-    chunks = search_fts_chunks(session_id, topic_title, limit=5)
+    chunks = search_fts_chunks(session_id, topic_title, limit=6)
     context = "\n\n".join(c["content"] for c in chunks) if chunks else topic_summary
 
-    prompt = f"""
-You are DeepTutor's Normal Mode Core Idea Engine.
+    prompt = f"""You are DeepTutor's elite academic Normal Mode Core Idea Engine.
 Break down the topic '{topic_title}' into the 4-phase pedagogical model using the uploaded textbook context below.
 
 Context:
-{context[:4000]}
+{context[:4500]}
 
-Tasks:
-1. Phase 1 - The Big Picture: High-level intuition, fundamental purpose, and why this concept exists.
-2. Phase 2 - Core Principle: Governing mechanics, mathematical formulas ($$...$$), and algorithmic rules.
+Pedagogical Tasks:
+1. Phase 1 - The Big Picture: Pure high-level intuition, motivation, and why this concept was developed. No conversational clutter.
+2. Phase 2 - Core Principle: Governing mechanics, mathematical formulation, and step-by-step mechanisms.
+   - All primary formulas and equations MUST be formatted on standalone lines using KaTeX block math: $$ ... $$
+   - Format variables and terms using inline math ($ ... $).
+   - Detail mechanisms and variable definitions with clean markdown bullet points.
 3. Phase 3 - Key Takeaways: High-yield bullet points for exam revision.
 4. Phase 4 - Common Pitfalls: Frequent exam traps, misconceptions, and subtle edge cases.
 
-Return ONLY valid JSON:
+Strict Rules:
+- No conversational filler, no pleasantries.
+- Strictly professional academic tone. Zero emojis.
+- Return ONLY valid JSON.
+
+JSON Structure:
 {{
   "topic_id": "{topic_id}",
   "topic_title": "{topic_title}",
-  "big_picture": "High-level intuition...",
-  "core_principle": "Detailed mechanics and formulas $$ ... $$",
+  "big_picture": "Clear, impactful pedagogical intuition...",
+  "core_principle": "Detailed mechanics with centered formulas $$ ... $$ and variable definitions.",
   "key_takeaways": [
-    "High-yield point 1",
-    "High-yield point 2",
-    "High-yield point 3"
+    "High-yield takeaway 1",
+    "High-yield takeaway 2",
+    "High-yield takeaway 3"
   ],
   "common_pitfalls": [
-    "Frequent misconception 1",
+    "Frequent student misconception 1",
     "Subtle exam trap 2"
   ]
 }}
 """
-    sys_inst = "You are a university master tutor. Return strict JSON without markdown formatting. Formulas in KaTeX ($$...$$). No emojis."
+    sys_inst = "You are an elite university professor. Output ONLY strictly valid JSON. Mathematical formulas in KaTeX ($$...$$). No conversational chatter. No emojis."
     raw = await call_llm(prompt, sys_inst, temperature=0.2)
 
-    if raw:
-        try:
-            clean = raw.strip().replace("```json", "").replace("```", "").strip()
-            return json.loads(clean)
-        except Exception:
-            pass
+    parsed = robust_json_parse(raw)
+    if parsed and isinstance(parsed, dict) and "big_picture" in parsed:
+        return parsed
 
     return {
         "topic_id": topic_id,
         "topic_title": topic_title,
-        "big_picture": f"The fundamental intuition of {topic_title} revolves around understanding how its underlying variables interact to solve core problems in the subject.",
-        "core_principle": f"The governing mechanics of {topic_title} operate according to defined theoretical relationships and quantitative formulas.",
+        "big_picture": f"**{topic_title}** provides fundamental computational and analytical models designed to extract patterns, minimize prediction errors, and optimize decision boundaries.",
+        "core_principle": f"The governing mechanics of **{topic_title}** operate according to defined theoretical relationships:\n\n$$ \\hat{{y}} = f(x; \\theta) $$\n\nWhere parameters are optimized across bounded objective spaces.",
         "key_takeaways": [
-            f"Understand the primary definitions and boundaries of {topic_title}.",
-            "Master the mathematical derivations and step-by-step procedures.",
-            "Verify edge cases against standard problem conditions."
+            f"Master the foundational definitions and scope of {topic_title}.",
+            "Understand the quantitative transformations and governing formulations.",
+            "Verify boundary constraints during system evaluation."
         ],
         "common_pitfalls": [
-            "Conflating intermediate assumptions with general boundary laws.",
-            "Omitting constant terms during formula evaluation."
+            "Conflating intermediate assumptions with general boundary conditions.",
+            "Omitting normalisation steps or scale factors in iterative calculation."
         ]
     }
 
@@ -642,15 +680,16 @@ Include formulas in standalone $$ ... $$ block math where appropriate. No emojis
     }
 
 
-# ─── 5. Teacher Mode: SSE Streaming Lecture Stream ──────────────────────────
+# ─── 5. Teacher Mode: SSE Streaming Lecture Stream with Syllabus Gate ────────
 
 async def stream_teacher_lecture(
     session_id: str,
     topic_id: str,
-    topic_title: str
+    topic_title: str,
+    override_syllabus: bool = False
 ) -> AsyncGenerator[str, None]:
     """
-    Server-Sent Events (SSE) stream for Teacher Mode.
+    Server-Sent Events (SSE) stream for Teacher Mode with intelligent syllabus validation.
     Streams 4 university lecture phases:
     - Phase 1: Introduction and Intuition
     - Phase 2: Simple Explanation (ELI5 analogy)
@@ -658,6 +697,45 @@ async def stream_teacher_lecture(
     - Phase 4: Key Rules & Exam Traps
     """
     chunks = search_fts_chunks(session_id, topic_title, limit=6)
+    session_topics = get_session_topics(session_id)
+    syllabus_titles = [t.get("title", "") for t in session_topics if t.get("title")]
+
+    # 1. Intelligent Syllabus Validation Gate
+    if not override_syllabus and syllabus_titles:
+        # Check if topic directly matches an extracted syllabus topic
+        is_direct_match = any(
+            topic_title.strip().lower() in s.lower() or s.lower() in topic_title.strip().lower()
+            for s in syllabus_titles
+        )
+
+        if not is_direct_match:
+            # Check relevance against course material with curriculum verification
+            verify_prompt = f"""You are an academic curriculum auditor.
+Course syllabus topics:
+{", ".join(syllabus_titles[:15]) if syllabus_titles else "General course materials"}
+
+Uploaded textbook search match count for student's topic: {len(chunks)} chunks found.
+Top text snippet: {" ".join(c.get("content", "")[:200] for c in chunks[:2]) if chunks else "No direct chunk matches"}
+
+Student requested topic to lecture on: "{topic_title}".
+
+Determine if "{topic_title}" belongs to the syllabus/scope of this course material, or is closely related prerequisite theory.
+Return strictly valid JSON:
+{{
+  "in_syllabus": true,
+  "reason": "1 concise sentence explaining whether this topic is covered or why it is out-of-syllabus",
+  "suggested_topics": ["Suggested Topic 1 from syllabus", "Suggested Topic 2 from syllabus", "Suggested Topic 3 from syllabus"]
+}}
+"""
+            verify_raw = await call_llm(verify_prompt, "You are a syllabus verification auditor. Output JSON only.", temperature=0.1)
+            parsed_eval = robust_json_parse(verify_raw)
+
+            if parsed_eval and isinstance(parsed_eval, dict) and not parsed_eval.get("in_syllabus", True):
+                suggested = parsed_eval.get("suggested_topics") or syllabus_titles[:4]
+                reason = parsed_eval.get("reason", f"'{topic_title}' does not appear in your uploaded course materials.")
+                yield f"data: {json.dumps({'type': 'out_of_syllabus', 'topic': topic_title, 'reason': reason, 'suggested_topics': suggested})}\n\n"
+                return
+
     context = "\n\n".join(c["content"] for c in chunks)
 
     phases = [
@@ -671,25 +749,26 @@ async def stream_teacher_lecture(
         # Emit phase header event
         yield f"data: {json.dumps({'type': 'phase_start', 'phase': phase_name})}\n\n"
 
-        prompt = f"""
-University Lecture Masterclass on: '{topic_title}'
+        prompt = f"""University Lecture Masterclass on: '{topic_title}'
 Phase: {phase_name}
 Goal: {phase_prompt}
 
 Uploaded Course Material Reference:
 {context[:3500]}
 
-Rules:
-- University-grade academic lecture tone.
-- Standalone formulas in $$ ... $$.
+Formatting & Pedagogical Rules:
+- University-grade academic lecture tone. No conversational noise or fluff.
+- All key equations and mathematical formulas MUST be rendered on standalone lines using KaTeX block math: $$ ... $$.
+- Format variables and terms with inline math ($ ... $).
+- Structure multi-part mechanisms with clear subheadings and bullet points.
 - Zero emojis.
-- Deliver rich, thorough explanations.
+- Deliver rich, thorough, pedagogical explanations.
 """
-        sys_inst = "You are a distinguished university lecturer giving an immersive live lecture."
+        sys_inst = "You are a distinguished university professor giving an immersive live masterclass. Use standalone KaTeX block math $$ ... $$. Zero emojis."
         text = await call_llm(prompt, sys_inst, temperature=0.3)
 
         if not text:
-            text = f"Welcome to the masterclass on {topic_title}. In this section, we examine the governing mechanics and key applications."
+            text = f"### {phase_name}\n\nIn our examination of **{topic_title}**, we observe that this concept establishes fundamental structural properties essential to analytical reasoning."
 
         # Stream words smoothly to simulate real-time lecture delivery
         words = text.split(" ")

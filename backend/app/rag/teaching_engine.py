@@ -19,10 +19,11 @@ MATERIAL CONTEXT:
 Provide a structured, step-by-step, pedagogical breakdown of the CORE IDEA for "{topic_title}".
 
 FORMATTING RULES:
-- Write clean, human-readable mathematics (e.g., use "ŷ = w·x + b", "σ(z) = 1 / (1 + e⁻ᶻ)", "Loss = (1/n) · Σ(y - ŷ)²").
-- DO NOT output unrendered raw LaTeX markup with complex dollar signs.
+- Write clean, publication-grade academic explanations. Eliminate conversational noise or fluff.
+- All primary mathematical formulas and equations MUST be formatted on standalone lines using KaTeX block math: $$ ... $$.
+- Use inline math ($ ... $) for variables, matrices, and notation (e.g., $W$, $b$, $x_i$).
 - DO NOT use any emojis. Maintain an articulate, professional academic tone.
-- Format variable definitions and mechanisms with clean bullet points.
+- Format variable definitions, step sequences, and mechanisms with clean markdown bullet points.
 
 Return strictly valid JSON with this exact 4-step structure:
 {{
@@ -41,7 +42,7 @@ Return strictly valid JSON with this exact 4-step structure:
       "tag": "CORE PRINCIPLE",
       "title": "Core Principle and Mechanics",
       "subtitle": "The governing rules, algorithms, or mathematical formulation",
-      "content": "Clear breakdown of the primary mechanism, governing formulas (in clean readable format), and step-by-step execution."
+      "content": "Clear breakdown of the primary mechanism, governing formulas centered in $$ ... $$, variable definitions, and step-by-step execution."
     }},
     {{
       "step_id": "key_takeaways",

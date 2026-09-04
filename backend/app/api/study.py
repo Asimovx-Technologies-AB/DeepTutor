@@ -343,11 +343,12 @@ async def post_topic_doubt(body: TopicDoubtRequest):
 async def get_teacher_stream(
     session_id: str = Query(...),
     topic_id: str = Query(...),
-    topic_title: str = Query(...)
+    topic_title: str = Query(...),
+    override_syllabus: bool = Query(False)
 ):
-    """Real-time SSE lecture stream across 4 pedagogical phases."""
+    """Real-time SSE lecture stream across 4 pedagogical phases with syllabus verification."""
     return StreamingResponse(
-        stream_teacher_lecture(session_id, topic_id, topic_title),
+        stream_teacher_lecture(session_id, topic_id, topic_title, override_syllabus=override_syllabus),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
