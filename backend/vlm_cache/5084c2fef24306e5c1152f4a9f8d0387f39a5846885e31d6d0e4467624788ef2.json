@@ -1,5 +1,0 @@
-{
-  "key": "5084c2fef24306e5c1152f4a9f8d0387f39a5846885e31d6d0e4467624788ef2",
-  "text": "{\"relevant\": true, \"accurate\": true, \"quality\": \"fair\", \"reason\": \"The diagram accurately depicts VMware architecture layers, including physical servers, ESX hypervisors, virtual machines, and VirtualCenter management.\"}",
-  "metadata": {}
-}

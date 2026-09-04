@@ -13,10 +13,21 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from app.api.auth import get_current_user
 from app.core import database as db
 from app.core.config import get_settings
-from app.rag.document_processor import process_document
-from app.rag.ollama_client import ollama
-from app.rag.gemini_client import GeminiClient
-from app.rag.entity_extractor import _extract_json
+from app.rag.curriculum_catalog import is_curriculum_topic, extract_textbook_chunks, get_chapter_title
+from app.rag.ollama_client import ollama, GeminiClient
+
+def process_document(file_path: str):
+    import pypdf
+    chunks = []
+    try:
+        reader = pypdf.PdfReader(file_path)
+        for i, p in enumerate(reader.pages):
+            txt = p.extract_text() or ""
+            if txt.strip():
+                chunks.append({"text": txt, "metadata": {"page": i + 1, "source": Path(file_path).name}})
+    except Exception:
+        pass
+    return chunks
 
 settings = get_settings()
 gemini_client = GeminiClient()
@@ -191,7 +202,7 @@ async def generate_smart_notes(
 
     # If material_text is empty or sparse, retrieve authentic textbook curriculum context
     if not is_custom_upload or len(material_text.strip()) < 100:
-        from app.rag.textbook_reader import is_curriculum_topic, extract_textbook_chunks, get_chapter_title
+        from app.rag.curriculum_catalog import is_curriculum_topic, extract_textbook_chunks, get_chapter_title
         curriculum_target = topic_id
         if not is_curriculum_topic(curriculum_target):
             # Match by name in catalog

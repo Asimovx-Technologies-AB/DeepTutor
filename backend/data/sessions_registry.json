@@ -1,0 +1,217 @@
+[
+  {
+    "id": "session_2001199939",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "An Introduction To Data Science - By Jeffrey Stanton - (Data Science Books)",
+    "title": "An Introduction To Data Science - By Jeffrey Stanton - (Data Science Books) Study Room",
+    "document_name": "An Introduction to Data Science - By Jeffrey Stanton - (Data Science Books).pdf",
+    "documents": [
+      "An Introduction to Data Science - By Jeffrey Stanton - (Data Science Books).pdf"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 7,
+    "message_count": 10,
+    "created_at": "2026-09-04T13:21:21.785260+00:00",
+    "last_active": "2026-09-04T14:00:02.199098+00:00"
+  },
+  {
+    "id": "session_6863256170",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "Attention All U Need",
+    "title": "Attention All U Need Study Room",
+    "document_name": "Attention all u need.pdf",
+    "documents": [
+      "Attention all u need.pdf"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 6,
+    "message_count": 2,
+    "created_at": "2026-09-04T13:10:35.270572+00:00",
+    "last_active": "2026-09-04T13:13:35.491248+00:00"
+  },
+  {
+    "id": "session_2536661296",
+    "user_id": "guest-user",
+    "subject": "Attention All U Need",
+    "title": "Attention All U Need Study Room",
+    "document_name": "Attention all u need.pdf",
+    "documents": [
+      "Attention all u need.pdf"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 6,
+    "message_count": 10,
+    "created_at": "2026-09-04T11:24:27.302964+00:00",
+    "last_active": "2026-09-04T13:48:14.357350+00:00"
+  },
+  {
+    "id": "session_4286305798",
+    "user_id": "guest-user",
+    "subject": "Machine Learning & AI",
+    "title": "Default Study Room",
+    "document_name": "",
+    "documents": [],
+    "document_count": 0,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 2,
+    "created_at": "2026-09-04T11:24:26.790740+00:00",
+    "last_active": "2026-09-04T11:24:28.336110+00:00"
+  },
+  {
+    "id": "session_2673298279",
+    "user_id": "guest-user",
+    "subject": "Machine Learning & AI",
+    "title": "Default Study Room",
+    "document_name": "",
+    "documents": [],
+    "document_count": 0,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 2,
+    "created_at": "2026-09-04T11:24:26.319637+00:00",
+    "last_active": "2026-09-04T11:24:27.914915+00:00"
+  },
+  {
+    "id": "session_4403344451",
+    "user_id": "e8835b27-97b9-44e4-9131-29247733ff32",
+    "subject": "Vms Architecture V3",
+    "title": "Vms Architecture V3 Study Room",
+    "document_name": "VMS_Architecture_v3.pdf",
+    "documents": [
+      "VMS_Architecture_v3.pdf"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 7,
+    "message_count": 26,
+    "created_at": "2026-09-04T11:17:11.633394+00:00",
+    "last_active": "2026-09-04T11:36:07.669736+00:00"
+  },
+  {
+    "id": "fbb9bd44-4654-4136-81a6-8ae5790c3a3d",
+    "user_id": "30cc0809-0ce0-4101-8355-77605c809eac",
+    "subject": "Neural Networks",
+    "title": "Neural Networks Study Room",
+    "document_name": "Neural Networks.pdf",
+    "documents": [
+      "Neural Networks.pdf"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 0,
+    "message_count": 8,
+    "created_at": "2026-09-04T10:01:45.470711+00:00",
+    "last_active": "2026-09-04T10:04:37.598407+00:00"
+  },
+  {
+    "id": "session_5088890707",
+    "user_id": "30cc0809-0ce0-4101-8355-77605c809eac",
+    "subject": "General Study",
+    "title": "Default Study Room",
+    "document_name": "",
+    "documents": [],
+    "document_count": 0,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-04T10:01:41.464079+00:00",
+    "last_active": "2026-09-04T10:01:41.464079+00:00"
+  },
+  {
+    "id": "session_6243776973",
+    "user_id": "7969dca5-437a-4764-abbc-189cd716efe0",
+    "subject": "Module-1 Introduction To Big Data",
+    "title": "Module-1 Introduction To Big Data Study Room",
+    "document_name": "Module-1 Introduction to Big Data.docx",
+    "documents": [
+      "Module-1 Introduction to Big Data.docx"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 7,
+    "message_count": 20,
+    "created_at": "2026-09-04T09:46:45.589534+00:00",
+    "last_active": "2026-09-04T09:59:53.256094+00:00"
+  },
+  {
+    "id": "session_2919558626",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "Ml Algorithams",
+    "title": "Attention All U Need Study Room",
+    "document_name": "ml algorithams.pdf",
+    "documents": [
+      "Attention all u need.pdf",
+      "ml algorithams.pdf"
+    ],
+    "document_count": 2,
+    "status": "text_ready",
+    "topic_count": 7,
+    "message_count": 14,
+    "created_at": "2026-09-04T07:16:48.977636+00:00",
+    "last_active": "2026-09-04T11:14:07.741942+00:00"
+  },
+  {
+    "id": "session_7629085165",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "chemistry",
+    "title": "Hsslive-19 Chemistry Eng Study Room",
+    "document_name": "Hsslive-19_Chemistry Eng.pdf",
+    "status": "text_ready",
+    "topic_count": 4,
+    "message_count": 2,
+    "created_at": "2026-09-04T06:44:20.763220+00:00",
+    "last_active": "2026-09-04T06:58:12.353156+00:00"
+  },
+  {
+    "id": "session_6387462719",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "Class-10-Geography",
+    "title": "Class-10-Geography Study Room",
+    "document_name": "Class-10-Geography.pdf",
+    "status": "text_ready",
+    "topic_count": 4,
+    "message_count": 22,
+    "created_at": "2026-09-04T06:09:52.981246+00:00",
+    "last_active": "2026-09-04T13:00:33.962584+00:00"
+  },
+  {
+    "id": "session_5634524936",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "Ml Algorithams",
+    "title": "Ml Algorithams Study Room",
+    "document_name": "ml algorithams.pdf",
+    "status": "text_ready",
+    "topic_count": 6,
+    "message_count": 22,
+    "created_at": "2026-09-04T06:09:24.710390+00:00",
+    "last_active": "2026-09-04T14:03:59.113538+00:00"
+  },
+  {
+    "id": "session_3862000107",
+    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "subject": "General Study",
+    "title": "Hsslive-35 Maths Eng Study Room",
+    "document_name": "Hsslive-35_Maths Eng.pdf",
+    "status": "text_ready",
+    "topic_count": 3,
+    "message_count": 6,
+    "created_at": "2026-09-04T05:36:33.693254+00:00",
+    "last_active": "2026-09-04T05:45:27.748705+00:00"
+  },
+  {
+    "id": "session_8957569891",
+    "user_id": "4ae9aa5d-b3ab-4c98-847e-4d3f272ec1ab",
+    "subject": "Physics",
+    "title": "Admin Physics Room",
+    "document_name": "",
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-04T05:22:28.932047+00:00",
+    "last_active": "2026-09-04T05:22:28.932047+00:00"
+  }
+]

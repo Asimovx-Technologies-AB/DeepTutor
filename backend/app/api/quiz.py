@@ -1,12 +1,15 @@
 import re
+import json
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Dict, List, Optional
 from app.api.auth import get_current_user
 from app.core import database as db
-from app.rag.quiz_generator import generate_quiz_for_section
-from app.rag.section_scope import get_section_collection_id, user_owns_section
+from app.rag.ollama_client import ollama
+from app.rag.exam_generator import exam_generator
+from app.rag.doc_processor import doc_processor
+from app.rag.sqlite_fts_store import get_session_store
 
 router = APIRouter(prefix="/quiz", tags=["quiz"])
 
@@ -25,11 +28,7 @@ class GenerateQuizRequest(BaseModel):
 
 
 class SubmitQuizRequest(BaseModel):
-    answers: Dict[str, str]  # question_id -> option_letter (A/B/C/D)
-
-
-from app.rag.topic_sanitizer import is_valid_academic_topic, clean_and_format_topic, deduplicate_and_rank_topics
-from app.rag.storage import active_graph_store
+    answers: Dict[str, str]
 
 
 @router.get("/suggestions")
@@ -38,10 +37,6 @@ async def get_topic_suggestions(
     session_id: Optional[str] = None,
     user: dict = Depends(get_current_user),
 ):
-    """
-    Extract clean, high-value AI-suggested concepts directly from uploaded PDF documents.
-    Filters out author names, page reference strings, table noise, citations, and boilerplate.
-    """
     target_tid = topic_id
     if session_id:
         sess = db.get_session(session_id)
@@ -49,62 +44,17 @@ async def get_topic_suggestions(
             target_tid = sess.get("topic_id") or sess.get("id")
 
     target_tid = (target_tid or "general").strip() or "general"
-    namespaced_topic = get_section_collection_id(user['id'], target_tid)
+    clean_list: List[str] = []
 
-    raw_candidates: List[str] = []
-
-    # 1. Fetch DB key topics extracted during document vectorization
     db_extracted_topics = db.get_key_topics_for_user_section(user['id'], target_tid)
     for kt in db_extracted_topics:
-        if kt:
-            raw_candidates.append(kt)
+        if kt and str(kt).strip() and not str(kt).startswith("__subject__:"):
+            clean_list.append(str(kt).strip())
 
-    # 2. Extract concept/algorithm/method entities from LightRAG JSON-KV Knowledge Graph
-    try:
-        lightrag_entities = active_graph_store.get_entities(namespaced_topic)
-        for ent in lightrag_entities:
-            name = ent.get("name")
-            ent_type = (ent.get("type") or "").lower()
-            if name and ent_type not in {"metadata"}:
-                raw_candidates.append(name)
-    except Exception:
-        pass
-
-    # 3. Fallback: NetworkX graph store entities
-    try:
-        from app.rag.graph_store import graph_store
-        graph = graph_store.get_full_graph(namespaced_topic)
-        nodes = graph.get("nodes", [])
-        for n in nodes:
-            name = n.get("name") or n.get("id")
-            ent_type = (n.get("type") or "").lower()
-            if name and ent_type not in {"metadata"}:
-                raw_candidates.append(name)
-    except Exception:
-        pass
-
-    # 4. Clean, format, and deduplicate with topic sanitizer
-    clean_list = deduplicate_and_rank_topics(raw_candidates, max_topics=15)
-
-    # Provide high-yield pedagogical fallback concepts if list is short
-    if len(clean_list) < 4:
-        fallbacks = [
-            "Core Principles & Definitions",
-            "Key Algorithms & Methods",
-            "Theoretical Frameworks",
-            "Comparative Analysis",
-            "Practical Applications",
-            "Important Case Studies"
-        ]
-        for f in fallbacks:
-            if f not in clean_list and len(clean_list) < 10:
-                clean_list.append(f)
+    if not clean_list:
+        clean_list = ["Core Foundations", "Primary Principles", "Applied Problem Solving", "Exam Synthesis"]
 
     return {"suggestions": clean_list[:15]}
-
-
-from app.rag.ollama_client import ollama
-from app.rag.gemini_client import gemini_client
 
 
 @router.post("/generate")
@@ -112,56 +62,66 @@ async def generate_quiz(
     body: GenerateQuizRequest,
     user: dict = Depends(get_current_user),
 ):
-    # 1. Prioritize explicit topic_id when provided (e.g. phys-10-1, sslc-physics)
     section_id = (body.topic_id or "").strip()
     if not section_id and body.session_id:
         session = db.get_session(body.session_id)
         if session:
             section_id = session.get("topic_id") or session.get("id") or "general"
 
-    if not section_id:
-        section_id = "general"
+    section_id = section_id or "general"
+    topic_title = body.focus_topic or body.custom_topic or section_id
 
-    effective_focus = body.focus_topic or body.custom_topic
+    # Retrieve context
+    context = ""
+    if body.note_content:
+        context = body.note_content
+    elif body.session_id:
+        ctx, _, _ = doc_processor.retrieve_context(doc_id=body.session_id, query=topic_title)
+        context = ctx
+        if not context:
+            store = get_session_store(body.session_id)
+            hits = store.search(topic_title, limit=3)
+            context = "\n".join([h.get("content", "") for h in hits])
 
-    if not body.note_id and not body.note_content and not user_owns_section(user["id"], section_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Upload and process a document before generating a quiz.",
-        )
+    # Generate exam via exam_generator
+    exam_data = await exam_generator.generate_exam(topic_title=topic_title, context=context)
+    questions = exam_data.get("questions", [])
 
-    quiz = await generate_quiz_for_section(
-        section_id=section_id,
-        user_id=user["id"],
-        focus_topic=effective_focus,
-        difficulty=body.difficulty,
-        time_limit_mins=body.time_limit_mins,
-        num_questions=body.num_questions or 5,
+    # Create quiz in database
+    quiz_obj = db.create_quiz(
         topic_id=section_id,
-        note_id=body.note_id,
-        note_content=body.note_content,
-        language=body.language or "english",
+        title=exam_data.get("title", f"{topic_title} Quiz"),
+        difficulty=body.difficulty or "medium",
+        time_limit=body.time_limit_mins or 10,
     )
-    if not quiz:
-        user_docs = db.get_documents_for_user_and_topic(user["id"], section_id)
-        if not user_docs:
-            raise HTTPException(
-                status_code=400,
-                detail="No uploaded document is available for this study session. Upload and process a document before generating a quiz."
-            )
 
-        llm_online = await ollama.is_available()
-        if not llm_online:
-            raise HTTPException(
-                status_code=503,
-                detail="AI service is offline or unconfigured. Please configure GEMINI_API_KEY in backend/.env or ensure Ollama is running."
-            )
+    created_questions = []
+    for q in questions:
+        q_prompt = q.get("prompt", "")
+        q_type = q.get("type", "multiple_choice")
+        options = q.get("options", ["A", "B", "C", "D"])
+        correct = str(q.get("correct_answer", "A"))
+        explanation = q.get("explanation", "")
 
-        raise HTTPException(
-            status_code=500,
-            detail="The uploaded document could not provide enough indexed text for a quiz. Wait for processing to finish or try another topic."
+        q_db = db.add_question(
+            quiz_id=quiz_obj["id"],
+            question_text=q_prompt,
+            question_type=q_type,
+            options=options,
+            correct_answer=correct,
+            explanation=explanation,
         )
-    return quiz
+        created_questions.append({
+            "id": q_db["id"],
+            "question_text": q_prompt,
+            "question_type": q_type,
+            "options": options,
+            "correct_answer": correct,
+            "explanation": explanation,
+        })
+
+    quiz_obj["questions"] = created_questions
+    return quiz_obj
 
 
 @router.get("/session/{session_id}")
@@ -179,8 +139,6 @@ async def list_quizzes(
     topic_id: str,
     user: dict = Depends(get_current_user),
 ):
-    if not user_owns_section(user["id"], topic_id):
-        raise HTTPException(status_code=404, detail="Study material not found")
     quizzes = db.get_quizzes_by_topic(topic_id)
     return quizzes
 
@@ -210,7 +168,6 @@ async def submit_quiz(
     if not questions:
         raise HTTPException(status_code=400, detail="Quiz has no questions")
 
-    # Calculate score
     score = 0
     total = len(questions)
     for q in questions:

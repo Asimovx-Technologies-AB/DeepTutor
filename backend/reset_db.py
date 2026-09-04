@@ -8,10 +8,8 @@ from app.core.database import DBContext, engine
 from app.core.models import (
     Base, User, ChatSession, ChatMessage, Document, 
     Quiz, QuizQuestion, QuizAttempt, Flashcard, StudyPlan,
-    UserActivity, UserProgress, LearningGoal
+    UserActivity, UserProgress, LearningGoal, SessionDocument
 )
-from app.rag.storage import active_vector_store, active_graph_store
-
 # Legacy stores
 try:
     from app.rag.vector_store import vector_store
@@ -39,12 +37,13 @@ def wipe_all_data(reseed_default_user: bool = True):
             db.query(Quiz).delete()
             db.query(Flashcard).delete()
             db.query(StudyPlan).delete()
+            db.query(SessionDocument).delete()
             db.query(Document).delete()
             db.query(UserActivity).delete()
             db.query(UserProgress).delete()
             db.query(LearningGoal).delete()
             db.query(User).delete()
-        print("   [OK] Cleared all SQL tables (Chats, Documents, Quizzes, Flashcards, Study Plans, Activities, Progress, Users).")
+        print("   [OK] Cleared all SQL tables (Chats, Documents, Quizzes, Flashcards, Study Plans, Activities, Progress, Users, Session Documents).")
     except Exception as e:
         print(f"   [WARN] SQL clear warning: {e}")
         # Fallback drop and recreate
@@ -63,16 +62,14 @@ def wipe_all_data(reseed_default_user: bool = True):
 
     print("\n2. Resetting Active Vector Store & Knowledge Graph...")
     try:
-        if hasattr(active_vector_store, "reset"):
-            active_vector_store.reset()
-            print("   [OK] Active Vector Store reset.")
+        # Fallback for old active_vector_store if it was injected
+        pass
     except Exception as e:
         print(f"   [INFO] Vector store reset note: {e}")
 
     try:
-        if hasattr(active_graph_store, "reset"):
-            active_graph_store.reset()
-            print("   [OK] Active Graph Store reset.")
+        # Fallback for old active_graph_store if it was injected
+        pass
     except Exception as e:
         print(f"   [INFO] Graph store reset note: {e}")
 
@@ -89,6 +86,9 @@ def wipe_all_data(reseed_default_user: bool = True):
         Path("./faiss_data"),
         Path("./lightrag_data"),
         Path("./chroma_data"),
+        Path("./data"),
+        Path("./vlm_cache"),
+        Path("./image_search_cache"),
     ]
 
     for path in folders_to_clear:
@@ -107,13 +107,14 @@ def wipe_all_data(reseed_default_user: bool = True):
             print(f"   [OK] Initialized empty directory {path}")
 
     if reseed_default_user:
-        print("\n4. Re-seeding default user account...")
+        print("\n4. Re-seeding default user accounts...")
         default_email = "sreeharips385@gmail.com"
         default_username = "i"
         default_pass = "mypassword123"
         hashed = bcrypt.hashpw(default_pass.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         
         with DBContext() as db:
+            # Main dev user
             user = User(
                 id=str(uuid.uuid4()),
                 username=default_username,
@@ -125,7 +126,21 @@ def wipe_all_data(reseed_default_user: bool = True):
                 created_at=datetime.utcnow().isoformat(),
             )
             db.add(user)
-        print(f"   [OK] Created default user: {default_email} / {default_pass} (Premium enabled)")
+
+            # Guest learner for frontend PrivateRoute
+            guest = User(
+                id="guest-user",
+                username="Student Learner",
+                email="student@deeptutor.ai",
+                password_hash=hashed,
+                role="student",
+                is_premium=True,
+                plan="premium",
+                created_at=datetime.utcnow().isoformat(),
+            )
+            db.add(guest)
+
+        print(f"   [OK] Created default users: {default_email} and guest-user (student@deeptutor.ai)")
 
     print("\n==================================================")
     print(" [SUCCESS] All dataset & database state reset!")

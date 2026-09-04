@@ -92,9 +92,9 @@ export default function Layout() {
   }
 
   const getLangBadge = (lang: string) => {
-    if (lang === 'ar') return '🇸🇦 AR'
-    if (lang === 'sv') return '🇸🇪 SV'
-    return '🇬🇧 EN'
+    if (lang === 'ar') return 'AR'
+    if (lang === 'sv') return 'SV'
+    return 'EN'
   }
 
   return (
@@ -127,7 +127,7 @@ export default function Layout() {
           {/* Website UI Language Switcher Toggle */}
           <button
             onClick={toggleLanguage}
-            title={`${t.header.websiteLanguage}: ${uiLanguage === 'en' ? 'English (🇬🇧)' : uiLanguage === 'sv' ? 'Svenska (🇸🇪)' : 'العربية (🇸🇦)'}`}
+            title={`${t.header.websiteLanguage}: ${uiLanguage === 'en' ? 'English (EN)' : uiLanguage === 'sv' ? 'Svenska (SV)' : 'العربية (AR)'}`}
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-black text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-all mb-4 cursor-pointer"
           >
             <Globe size={13} className="text-indigo-600" />
@@ -167,7 +167,10 @@ export default function Layout() {
               {user?.username?.charAt(0).toUpperCase() || 'U'}
             </div>
             <button
-              onClick={() => logout()}
+              onClick={() => {
+                logout()
+                navigate('/login', { replace: true })
+              }}
               className="text-slate-400 hover:text-rose-600 transition-colors p-2 rounded-full hover:bg-rose-50 cursor-pointer"
               title={t.header.logout}
             >

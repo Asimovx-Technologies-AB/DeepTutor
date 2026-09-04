@@ -12,7 +12,7 @@ import {
   Trash2, Download, Copy, Check, Printer, HelpCircle,
   Clock, AlertTriangle, BookOpen, Layers, Plus,
   Search, ExternalLink, ChevronRight, RefreshCw, X,
-  FileCheck, ShieldAlert, ArrowRight, Zap, Target
+  FileCheck, ShieldAlert, ArrowRight, Zap, Target, Star
 } from 'lucide-react'
 import { notesApi, documentsApi } from '../services/api'
 import MermaidDiagram from '../components/MermaidDiagram'
@@ -34,25 +34,25 @@ const NOTE_TYPES = [
   {
     id: 'high_yield_master',
     name: 'Master Revision Note',
-    icon: '🌟',
+    icon: Sparkles,
     desc: 'Comprehensive theory + PYQ weightage + solved problems + Mermaid flowchart',
   },
   {
     id: 'pyq_analysis',
     name: 'PYQ Exam Trends',
-    icon: '🎯',
+    icon: Target,
     desc: 'Year-by-year recurring patterns, marks weightage & predicted questions',
   },
   {
     id: 'quick_cheat_sheet',
     name: '5-Min Cheat Sheet',
-    icon: '⚡',
+    icon: Zap,
     desc: 'High-density formulas, definitions, mnemonics & exam traps to avoid',
   },
   {
     id: 'solved_qa',
     name: 'Solved PYQ Question Bank',
-    icon: '📝',
+    icon: FileCheck,
     desc: 'Step-by-step solutions with marking scheme criteria and key concepts',
   },
 ]
@@ -387,24 +387,31 @@ export default function SmartNotesPage() {
                 2. Note Synthesis Mode
               </label>
               <div className="grid grid-cols-2 gap-2">
-                {NOTE_TYPES.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setNoteType(t.id)}
-                    className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      noteType === t.id
-                        ? 'bg-brand-primary text-white border-brand-primary shadow-md transform scale-[1.02]'
-                        : 'bg-white/50 text-text-primary border-border hover:bg-white hover:shadow-sm'
-                    }`}
-                  >
-                    <span className="text-xl block mb-1.5">{t.icon}</span>
-                    <p className="text-xs font-bold leading-tight mb-1">{t.name}</p>
-                    <p className={`text-[10px] leading-relaxed line-clamp-2 ${noteType === t.id ? 'text-white/80' : 'text-text-secondary'}`}>
-                      {t.desc}
-                    </p>
-                  </button>
-                ))}
+                {NOTE_TYPES.map((t) => {
+                  const IconComp = t.icon
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setNoteType(t.id)}
+                      className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        noteType === t.id
+                          ? 'bg-brand-primary text-white border-brand-primary shadow-md transform scale-[1.02]'
+                          : 'bg-white/50 text-text-primary border-border hover:bg-white hover:shadow-sm'
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center mb-2 ${
+                        noteType === t.id ? 'bg-white/20 text-white' : 'bg-brand-primary-soft text-brand-primary'
+                      }`}>
+                        <IconComp size={16} />
+                      </div>
+                      <p className="text-xs font-bold leading-tight mb-1">{t.name}</p>
+                      <p className={`text-[10px] leading-relaxed line-clamp-2 ${noteType === t.id ? 'text-white/80' : 'text-text-secondary'}`}>
+                        {t.desc}
+                      </p>
+                    </button>
+                  )
+                })}
               </div>
             </div>
             </div>
@@ -529,13 +536,15 @@ export default function SmartNotesPage() {
                 {/* Sources Pill Row */}
                 <div className="flex flex-wrap items-center gap-2 text-xs text-text-secondary">
                   {activeNote.material_doc_name && (
-                    <span className="px-2.5 py-1 rounded-xl bg-transparent border border-border flex items-center gap-1 font-semibold">
-                      📖 {activeNote.material_doc_name}
+                    <span className="px-2.5 py-1 rounded-xl bg-transparent border border-border flex items-center gap-1.5 font-semibold">
+                      <BookOpen size={12} className="text-text-muted" />
+                      <span>{activeNote.material_doc_name}</span>
                     </span>
                   )}
                   {activeNote.pyq_doc_names?.map((pname: string, i: number) => (
-                    <span key={i} className="px-2.5 py-1 rounded-xl bg-brand-primary-soft/60 text-brand-primary border border-brand-primary/30 flex items-center gap-1 font-bold">
-                      📝 {pname}
+                    <span key={i} className="px-2.5 py-1 rounded-xl bg-brand-primary-soft/60 text-brand-primary border border-brand-primary/30 flex items-center gap-1.5 font-bold">
+                      <FileText size={12} />
+                      <span>{pname}</span>
                     </span>
                   ))}
                 </div>
@@ -552,9 +561,10 @@ export default function SmartNotesPage() {
                     {activeNote.high_yield_topics.map((topic: string, i: number) => (
                       <span
                         key={i}
-                        className="px-2.5 py-1 rounded-xl bg-white border border-border text-xs font-bold text-text-primary shadow-2xs"
+                        className="px-2.5 py-1 rounded-xl bg-white border border-border text-xs font-bold text-text-primary shadow-2xs flex items-center gap-1"
                       >
-                        ⭐ {topic}
+                        <Star size={11} className="text-amber-500 fill-amber-500" />
+                        <span>{topic}</span>
                       </span>
                     ))}
                   </div>

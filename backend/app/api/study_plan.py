@@ -1,9 +1,12 @@
+import json
+import re
+from datetime import datetime, date
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from app.api.auth import get_current_user
 from app.core import database as db
-from app.rag.study_plan_generator import generate_study_plan, generate_day_study_notes
+from app.rag.ollama_client import ollama
 
 router = APIRouter(prefix="/study-plan", tags=["study-plan"])
 
@@ -28,12 +31,94 @@ class DayNotesRequest(BaseModel):
     force_regenerate: Optional[bool] = False
 
 
+async def _generate_day_study_notes(day_topic: str, key_concepts: List[str]) -> str:
+    prompt = f"""You are DeepTutor, an elite academic AI tutor.
+Write comprehensive, authoritative master study notes for the topic: "{day_topic}".
+Key concepts to cover: {", ".join(key_concepts) if key_concepts else "Core principles"}.
+
+FORMAT REQUIREMENTS:
+- Use clean Markdown (# and ## headings).
+- Zero emojis. Maintain an articulate, authoritative academic tone.
+- Follow this exact structure:
+  1. # {day_topic} — Study Notes
+  2. > **TL;DR / Summary**: 3-5 line essence box.
+  3. ## Core Governing Principles & Mathematical Framework (Highlight all formulas in $$ ... $$ or formatted blocks).
+  4. ## Step-by-Step Problem-Solving & Concrete Examples
+  5. ## Comparison & Trade-Offs (Use Markdown comparison tables wherever relevant).
+  6. ## Commonly Confused / High-Yield Gotchas (Common student pitfalls, traps, edge cases).
+  7. ## Self-Check Active Recall (5-8 testable questions labeled [High-yield] or [Good-to-know], with answers in a collapsible `<details><summary>Click to reveal answers</summary>...</details>` block).
+  8. ## Quick-Reference Glossary (Two-column Markdown table of key terms and concise definitions).
+  9. **Topics to expand next:** (1 line suggestion of next logical study topic).
+"""
+    notes = await ollama.chat([{"role": "user", "content": prompt}], temperature=0.2)
+    return notes.strip()
+
+
+async def _generate_study_plan(user_id: str, topic_id: str, target_date: str, hours_per_day: float) -> dict:
+    try:
+        t_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+        today = date.today()
+        days_diff = (t_date - today).days
+        total_days = max(3, min(days_diff, 14))
+    except Exception:
+        total_days = 7
+
+    prompt = f"""You are an elite academic curriculum planner.
+Create a structured {total_days}-day study roadmap for the subject/topic: "{topic_id}".
+Student can study {hours_per_day} hours per day.
+
+Return ONLY a valid JSON list of day objects with this exact structure:
+[
+  {{
+    "day": 1,
+    "topic": "Foundational Principles of ...",
+    "key_concepts": ["Concept 1", "Concept 2"],
+    "estimated_hours": {hours_per_day}
+  }}
+]
+JSON OUTPUT:"""
+
+    raw = await ollama.chat([{"role": "user", "content": prompt}], temperature=0.2)
+    cleaned = raw.strip().removeprefix("```json").removesuffix("```").strip()
+
+    try:
+        schedule_data = json.loads(cleaned)
+        if not isinstance(schedule_data, list):
+            schedule_data = schedule_data.get("schedule") or []
+    except Exception:
+        schedule_data = [
+            {"day": i + 1, "topic": f"Module {i + 1}: Core Concepts", "key_concepts": ["Foundations", "Application"], "estimated_hours": hours_per_day}
+            for i in range(total_days)
+        ]
+
+    schedule = []
+    for item in schedule_data:
+        schedule.append({
+            "day": item.get("day", len(schedule) + 1),
+            "topic": item.get("topic", "Core Concepts"),
+            "key_concepts": item.get("key_concepts", []),
+            "estimated_hours": item.get("estimated_hours", hours_per_day),
+            "completed": False,
+            "study_notes": "",
+        })
+
+    plan = db.create_study_plan(
+        user_id=user_id,
+        topic_id=topic_id,
+        title=f"{topic_id.title()} {total_days}-Day Study Roadmap",
+        target_date=target_date,
+        total_days=len(schedule),
+        hours_per_day=hours_per_day,
+        schedule=schedule,
+    )
+    return plan
+
+
 @router.post("/day-notes")
 async def get_day_notes(
     body: DayNotesRequest,
     user: dict = Depends(get_current_user),
 ):
-    # 1. Zero-token cache check: if already generated, has full structured markdown format, and not force-regenerated
     if not body.force_regenerate and body.plan_id and body.day_number is not None:
         try:
             plan = db.get_study_plan(body.plan_id)
@@ -41,34 +126,17 @@ async def get_day_notes(
                 for item in plan["schedule"]:
                     if item.get("day") == body.day_number:
                         saved_notes = item.get("study_notes")
-                        if saved_notes and len(saved_notes.strip()) > 150 and ("##" in saved_notes or "#" in saved_notes):
+                        if saved_notes and len(saved_notes.strip()) > 150:
                             return {"day_topic": body.day_topic, "notes": saved_notes, "cached": True}
-        except Exception as cache_err:
-            print(f"[day-notes] Cache check error (non-fatal): {cache_err}")
+        except Exception:
+            pass
 
-    # 2. Generate via LLM RAG
-    try:
-        notes = await generate_day_study_notes(
-            topic_id=body.topic_id or "general",
-            day_topic=body.day_topic,
-            key_concepts=body.key_concepts or [],
-            user_id=user["id"],
-        )
-    except Exception as gen_err:
-        import traceback
-        print(f"[day-notes] Generation error: {gen_err}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"AI generation failed: {str(gen_err)}")
-
-    if not notes:
-        raise HTTPException(status_code=500, detail="AI returned empty notes. Please try again.")
-
-    # 3. Automatically persist to DB so future views cost 0 tokens
+    notes = await _generate_day_study_notes(body.day_topic, body.key_concepts or [])
     if body.plan_id and body.day_number is not None:
         try:
             db.save_study_plan_day_notes(body.plan_id, body.day_number, notes)
-        except Exception as save_err:
-            print(f"[day-notes] Save error (non-fatal): {save_err}")
+        except Exception:
+            pass
 
     return {"day_topic": body.day_topic, "notes": notes, "cached": False}
 
@@ -86,39 +154,41 @@ async def generate_plan(
         else:
             section_id = body.session_id
 
-    if not section_id:
-        section_id = "general"
-
-    plan = await generate_study_plan(
+    section_id = section_id or "general"
+    plan = await _generate_study_plan(
         user_id=user["id"],
         topic_id=section_id,
         target_date=body.target_date,
         hours_per_day=body.hours_per_day or 2.0,
     )
-    if not plan:
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to generate study plan. Make sure documents are uploaded for this topic and Ollama is online."
-        )
+    return plan
+
+
+@router.get("/topic/{topic_id}")
+async def get_plan(
+    topic_id: str,
+    user: dict = Depends(get_current_user),
+):
+    plan = db.get_study_plan_by_topic(user["id"], topic_id)
     return plan
 
 
 @router.get("/my-plans")
-async def list_my_plans(user: dict = Depends(get_current_user)):
-    return db.get_study_plans_for_user(user["id"])
+async def get_my_plans(user: dict = Depends(get_current_user)):
+    """Fetch all study plans belonging to the current user."""
+    plans = db.get_study_plans_for_user(user["id"])
+    return plans
 
 
 @router.get("/{plan_id}")
-async def get_plan(plan_id: str, user: dict = Depends(get_current_user)):
+async def get_plan_by_id(
+    plan_id: str,
+    user: dict = Depends(get_current_user),
+):
     plan = db.get_study_plan(plan_id)
     if not plan:
         raise HTTPException(status_code=404, detail="Study plan not found")
     return plan
-
-
-class VerifyQuizRequest(BaseModel):
-    day_number: int
-    score_percentage: float
 
 
 @router.post("/{plan_id}/toggle-day")
@@ -133,39 +203,11 @@ async def toggle_day(
     return plan
 
 
-@router.post("/{plan_id}/verify-quiz")
-async def verify_day_quiz(
+@router.delete("/{plan_id}")
+async def delete_plan(
     plan_id: str,
-    body: VerifyQuizRequest,
     user: dict = Depends(get_current_user),
 ):
-    plan = db.get_study_plan(plan_id)
-    if not plan:
-        raise HTTPException(status_code=404, detail="Study plan not found")
-
-    passed = body.score_percentage >= 70.0
-    completed_days = plan.get("completed_days", [])
-    already_completed = body.day_number in completed_days
-
-    if passed and not already_completed:
-        plan = db.toggle_study_plan_day(plan_id, body.day_number)
-
-    return {
-        "passed": passed,
-        "score_percentage": round(body.score_percentage, 1),
-        "day_number": body.day_number,
-        "day_completed": body.day_number in (plan.get("completed_days", []) if plan else []),
-        "threshold": 70.0,
-        "message": (
-            f"🎉 Congratulations! You scored {round(body.score_percentage, 1)}% (≥ 70%) and completed Day {body.day_number}!"
-            if passed
-            else f"Scored {round(body.score_percentage, 1)}%. Minimum 70% required to complete Day {body.day_number}. Review notes & retry!"
-        ),
-    }
-
-
-@router.delete("/{plan_id}")
-async def delete_plan(plan_id: str, user: dict = Depends(get_current_user)):
     ok = db.delete_study_plan(plan_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Study plan not found")

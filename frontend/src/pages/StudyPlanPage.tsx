@@ -167,7 +167,7 @@ export default function StudyPlanPage() {
     setActiveNotesModal({
       dayNum: dayItem.day,
       topic: dayItem.topic,
-      notes: `### 📌 ${dayItem.topic}\n\nGenerating comprehensive AI Study Notes from document context...`,
+      notes: `### ${dayItem.topic}\n\nGenerating comprehensive AI Study Notes from document context...`,
       loading: true,
     })
 
@@ -211,7 +211,7 @@ export default function StudyPlanPage() {
           ? {
               ...prev,
               loading: false,
-              notes: `### ⚠️ Could Not Generate Notes\n\n**Error:** ${errMsg}\n\nPlease try again. If the problem persists, check that the backend is running and your PDF is uploaded for this topic.`,
+              notes: `### Could Not Generate Notes\n\n**Error:** ${errMsg}\n\nPlease try again. If the problem persists, check that the backend is running and your PDF is uploaded for this topic.`,
             }
           : null
       )
@@ -440,7 +440,7 @@ export default function StudyPlanPage() {
                               : 'bg-[#EEF2FF] text-[#4F46E5] border-[#4F46E5]/20'
                           }`}
                         >
-                          {isOverdue ? `⚠️ Target Overdue: ${currentPlan.target_date}` : `Target Finish Date: ${currentPlan.target_date}`}
+                          {isOverdue ? `Target Overdue: ${currentPlan.target_date}` : `Target Finish Date: ${currentPlan.target_date}`}
                         </span>
                       )
                     })()}
@@ -518,7 +518,7 @@ export default function StudyPlanPage() {
                                     ? 'bg-[#58CC02] border-[#58CC02] text-white elevation-1'
                                     : 'bg-[#F7F7F7] border-[#E2E8F0] text-transparent'
                                 }`}
-                                title={isDone ? (uiLanguage === 'sv' ? '✅ Klarade Dags-Quiz (≥70%)' : '✅ Passed Day Quiz (≥70%)') : (uiLanguage === 'sv' ? 'Gör Dags-Quiz för att slutföra' : 'Pass the Day Quiz to complete')}
+                                title={isDone ? (uiLanguage === 'sv' ? 'Klarade Dags-Quiz (≥70%)' : 'Passed Day Quiz (≥70%)') : (uiLanguage === 'sv' ? 'Gör Dags-Quiz för att slutföra' : 'Pass the Day Quiz to complete')}
                               >
                                 <CheckCircle2 size={18} />
                               </div>
@@ -593,7 +593,7 @@ export default function StudyPlanPage() {
                                     }`}
                                   >
                                     <Target size={14} />
-                                    {isDone ? (uiLanguage === 'sv' ? '✓ Gör om Dags-Quiz (Klar)' : '✓ Retake Day Quiz (Passed)') : (uiLanguage === 'sv' ? '🎯 Gör Dags-Quiz (Klar ≥ 70%)' : '🎯 Take Day Quiz (Pass ≥ 70%)')}
+                                    {isDone ? (uiLanguage === 'sv' ? 'Gör om Dags-Quiz (Klar)' : 'Retake Day Quiz (Passed)') : (uiLanguage === 'sv' ? 'Gör Dags-Quiz (Klar ≥ 70%)' : 'Take Day Quiz (Pass ≥ 70%)')}
                                   </button>
                                 </div>
                               </div>
@@ -843,7 +843,7 @@ export default function StudyPlanPage() {
               </div>
 
               <div className="border-t border-slate-100 pt-4 mt-4 flex items-center justify-between">
-                <span className="text-xs text-slate-400 font-medium">✨ Derived from your uploaded PDF text</span>
+                <span className="text-xs text-slate-400 font-medium">Derived from your uploaded PDF text</span>
                 <button
                   onClick={() => {
                     if (isSpeaking) window.speechSynthesis.cancel()

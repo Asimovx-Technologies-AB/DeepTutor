@@ -63,7 +63,7 @@ export default function NotificationPopup() {
       planNotification = {
         id: 'plan-target-today',
         type: 'plan',
-        title: `🎯 Today's Goal: ${planTitle}`,
+        title: `Today's Goal: ${planTitle}`,
         message: `Today is your target completion date for '${planTitle}'. Finish your remaining topics to complete your goal!`,
         timeAgo: 'Just now',
         actionText: 'Continue Learning',
@@ -74,7 +74,7 @@ export default function NotificationPopup() {
       planNotification = {
         id: 'plan-catchup',
         type: 'plan',
-        title: `⏰ Catch Up Plan: ${planTitle}`,
+        title: `Catch Up Plan: ${planTitle}`,
         message: `You have unfinished topics in '${planTitle}'. Resume learning anytime at your own pace!`,
         timeAgo: 'Reminder',
         actionText: 'Open Study Plan',
@@ -90,7 +90,7 @@ export default function NotificationPopup() {
     {
       id: 'streak-1',
       type: 'streak',
-      title: '🔥 Streak Active!',
+      title: 'Streak Active!',
       message: `You are on a ${currentStreak}-day learning streak (${totalXp} XP earned). Complete 1 lesson today to keep it going!`,
       timeAgo: 'Just now',
       actionText: 'Continue Streak',

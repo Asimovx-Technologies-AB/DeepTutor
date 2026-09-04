@@ -6,8 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pathlib import Path
 from app.core.config import get_settings
-from app.api import auth, chat, documents, quiz, flashcards, progress, study_plan, leaderboard, mcp, notes, dashboard
+from app.api import auth, chat, documents, quiz, flashcards, progress, study_plan, leaderboard, mcp, notes, dashboard, study
 from app.api.endpoints import images
+from app.services.study_storage import ensure_data_directories, check_and_restore_s3_backups
 
 settings = get_settings()
 
@@ -15,23 +16,19 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: create all required directories
+    ensure_data_directories()
+    check_and_restore_s3_backups()
+
     dirs = [
         settings.UPLOAD_DIR,
-        settings.FAISS_DATA_DIR,
-        settings.LIGHTRAG_DATA_DIR,
-        settings.CHROMA_PERSIST_DIR,  # keep for legacy fallback
-        settings.GRAPH_DATA_DIR,       # keep for legacy fallback
         settings.IMAGE_SEARCH_CACHE_DIR,
     ]
     for dir_path in dirs:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
 
     print(f"[START] {settings.APP_NAME} v{settings.APP_VERSION}")
-    print(f"[LLM]   Ollama @ {settings.OLLAMA_BASE_URL} | Chat: {settings.OLLAMA_CHAT_MODEL}")
-    print(f"[EMBED] Provider: {settings.EMBEDDING_PROVIDER.upper()} | Model: {settings.OLLAMA_EMBED_MODEL}")
-    print(f"[STORE] Vector: {settings.VECTOR_STORE_BACKEND.upper()} @ {settings.FAISS_DATA_DIR}")
-    print(f"[STORE] Graph:  {settings.GRAPH_STORE_BACKEND.upper()} @ {settings.LIGHTRAG_DATA_DIR}")
-    print(f"[CHUNK] Semantic chunker: {settings.CHUNK_MIN_WORDS}–{settings.CHUNK_MAX_WORDS} words/chunk")
+    print(f"[LLM]   Provider: {settings.LLM_PROVIDER.upper()} | Model: {settings.GEMINI_MODEL}")
+    print(f"[EMBED] Provider: {settings.EMBEDDING_PROVIDER.upper()} | Model: {settings.GEMINI_EMBED_MODEL}")
 
     # Report active parser
     try:
@@ -73,6 +70,7 @@ all_routers = [
     leaderboard.router,
     notes.router,
     dashboard.router,
+    study.router,
 ]
 for r in all_routers:
     app.include_router(r, prefix="/api")
@@ -99,22 +97,8 @@ async def root():
 @app.get("/api/health")
 async def health():
     from app.rag.ollama_client import ollama
-    from app.rag.cache import embedding_cache, query_result_cache
-    from app.rag.storage import active_vector_store, active_graph_store
 
     ollama_ok = await ollama.is_available()
-
-    # Vector store stats
-    try:
-        vs_stats = active_vector_store.cache_stats()
-    except Exception:
-        vs_stats = {"backend": settings.VECTOR_STORE_BACKEND}
-
-    # Graph store stats
-    try:
-        gs_stats = {"backend": settings.GRAPH_STORE_BACKEND, "data_dir": settings.LIGHTRAG_DATA_DIR}
-    except Exception:
-        gs_stats = {"backend": settings.GRAPH_STORE_BACKEND}
 
     # Database health check
     db_status = "connected"
@@ -130,21 +114,13 @@ async def health():
     return {
         "api": "ok",
         "version": settings.APP_VERSION,
+        "llm_online": ollama_ok,
         "database": {
             "status": db_status,
             "type": db_type,
         },
         "pipeline": {
-            "stage1_parser": settings.PRIMARY_PARSER,
-            "stage1_chunker": f"semantic_{settings.CHUNK_MIN_WORDS}_{settings.CHUNK_MAX_WORDS}w",
-            "stage2_embedder": settings.EMBEDDING_PROVIDER,
-            "stage3_vector_store": settings.VECTOR_STORE_BACKEND,
-            "stage3_graph_store": settings.GRAPH_STORE_BACKEND,
-        },
-        "vector_store": vs_stats,
-        "graph_store": gs_stats,
-        "cache": {
-            "embedding": embedding_cache.stats(),
-            "query": query_result_cache.stats(),
+            "status": "active",
+            "storage": "sqlite_fts",
         },
     }

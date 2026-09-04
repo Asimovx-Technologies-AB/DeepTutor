@@ -34,7 +34,9 @@ class Settings(BaseSettings):
     # Switch via .env: LLM_PROVIDER=azure_openai | gemini | ollama
     LLM_PROVIDER: str = "gemini"
     GEMINI_API_KEY: str = ""
-    GEMINI_CHAT_MODEL: str = "gemini-3.5-flash-lite"
+    GEMINI_CHAT_MODEL: str = "gemini-3.1-flash-lite"
+    GEMINI_MODEL: str = "gemini-3.1-flash-lite"
+    GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta"
     GEMINI_TIMEOUT: int = 60
 
     # ── Ollama local settings ────────────────────────────────────────────────
@@ -95,7 +97,7 @@ class Settings(BaseSettings):
 
     # ── VLM (Vision-Language Model) Document & Image Parser ────────────────
     ENABLE_VLM_PARSER: bool = True           # Use Gemini Flash VLM for diagrams, images, and scanned PDFs
-    GEMINI_VLM_MODEL: str = "gemini-2.5-flash"  # "gemini-2.5-flash" | "gemini-3.5-flash" | "gemini-flash-latest"
+    GEMINI_VLM_MODEL: str = "gemini-3.6-flash"  # "gemini-3.6-flash" | "gemini-3.5-flash" | "gemini-flash-latest"
     VLM_MIN_WORDS_THRESHOLD: int = 50        # Flag page for VLM if word count < this threshold
     VLM_IMAGE_COVERAGE_THRESHOLD: float = 0.70  # Flag page for VLM if image coverage > this percentage
     VLM_CACHE_DIR: str = "./vlm_cache"       # Disk cache directory for per-page VLM transcriptions
