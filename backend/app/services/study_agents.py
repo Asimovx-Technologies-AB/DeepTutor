@@ -167,14 +167,31 @@ class QueryAnalyzerAgent:
     async def plan(self, user_query: str, subject: str = "General Study", history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         q_lower = user_query.lower().strip()
 
-        # 1. Format classification
+        # 1. Format & Sub-intent classification
         is_quiz = any(k in q_lower for k in ("quiz", "test me", "ask me a question", "pop quiz", "mcq"))
         is_study_notes = bool(re.search(
             r"\b(study notes?|cheat sheet|revision notes?|study map|summari[sz]e.*as notes|create.*(?:md|\.md|markdown)|make.*(?:md|\.md|markdown)|generate.*(?:md|\.md|markdown)|(?:md|\.md|markdown)\s*(?:file|doc)?\s*(?:on|for|about))\b", q_lower
         ))
-        is_comparison = any(k in q_lower for k in ("compare", "versus", " vs ", "difference between", "distinguish"))
+        is_comparison = any(k in q_lower for k in ("compare", "versus", " vs ", "difference between", "distinguish", "relate to"))
         is_diagram = any(k in q_lower for k in ("diagram", "figure", "chart", "architecture", "flowchart", "illustration"))
+        is_solve = any(k in q_lower for k in ("solve", "calculate", "fill", "matrix", "column", "row", "position", "sequence", "table", "problem"))
+        is_conceptual = any(k in q_lower for k in ("explain", "what is", "how does", "tell me", "break down", "overview", "definition", "concept", "why is", "describe"))
 
+        # Explanation level classification
+        is_eli5 = any(k in q_lower for k in ("eli5", "like i'm 5", "like im 5", "like a 5 year old", "like a five year old", "explain simply", "simple words", "for beginners", "for a child"))
+        is_simple = is_eli5 or any(w in q_lower for w in ("simply", "simple", "basic", "beginner"))
+        is_advanced = any(w in q_lower for w in ("advanced", "expert", "deep", "complex", "rigorous"))
+
+        if is_eli5:
+            explanation_level = "eli5"
+        elif is_simple:
+            explanation_level = "simple"
+        elif is_advanced:
+            explanation_level = "advanced"
+        else:
+            explanation_level = "standard"
+
+        # Primary format
         if is_quiz:
             resp_format = "quiz"
         elif is_study_notes:
@@ -183,11 +200,39 @@ class QueryAnalyzerAgent:
             resp_format = "comparison"
         elif is_diagram:
             resp_format = "diagram"
+        elif is_solve:
+            resp_format = "solve"
         else:
             resp_format = "conceptual"
 
+        # Detect compound sub-intents
+        sub_intents = []
+        intents_with_pos = []
+        intent_keywords = [
+            ("explain", "conceptual"), ("what is", "conceptual"), ("how does", "conceptual"), ("tell me", "conceptual"),
+            ("quiz", "quiz"), ("test me", "quiz"), ("pop quiz", "quiz"),
+            ("study notes", "study_notes"), ("cheat sheet", "study_notes"), ("markdown", "study_notes"),
+            ("compare", "comparison"), ("difference between", "comparison"), (" vs ", "comparison"),
+            ("solve", "solve"), ("calculate", "solve"), ("fill", "solve"), ("problem", "solve")
+        ]
+        for kw, it in intent_keywords:
+            pos = q_lower.find(kw)
+            if pos != -1:
+                intents_with_pos.append((pos, it))
+
+        if intents_with_pos:
+            intents_with_pos.sort(key=lambda x: x[0])
+            seen_intent = set()
+            for _, it in intents_with_pos:
+                if it not in seen_intent:
+                    seen_intent.add(it)
+                    sub_intents.append(it)
+
+        if not sub_intents:
+            sub_intents = [resp_format]
+
         # 2. Content requirements
-        is_table = any(k in q_lower for k in ("table", "data", "fill", "solve", "matrix", "column", "row", "calculate", "position", "sequence"))
+        is_table = is_solve or any(k in q_lower for k in ("table", "data", "fill", "solve", "matrix", "column", "row", "calculate", "position", "sequence"))
         is_image = is_diagram or any(k in q_lower for k in ("image", "picture", "visual", "graph", "plot"))
 
         # 3. Clean search keywords with acronym & symbol preservation
@@ -200,6 +245,27 @@ class QueryAnalyzerAgent:
         clean_noun_phrase = " ".join(filtered_words[:5]) or user_query
 
         bm25_queries = [clean_noun_phrase, user_query]
+
+        # Cross-reference concept extraction for "how does X relate to Y", "X vs Y", etc.
+        cross_ref_concepts = []
+        cross_ref_match = (
+            re.search(r"\b(?:how does|how do)\s+(.+?)\s+(?:relate to|differ from|compare to|connect with)\s+(.+?)(?:\?|$)", user_query, re.I)
+            or re.search(r"\b(?:difference between|relationship between|compare)\s+(.+?)\s+(?:and|versus|vs\.?)\s+(.+?)(?:\?|$)", user_query, re.I)
+            or re.search(r"\b(.+?)\s+(?:vs\.?|versus)\s+(.+?)(?:\?|$)", user_query, re.I)
+        )
+        if cross_ref_match:
+            c1_raw = cross_ref_match.group(1).strip()
+            c2_raw = cross_ref_match.group(2).strip()
+            c1_words = [w for w in re.findall(r"[a-z0-9_]+", c1_raw.lower()) if w not in stopwords]
+            c2_words = [w for w in re.findall(r"[a-z0-9_]+", c2_raw.lower()) if w not in stopwords]
+            if c1_words and c2_words:
+                c1_phrase = " ".join(c1_words)
+                c2_phrase = " ".join(c2_words)
+                cross_ref_concepts = [c1_phrase, c2_phrase]
+                if c1_phrase not in bm25_queries:
+                    bm25_queries.append(c1_phrase)
+                if c2_phrase not in bm25_queries:
+                    bm25_queries.append(c2_phrase)
 
         # Domain expansions for common technical/math abbreviations
         expansions = []
@@ -229,9 +295,158 @@ class QueryAnalyzerAgent:
             "requires_table_data": is_table,
             "requires_image_data": is_image,
             "response_format": resp_format,
+            "sub_intents": sub_intents,
+            "explanation_level": explanation_level,
+            "is_compound": len(sub_intents) > 1,
+            "cross_ref_concepts": cross_ref_concepts,
             "confidence": 0.95,
             "needs_clarification": False
         }
+
+
+# ─── Robust Parsing, Sanitization & Verification Helpers ───────────────────
+
+def parse_llm_json_response(text: str, default_thought: str = "") -> tuple[str, str, Any]:
+    """Robust parser for LLM JSON responses with fallback to regex and markdown extraction."""
+    thought = default_thought or "Synthesizing retrieved FTS5 chunks into a structured step-by-step explanation."
+    answer = ""
+    quiz_data = None
+    if not text:
+        return thought, answer, quiz_data
+
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+
+    parsed = None
+    try:
+        parsed = json.loads(cleaned, strict=False)
+    except Exception:
+        json_match = re.search(r"(\{[\s\S]*\})", cleaned)
+        if json_match:
+            try:
+                parsed = json.loads(json_match.group(1), strict=False)
+            except Exception:
+                pass
+
+    if isinstance(parsed, dict):
+        thought = parsed.get("thought_process", thought)
+        answer = parsed.get("response", "")
+        quiz_data = parsed.get("quiz_data")
+
+    if not answer and ('"response"' in cleaned or '"thought_process"' in cleaned):
+        th_match = re.search(r'"thought_process"\s*:\s*"((?:[^"\\]|\\.)*)"', cleaned, re.DOTALL)
+        if th_match:
+            thought = th_match.group(1).replace(r'\"', '"').replace(r'\n', '\n')
+
+        resp_pattern = re.search(r'"response"\s*:\s*"', cleaned)
+        if resp_pattern:
+            start_pos = resp_pattern.end()
+            end_pos = cleaned.rfind('"')
+            if end_pos > start_pos:
+                raw_ans = cleaned[start_pos:end_pos]
+            else:
+                raw_ans = cleaned[start_pos:]
+            answer = raw_ans.replace(r'\"', '"').replace(r'\n', '\n').replace(r'\t', '    ')
+
+    if not answer:
+        if cleaned.startswith("{") and '"response":' in cleaned:
+            cleaned_body = re.sub(r'^\s*\{\s*"thought_process"\s*:\s*".*?"\s*,\s*"response"\s*:\s*"?', '', cleaned, flags=re.DOTALL)
+            cleaned_body = re.sub(r'"?\s*\}\s*$', '', cleaned_body)
+            answer = cleaned_body.replace(r'\"', '"').replace(r'\n', '\n').strip()
+        else:
+            answer = cleaned
+
+    return thought, answer, quiz_data
+
+
+def sanitize_katex(text: str) -> str:
+    """Sanitizes control characters and fixes common LaTeX keyword truncations."""
+    if not text:
+        return ""
+    text = text.replace('\x0c', r'\f').replace('\x07', r'\a').replace('\x08', r'\b').replace('\x0b', r'\v')
+    text = re.sub(r'(?<!\\)\brac\{', r'\\frac{', text)
+    text = re.sub(r'(?<!\\)\bext\{', r'\\text{', text)
+    text = re.sub(r'(?<!\\)\bpprox\b', r'\\approx', text)
+    return text
+
+
+def check_katex_brace_balance(text: str) -> tuple[bool, str]:
+    """
+    Scans for LaTeX math blocks ($$...$$ and $...$) and checks if curly braces are balanced.
+    Returns (is_balanced, malformed_span).
+    """
+    if not text:
+        return True, ""
+
+    # Check standalone block KaTeX $$...$$
+    blocks = re.findall(r"\$\$([\s\S]*?)\$\$", text)
+    for block in blocks:
+        open_b = len(re.findall(r"(?<!\\)\{", block))
+        close_b = len(re.findall(r"(?<!\\)\}", block))
+        if open_b != close_b:
+            snippet = block.strip().replace("\n", " ")[:80]
+            return False, f"$${snippet}...$$"
+
+    # Check inline math $...$
+    inlines = re.findall(r"(?<!\$)\$(?!\$)(.*?)(?<!\$)\$(?!\$)", text)
+    for inline in inlines:
+        open_b = len(re.findall(r"(?<!\\)\{", inline))
+        close_b = len(re.findall(r"(?<!\\)\}", inline))
+        if open_b != close_b:
+            return False, f"${inline.strip()[:50]}$"
+
+    return True, ""
+
+
+def count_markdown_table_rows(text: str) -> int:
+    """Counts data rows in markdown tables, excluding header and separator rows."""
+    if not text:
+        return 0
+    lines = [l.strip() for l in text.splitlines() if l.strip().startswith("|") and l.strip().endswith("|")]
+    if not lines:
+        return 0
+    # Exclude separator lines like |---|---|
+    data_lines = [l for l in lines if not re.match(r"^\|(?:\s*:?-+:?\s*\|)+$", l)]
+    # First line is typically the header
+    return max(0, len(data_lines) - 1)
+
+
+def check_table_placeholders(text: str) -> bool:
+    """Checks if any markdown table cells contain ellipsis or placeholder tokens."""
+    if not text or "|" not in text:
+        return False
+    table_lines = [l.strip() for l in text.splitlines() if l.strip().startswith("|") and l.strip().endswith("|")]
+    for line in table_lines:
+        if re.match(r"^\|(?:\s*:?-+:?\s*\|)+$", line):
+            continue
+        cells = [c.strip() for c in line.split("|")[1:-1]]
+        for c in cells:
+            if c in ("...", "…", "TBD", "N/A", "TODO", "?"):
+                return True
+            if re.search(r"\b(TBD|TODO|N/A)\b", c, re.IGNORECASE):
+                return True
+    return False
+
+
+def detect_expected_row_count(query: str, chunks: List[Dict[str, Any]]) -> Optional[int]:
+    """Detects expected table row count from query or source table chunks."""
+    m = re.search(r"\b(\d+)\s*(?:rows?|items?|parts?|questions?|problems?|sequence terms?)\b", query.lower())
+    if m:
+        val = int(m.group(1))
+        if 2 <= val <= 30:
+            return val
+    numbered = re.findall(r"(?:^|\n|\s)(?:\d+[\.\)]|[a-e][\.\)])\s+", query)
+    if len(numbered) >= 2:
+        return len(numbered)
+    for c in chunks:
+        content = c.get("content", "")
+        if "|" in content:
+            r_count = count_markdown_table_rows(content)
+            if r_count >= 2:
+                return r_count
+    return None
 
 
 # ─── 2. Executor Agent (DecisionAgent) ──────────────────────────────────────
@@ -252,14 +467,37 @@ class DecisionAgent:
         page_match = re.search(r"\b(?:page\s*number|pagenumber|page|pg|p\.?)\s*(?:no\.?)?\s*(\d+)\b", user_query.lower())
         target_page = int(page_match.group(1)) if page_match else None
 
-        # 1. Retrieve candidate chunks
+        # 1.0 Adversarial Grounding Bypass Check
+        adversarial_patterns = [
+            r"\bignore\s+(?:the\s+)?(?:pdf|document|textbook|notes|course\s+materials?|context)\b",
+            r"\bforget\s+(?:the\s+)?(?:pdf|document|material|context|notes)\b",
+            r"\bjust\s+use\s+(?:your\s+)?general\s+knowledge\b",
+            r"\bregardless\s+of\s+(?:the\s+)?(?:textbook|pdf|material|notes)\b",
+            r"\bdisregard\s+(?:the\s+)?(?:pdf|document|notes|textbook|material)\b",
+            r"\bbypass\s+(?:the\s+)?(?:rules|grounding|system|instructions?)\b",
+            r"\bdon'?t\s+use\s+(?:the\s+)?(?:pdf|textbook|material|notes)\b",
+        ]
+        if any(re.search(pat, user_query, re.I) for pat in adversarial_patterns):
+            scope_msg = (
+                f"DeepTutor is scoped to tutor you strictly from your uploaded course materials for **{subject}** to ensure exam and syllabus alignment.\n\n"
+                f"I noticed you asked to bypass the uploaded material and rely solely on general knowledge. "
+                f"To maintain academic integrity, I stay anchored to your syllabus.\n\n"
+                f"**Would you like me to answer using general academic knowledge outside your course materials?**"
+            )
+            return {
+                "thought_process": "Detected student request to bypass syllabus grounding. Declined silent bypass per academic safety protocols and requested explicit scope confirmation.",
+                "response": scope_msg,
+                "sources": [],
+                "format": "conceptual"
+            }
+
+        # 1.1 Retrieve candidate chunks
         retrieved_chunks = []
         seen_ids = set()
 
         # If a specific page was asked, fetch all chunks from that exact page directly first
         if target_page is not None:
             page_chunks = get_chunks_by_page(session_id, target_page)
-            # If user asked about table or solving, prioritize table chunks on that page
             if any(w in user_query.lower() for w in ("table", "solve", "fill", "calculate", "data", "matrix", "row", "col")):
                 page_chunks.sort(key=lambda c: 0 if c.get("source_type") == "table" else 1)
             for c in page_chunks:
@@ -309,24 +547,62 @@ class DecisionAgent:
                 "format": "conceptual"
             }
 
-        # 2. Check if student query is a short Boolean confirmation / refusal
+        # 2. Check if student query is a Boolean confirmation / refusal (with trailing clause support)
         q_clean = user_query.lower().strip()
-        is_boolean_yes = q_clean in ("yes", "y", "yeah", "yup", "sure", "ok", "okay", "true", "tell me more", "explain that", "go ahead", "please do", "solve that", "explain", "continue")
-        is_boolean_no = q_clean in ("no", "n", "nope", "nah", "false", "not now", "stop", "cancel")
+        bool_yes_pattern = r"^(yes|y|yeah|yup|sure|ok|okay|true|go ahead|please do|tell me more|explain that|solve that|continue)\b[,\s]*(.*)$"
+        bool_no_pattern = r"^(no|n|nope|nah|false|not now|stop|cancel)\b[,\s]*(.*)$"
 
-        # If user query is a boolean follow-up ("yes", "sure", etc.), extract keywords from the previous assistant question
-        search_terms = plan.get("bm25_queries", [user_query])
+        m_yes = re.match(bool_yes_pattern, q_clean, re.I)
+        m_no = re.match(bool_no_pattern, q_clean, re.I)
+
+        is_boolean_yes = False
+        is_boolean_no = False
+        trailing_clause = ""
+
+        if m_yes:
+            is_boolean_yes = True
+            trailing_clause = m_yes.group(2).strip().rstrip(".!?,")
+        elif q_clean in ("yes", "y", "yeah", "yup", "sure", "ok", "okay", "true", "tell me more", "explain that", "go ahead", "please do", "solve that", "explain", "continue"):
+            is_boolean_yes = True
+
+        if m_no and not trailing_clause:
+            is_boolean_no = True
+
+        # If user query is a boolean follow-up ("yes", "sure", etc.), extract keywords from the offered assistant question
+        search_terms = list(plan.get("bm25_queries", [user_query]))
         if is_boolean_yes and history:
-            prev_turn = ""
-            for m in reversed(history):
-                if m.get("text"):
-                    prev_turn = m.get("text", "")
-                    break
-            prev_words = [w for w in re.findall(r"[a-z0-9]+", prev_turn.lower()) if len(w) > 3 and w not in (
+            offer_turn = ""
+            # Walk backward up to 5 turns to find an assistant message that actually offered a follow-up
+            for m in reversed(history[-5:]):
+                if m.get("role") == "assistant" and m.get("text"):
+                    text_val = m.get("text", "").strip()
+                    if "?" in text_val or any(k in text_val.lower() for k in ("would you like", "shall we", "should we", "want to", "do you want", "practice")):
+                        offer_turn = text_val
+                        break
+            if not offer_turn:
+                for m in reversed(history):
+                    if m.get("role") == "assistant" and m.get("text"):
+                        offer_turn = m.get("text", "")
+                        break
+
+            prev_words = [w for w in re.findall(r"[a-z0-9]+", offer_turn.lower()) if len(w) > 3 and w not in (
                 "would", "like", "shall", "with", "this", "that", "have", "from", "step", "example", "question", "could", "find", "answer", "please"
             )]
             if prev_words:
                 search_terms = [" ".join(prev_words[-6:]), " ".join(prev_words[:4])]
+
+            # If student provided an affirmative continuation with a trailing clause (e.g. "yes, but only the second part")
+            if trailing_clause:
+                search_terms.insert(0, trailing_clause)
+                if prev_words:
+                    search_terms.append(f"{' '.join(prev_words[:3])} {trailing_clause}")
+
+        # Cross-reference targeted retrieval for "how does X relate to Y", "X vs Y"
+        cross_ref_concepts = plan.get("cross_ref_concepts") or []
+        if cross_ref_concepts:
+            for c_term in cross_ref_concepts:
+                if c_term and c_term not in search_terms:
+                    search_terms.append(c_term)
 
         # Detect if student asks for a large response, detailed explanation, big answer, or related questions
         is_large_request = any(k in user_query.lower() for k in (
@@ -368,6 +644,15 @@ class DecisionAgent:
                     seen_ids.add(c["chunk_id"])
                     retrieved_chunks.append(c)
 
+        # If cross-reference concepts exist, ensure explicit targeted retrieval for concept Y (and X)
+        if cross_ref_concepts:
+            for c_term in cross_ref_concepts:
+                c_chunks = search_fts_chunks(session_id, c_term, limit=4)
+                for cc in c_chunks:
+                    if cc["chunk_id"] not in seen_ids:
+                        seen_ids.add(cc["chunk_id"])
+                        retrieved_chunks.append(cc)
+
         if not retrieved_chunks:
             # Broad search fallback
             if is_boolean_yes:
@@ -386,14 +671,16 @@ class DecisionAgent:
             if history_lines:
                 history_block = "Recent Conversation History:\n" + "\n".join(history_lines) + "\n\n"
 
-        # 4. Check if student asked for flashcards or a quiz
-        is_quiz_or_flashcard = any(k in user_query.lower() for k in (
+        # 4. Check if student asked for flashcards or a quiz (and not a compound conceptual+quiz request)
+        sub_intents = plan.get("sub_intents") or []
+        is_compound_quiz = "quiz" in sub_intents and any(it in sub_intents for it in ("conceptual", "solve", "study_notes"))
+        is_quiz_or_flashcard = not is_compound_quiz and any(k in user_query.lower() for k in (
             "flashcard", "flashcards", "quiz", "quiz me", "test me", "flash card", "flash cards", "make a flashcard", "create a flashcard", "generate quiz"
         ))
 
         if is_quiz_or_flashcard:
             from app.services.study_quiz_engine import generate_flashcard_deck, sanitize_topic_title
-            explanation_level = "standard"
+            explanation_level = plan.get("explanation_level", "standard")
             if any(w in user_query.lower() for w in ("simply", "simple", "eli5", "basic")):
                 explanation_level = "simple"
             elif any(w in user_query.lower() for w in ("advanced", "expert", "deep", "complex")):
@@ -413,7 +700,6 @@ class DecisionAgent:
                 for m in reversed(history):
                     if m.get("role") == "assistant" and m.get("text"):
                         override_ctx = m.get("text")
-                        # Try extracting a clean title from the heading of the previous response
                         h_match = re.search(r"^#+\s*(.+)$", override_ctx, re.MULTILINE)
                         if h_match:
                             clean_title = sanitize_topic_title(h_match.group(1).strip())
@@ -422,14 +708,12 @@ class DecisionAgent:
                         break
 
             if not override_ctx:
-                # Clean topic title from query
                 clean_title = re.sub(
                     r"(?i)\b(create|make|generate|build|give me|show|flashcards|flashcard|quiz|deck|on the topic|about|on|me|based|previous|response|answer|for|a|this|it)\b",
                     "",
                     user_query
                 ).strip()
 
-                # If clean_title ended up empty or generic ("a for this", "for this", "this"), fallback to previous response if available
                 if (not clean_title or clean_title.lower() in ("a", "this", "it", "course material", "for this")) and history:
                     for m in reversed(history):
                         if m.get("role") == "assistant" and m.get("text"):
@@ -500,7 +784,6 @@ class DecisionAgent:
         goals_str = ", ".join(student_mem.get("goals", [])) or "Mastery"
 
         # 6. Strict Grounding Verification
-        # If no chunks exist at all in the database
         all_doc_chunks = get_all_chunks(session_id, limit=3)
         if not all_doc_chunks and not retrieved_chunks and not is_boolean_yes:
             decline_msg = f"I could not find the answer to this in your uploaded PDF. Please ask questions specifically related to the concepts and chapters in your uploaded material for {subject}."
@@ -511,31 +794,63 @@ class DecisionAgent:
                 "format": plan.get("response_format", "conceptual")
             }
 
-        # Group chunks by doc_id (document name) to ensure multi-material balance
+        # Group chunks by friendly document name to ensure multi-material balance and explicit document origin
+        session_docs = get_session_documents(session_id)
+        doc_name_map = {}
+        for d in session_docs:
+            d_id = str(d.get("id", ""))
+            d_name = d.get("filename") or d.get("title") or d_id
+            if d_id:
+                doc_name_map[d_id] = d_name
+
         chunks_by_doc: Dict[str, List[Dict[str, Any]]] = {}
         for c in retrieved_chunks:
-            d_name = c.get("doc_id") or "Uploaded Material"
-            if d_name not in chunks_by_doc:
-                chunks_by_doc[d_name] = []
-            chunks_by_doc[d_name].append(c)
+            raw_doc_id = str(c.get("doc_id") or "Uploaded Material")
+            friendly_doc_name = doc_name_map.get(raw_doc_id, raw_doc_id)
+            c["friendly_doc_name"] = friendly_doc_name
+            if friendly_doc_name not in chunks_by_doc:
+                chunks_by_doc[friendly_doc_name] = []
+            chunks_by_doc[friendly_doc_name].append(c)
 
-        # Build clear multi-document context blocks
+        # Build clear multi-document context blocks with explicit source names and page numbers
         max_chunks_per_doc = 10 if is_large_request else 5
         formatted_doc_blocks = []
         for doc_name, doc_chunks in chunks_by_doc.items():
             block = f"=== UPLOADED MATERIAL: {doc_name} ===\n" + "\n\n".join(
-                f"--- CHUNK [Document: {doc_name} | Chunk ID: {c['chunk_id']} | Page {c['page']} | Type: {c['source_type']}] ---\n{c['content']}"
+                f"--- CHUNK [Document: {doc_name} | Page: {c['page']} | Chunk ID: {c['chunk_id']} | Type: {c['source_type']}] ---\n{c['content']}"
                 for c in doc_chunks[:max_chunks_per_doc]
             )
             formatted_doc_blocks.append(block)
 
         context_text = "\n\n".join(formatted_doc_blocks)
 
+        # Compound request guidance
+        compound_guidance = ""
+        if is_compound_quiz:
+            compound_guidance = (
+                "\n11. Compound Request Protocol:\n"
+                "- The student requested BOTH an explanation/solution AND a quiz in the same turn.\n"
+                "- You MUST first deliver the complete, grounded academic explanation or solution.\n"
+                "- Then, immediately conclude with an interactive 1-question practice quiz question directly testing the material explained.\n"
+            )
+
+        # ELI5 comparison guidance
+        eli5_comparison_guidance = ""
+        if plan.get("response_format") == "comparison" and plan.get("explanation_level") in ("eli5", "simple"):
+            eli5_comparison_guidance = (
+                "\n12. ELI5 Comparison Protocol:\n"
+                "- The student requested an ELI5 / simple comparison. Do NOT use a complex Markdown comparison table or technical jargon.\n"
+                "- Instead, explain the comparison using two paired, simple, conversational paragraphs using everyday analogies suited for a beginner.\n"
+            )
+
+        trailing_constraint_str = f"Specific Focus / Constraint: '{trailing_clause}'\n" if trailing_clause else ""
+
         # 7. Prompt LLM with Strict Academic Grounding, Conversational Follow-up, & KaTeX Math
         prompt = f"""
 You are DeepTutor's Execution Agent (DecisionAgent).
 Subject: {subject}
 Response Contract: {plan.get('response_format', 'conceptual')}
+Explanation Level: {plan.get('explanation_level', 'standard')}
 Student Weakness Profile: {weaknesses_str}
 Student Goals: {goals_str}
 
@@ -544,52 +859,46 @@ Student Goals: {goals_str}
 
 Student Message:
 "{user_query}"
-
+{trailing_constraint_str}
 STRICT RULES:
-1. Grounding Rule: Answer strictly and only from the retrieved chunks and conversation history above. If a completely unrelated topic is asked that is absent from the material, state:
-   "I could not find the answer to this in your uploaded PDF. Please ask questions specifically related to the concepts and chapters in your uploaded material for {subject}."
-2. Multi-Material Grounding Rule:
-   - If the retrieved chunks come from multiple uploaded materials (or if the student asks to explain or compare 'both materials' / 'all materials'):
-     You MUST explicitly analyze and present the content from EACH material under clear section headings (e.g. '### Material 1: [Document Name]' and '### Material 2: [Document Name]').
-     Compare any differences or unique details on that page/topic between both materials. Do NOT skip any uploaded material.
+1. Grounding & Missing Information Protocol (3 Modes):
+   - Mode 1 (Sufficient Material): Answer strictly and objectively from the retrieved chunks and conversation history.
+   - Mode 2 (Insufficient / Partial Inputs): If the retrieved context provides SOME but NOT ALL values or variables needed to solve a problem (e.g., mass and force given, angle missing):
+     You MUST explicitly state which specific parameter or value is missing, explain the governing formula that requires it, and ask the student for that specific value or guide them to where in the course materials it might be found. Do NOT invent, assume, or hallucinate a plausible numerical value, and do NOT decline completely.
+   - Mode 3 (Source Contradiction / Typos): If a formula, constant, or unit in the retrieved text looks internally contradictory or contains a clear source typo (e.g., units do not reconcile across equations), you MUST explicitly flag the inconsistency to the student rather than silently 'fixing' it or blindly calculating.
+   - Mode 4 (Completely Unrelated): If a completely unrelated topic is asked that is absent from the material, state:
+     "I could not find the answer to this in your uploaded PDF. Please ask questions specifically related to the concepts and chapters in your uploaded material for {subject}."
+2. Multi-Material & Cross-Chunk Disagreement Rule:
+   - If retrieved chunks come from multiple uploaded materials (or if the student asks to compare or explain both materials):
+     You MUST explicitly analyze and present the content from EACH material under clear section headings (e.g. '### Material: [Document Name]').
+   - If retrieved chunks from different source documents or chapters appear to disagree or provide conflicting values/perspectives:
+     You MUST explicitly surface the disagreement to the student (e.g., "Your Chapter 2 notes state X, but the uploaded lecture slides state Y — here is how they differ and why") rather than silently picking one source.
 3. Greetings & Salutations:
-   - If the student message is a greeting (e.g., 'Hi', 'Hello', 'Hey', 'Good morning', 'Greetings'), greet them warmly as DeepTutor for **{subject}**, explain your capabilities, and ask what concept from their course materials they'd like to study today. Do NOT say "I could not find the answer to this in your uploaded PDF" for greetings.
+   - If the student message is a greeting, greet them warmly as DeepTutor for **{subject}**, explain your capabilities, and ask what concept from their course materials they'd like to study today. Do NOT output a refusal for greetings.
 4. Boolean Continuations & Follow-up Acceptance:
-   - If the student answers 'Yes', 'Sure', 'Explain that', or 'Continue' to your previous follow-up question, you MUST directly fulfill and explain that topic step-by-step. Do NOT output a refusal message for follow-ups that you offered.
+   - If the student answers 'Yes', 'Sure', 'Explain that', or 'Continue' (including with a trailing constraint like 'yes, but only part 2'):
+     You MUST directly fulfill the follow-up step-by-step honoring any trailing constraint. Do NOT output a refusal message for follow-ups that you offered.
    - If the student answers 'No' / 'Nope', acknowledge politely and ask what other concept from their uploaded material they would like to study.
 5. Universal STEM Problem Solving & Table Completion Protocol:
-   When solving, calculating, or filling any table, exercise, or problem across ANY subject (Chemistry, Physics, Mathematics, Biology, Computer Science, Economics):
-   - Stage 1: First-Principles Governing Laws: Identify the fundamental laws, governing formulas, or naming conventions (e.g., in Physics: free-body balance, conservation laws, sign conventions; in Chemistry: IUPAC longest continuous chain tracing all branches, lowest locant rule; in Math: algebraic rules, boundary conditions; in CS: state transitions).
-   - Stage 2: Structural Inspection & Trap Elimination: Inspect every sub-component for classic textbook traps (e.g., in Chemistry: check if a bent substituent branch is longer than the horizontal chain, e.g. an ethyl group at C2 makes the chain longer; in Physics: verify coordinate directions and units; in Math: check $n=0$ or negative bounds).
-   - Stage 3: Row-by-Row Independent Computation: Compute EVERY single row, sequence, or test case individually from first principles. Double-check from both directions/perspectives (e.g., number carbons from both left and right and select the lowest locant set).
+   When solving, calculating, or filling any table, exercise, or problem across ANY subject:
+   - Stage 1: First-Principles Governing Laws: Identify the fundamental laws, governing formulas, or naming conventions.
+   - Stage 2: Structural Inspection & Trap Elimination: Inspect every sub-component for classic textbook traps (e.g., in Chemistry: check if a bent substituent branch is longer than the horizontal chain; in Physics: verify coordinate directions and units; in Math: check $n=0$ or negative bounds).
+   - Stage 3: Row-by-Row Independent Computation: Compute EVERY single row, sequence, or test case individually from first principles.
    - Stage 4: Sanity & Verification Check: Verify dimensional consistency, IUPAC validity, or algebraic balance before finalizing the table.
-   - Stage 5: Complete Solved Markdown Table: Output the 100% complete Markdown table with EVERY row, position, value, and name fully populated. Strictly do NOT use ellipses (...) or placeholders. Show clear step-by-step reasoning for each row above or below the table.
+   - Stage 5: Complete Solved Markdown Table: Output the 100% complete Markdown table with EVERY row, position, value, and name fully populated. Strictly do NOT use ellipses (...) or placeholders ('TBD', 'N/A'). Show clear step-by-step reasoning for each row above or below the table.
 6. Mathematics: Format ALL formulas in standalone block KaTeX:
    $$
    formula
    $$
-   or inline $...$.
+   or inline $...$. Ensure all LaTeX curly braces are strictly balanced!
 7. Tone: Articulate, authoritative, engaging academic tone. Strictly ZERO emojis.
 8. Chain-of-Thought: Provide a dedicated thought process detailing your reasoning and verification before the answer.
 9. Interactive Follow-up Question (Conversational Closing):
    ALWAYS end your response with a natural, conversational follow-up question in bold (e.g., "**Would you like to solve another problem from this section?**" or "**Shall we see how this applies to negative differences, or test this with a quick 1-question practice?**") that the student can easily answer with a simple 'Yes' or 'No'.
-10. Large, 'Explain More', & Previous Response Expansion Protocol:
-   - When the student asks to 'explain more about [particular topic]' OR 'explain more about the previous response / answer':
-   - You MUST generate an exhaustive, in-depth academic master response (minimum 5-8 detailed Markdown sections).
-   - Do NOT output short 1-paragraph summaries when an 'explain more' or detailed response is requested.
-   - **If expanding a particular topic** (e.g. 'explain more about multi-head attention'):
-     - Provide full mathematical derivations in centered block KaTeX `$$ ... $$`, architectural sub-component breakdowns under `###` subheadings, scannable Markdown comparison tables, worked step-by-step calculations, and exam traps.
-   - **If expanding the previous response** (e.g. 'explain more about the previous answer'):
-     - Reference key concepts, mechanisms, and formulas introduced in the previous turn.
-     - Elaborate on every single sub-component, provide concrete numerical/worked examples, explain underlying intuition, and detail edge cases.
-   - Structure for Detailed Response:
-     - '# [Topic / Query Title] — Exhaustive Master Explanation'
-     - '## 1. High-Level Intuition & Fundamental Motivation'
-     - '## 2. Governing Principles & Mathematical Formulation' (with centered block KaTeX $$ ... $$)
-     - '## 3. Step-by-Step Component Breakdown & Sub-Question Analysis' (with dedicated '### ' subsections for each sub-question/related concept)
-     - '## 4. Scannable Comparison & Markdown Tables' (scannable tabular summary)
-     - '## 5. Exam Traps, Misconceptions & Subtle Edge Cases'
-     - '## 6. Comprehensive Summary & Actionable Key Takeaways'
+10. Textbook Correctness Inquiry:
+    - If the student asks whether the textbook, author, or uploaded material is wrong about a concept ('is this textbook wrong about X'):
+      1. First, objectively explain what the uploaded material specifically states.
+      2. If the material's claim is inconsistent with well-established academic facts, flag this as an objective caveat/note of caution (e.g., "Note: While your text states X, standard literature notes Y because..."), rather than an aggressive contradiction. Always explain what the course material states first.{compound_guidance}{eli5_comparison_guidance}
 
 Return ONLY valid JSON in this exact structure:
 {{
@@ -629,68 +938,48 @@ Return ONLY valid JSON in this exact structure:
         sys_inst = "You are a distinguished university professor. Output clean JSON only. Strictly no emojis."
         raw = await call_llm(prompt, sys_inst, temperature=0.2, image_bytes=page_image_bytes)
 
-        thought = "Synthesizing retrieved FTS5 chunks into a structured step-by-step explanation."
-        answer = ""
-        quiz_data = None
+        thought, answer, quiz_data = parse_llm_json_response(raw)
+        answer = sanitize_katex(answer)
 
-        if raw:
-            text = raw.strip()
-            # Strip code fences if present
-            if text.startswith("```"):
-                text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
-                text = re.sub(r"\s*```$", "", text).strip()
+        # ─── Verification & Self-Correction Repair Loops ────────────────────
 
-            # 1. Try standard JSON decode with strict=False
-            parsed = None
-            try:
-                parsed = json.loads(text, strict=False)
-            except Exception:
-                # 2. Try regex extraction of JSON object
-                json_match = re.search(r"(\{[\s\S]*\})", text)
-                if json_match:
-                    try:
-                        parsed = json.loads(json_match.group(1), strict=False)
-                    except Exception:
-                        pass
+        # Check 1: KaTeX Brace Balance Sanity Check (Category 7)
+        is_balanced, malformed_span = check_katex_brace_balance(answer)
+        if not is_balanced and answer:
+            print(f"[DecisionAgent] KaTeX unbalanced braces detected in: {malformed_span}. Triggering repair retry...")
+            repair_prompt = (
+                f"{prompt}\n\n"
+                f"CRITICAL REPAIR INSTRUCTION: Your previous LaTeX output had unbalanced curly braces in span '{malformed_span}'. "
+                f"Regenerate the complete response ensuring all LaTeX formulas have perfectly balanced curly braces {{ and }}."
+            )
+            rep_raw = await call_llm(repair_prompt, sys_inst, temperature=0.1, image_bytes=page_image_bytes)
+            if rep_raw:
+                th2, ans2, qd2 = parse_llm_json_response(rep_raw)
+                ans2 = sanitize_katex(ans2)
+                if ans2:
+                    thought, answer, quiz_data = th2 or thought, ans2, qd2 or quiz_data
 
-            if isinstance(parsed, dict):
-                thought = parsed.get("thought_process", thought)
-                answer = parsed.get("response", "")
-                quiz_data = parsed.get("quiz_data")
+        # Check 2: STEM Table Verification (Row Count & Placeholder Enforcement - Category 2)
+        if answer and ("|" in answer or plan.get("requires_table_data")):
+            actual_rows = count_markdown_table_rows(answer)
+            expected_rows = detect_expected_row_count(user_query, retrieved_chunks)
+            has_placeholder = check_table_placeholders(answer)
 
-            # 3. Fallback: Safe regex extraction of fields without unicode_escape
-            if not answer and ('"response"' in text or '"thought_process"' in text):
-                th_match = re.search(r'"thought_process"\s*:\s*"((?:[^"\\]|\\.)*)"', text, re.DOTALL)
-                if th_match:
-                    thought = th_match.group(1).replace(r'\"', '"').replace(r'\n', '\n')
+            repair_msg = ""
+            if expected_rows and actual_rows > 0 and actual_rows < expected_rows:
+                repair_msg = f"You produced {actual_rows} table rows, but the problem specifies {expected_rows} rows. Redo this completely, solving and showing every single row (all {expected_rows} rows) without skipping any."
+            elif actual_rows > 0 and has_placeholder:
+                repair_msg = "Your previous output table contained an ellipsis ('...') or placeholder cell ('TBD', 'N/A'). You are strictly forbidden from using ellipses or placeholders. Redo this completely, solving and filling every row and cell explicitly from first principles."
 
-                resp_pattern = re.search(r'"response"\s*:\s*"', text)
-                if resp_pattern:
-                    start_pos = resp_pattern.end()
-                    end_pos = text.rfind('"')
-                    if end_pos > start_pos:
-                        raw_ans = text[start_pos:end_pos]
-                    else:
-                        raw_ans = text[start_pos:]
-                    # Unescape standard JSON string escapes only, leaving all LaTeX backslashes intact!
-                    answer = raw_ans.replace(r'\"', '"').replace(r'\n', '\n').replace(r'\t', '    ')
-
-            if not answer:
-                # Direct markdown response or stripped JSON
-                if text.startswith("{") and '"response":' in text:
-                    cleaned_body = re.sub(r'^\s*\{\s*"thought_process"\s*:\s*".*?"\s*,\s*"response"\s*:\s*"?', '', text, flags=re.DOTALL)
-                    cleaned_body = re.sub(r'"?\s*\}\s*$', '', cleaned_body)
-                    answer = cleaned_body.replace(r'\"', '"').replace(r'\n', '\n').strip()
-                else:
-                    answer = text
-
-        # Sanitize any accidental control character / corrupted LaTeX artifacts
-        if answer:
-            answer = answer.replace('\x0c', r'\f').replace('\x07', r'\a').replace('\x08', r'\b').replace('\x0b', r'\v')
-            # Fix any truncated/corrupted LaTeX keywords
-            answer = re.sub(r'(?<!\\)\brac\{', r'\\frac{', answer)
-            answer = re.sub(r'(?<!\\)\bext\{', r'\\text{', answer)
-            answer = re.sub(r'(?<!\\)\bpprox\b', r'\\approx', answer)
+            if repair_msg:
+                print(f"[DecisionAgent] STEM Table check flagged issue ({repair_msg}). Triggering repair retry...")
+                repair_prompt = f"{prompt}\n\nCRITICAL REPAIR INSTRUCTION: {repair_msg}"
+                rep_raw = await call_llm(repair_prompt, sys_inst, temperature=0.1, image_bytes=page_image_bytes)
+                if rep_raw:
+                    th2, ans2, qd2 = parse_llm_json_response(rep_raw)
+                    ans2 = sanitize_katex(ans2)
+                    if ans2:
+                        thought, answer, quiz_data = th2 or thought, ans2, qd2 or quiz_data
 
         if not answer:
             # Fallback direct generation if JSON parse failed
@@ -1180,6 +1469,36 @@ async def evaluate_exam_submission(
             correct = q.get("correct_answer", "").strip().lower()
             synonyms = [s.strip().lower() for s in q.get("acceptable_synonyms", [correct])]
             is_correct = any(s == student_ans.lower() for s in synonyms)
+            feedback = "Accurate terminology." if is_correct else f"Expected: '{q.get('correct_answer')}'."
+
+            # Lightweight LLM Equivalence Fallback for valid terminology not in acceptable_synonyms (Category 8)
+            if not is_correct and student_ans:
+                equiv_prompt = f"""
+Evaluate if this student's fill-in-the-blank answer is academically equivalent to the expected answer.
+
+Question: {q.get('question')}
+Expected Correct Answer: {q.get('correct_answer')}
+Acceptable Synonyms: {synonyms}
+Student Answer: "{student_ans}"
+
+Task: Does the student's answer mean the same thing as the correct answer, allowing for different but valid academic terminology, synonyms, or alternative phrasing?
+Return ONLY valid JSON:
+{{
+  "equivalent": true or false,
+  "explanation": "Short explanation"
+}}
+"""
+                try:
+                    equiv_raw = await call_llm(equiv_prompt, "You are an objective exam grader. Output strict JSON only.", temperature=0.0)
+                    if equiv_raw:
+                        clean_eq = equiv_raw.strip().replace("```json", "").replace("```", "").strip()
+                        eq_data = json.loads(clean_eq)
+                        if eq_data.get("equivalent") is True:
+                            is_correct = True
+                            feedback = f"Accepted equivalent terminology: '{student_ans}' is academically equivalent to '{q.get('correct_answer')}'."
+                except Exception as e:
+                    print(f"[Exam Evaluator] Equivalence check note: {e}")
+
             score = 100 if is_correct else 0
             earned_points += (score / 100.0)
             question_evaluations.append({
@@ -1190,27 +1509,32 @@ async def evaluate_exam_submission(
                 "correct_answer": q.get("correct_answer"),
                 "score_percentage": score,
                 "is_correct": is_correct,
-                "feedback": "Accurate terminology." if is_correct else f"Expected: '{q.get('correct_answer')}'.",
+                "feedback": feedback,
                 "explanation": q.get("explanation", "")
             })
 
         else:
-            # Written Question Rubric Evaluation via LLM
+            # Written Question Rubric Evaluation via LLM (Category 8)
             prompt = f"""
 Evaluate this student's written exam response using the provided rubric.
 
 Question: {q.get('question')}
-Rubric: {q.get('rubric_criteria')}
+Rubric Criteria: {q.get('rubric_criteria')}
 Sample Model Answer: {q.get('sample_model_answer')}
 
 Student's Written Answer:
 "{student_ans}"
 
+GRADING RULES:
+1. Grade objectively based on whether the student's answer demonstrably satisfies each rubric criterion, NOT merely on similarity to the sample model answer. A structurally different or alternative response that satisfies the rubric criteria must receive full marks.
+2. In your feedback, you MUST explicitly quote or cite which specific rubric criterion each point was awarded or deducted for.
+
 Provide an objective academic grade from 0 to 100 and constructive feedback.
 Return ONLY valid JSON:
 {{
   "score_percentage": 85,
-  "feedback": "Constructive academic feedback...",
+  "feedback": "Constructive academic feedback quoting specific rubric criteria...",
+  "rubric_citations": ["Criterion 1 satisfied: ...", "Criterion 2 deduction: ..."],
   "strengths": "What was well explained...",
   "missed_points": "What was missing..."
 }}
@@ -1218,12 +1542,14 @@ Return ONLY valid JSON:
             raw = await call_llm(prompt, "You are a university exam grader. Output strict JSON only.", temperature=0.1)
             score = 75
             feedback = "Response addresses core concepts adequately."
+            rubric_citations = []
             if raw:
                 try:
                     clean = raw.strip().replace("```json", "").replace("```", "").strip()
                     eval_data = json.loads(clean)
                     score = int(eval_data.get("score_percentage", 75))
                     feedback = eval_data.get("feedback", feedback)
+                    rubric_citations = eval_data.get("rubric_citations", [])
                 except Exception:
                     pass
 
@@ -1237,6 +1563,7 @@ Return ONLY valid JSON:
                 "score_percentage": score,
                 "is_correct": score >= 70,
                 "feedback": feedback,
+                "rubric_citations": rubric_citations,
                 "explanation": q.get("rubric_criteria", "")
             })
 

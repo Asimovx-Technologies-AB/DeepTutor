@@ -11,9 +11,9 @@
     "document_count": 1,
     "status": "text_ready",
     "topic_count": 7,
-    "message_count": 2,
+    "message_count": 10,
     "created_at": "2026-09-04T13:21:21.785260+00:00",
-    "last_active": "2026-09-04T13:22:27.780569+00:00"
+    "last_active": "2026-09-04T14:00:02.199098+00:00"
   },
   {
     "id": "session_6863256170",
@@ -43,9 +43,9 @@
     "document_count": 1,
     "status": "text_ready",
     "topic_count": 6,
-    "message_count": 4,
+    "message_count": 10,
     "created_at": "2026-09-04T11:24:27.302964+00:00",
-    "last_active": "2026-09-04T11:24:40.759001+00:00"
+    "last_active": "2026-09-04T13:48:14.357350+00:00"
   },
   {
     "id": "session_4286305798",
@@ -186,9 +186,9 @@
     "document_name": "ml algorithams.pdf",
     "status": "text_ready",
     "topic_count": 6,
-    "message_count": 18,
+    "message_count": 22,
     "created_at": "2026-09-04T06:09:24.710390+00:00",
-    "last_active": "2026-09-04T13:02:08.804167+00:00"
+    "last_active": "2026-09-04T14:03:59.113538+00:00"
   },
   {
     "id": "session_3862000107",
