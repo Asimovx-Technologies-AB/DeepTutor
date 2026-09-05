@@ -482,10 +482,11 @@ p, .markdown-content p {
 .artifact-md-viewer pre {
   font-family: 'JetBrains Mono', monospace;
   font-size: 13px;
-  background: #111827;
-  color: #F9FAFB;
+  background: #F8FAFC;
+  color: #0F172A;
   padding: 1em 1.25em;
   border-radius: 8px;
+  border: 1px solid #E2E8F0;
   overflow-x: auto;
   margin: 20px 0;
 }
@@ -731,11 +732,11 @@ textarea:focus-visible {
 }
 
 .markdown-content pre {
-  background-color: #111827;
-  color: #F9FAFB;
+  background-color: #F8FAFC;
+  color: #0F172A;
   padding: 1.1rem;
   border-radius: 0.75rem;
-  border: 1px solid #1F2937;
+  border: 1px solid #E2E8F0;
   overflow-x: auto;
   font-family: var(--font-mono);
   margin: 1.25em 0;

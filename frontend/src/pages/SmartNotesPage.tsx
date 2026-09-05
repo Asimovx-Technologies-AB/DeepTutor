@@ -622,7 +622,7 @@ export default function SmartNotesPage() {
                         )
                       }
                       return (
-                        <pre className="bg-[#20201D] text-white p-4 rounded-2xl overflow-x-auto text-xs font-mono">
+                        <pre className="bg-slate-50 text-slate-800 p-4 rounded-2xl overflow-x-auto text-xs font-mono border border-slate-200">
                           <code>{children}</code>
                         </pre>
                       )

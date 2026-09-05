@@ -325,14 +325,28 @@ def search_fts_chunks(
     conn.row_factory = sqlite3.Row
     results = []
 
-    clean_words = [
+    STOP_WORDS = {
+        "what", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
+        "do", "does", "did", "the", "a", "an", "and", "or", "but", "if", "then", "else",
+        "in", "on", "at", "to", "for", "of", "with", "by", "from", "about", "into", "through",
+        "during", "before", "after", "above", "below", "up", "down", "out", "over", "under",
+        "again", "further", "once", "here", "there", "when", "where", "why", "how", "all",
+        "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor",
+        "not", "only", "own", "same", "so", "than", "too", "very", "can", "will", "just",
+        "should", "now", "tell", "me", "explain", "give", "show", "define", "meaning", "solve"
+    }
+
+    raw_words = [
         "".join(c for c in w if c.isalnum() or c in ("-", "_")).strip()
         for w in query.split()
     ]
-    clean_words = [w for w in clean_words if len(w) > 1]
+    raw_words = [w for w in raw_words if len(w) > 1]
 
-    if not clean_words:
+    if not raw_words:
         return []
+
+    non_stop = [w for w in raw_words if w.lower() not in STOP_WORDS]
+    clean_words = non_stop if non_stop else raw_words
 
     fts_query = " OR ".join(f'"{w}"' for w in clean_words[:8])
 

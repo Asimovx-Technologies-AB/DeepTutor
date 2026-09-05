@@ -1758,6 +1758,8 @@ class DecisionAgent:
                 retrieved_chunks = get_all_chunks(session_id, limit=8)
             else:
                 retrieved_chunks = search_fts_chunks(session_id, user_query, limit=8 if is_large_request else 5)
+                if not retrieved_chunks:
+                    retrieved_chunks = get_all_chunks(session_id, limit=5)
 
         # 3. Format Recent Conversation History
         history_block = ""
@@ -1977,7 +1979,7 @@ STRICT RULES:
    - Mode 2 (Insufficient / Partial Inputs): If the retrieved context provides SOME but NOT ALL values or variables needed to solve a problem (e.g., mass and force given, angle missing):
      You MUST explicitly state which specific parameter or value is missing, explain the governing formula that requires it, and ask the student for that specific value or guide them to where in the course materials it might be found. Do NOT invent, assume, or hallucinate a plausible numerical value, and do NOT decline completely.
    - Mode 3 (Source Contradiction / Typos): If a formula, constant, or unit in the retrieved text looks internally contradictory or contains a clear source typo (e.g., units do not reconcile across equations), you MUST explicitly flag the inconsistency to the student rather than silently 'fixing' it or blindly calculating.
-   - Mode 4 (Completely Unrelated / Open Exploration): If materials ARE uploaded and the topic is absent from the material, explain that it is not covered in their uploaded materials for {subject}. If NO materials are uploaded yet, answer the student's query clearly and academically from first principles, and conclude with a tip to upload course materials.
+   - Mode 4 (Out-of-Topic / Absent from Materials): If course materials ARE uploaded for this session and the student's question topic is NOT present in the uploaded course materials, you MUST STRICTLY decline to answer or explain the out-of-topic concept. State clearly that the concept is not covered in their uploaded materials for {subject}, suggest topics that ARE in their uploaded materials, and invite them to ask questions on those topics or upload notes for the new topic. Strictly do NOT provide general academic overviews, definitions, or explanations for out-of-topic concepts when materials are uploaded. If NO materials are uploaded yet, answer the student's query clearly and academically from first principles, and conclude with a tip to upload course materials.
 2. Multi-Material & Cross-Chunk Disagreement Rule:
    - If retrieved chunks come from multiple uploaded materials (or if the student asks to compare or explain both materials):
      You MUST explicitly analyze and present the content from EACH material under clear section headings (e.g. '### Material: [Document Name]').
