@@ -26,6 +26,7 @@ import MermaidDiagram from '../components/MermaidDiagram'
 import StudyNotesCard, { extractDocTitle } from '../components/StudyNotesCard'
 import FlashcardQuizCard from '../components/FlashcardQuizCard'
 import ConfirmModal from '../components/ConfirmModal'
+import { SessionLoadingAnimation } from '../components/SessionLoadingAnimation'
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
@@ -147,6 +148,7 @@ export default function LearnPage() {
   // ─── State: Workspaces & Sessions ───
   const [sessions, setSessions] = useState<StudySessionMeta[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string>(routeSessionId || '')
+  const [isSessionLoading, setIsSessionLoading] = useState<boolean>(false)
   const [activeSubject, setActiveSubject] = useState<string>('General Study')
   const [documentName, setDocumentName] = useState<string>('')
   const [docStatus, setDocStatus] = useState<string>('text_ready')
@@ -402,6 +404,7 @@ export default function LearnPage() {
   // ─── 2. Load Session Details & SQLite Data ───
   const loadSessionDetails = useCallback(async (sid: string) => {
     if (!sid) return
+    setIsSessionLoading(true)
     try {
       const res = await studyApi.getSession(sid)
       const data = res.data
@@ -441,6 +444,8 @@ export default function LearnPage() {
       }
     } catch (err) {
       console.error('Failed to load session details:', err)
+    } finally {
+      setIsSessionLoading(false)
     }
   }, [])
 
@@ -1072,6 +1077,9 @@ export default function LearnPage() {
 
   // ─── Session Switching ───
   const handleSelectSession = (sid: string) => {
+    if (sid !== activeSessionId) {
+      setIsSessionLoading(true)
+    }
     setActiveSessionId(sid)
     const target = sessions.find((s) => s.id === sid)
     if (target) {
@@ -1822,7 +1830,18 @@ export default function LearnPage() {
             {/* TAB 1: GROUNDED TUTOR CHAT (IndTutor Cognitive Minimalist Experience) */}
             {activeTab === 'chat' && (
               <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-[#F9FAFB]">
-                {/* Message Scroll Container */}
+                {isSessionLoading ? (
+                  <div className="flex-1 flex items-center justify-center p-4 sm:p-8 bg-[#F9FAFB] overflow-y-auto">
+                    <div className="max-w-2xl w-full">
+                      <SessionLoadingAnimation
+                        sessionTitle={sessions.find((s) => s.id === activeSessionId)?.title || documentName || activeSubject}
+                        subject={activeSubject}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Message Scroll Container */}
                 <div
                   ref={chatScrollRef}
                   onScroll={handleChatScroll}
@@ -2233,6 +2252,8 @@ export default function LearnPage() {
                     </div>
                   </div>
                 </div>
+                  </>
+                )}
               </div>
             )}
 

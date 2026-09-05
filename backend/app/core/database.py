@@ -178,7 +178,40 @@ def update_user_tier(user_id: str, is_premium: bool) -> Optional[dict]:
     return get_user_by_id(user_id)
 
 
-# ─── Session helpers ───────────────────────────────────────────────────────────
+def ensure_session_exists(session_id: str, user_id: Optional[str] = None, title: str = "Study Workspace") -> None:
+    uid = user_id or "default-user"
+    with DBContext() as db:
+        s = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        if not s:
+            u = db.query(User).filter(User.id == uid).first()
+            if not u:
+                u = User(
+                    id=uid,
+                    username="Student",
+                    email=f"{uid}@deeptutor.app",
+                    password_hash="local_hash",
+                    role="student"
+                )
+                db.add(u)
+                try:
+                    db.commit()
+                except Exception:
+                    db.rollback()
+
+            s = ChatSession(
+                id=session_id,
+                user_id=uid,
+                topic_id="general",
+                session_title=title,
+                started_at=now_iso()
+            )
+            db.add(s)
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+
+
 def create_session(user_id: str, topic_id: str, title: str) -> dict:
     sid = new_id()
     started = now_iso()

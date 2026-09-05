@@ -178,9 +178,10 @@ async def upload_document(
     init_session_db(study_id)
 
     # Sanitize filename and check path traversal
-    safe_filename = Path(file.filename).name
-    if not safe_filename or ".." in safe_filename or "/" in safe_filename or "\\" in safe_filename:
-        raise HTTPException(status_code=400, detail="Invalid filename")
+    raw_filename = file.filename or ""
+    if not raw_filename or ".." in raw_filename or "/" in raw_filename or "\\" in raw_filename:
+        raise HTTPException(status_code=400, detail="Path traversal attempt detected in filename")
+    safe_filename = Path(raw_filename).name
 
     upload_dir = (upload_root / study_id).resolve()
     file_path_obj = (upload_dir / safe_filename).resolve()
