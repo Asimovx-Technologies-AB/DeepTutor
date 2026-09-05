@@ -1,0 +1,398 @@
+[
+  {
+    "id": "test_calibrated_flow_shortcut_38bd211b",
+    "user_id": "default-user",
+    "subject": "Science",
+    "title": "Science (Primary School (Class 1\u20135))",
+    "document_name": "[Textbook] Science",
+    "documents": [
+      "[Textbook] Science"
+    ],
+    "document_count": 1,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T12:57:25.589194+00:00",
+    "last_active": "2026-09-05T12:57:25.589194+00:00"
+  },
+  {
+    "id": "test_calibrated_flow_primary_72594269",
+    "user_id": "default-user",
+    "subject": "Machine Learning",
+    "title": "Machine Learning (Primary School (Class 1\u20135))",
+    "document_name": "[Textbook] Machine Learning",
+    "documents": [
+      "[Textbook] Machine Learning"
+    ],
+    "document_count": 1,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T12:57:25.487217+00:00",
+    "last_active": "2026-09-05T12:57:25.487217+00:00"
+  },
+  {
+    "id": "session_6493149559",
+    "user_id": "dd8c82d3-c6d5-4880-b46c-243b2bc80db0",
+    "subject": "Ml Algorithams",
+    "title": "Ml Algorithams Study Room",
+    "document_name": "ml algorithams.pdf",
+    "documents": [
+      "ml algorithams.pdf"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 5,
+    "message_count": 12,
+    "created_at": "2026-09-05T12:57:09.886163+00:00",
+    "last_active": "2026-09-05T13:01:01.944680+00:00"
+  },
+  {
+    "id": "test_calibrated_flow_shortcut_ecf58b74",
+    "user_id": "default-user",
+    "subject": "Science",
+    "title": "Science (Primary School (Class 1\u20135))",
+    "document_name": "[Textbook] Science",
+    "documents": [
+      "[Textbook] Science"
+    ],
+    "document_count": 1,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T12:56:02.417931+00:00",
+    "last_active": "2026-09-05T12:56:02.417931+00:00"
+  },
+  {
+    "id": "test_calibrated_flow_primary_358734f8",
+    "user_id": "default-user",
+    "subject": "Machine Learning",
+    "title": "Machine Learning (Primary School (Class 1\u20135))",
+    "document_name": "[Textbook] Machine Learning",
+    "documents": [
+      "[Textbook] Machine Learning"
+    ],
+    "document_count": 1,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T12:56:02.320206+00:00",
+    "last_active": "2026-09-05T12:56:02.320206+00:00"
+  },
+  {
+    "id": "session_3965978207",
+    "user_id": "dd8c82d3-c6d5-4880-b46c-243b2bc80db0",
+    "subject": "Docscanner 17-Nov-2025 2-09 Pm",
+    "title": "Docscanner 17-Nov-2025 2-09 Pm Study Room",
+    "document_name": "DocScanner 17-Nov-2025 2-09 pm.pdf",
+    "documents": [
+      "DocScanner 17-Nov-2025 2-09 pm.pdf"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 6,
+    "message_count": 10,
+    "created_at": "2026-09-05T12:43:04.933418+00:00",
+    "last_active": "2026-09-05T12:56:51.822875+00:00"
+  },
+  {
+    "id": "session_4075254702",
+    "user_id": "dd8c82d3-c6d5-4880-b46c-243b2bc80db0",
+    "subject": "General Study",
+    "title": "New Study Workspace",
+    "document_name": "",
+    "documents": [],
+    "document_count": 0,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T12:43:01.887667+00:00",
+    "last_active": "2026-09-05T12:43:01.887667+00:00"
+  },
+  {
+    "id": "test_calibrated_flow_shortcut_ce17780a",
+    "user_id": "default-user",
+    "subject": "Science",
+    "title": "Science (Primary School (Class 1\u20135))",
+    "document_name": "[Textbook] Science",
+    "documents": [
+      "[Textbook] Science"
+    ],
+    "document_count": 1,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T12:41:19.238252+00:00",
+    "last_active": "2026-09-05T12:41:19.238252+00:00"
+  },
+  {
+    "id": "test_calibrated_flow_primary_937b2def",
+    "user_id": "default-user",
+    "subject": "Machine Learning",
+    "title": "Machine Learning (Primary School (Class 1\u20135))",
+    "document_name": "[Textbook] Machine Learning",
+    "documents": [
+      "[Textbook] Machine Learning"
+    ],
+    "document_count": 1,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T12:41:19.117708+00:00",
+    "last_active": "2026-09-05T12:41:19.117708+00:00"
+  },
+  {
+    "id": "session_9946329771",
+    "user_id": "dd8c82d3-c6d5-4880-b46c-243b2bc80db0",
+    "subject": "Attention All U Need",
+    "title": "Attention All U Need Study Room",
+    "document_name": "Attention all u need.pdf",
+    "documents": [
+      "Attention all u need.pdf"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 6,
+    "message_count": 8,
+    "created_at": "2026-09-05T12:25:56.917462+00:00",
+    "last_active": "2026-09-05T12:30:22.002256+00:00"
+  },
+  {
+    "id": "session_3671608272",
+    "user_id": "dd8c82d3-c6d5-4880-b46c-243b2bc80db0",
+    "subject": "Ml Algorithams",
+    "title": "Ml Algorithams Study Room",
+    "document_name": "ml algorithams.pdf",
+    "documents": [
+      "ml algorithams.pdf"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 5,
+    "message_count": 4,
+    "created_at": "2026-09-05T12:24:13.477355+00:00",
+    "last_active": "2026-09-05T12:42:45.642717+00:00"
+  },
+  {
+    "id": "37f6a552-86c1-4ddf-8a1a-ceb7e8dd31ee",
+    "user_id": "e6a3c756-c286-45f5-ab8b-e8d7132fd7c7",
+    "subject": "Hsslive-35 Maths Eng",
+    "title": "Hsslive-35 Maths Eng Study Room",
+    "document_name": "Hsslive-35_Maths Eng.pdf",
+    "documents": [
+      "Hsslive-35_Maths Eng.pdf"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 0,
+    "message_count": 2,
+    "created_at": "2026-09-05T12:22:39.130288+00:00",
+    "last_active": "2026-09-05T12:23:09.090250+00:00"
+  },
+  {
+    "id": "session_6231852345",
+    "user_id": "e6a3c756-c286-45f5-ab8b-e8d7132fd7c7",
+    "subject": "General Study",
+    "title": "Default Study Room",
+    "document_name": "",
+    "documents": [],
+    "document_count": 0,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T12:22:16.370423+00:00",
+    "last_active": "2026-09-05T12:22:16.370423+00:00"
+  },
+  {
+    "id": "test_calibrated_flow_shortcut_4e0a79b5",
+    "user_id": "default-user",
+    "subject": "Science",
+    "title": "Science (Primary School (Class 1\u20135))",
+    "document_name": "[Textbook] Science",
+    "documents": [
+      "[Textbook] Science"
+    ],
+    "document_count": 1,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T12:20:48.472775+00:00",
+    "last_active": "2026-09-05T12:20:48.472775+00:00"
+  },
+  {
+    "id": "test_calibrated_flow_primary_5e7f33e3",
+    "user_id": "default-user",
+    "subject": "Machine Learning",
+    "title": "Machine Learning (Primary School (Class 1\u20135))",
+    "document_name": "[Textbook] Machine Learning",
+    "documents": [
+      "[Textbook] Machine Learning"
+    ],
+    "document_count": 1,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T12:20:48.386575+00:00",
+    "last_active": "2026-09-05T12:20:48.386575+00:00"
+  },
+  {
+    "id": "test_calibrated_flow_shortcut_2897113a",
+    "user_id": "default-user",
+    "subject": "Science",
+    "title": "Science (Primary School (Class 1\u20135))",
+    "document_name": "[Textbook] Science",
+    "documents": [
+      "[Textbook] Science"
+    ],
+    "document_count": 1,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T12:17:21.670974+00:00",
+    "last_active": "2026-09-05T12:17:21.670974+00:00"
+  },
+  {
+    "id": "test_calibrated_flow_primary_b9556b28",
+    "user_id": "default-user",
+    "subject": "Machine Learning",
+    "title": "Machine Learning (Primary School (Class 1\u20135))",
+    "document_name": "[Textbook] Machine Learning",
+    "documents": [
+      "[Textbook] Machine Learning"
+    ],
+    "document_count": 1,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T12:17:21.607659+00:00",
+    "last_active": "2026-09-05T12:17:21.607659+00:00"
+  },
+  {
+    "id": "test_calibrated_flow_primary_c4f3855b",
+    "user_id": "default-user",
+    "subject": "Machine Learning",
+    "title": "Machine Learning (Primary School (Class 1\u20135))",
+    "document_name": "[Textbook] Machine Learning",
+    "documents": [
+      "[Textbook] Machine Learning"
+    ],
+    "document_count": 1,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T12:17:13.990315+00:00",
+    "last_active": "2026-09-05T12:17:13.990315+00:00"
+  },
+  {
+    "id": "session_4482397269",
+    "user_id": "91ed7c46-121d-4cda-bb6c-1d943105cba6",
+    "subject": "Physics",
+    "title": "Physics (Primary School (Class 1\u20135))",
+    "document_name": "[Textbook] Physics",
+    "documents": [
+      "[Textbook] Physics"
+    ],
+    "document_count": 1,
+    "status": "ready",
+    "topic_count": 4,
+    "message_count": 12,
+    "created_at": "2026-09-05T12:00:02.304507+00:00",
+    "last_active": "2026-09-05T12:03:29.505723+00:00"
+  },
+  {
+    "id": "session_6334809819",
+    "user_id": "91ed7c46-121d-4cda-bb6c-1d943105cba6",
+    "subject": "Hsslive-35 Maths Eng",
+    "title": "Hsslive-35 Maths Eng Study Room",
+    "document_name": "Hsslive-35_Maths Eng.pdf",
+    "documents": [
+      "Hsslive-35_Maths Eng.pdf"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 5,
+    "message_count": 2,
+    "created_at": "2026-09-05T11:53:24.333485+00:00",
+    "last_active": "2026-09-05T11:56:13.518604+00:00"
+  },
+  {
+    "id": "test_calibrated_flow_shortcut_b5bdd113",
+    "user_id": "default-user",
+    "subject": "Science",
+    "title": "Science (Primary School (Class 1\u20135))",
+    "document_name": "[Textbook] Science",
+    "documents": [
+      "[Textbook] Science"
+    ],
+    "document_count": 1,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T11:51:25.960242+00:00",
+    "last_active": "2026-09-05T11:51:25.960242+00:00"
+  },
+  {
+    "id": "test_calibrated_flow_primary_85393f74",
+    "user_id": "default-user",
+    "subject": "Machine Learning",
+    "title": "Machine Learning (Primary School (Class 1\u20135))",
+    "document_name": "[Textbook] Machine Learning",
+    "documents": [
+      "[Textbook] Machine Learning"
+    ],
+    "document_count": 1,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T11:51:25.712699+00:00",
+    "last_active": "2026-09-05T11:51:25.712699+00:00"
+  },
+  {
+    "id": "test_calibrated_flow_shortcut_fe893470",
+    "user_id": "default-user",
+    "subject": "Science",
+    "title": "Science (Primary School (Class 1\u20135))",
+    "document_name": "[Textbook] Science",
+    "documents": [
+      "[Textbook] Science"
+    ],
+    "document_count": 1,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T11:33:20.382203+00:00",
+    "last_active": "2026-09-05T11:33:20.382203+00:00"
+  },
+  {
+    "id": "test_calibrated_flow_primary_698e9c24",
+    "user_id": "default-user",
+    "subject": "Machine Learning",
+    "title": "Machine Learning (Primary School (Class 1\u20135))",
+    "document_name": "[Textbook] Machine Learning",
+    "documents": [
+      "[Textbook] Machine Learning"
+    ],
+    "document_count": 1,
+    "status": "ready",
+    "topic_count": 0,
+    "message_count": 0,
+    "created_at": "2026-09-05T11:33:20.293105+00:00",
+    "last_active": "2026-09-05T11:33:20.293105+00:00"
+  },
+  {
+    "id": "session_485020668",
+    "user_id": "91ed7c46-121d-4cda-bb6c-1d943105cba6",
+    "subject": "Class-10-Geography",
+    "title": "Class-10-Geography Study Room",
+    "document_name": "Class-10-Geography.pdf",
+    "documents": [
+      "Class-10-Geography.pdf"
+    ],
+    "document_count": 1,
+    "status": "text_ready",
+    "topic_count": 8,
+    "message_count": 6,
+    "created_at": "2026-09-05T11:30:07.330119+00:00",
+    "last_active": "2026-09-05T11:52:00.062040+00:00"
+  }
+]

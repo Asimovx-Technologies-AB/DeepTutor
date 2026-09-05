@@ -5,7 +5,7 @@ from typing import List, Optional, Dict
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session
 from app.core.config import get_settings
-from app.core.models import Base, User, ChatSession, ChatMessage, Document, Quiz, QuizQuestion, QuizAttempt, Flashcard, StudyPlan, KnowledgeGraph, StudyNote
+from app.core.models import Base, User, ChatSession, ChatMessage, Document, Quiz, QuizQuestion, QuizAttempt, Flashcard, StudyPlan, KnowledgeGraph, StudyNote, SessionDocument
 
 settings = get_settings()
 
@@ -24,7 +24,7 @@ def _create_engine_with_fallback(primary_url: str):
                 pool_size=20,
                 max_overflow=30,
                 pool_recycle=300,
-                connect_args={"connect_timeout": 5},
+                connect_args={"connect_timeout": 15},
             )
             # Test connection
             with eng.connect() as conn:
@@ -55,6 +55,9 @@ except Exception as e:
 with engine.connect() as conn:
     for sql in [
         "ALTER TABLE documents ADD COLUMN key_topics TEXT DEFAULT '[]'",
+        "ALTER TABLE documents ADD COLUMN doc_hash VARCHAR(64)",
+        "ALTER TABLE documents ADD COLUMN status VARCHAR(20) DEFAULT 'pending'",
+        "ALTER TABLE documents ADD COLUMN error_message TEXT",
         "ALTER TABLE users ADD COLUMN is_premium BOOLEAN DEFAULT 0",
         "ALTER TABLE users ADD COLUMN plan VARCHAR DEFAULT 'free'",
         "ALTER TABLE users ADD COLUMN current_streak INTEGER DEFAULT 0",
@@ -175,7 +178,40 @@ def update_user_tier(user_id: str, is_premium: bool) -> Optional[dict]:
     return get_user_by_id(user_id)
 
 
-# ─── Session helpers ───────────────────────────────────────────────────────────
+def ensure_session_exists(session_id: str, user_id: Optional[str] = None, title: str = "Study Workspace") -> None:
+    uid = user_id or "default-user"
+    with DBContext() as db:
+        s = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        if not s:
+            u = db.query(User).filter(User.id == uid).first()
+            if not u:
+                u = User(
+                    id=uid,
+                    username="Student",
+                    email=f"{uid}@deeptutor.app",
+                    password_hash="local_hash",
+                    role="student"
+                )
+                db.add(u)
+                try:
+                    db.commit()
+                except Exception:
+                    db.rollback()
+
+            s = ChatSession(
+                id=session_id,
+                user_id=uid,
+                topic_id="general",
+                session_title=title,
+                started_at=now_iso()
+            )
+            db.add(s)
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+
+
 def create_session(user_id: str, topic_id: str, title: str) -> dict:
     sid = new_id()
     started = now_iso()
@@ -229,14 +265,27 @@ def get_session(session_id: str) -> Optional[dict]:
     return None
 
 
-def delete_session(session_id: str) -> bool:
+def delete_session(session_id: str, user_id: Optional[str] = None) -> dict:
     with DBContext() as db:
+        query = db.query(ChatSession).filter(ChatSession.id == session_id)
+        if user_id is not None:
+            query = query.filter(ChatSession.user_id == user_id)
+        s = query.first()
+        if not s:
+            return {"deleted": False}
+
+        doc_links = db.query(SessionDocument).filter(SessionDocument.session_id == session_id).all()
+        deleted_docs = []
+        for dl in doc_links:
+            d = db.query(Document).filter(Document.doc_hash == dl.doc_hash).first()
+            if d:
+                deleted_docs.append({"id": d.id, "file_path": d.file_path})
+            db.delete(dl)
+
         db.query(ChatMessage).filter(ChatMessage.session_id == session_id).delete(synchronize_session=False)
-        s = db.query(ChatSession).filter(ChatSession.id == session_id).first()
-        if s:
-            db.delete(s)
-            return True
-    return False
+        db.delete(s)
+        return {"deleted": True, "deleted_docs": deleted_docs}
+
 
 
 # ─── Message helpers ───────────────────────────────────────────────────────────
@@ -289,7 +338,15 @@ def get_messages(session_id: str, last_n: int = 20) -> List[dict]:
 
 
 # ─── Document helpers ──────────────────────────────────────────────────────────
-def create_document(user_id: str, topic_id: str, file_name: str, file_path: str, file_type: str) -> dict:
+def create_document(
+    user_id: str,
+    topic_id: str,
+    file_name: str,
+    file_path: str,
+    file_type: str,
+    doc_hash: Optional[str] = None,
+    status: str = "pending",
+) -> dict:
     doc_id = new_id()
     with DBContext() as db:
         doc = Document(
@@ -302,6 +359,8 @@ def create_document(user_id: str, topic_id: str, file_name: str, file_path: str,
             indexed=False,
             entity_count=0,
             chunk_count=0,
+            doc_hash=doc_hash,
+            status=status,
             created_at=now_iso(),
         )
         db.add(doc)
@@ -316,6 +375,8 @@ def create_document(user_id: str, topic_id: str, file_name: str, file_path: str,
             "file_path": d.file_path,
             "file_type": d.file_type,
             "indexed": d.indexed,
+            "status": getattr(d, "status", status),
+            "doc_hash": getattr(d, "doc_hash", doc_hash),
             "entity_count": d.entity_count,
             "chunk_count": d.chunk_count,
             "created_at": d.created_at,
@@ -391,17 +452,126 @@ def get_documents_for_user(user_id: str) -> List[dict]:
         ]
 
 
-def update_document_stats(doc_id: str, indexed: bool, entity_count: int, chunk_count: int, key_topics: list = None) -> bool:
+def update_document_stats(
+    doc_id: str,
+    indexed: bool,
+    entity_count: int,
+    chunk_count: int,
+    key_topics: list = None,
+    status: Optional[str] = None,
+    error_message: Optional[str] = None,
+) -> bool:
     with DBContext() as db:
         doc = db.query(Document).filter(Document.id == doc_id).first()
         if doc:
             doc.indexed = indexed
             doc.entity_count = entity_count
             doc.chunk_count = chunk_count
+            if status:
+                doc.status = status
+            elif indexed:
+                doc.status = "completed"
+            if error_message is not None:
+                doc.error_message = error_message
             if key_topics is not None:
                 doc.key_topics = key_topics
             return True
     return False
+
+
+def get_document_by_hash(doc_hash: str, user_id: str) -> Optional[dict]:
+    with DBContext() as db:
+        d = db.query(Document).filter(Document.doc_hash == doc_hash, Document.user_id == user_id).first()
+        if not d:
+            return None
+        return {
+            "id": d.id,
+            "user_id": d.user_id,
+            "topic_id": d.topic_id,
+            "file_name": d.file_name,
+            "file_path": d.file_path,
+            "file_type": d.file_type,
+            "indexed": d.indexed,
+            "status": getattr(d, "status", "completed" if d.indexed else "pending"),
+            "doc_hash": d.doc_hash,
+            "entity_count": d.entity_count,
+            "chunk_count": d.chunk_count,
+            "key_topics": getattr(d, "key_topics", []),
+            "created_at": d.created_at,
+        }
+
+
+def link_document_to_session(doc_hash: str, session_id: str, user_id: str) -> bool:
+    with DBContext() as db:
+        existing = db.query(SessionDocument).filter(
+            SessionDocument.session_id == session_id,
+            SessionDocument.doc_hash == doc_hash
+        ).first()
+        if not existing:
+            link = SessionDocument(
+                session_id=session_id,
+                doc_hash=doc_hash,
+                user_id=user_id,
+                uploaded_at=now_iso(),
+            )
+            db.add(link)
+    return True
+
+
+def get_session_documents(session_id: str, user_id: str) -> List[dict]:
+    with DBContext() as db:
+        links = db.query(SessionDocument).filter(
+            SessionDocument.session_id == session_id,
+            SessionDocument.user_id == user_id
+        ).order_by(SessionDocument.uploaded_at.desc()).all()
+        
+        results = []
+        for link in links:
+            doc = db.query(Document).filter(
+                Document.doc_hash == link.doc_hash,
+                Document.user_id == user_id
+            ).first()
+            if doc:
+                results.append({
+                    "id": doc.id,
+                    "doc_hash": doc.doc_hash,
+                    "filename": doc.file_name,
+                    "file_type": doc.file_type,
+                    "chunks": doc.chunk_count,
+                    "status": getattr(doc, "status", "completed" if doc.indexed else "pending"),
+                    "uploaded_at": link.uploaded_at,
+                    "key_topics": getattr(doc, "key_topics", []),
+                })
+        return results
+
+
+def get_document_status_for_ui(session_id: str, user_id: str) -> List[dict]:
+    with DBContext() as db:
+        links = db.query(SessionDocument).filter(
+            SessionDocument.session_id == session_id,
+            SessionDocument.user_id == user_id
+        ).all()
+        
+        ui_stats = []
+        for link in links:
+            doc = db.query(Document).filter(
+                Document.doc_hash == link.doc_hash,
+                Document.user_id == user_id
+            ).first()
+            if not doc:
+                continue
+            linked_count = db.query(SessionDocument).filter(
+                SessionDocument.doc_hash == link.doc_hash,
+                SessionDocument.user_id == user_id
+            ).count()
+            ui_stats.append({
+                "filename": doc.file_name,
+                "status": "indexed" if (doc.indexed or getattr(doc, "status", "") == "completed") else getattr(doc, "status", "pending"),
+                "chunks": doc.chunk_count,
+                "linked_sessions": linked_count,
+                "doc_hash": doc.doc_hash,
+            })
+        return ui_stats
 
 
 def delete_document(doc_id: str, user_id: str) -> Optional[dict]:

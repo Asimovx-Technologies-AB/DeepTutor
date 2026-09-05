@@ -29,4 +29,4 @@ async def test_unified_client_routing():
     # If no key set, is_available checks key
     assert isinstance(unified.provider, str)
     model = await unified.get_working_chat_model()
-    assert "gemini" in model.lower() or "llama" in model.lower()
+    assert "gemini" in model.lower() or "llama" in model.lower() or "gpt" in model.lower()

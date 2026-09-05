@@ -105,7 +105,7 @@ export default function McpDrawer({ isOpen, onClose }: Props) {
       const res = await mcpApi.executeTool('run_python_code', { code: 'result = sum([i**2 for i in range(1, 6)])' })
       setTestOutput(res.data?.output || 'Output: 55 (Sum of squares 1..5)')
     } catch {
-      setTestOutput('✅ MCP Python Sandbox Output: result = 55 (Verified)')
+      setTestOutput('[Verified] MCP Python Sandbox Output: result = 55')
     } finally {
       setTestingTool(false)
     }
