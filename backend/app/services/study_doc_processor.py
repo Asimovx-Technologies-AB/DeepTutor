@@ -273,20 +273,12 @@ class StudyDocumentProcessor:
             with open(file_path, "rb") as f:
                 img_bytes = f.read()
 
-            if settings.GEMINI_API_KEY:
-                import google.generativeai as genai
-                genai.configure(api_key=settings.GEMINI_API_KEY)
-                model = genai.GenerativeModel("gemini-2.5-flash")
-                ext = Path(file_path).suffix.lower().replace(".", "")
-                mime = f"image/{ext}" if ext != "jpg" else "image/jpeg"
-                prompt = (
-                    "Transcribe this study image or diagram completely. Describe formulas in LaTeX ($...$), "
-                    "transcribe handwritten text, and explain technical diagrams in detail."
-                )
-                image_part = {"mime_type": mime, "data": img_bytes}
-                resp = await asyncio.to_thread(model.generate_content, [prompt, image_part])
-                if resp and resp.text:
-                    transcription = resp.text
+            from app.services.study_agents import call_vlm
+            prompt = (
+                "Transcribe this study image or diagram completely. Describe formulas in LaTeX ($...$), "
+                "transcribe handwritten text, and explain technical diagrams in detail."
+            )
+            transcription = await call_vlm(prompt, img_bytes)
         except Exception:
             pass
 
@@ -363,34 +355,30 @@ class StudyDocumentProcessor:
             doc = pymupdf.open(file_path)
             settings = get_settings()
 
-            if settings.GEMINI_API_KEY:
-                import google.generativeai as genai
-                genai.configure(api_key=settings.GEMINI_API_KEY)
-                model = genai.GenerativeModel("gemini-2.5-flash")
+            from app.services.study_agents import call_vlm
 
-                extracted_img_count = 0
-                for p_idx in range(min(len(doc), 15)):
-                    page = doc[p_idx]
-                    images = page.get_images()
-                    for img_idx, img in enumerate(images[:2]):
-                        if extracted_img_count >= 5:
-                            break
-                        xref = img[0]
-                        base_img = doc.extract_image(xref)
-                        if base_img and base_img.get("image"):
-                            img_bytes = base_img["image"]
-                            if len(img_bytes) > 5000:  # Skip tiny icons
-                                prompt = "Describe this technical diagram or academic figure concisely. Detail all labeled axes, steps, and key principles."
-                                image_part = {"mime_type": f"image/{base_img.get('ext', 'png')}", "data": img_bytes}
-                                resp = await asyncio.to_thread(model.generate_content, [prompt, image_part])
-                                if resp and resp.text:
-                                    enrichment_chunks.append({
-                                        "chunk_id": f"{doc_id}_fig_p{p_idx+1}_{img_idx}",
-                                        "page": p_idx + 1,
-                                        "source_type": "image_caption",
-                                        "content": f"[Doc: {path.name} | Page {p_idx+1} | Type: figure_diagram] {resp.text}"
-                                    })
-                                    extracted_img_count += 1
+            extracted_img_count = 0
+            for p_idx in range(min(len(doc), 15)):
+                page = doc[p_idx]
+                images = page.get_images()
+                for img_idx, img in enumerate(images[:2]):
+                    if extracted_img_count >= 5:
+                        break
+                    xref = img[0]
+                    base_img = doc.extract_image(xref)
+                    if base_img and base_img.get("image"):
+                        img_bytes = base_img["image"]
+                        if len(img_bytes) > 5000:  # Skip tiny icons
+                            prompt = "Describe this technical diagram or academic figure concisely. Detail all labeled axes, steps, and key principles."
+                            fig_text = await call_vlm(prompt, img_bytes)
+                            if fig_text and fig_text.strip():
+                                enrichment_chunks.append({
+                                    "chunk_id": f"{doc_id}_fig_p{p_idx+1}_{img_idx}",
+                                    "page": p_idx + 1,
+                                    "source_type": "image_caption",
+                                    "content": f"[Doc: {path.name} | Page {p_idx+1} | Type: figure_diagram] {fig_text.strip()}"
+                                })
+                                extracted_img_count += 1
             doc.close()
         except Exception:
             pass

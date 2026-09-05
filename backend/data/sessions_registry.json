@@ -1,6 +1,6 @@
 [
   {
-    "id": "test_calibrated_flow_shortcut_847206f0",
+    "id": "test_calibrated_flow_shortcut_b5bdd113",
     "user_id": "default-user",
     "subject": "Science",
     "title": "Science (Primary School (Class 1\u20135))",
@@ -12,11 +12,11 @@
     "status": "ready",
     "topic_count": 0,
     "message_count": 0,
-    "created_at": "2026-09-05T09:02:31.708416+00:00",
-    "last_active": "2026-09-05T09:02:31.708416+00:00"
+    "created_at": "2026-09-05T11:51:25.960242+00:00",
+    "last_active": "2026-09-05T11:51:25.960242+00:00"
   },
   {
-    "id": "test_calibrated_flow_primary_0cdf0f87",
+    "id": "test_calibrated_flow_primary_85393f74",
     "user_id": "default-user",
     "subject": "Machine Learning",
     "title": "Machine Learning (Primary School (Class 1\u20135))",
@@ -28,11 +28,11 @@
     "status": "ready",
     "topic_count": 0,
     "message_count": 0,
-    "created_at": "2026-09-05T09:02:31.429285+00:00",
-    "last_active": "2026-09-05T09:02:31.429285+00:00"
+    "created_at": "2026-09-05T11:51:25.712699+00:00",
+    "last_active": "2026-09-05T11:51:25.712699+00:00"
   },
   {
-    "id": "test_calibrated_flow_shortcut_5f9d25f7",
+    "id": "test_calibrated_flow_shortcut_fe893470",
     "user_id": "default-user",
     "subject": "Science",
     "title": "Science (Primary School (Class 1\u20135))",
@@ -44,11 +44,11 @@
     "status": "ready",
     "topic_count": 0,
     "message_count": 0,
-    "created_at": "2026-09-05T09:02:02.465879+00:00",
-    "last_active": "2026-09-05T09:02:02.465879+00:00"
+    "created_at": "2026-09-05T11:33:20.382203+00:00",
+    "last_active": "2026-09-05T11:33:20.382203+00:00"
   },
   {
-    "id": "test_calibrated_flow_primary_dc13d6fb",
+    "id": "test_calibrated_flow_primary_698e9c24",
     "user_id": "default-user",
     "subject": "Machine Learning",
     "title": "Machine Learning (Primary School (Class 1\u20135))",
@@ -60,506 +60,23 @@
     "status": "ready",
     "topic_count": 0,
     "message_count": 0,
-    "created_at": "2026-09-05T09:02:02.087278+00:00",
-    "last_active": "2026-09-05T09:02:02.087278+00:00"
+    "created_at": "2026-09-05T11:33:20.293105+00:00",
+    "last_active": "2026-09-05T11:33:20.293105+00:00"
   },
   {
-    "id": "test_calibrated_flow_shortcut_d3ad10b0",
-    "user_id": "default-user",
-    "subject": "Science",
-    "title": "Science (Primary School (Class 1\u20135))",
-    "document_name": "[Textbook] Science",
-    "documents": [
-      "[Textbook] Science"
-    ],
-    "document_count": 1,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 0,
-    "created_at": "2026-09-05T09:00:04.845158+00:00",
-    "last_active": "2026-09-05T09:00:04.845158+00:00"
-  },
-  {
-    "id": "test_calibrated_flow_primary_ad00f59b",
-    "user_id": "default-user",
-    "subject": "Machine Learning",
-    "title": "Machine Learning (Primary School (Class 1\u20135))",
-    "document_name": "[Textbook] Machine Learning",
-    "documents": [
-      "[Textbook] Machine Learning"
-    ],
-    "document_count": 1,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 0,
-    "created_at": "2026-09-05T09:00:04.532623+00:00",
-    "last_active": "2026-09-05T09:00:04.532623+00:00"
-  },
-  {
-    "id": "test_calibrated_flow_shortcut_0c596f1b",
-    "user_id": "default-user",
-    "subject": "Science",
-    "title": "Science (Primary School (Class 1\u20135))",
-    "document_name": "[Textbook] Science",
-    "documents": [
-      "[Textbook] Science"
-    ],
-    "document_count": 1,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 0,
-    "created_at": "2026-09-05T08:59:27.204420+00:00",
-    "last_active": "2026-09-05T08:59:27.204420+00:00"
-  },
-  {
-    "id": "test_calibrated_flow_primary_b06a961a",
-    "user_id": "default-user",
-    "subject": "Machine Learning",
-    "title": "Machine Learning (Primary School (Class 1\u20135))",
-    "document_name": "[Textbook] Machine Learning",
-    "documents": [
-      "[Textbook] Machine Learning"
-    ],
-    "document_count": 1,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 0,
-    "created_at": "2026-09-05T08:59:26.817664+00:00",
-    "last_active": "2026-09-05T08:59:26.817664+00:00"
-  },
-  {
-    "id": "session_1054807767",
-    "user_id": "1e37dea3-1944-4f54-83df-cd9fcc741298",
-    "subject": "River In Kerala",
-    "title": "River In Kerala (Primary School (Class 1\u20135))",
-    "document_name": "[Textbook] River In Kerala",
-    "documents": [
-      "[Textbook] River In Kerala"
-    ],
-    "document_count": 1,
-    "status": "ready",
-    "topic_count": 4,
-    "message_count": 22,
-    "created_at": "2026-09-05T08:48:57.447342+00:00",
-    "last_active": "2026-09-05T08:56:49.629208+00:00"
-  },
-  {
-    "id": "test_calibrated_flow_shortcut_423c2f78",
-    "user_id": "default-user",
-    "subject": "Science",
-    "title": "Science (Primary School (Class 1\u20135))",
-    "document_name": "[Textbook] Science",
-    "documents": [
-      "[Textbook] Science"
-    ],
-    "document_count": 1,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 0,
-    "created_at": "2026-09-05T08:48:09.100668+00:00",
-    "last_active": "2026-09-05T08:48:09.100668+00:00"
-  },
-  {
-    "id": "test_calibrated_flow_primary_7837e1bb",
-    "user_id": "default-user",
-    "subject": "Machine Learning",
-    "title": "Machine Learning (Primary School (Class 1\u20135))",
-    "document_name": "[Textbook] Machine Learning",
-    "documents": [
-      "[Textbook] Machine Learning"
-    ],
-    "document_count": 1,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 0,
-    "created_at": "2026-09-05T08:48:08.701480+00:00",
-    "last_active": "2026-09-05T08:48:08.701480+00:00"
-  },
-  {
-    "id": "test_calibrated_flow_shortcut_82f466de",
-    "user_id": "default-user",
-    "subject": "Science",
-    "title": "Science (Primary School (Class 1\u20135))",
-    "document_name": "[Textbook] Science",
-    "documents": [
-      "[Textbook] Science"
-    ],
-    "document_count": 1,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 0,
-    "created_at": "2026-09-05T08:46:57.323222+00:00",
-    "last_active": "2026-09-05T08:46:57.323222+00:00"
-  },
-  {
-    "id": "test_calibrated_flow_primary_503ed396",
-    "user_id": "default-user",
-    "subject": "Machine Learning",
-    "title": "Machine Learning (Primary School (Class 1\u20135))",
-    "document_name": "[Textbook] Machine Learning",
-    "documents": [
-      "[Textbook] Machine Learning"
-    ],
-    "document_count": 1,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 0,
-    "created_at": "2026-09-05T08:46:56.032856+00:00",
-    "last_active": "2026-09-05T08:46:56.032856+00:00"
-  },
-  {
-    "id": "session_5150220061",
-    "user_id": "1e37dea3-1944-4f54-83df-cd9fcc741298",
-    "subject": "Kerala Map",
-    "title": "Kerala Map (Primary School (Class 1\u20135))",
-    "document_name": "[Textbook] Kerala Map",
-    "documents": [
-      "[Textbook] Kerala Map"
-    ],
-    "document_count": 1,
-    "status": "ready",
-    "topic_count": 4,
-    "message_count": 8,
-    "created_at": "2026-09-05T07:54:55.595590+00:00",
-    "last_active": "2026-09-05T07:56:19.624895+00:00"
-  },
-  {
-    "id": "test_calibrated_flow_shortcut",
-    "user_id": "default-user",
-    "subject": "Science",
-    "title": "Science (Primary School (Class 1\u20135))",
-    "document_name": "[Textbook] Science",
-    "documents": [
-      "[Textbook] Science"
-    ],
-    "document_count": 1,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 0,
-    "created_at": "2026-09-05T07:53:48.213460+00:00",
-    "last_active": "2026-09-05T07:53:48.213460+00:00"
-  },
-  {
-    "id": "test_calibrated_flow_primary",
-    "user_id": "default-user",
-    "subject": "Machine Learning",
-    "title": "Machine Learning (Primary School (Class 1\u20135))",
-    "document_name": "[Textbook] Machine Learning",
-    "documents": [
-      "[Textbook] Machine Learning"
-    ],
-    "document_count": 1,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 0,
-    "created_at": "2026-09-05T07:53:47.985451+00:00",
-    "last_active": "2026-09-05T07:53:47.985451+00:00"
-  },
-  {
-    "id": "session_4407011600",
-    "user_id": "1e37dea3-1944-4f54-83df-cd9fcc741298",
-    "subject": "Machine Learning",
-    "title": "Machine Learning Study Room",
-    "document_name": "[Textbook] Machine Learning",
-    "documents": [
-      "[Textbook] Machine Learning"
-    ],
-    "document_count": 1,
-    "status": "ready",
-    "topic_count": 4,
-    "message_count": 10,
-    "created_at": "2026-09-05T07:35:54.098176+00:00",
-    "last_active": "2026-09-05T07:45:06.133924+00:00"
-  },
-  {
-    "id": "test_session_bc05f253",
-    "user_id": "default-user",
-    "subject": "Machine Learning",
-    "title": "Machine Learning Study Room",
-    "document_name": "[Textbook] Machine Learning",
-    "documents": [
-      "[Textbook] Machine Learning"
-    ],
-    "document_count": 1,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 0,
-    "created_at": "2026-09-05T07:34:42.961378+00:00",
-    "last_active": "2026-09-05T07:34:42.961378+00:00"
-  },
-  {
-    "id": "session_5144145318",
-    "user_id": "1e37dea3-1944-4f54-83df-cd9fcc741298",
-    "subject": "General Study",
-    "title": "Default Study Room",
-    "document_name": "",
-    "documents": [],
-    "document_count": 0,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 10,
-    "created_at": "2026-09-05T07:12:25.015050+00:00",
-    "last_active": "2026-09-05T07:24:59.191810+00:00"
-  },
-  {
-    "id": "session_7791891705",
-    "user_id": "1cf9cf04-2836-41ea-a24c-14245f6b54f0",
-    "subject": "Ml Algorithams",
-    "title": "Ml Algorithams Study Room",
-    "document_name": "ml algorithams.pdf",
-    "documents": [
-      "ml algorithams.pdf"
-    ],
-    "document_count": 1,
-    "status": "text_ready",
-    "topic_count": 5,
-    "message_count": 8,
-    "created_at": "2026-09-05T07:02:47.686253+00:00",
-    "last_active": "2026-09-05T07:07:27.732817+00:00"
-  },
-  {
-    "id": "session_974946438",
-    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
-    "subject": "Ncert-Class-10-History",
-    "title": "Ncert-Class-10-History Study Room",
-    "document_name": "NCERT-Class-10-History.pdf",
-    "documents": [
-      "NCERT-Class-10-History.pdf"
-    ],
-    "document_count": 1,
-    "status": "text_ready",
-    "topic_count": 6,
-    "message_count": 6,
-    "created_at": "2026-09-04T16:09:21.110470+00:00",
-    "last_active": "2026-09-04T16:42:31.387425+00:00"
-  },
-  {
-    "id": "session_3330306284",
-    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
-    "subject": "General Study",
-    "title": "New Study Workspace",
-    "document_name": "",
-    "documents": [],
-    "document_count": 0,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 0,
-    "created_at": "2026-09-04T16:09:19.973934+00:00",
-    "last_active": "2026-09-04T16:09:19.973934+00:00"
-  },
-  {
-    "id": "session_2001199939",
-    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
-    "subject": "An Introduction To Data Science - By Jeffrey Stanton - (Data Science Books)",
-    "title": "An Introduction To Data Science - By Jeffrey Stanton - (Data Science Books) Study Room",
-    "document_name": "An Introduction to Data Science - By Jeffrey Stanton - (Data Science Books).pdf",
-    "documents": [
-      "An Introduction to Data Science - By Jeffrey Stanton - (Data Science Books).pdf"
-    ],
-    "document_count": 1,
-    "status": "text_ready",
-    "topic_count": 7,
-    "message_count": 10,
-    "created_at": "2026-09-04T13:21:21.785260+00:00",
-    "last_active": "2026-09-04T14:00:02.199098+00:00"
-  },
-  {
-    "id": "session_6863256170",
-    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
-    "subject": "Attention All U Need",
-    "title": "Attention All U Need Study Room",
-    "document_name": "Attention all u need.pdf",
-    "documents": [
-      "Attention all u need.pdf"
-    ],
-    "document_count": 1,
-    "status": "text_ready",
-    "topic_count": 6,
-    "message_count": 16,
-    "created_at": "2026-09-04T13:10:35.270572+00:00",
-    "last_active": "2026-09-04T16:42:00.298656+00:00"
-  },
-  {
-    "id": "session_2536661296",
-    "user_id": "guest-user",
-    "subject": "Attention All U Need",
-    "title": "Attention All U Need Study Room",
-    "document_name": "Attention all u need.pdf",
-    "documents": [
-      "Attention all u need.pdf"
-    ],
-    "document_count": 1,
-    "status": "text_ready",
-    "topic_count": 6,
-    "message_count": 10,
-    "created_at": "2026-09-04T11:24:27.302964+00:00",
-    "last_active": "2026-09-04T13:48:14.357350+00:00"
-  },
-  {
-    "id": "session_4286305798",
-    "user_id": "guest-user",
-    "subject": "Machine Learning & AI",
-    "title": "Default Study Room",
-    "document_name": "",
-    "documents": [],
-    "document_count": 0,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 2,
-    "created_at": "2026-09-04T11:24:26.790740+00:00",
-    "last_active": "2026-09-04T11:24:28.336110+00:00"
-  },
-  {
-    "id": "session_2673298279",
-    "user_id": "guest-user",
-    "subject": "Machine Learning & AI",
-    "title": "Default Study Room",
-    "document_name": "",
-    "documents": [],
-    "document_count": 0,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 2,
-    "created_at": "2026-09-04T11:24:26.319637+00:00",
-    "last_active": "2026-09-04T11:24:27.914915+00:00"
-  },
-  {
-    "id": "session_4403344451",
-    "user_id": "e8835b27-97b9-44e4-9131-29247733ff32",
-    "subject": "Vms Architecture V3",
-    "title": "Vms Architecture V3 Study Room",
-    "document_name": "VMS_Architecture_v3.pdf",
-    "documents": [
-      "VMS_Architecture_v3.pdf"
-    ],
-    "document_count": 1,
-    "status": "text_ready",
-    "topic_count": 7,
-    "message_count": 26,
-    "created_at": "2026-09-04T11:17:11.633394+00:00",
-    "last_active": "2026-09-04T11:36:07.669736+00:00"
-  },
-  {
-    "id": "fbb9bd44-4654-4136-81a6-8ae5790c3a3d",
-    "user_id": "30cc0809-0ce0-4101-8355-77605c809eac",
-    "subject": "Neural Networks",
-    "title": "Neural Networks Study Room",
-    "document_name": "Neural Networks.pdf",
-    "documents": [
-      "Neural Networks.pdf"
-    ],
-    "document_count": 1,
-    "status": "text_ready",
-    "topic_count": 0,
-    "message_count": 8,
-    "created_at": "2026-09-04T10:01:45.470711+00:00",
-    "last_active": "2026-09-04T10:04:37.598407+00:00"
-  },
-  {
-    "id": "session_5088890707",
-    "user_id": "30cc0809-0ce0-4101-8355-77605c809eac",
-    "subject": "General Study",
-    "title": "Default Study Room",
-    "document_name": "",
-    "documents": [],
-    "document_count": 0,
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 0,
-    "created_at": "2026-09-04T10:01:41.464079+00:00",
-    "last_active": "2026-09-04T10:01:41.464079+00:00"
-  },
-  {
-    "id": "session_6243776973",
-    "user_id": "7969dca5-437a-4764-abbc-189cd716efe0",
-    "subject": "Module-1 Introduction To Big Data",
-    "title": "Module-1 Introduction To Big Data Study Room",
-    "document_name": "Module-1 Introduction to Big Data.docx",
-    "documents": [
-      "Module-1 Introduction to Big Data.docx"
-    ],
-    "document_count": 1,
-    "status": "text_ready",
-    "topic_count": 7,
-    "message_count": 20,
-    "created_at": "2026-09-04T09:46:45.589534+00:00",
-    "last_active": "2026-09-04T09:59:53.256094+00:00"
-  },
-  {
-    "id": "session_2919558626",
-    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
-    "subject": "Ml Algorithams",
-    "title": "Attention All U Need Study Room",
-    "document_name": "ml algorithams.pdf",
-    "documents": [
-      "Attention all u need.pdf",
-      "ml algorithams.pdf"
-    ],
-    "document_count": 2,
-    "status": "text_ready",
-    "topic_count": 7,
-    "message_count": 14,
-    "created_at": "2026-09-04T07:16:48.977636+00:00",
-    "last_active": "2026-09-04T11:14:07.741942+00:00"
-  },
-  {
-    "id": "session_7629085165",
-    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
-    "subject": "chemistry",
-    "title": "Hsslive-19 Chemistry Eng Study Room",
-    "document_name": "Hsslive-19_Chemistry Eng.pdf",
-    "status": "text_ready",
-    "topic_count": 4,
-    "message_count": 2,
-    "created_at": "2026-09-04T06:44:20.763220+00:00",
-    "last_active": "2026-09-04T06:58:12.353156+00:00"
-  },
-  {
-    "id": "session_6387462719",
-    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
+    "id": "session_485020668",
+    "user_id": "91ed7c46-121d-4cda-bb6c-1d943105cba6",
     "subject": "Class-10-Geography",
     "title": "Class-10-Geography Study Room",
     "document_name": "Class-10-Geography.pdf",
+    "documents": [
+      "Class-10-Geography.pdf"
+    ],
+    "document_count": 1,
     "status": "text_ready",
-    "topic_count": 4,
-    "message_count": 22,
-    "created_at": "2026-09-04T06:09:52.981246+00:00",
-    "last_active": "2026-09-04T13:00:33.962584+00:00"
-  },
-  {
-    "id": "session_5634524936",
-    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
-    "subject": "Ml Algorithams",
-    "title": "Ml Algorithams Study Room",
-    "document_name": "ml algorithams.pdf",
-    "status": "text_ready",
-    "topic_count": 6,
-    "message_count": 24,
-    "created_at": "2026-09-04T06:09:24.710390+00:00",
-    "last_active": "2026-09-04T16:09:03.410128+00:00"
-  },
-  {
-    "id": "session_3862000107",
-    "user_id": "cfb9e973-7fc3-425d-b1df-7d2861d9a333",
-    "subject": "General Study",
-    "title": "Hsslive-35 Maths Eng Study Room",
-    "document_name": "Hsslive-35_Maths Eng.pdf",
-    "status": "text_ready",
-    "topic_count": 3,
-    "message_count": 8,
-    "created_at": "2026-09-04T05:36:33.693254+00:00",
-    "last_active": "2026-09-04T16:13:32.619419+00:00"
-  },
-  {
-    "id": "session_8957569891",
-    "user_id": "4ae9aa5d-b3ab-4c98-847e-4d3f272ec1ab",
-    "subject": "Physics",
-    "title": "Admin Physics Room",
-    "document_name": "",
-    "status": "ready",
-    "topic_count": 0,
-    "message_count": 0,
-    "created_at": "2026-09-04T05:22:28.932047+00:00",
-    "last_active": "2026-09-04T05:22:28.932047+00:00"
+    "topic_count": 8,
+    "message_count": 6,
+    "created_at": "2026-09-05T11:30:07.330119+00:00",
+    "last_active": "2026-09-05T11:52:00.062040+00:00"
   }
 ]

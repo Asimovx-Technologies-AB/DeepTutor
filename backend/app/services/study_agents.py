@@ -181,21 +181,28 @@ async def call_llm(
     except Exception:
         pass
 
-    # 2. Google GenerativeAI SDK Fallback
+    # 2. Google Gemini REST Fallback
     if settings.GEMINI_API_KEY:
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=settings.GEMINI_API_KEY)
-            model_name = getattr(settings, "GEMINI_MODEL", "gemini-3.1-flash-lite")
-            clean_name = model_name.replace("models/", "")
-            model = genai.GenerativeModel(
-                model_name=clean_name,
-                system_instruction=system_instruction if system_instruction else None,
-                generation_config={"temperature": temperature}
-            )
-            resp = await asyncio.to_thread(model.generate_content, prompt)
-            if resp and resp.text:
-                return resp.text
+            import httpx
+            g_key = settings.GEMINI_API_KEY
+            g_model = getattr(settings, "GEMINI_MODEL", "gemini-3.1-flash-lite").replace("models/", "")
+            g_url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={g_key}"
+            g_payload: Dict[str, Any] = {
+                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                "generationConfig": {"temperature": temperature}
+            }
+            if system_instruction:
+                g_payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+            async with httpx.AsyncClient(timeout=22.0) as client:
+                g_res = await client.post(g_url, json=g_payload)
+                if g_res.status_code == 200:
+                    g_data = g_res.json()
+                    g_cands = g_data.get("candidates", [])
+                    if g_cands:
+                        g_parts = g_cands[0].get("content", {}).get("parts", [])
+                        if g_parts and g_parts[0].get("text"):
+                            return g_parts[0].get("text")
         except Exception:
             pass
 
