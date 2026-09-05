@@ -15,6 +15,7 @@ import re
 import json
 import asyncio
 from typing import Dict, Any, List, Optional, AsyncGenerator
+from datetime import datetime, timezone
 
 from app.core.config import get_settings
 from pathlib import Path
@@ -26,6 +27,18 @@ from app.services.study_storage import (
     add_student_memory_fact,
     get_session_documents,
     get_session_topics,
+    save_session_topics,
+    save_session_document,
+    insert_chunks_to_fts,
+    register_or_update_session,
+    create_lecture_session,
+    get_lecture_session,
+    update_lecture_session,
+    record_lecture_checkpoint,
+    update_lecture_checkpoint,
+    record_lecture_pause,
+    record_mastered_topic,
+    get_mastered_topics,
     BACKEND_DIR,
 )
 
@@ -285,6 +298,758 @@ async def resolve_topic_from_text(text: str, default_subject: str = "Course Mate
     except Exception:
         pass
     return sanitize_topic_title(default_subject)
+
+
+# ─── Subject Expansion & Synthetic Textbook Generation Helpers ─────────────────
+
+COMMON_SUBJECT_EXPANSIONS = {
+    "ml": "Machine Learning",
+    "ai": "Artificial Intelligence",
+    "dl": "Deep Learning",
+    "nlp": "Natural Language Processing",
+    "cv": "Computer Vision",
+    "rl": "Reinforcement Learning",
+    "ds": "Data Science & Data Structures",
+    "dbms": "Database Management Systems",
+    "os": "Operating Systems",
+    "cn": "Computer Networks",
+    "toc": "Theory of Computation",
+    "coa": "Computer Organization & Architecture",
+    "oop": "Object-Oriented Programming",
+    "dsa": "Data Structures & Algorithms",
+    "math": "Mathematics",
+    "maths": "Mathematics",
+    "phy": "Physics",
+    "chem": "Chemistry",
+    "bio": "Biology",
+    "stats": "Statistics & Probability",
+    "python": "Python Programming",
+    "cpp": "C++ Programming",
+    "java": "Java Programming",
+}
+
+
+def normalize_subject_title(raw_subject: str) -> str:
+    """Standardizes subject names and maps common acronyms (e.g. 'ml' -> 'Machine Learning')."""
+    if not raw_subject:
+        return "General Study"
+    cleaned = raw_subject.strip()
+    low = cleaned.lower().rstrip(".!?,")
+    if low in COMMON_SUBJECT_EXPANSIONS:
+        return COMMON_SUBJECT_EXPANSIONS[low]
+    if len(low.split()) <= 4:
+        for abbr, exp in COMMON_SUBJECT_EXPANSIONS.items():
+            if re.search(rf"\b{re.escape(abbr)}\b", low):
+                return exp
+    cleaned = re.sub(
+        r"(?i)^(?:i want to learn|i want to study|let'?s learn|let'?s study|can we study|can we learn|teach me|tell me about|what is|what are|explain|study|learn|about)\s+",
+        "",
+        cleaned
+    ).strip().rstrip("?.!,")
+    if cleaned and 2 <= len(cleaned) <= 60:
+        c_low = cleaned.lower()
+        if c_low in COMMON_SUBJECT_EXPANSIONS:
+            return COMMON_SUBJECT_EXPANSIONS[c_low]
+        return cleaned.title()
+    return "General Study"
+
+
+def extract_subject_from_query(query: str, default_subject: str = "General Study") -> str:
+    """Extracts an academic subject from student query, falling back to default_subject."""
+    sub = normalize_subject_title(query)
+    if sub != "General Study":
+        return sub
+    if default_subject and default_subject not in ("General Study", "New Course Workspace", "Default Study Room", ""):
+        return normalize_subject_title(default_subject)
+    return "General Study"
+
+
+# ─── Educational Calibration Level Profiles ─────────────────────────────────────
+
+LEVEL_PROFILES = {
+    "primary": {
+        "level_name": "Primary School (Class 1–5)",
+        "tone": "Warm, imaginative, visual, story-driven, and playful for young children (Class 1–5).",
+        "instructions": (
+            "Audience: Young elementary school children (Class 1–5, ages 6–10).\n"
+            "- Use very simple language, everyday words, and vivid, friendly storytelling.\n"
+            "- Explain concepts using cheerful metaphors, cartoons, animal analogies, or toys.\n"
+            "- STRICTLY AVOID complex technical jargon, heavy college math, and formal theorems.\n"
+            "- Math should be restricted to simple counting, playful patterns, or basic arithmetic.\n"
+            "- Include friendly emojis, cheerful encouragement, and fun interactive checkpoints formatted like mini-games or observation riddles."
+        ),
+        "difficulty_tags": ("Exploring", "Easy Fun", "Wonder", "Kid Master"),
+        "curriculum_template": [
+            ("Fun Beginnings with {subject}", "A playful story introducing what {subject} is and why it is super exciting!"),
+            ("Everyday Magic & Discoveries", "Where we see {subject} in the real world, at home, in nature, and with friends!"),
+            ("Playful Experiments & Mini-Adventures", "Hands-on simple activities and fun puzzle-solving together."),
+            ("Becoming a Young Explorer of {subject}", "Exciting review, friendly challenges, and celebrating what you learned!")
+        ],
+        "default_checkpoints": [
+            "Can you think of one thing in your house, games, or classroom that reminds you of {subject}?",
+            "If you had to explain {subject} to your best friend using a funny cartoon animal story, what would you tell them?"
+        ]
+    },
+    "secondary": {
+        "level_name": "Middle & High School (Class 6–12)",
+        "tone": "Clear, engaging, structured, and exam-oriented for school students (Class 6–12).",
+        "instructions": (
+            "Audience: Middle and High School students (Class 6–12, ages 11–18).\n"
+            "- Break down concepts step-by-step with clear definitions and visual intuition.\n"
+            "- Introduce foundational formulas with KaTeX math ($...$ inline, $$...$$ blocks) accompanied by intuitive physical or geometric explanations.\n"
+            "- Connect theory to practical experiments, school lab examples, and everyday technology.\n"
+            "- Checkpoints should test conceptual understanding, formula application, and simple problem solving."
+        ),
+        "difficulty_tags": ("Beginner", "Intermediate", "Core Concepts", "Exam Prep"),
+        "curriculum_template": [
+            ("Foundations & Principles of {subject}", "Core terminology, foundational laws, and historical context."),
+            ("Core Mechanisms, Formulas & Models", "Step-by-step breakdown of fundamental equations, rules, and problem types."),
+            ("Real-World Applications & Experiments", "How principles are applied in modern science, technology, and engineering."),
+            ("Problem Solving & Exam Mastery", "Synthesizing concepts, tackling multi-step questions, and review.")
+        ],
+        "default_checkpoints": [
+            "In your own words, what is the core scientific or conceptual principle behind {subject}?",
+            "How would you solve a standard problem in {subject} step-by-step using the foundational formula?"
+        ]
+    },
+    "undergraduate": {
+        "level_name": "Undergraduate (B.Tech / BSc / College)",
+        "tone": "Rigorous, analytical, academically deep, and structured for university students.",
+        "instructions": (
+            "Audience: College and university undergraduates (B.Tech, BSc, BCA, BS).\n"
+            "- Provide formal mathematical formulations, derivations, and theorems using KaTeX ($$...$$ for blocks, $...$ for inline).\n"
+            "- Include algorithmic breakdowns, pseudo-code/code snippets where relevant, and complexity/trade-off analysis.\n"
+            "- Cover theoretical bounds, edge cases, and canonical problem-solving methodologies.\n"
+            "- Checkpoints should require analytical reasoning, derivation checks, or architectural problem-solving."
+        ),
+        "difficulty_tags": ("Foundational", "Intermediate Theory", "Advanced Analysis", "Synthesis"),
+        "curriculum_template": [
+            ("Theoretical Foundations of {subject}", "Axiomatic definitions, mathematical formulation, and fundamental theorems."),
+            ("Core Algorithms, Derivations & Mechanisms", "Detailed structural derivations, algorithmic frameworks, and proof intuition."),
+            ("Practical Implementation & System Design", "Concrete code patterns, empirical validation, trade-offs, and optimization."),
+            ("Advanced Paradigms & Frontier Topics", "Contemporary research directions, open problems, and cross-domain synthesis.")
+        ],
+        "default_checkpoints": [
+            "State the primary theoretical formulation or governing equation of {subject} and explain each variable.",
+            "Compare two core approaches or algorithms in {subject} in terms of time complexity, memory footprint, or accuracy trade-offs."
+        ]
+    },
+    "professional": {
+        "level_name": "Professional / Postgraduate",
+        "tone": "Concise, research-grade, industry-oriented, and architectural for specialists.",
+        "instructions": (
+            "Audience: Working software engineers, data scientists, researchers, and postgraduate specialists (M.Tech, MS, PhD).\n"
+            "- Assume strong foundational and mathematical literacy; skip introductory hand-waving.\n"
+            "- Focus on production systems, distributed scale, reliability, low-level optimization, and design trade-offs.\n"
+            "- Reference state-of-the-art literature, empirical benchmarks, failure modes, and operational realities.\n"
+            "- Checkpoints should focus on high-stakes architectural decisions, fault tolerance, and performance optimization."
+        ),
+        "difficulty_tags": ("Architectural Foundations", "Advanced Scalability", "Operational Optimization", "Frontier Research"),
+        "curriculum_template": [
+            ("Core Architecture & Theoretical Foundations", "High-performance formalisms, state-of-the-art benchmarks, and theoretical guarantees."),
+            ("Scalable Systems, Pipelines & Optimization", "Low-level implementation nuances, distributed paradigms, and latency/throughput bounds."),
+            ("Production Failure Modes & Operational Resilience", "Empirical edge cases, debugging telemetry, reliability engineering, and security."),
+            ("State-of-the-Art Frontiers & Future Directions", "Emerging paradigms, novel architectures, and industry synthesis.")
+        ],
+        "default_checkpoints": [
+            "What critical architectural trade-off emerges when scaling {subject} in a production environment under strict latency constraints?",
+            "How do recent state-of-the-art methods mitigate known failure modes or performance bottlenecks in {subject}?"
+        ]
+    }
+}
+
+
+def parse_learning_level(text: str) -> Optional[str]:
+    """
+    Parses user input to identify the 4-tier educational calibration level:
+    - 'primary': Class 1–5 / Elementary / Kids
+    - 'secondary': Class 6–12 / Middle & High School
+    - 'undergraduate': B.Tech / BSc / College
+    - 'professional': Professional / Postgraduate / Advanced
+    """
+    if not text:
+        return None
+    raw = text.strip().lower()
+
+    # 1. Exact numeric option selection: "1", "2", "3", "4"
+    if raw in ("1", "one", "#1", "option 1", "tier 1", "1."):
+        return "primary"
+    if raw in ("2", "two", "#2", "option 2", "tier 2", "2."):
+        return "secondary"
+    if raw in ("3", "three", "#3", "option 3", "tier 3", "3."):
+        return "undergraduate"
+    if raw in ("4", "four", "#4", "option 4", "tier 4", "4."):
+        return "professional"
+
+    # 2. Check for explicit class / grade ranges
+    # Primary: Class 1 to 5
+    if re.search(r"\b(?:class|grade|standard|std)\s*([1-5])\b", raw) or \
+       re.search(r"\b([1-5])(?:st|nd|rd|th)?\s*(?:class|grade|standard|std)\b", raw) or \
+       any(w in raw for w in ("primary", "elementary", "kindergarten", "nursery", "kid", "child", "young learner", "1st std", "2nd std", "3rd std", "4th std", "5th std")):
+        return "primary"
+
+    # Secondary: Class 6 to 12
+    if re.search(r"\b(?:class|grade|standard|std)\s*([6-9]|1[0-2])\b", raw) or \
+       re.search(r"\b([6-9]|1[0-2])(?:th)?\s*(?:class|grade|standard|std)\b", raw) or \
+       any(w in raw for w in ("middle school", "high school", "secondary", "matric", "intermediate", "inter", "+2", "plus two", "10th", "12th", "6th std", "7th std", "8th std", "9th std", "10th std", "11th std", "12th std")):
+        return "secondary"
+
+    # Professional / Postgraduate
+    if any(w in raw for w in ("professional", "postgraduate", "postgrad", "working", "industry", "job", "mtech", "m.tech", "masters", "master", "phd", "ph.d", "doctorate", "researcher", "practitioner", "architect")):
+        return "professional"
+
+    # Undergraduate / College
+    if any(w in raw for w in ("undergrad", "undergraduate", "college", "university", "btech", "b.tech", "bsc", "b.sc", "bca", "b.c.a", "be", "b.e", "bachelor", "engineering")):
+        return "undergraduate"
+
+    # Fallback pattern for "option X"
+    exact_num_match = re.search(r"\b(?:option|tier|level|choice|no\.?|#)?\s*([1-4])\b", raw)
+    if exact_num_match:
+        val = exact_num_match.group(1)
+        return {"1": "primary", "2": "secondary", "3": "undergraduate", "4": "professional"}.get(val)
+
+    return None
+
+
+async def generate_synthetic_textbook(
+    session_id: str,
+    subject: str,
+    user_id: str = "default-user",
+    level_key: str = "undergraduate"
+) -> Dict[str, Any]:
+    """
+    Generates a calibrated synthetic textbook and multi-module curriculum roadmap for a subject.
+    Calibrated across 4 tiers: Primary (Class 1-5), Secondary (Class 6-12), Undergrad, and Professional.
+    Indexes the content directly into SQLite FTS5 and registers it in session_topics & session_documents.
+    """
+    clean_sub = normalize_subject_title(subject)
+    if clean_sub == "General Study" and subject and subject.strip():
+        clean_sub = subject.strip().title()
+
+    profile = LEVEL_PROFILES.get(level_key, LEVEL_PROFILES["undergraduate"])
+    level_name = profile["level_name"]
+
+    system_instruction = (
+        f"You are a subject-matter expert who has worked professionally in {clean_sub} "
+        f"AND an expert instructional designer. You write textbooks the way top applied programs do — "
+        f"case-study-driven, project-based, grounded in real practice, not abstract theory alone. "
+        f"You are now writing for: {level_name}. {profile['instructions']}"
+    )
+
+    field_context_by_level = {
+        "primary": f"as explored by curious young learners through everyday life, stories, and play",
+        "secondary": f"as studied by school students preparing for exams and real-world understanding",
+        "undergraduate": f"as applied by undergraduate students, engineers, analysts, and practitioners",
+        "professional": f"as deployed by industry practitioners, researchers, and senior specialists"
+    }
+    field_context = field_context_by_level.get(level_key, field_context_by_level["undergraduate"])
+
+    user_prompt = f"""
+You are writing a professional applied textbook module.
+
+ROLE: Subject-matter expert in {clean_sub} AND expert instructional designer for {level_name}.
+TOPIC: {clean_sub}
+FOR: {level_name} | Field context: {field_context}
+Pedagogical constraints: {profile['instructions']}
+
+═══════════════════════════════════════
+CURRICULUM ROADMAP (output first)
+═══════════════════════════════════════
+Generate a 4-module curriculum roadmap. Each module must have a real-world professional framing — not generic chapter titles.
+
+Return a JSON block (only this, no extra text) at the very start:
+```json
+{{
+  "curriculum": [
+    {{
+      "id": "module_1",
+      "title": "Module 1: [Specific real-world title]",
+      "summary": "[1-2 sentences grounded in a real professional context for {level_name}]",
+      "difficulty": "{profile['difficulty_tags'][0]}",
+      "key_concepts": ["Concept A", "Concept B", "Concept C"],
+      "estimated_study_time": "20-30 mins",
+      "real_world_anchor": "[The specific profession/scenario this module is framed around]"
+    }},
+    {{
+      "id": "module_2",
+      "title": "Module 2: [Specific real-world title]",
+      "summary": "[1-2 sentences grounded in real practice]",
+      "difficulty": "{profile['difficulty_tags'][1]}",
+      "key_concepts": ["Concept A", "Concept B"],
+      "estimated_study_time": "25-35 mins",
+      "real_world_anchor": "[The specific profession/scenario this module is framed around]"
+    }},
+    {{
+      "id": "module_3",
+      "title": "Module 3: [Specific real-world title]",
+      "summary": "[1-2 sentences grounded in real practice]",
+      "difficulty": "{profile['difficulty_tags'][2]}",
+      "key_concepts": ["Concept A", "Concept B"],
+      "estimated_study_time": "30-40 mins",
+      "real_world_anchor": "[The specific profession/scenario this module is framed around]"
+    }},
+    {{
+      "id": "module_4",
+      "title": "Module 4: [Specific real-world title]",
+      "summary": "[1-2 sentences grounded in real practice]",
+      "difficulty": "{profile['difficulty_tags'][3]}",
+      "key_concepts": ["Concept A", "Concept B"],
+      "estimated_study_time": "35-45 mins",
+      "real_world_anchor": "[The specific profession/scenario this module is framed around]"
+    }}
+  ]
+}}
+```
+
+═══════════════════════════════════════
+CHAPTER 1 — FULL APPLIED TEXTBOOK MODULE
+═══════════════════════════════════════
+
+After the JSON block, generate the complete Chapter 1 textbook module in clean Markdown.
+Follow this exact 13-section structure. Every section must connect back to the chosen real-world anchor scenario.
+
+---
+
+# Module 1: [Title] — {clean_sub}
+
+> **Level**: {level_name} | **Field**: {field_context}
+
+## § 1 — Chapter Overview
+- **Real-World Framing**: Introduce the anchor scenario or profession that frames this entire chapter (a running thread, not a one-off example — e.g., "This chapter follows Priya, a junior data analyst at a retail chain tracking weekly sales patterns").
+- **Why This Matters Outside the Classroom**: 2-3 sentences connecting this module to real decisions, jobs, and outcomes.
+- **Learning Objectives** (Bloom's-aligned, written as real capabilities): Use action phrases like "calculate X for Y client," "design a Z for W scenario," — not abstract "understand" or "know."
+
+## § 2 — Prerequisite Check
+- 3-5 quick diagnostic questions tied to the anchor scenario.
+- Example format: "Before Priya can analyze the sales data, can you...?"
+
+## § 3 — Case Study Hook
+- Open with a realistic, high-stakes scenario (a news event, workplace situation, real dataset snippet, or historical case).
+- Make the stakes explicit — what goes wrong if this concept is misunderstood?
+- Include at least one **authentic artifact** (a formatted table, a sample report snippet, a realistic dataset, a schedule, a receipt) that the student must read and use later.
+
+## § 4 — Core Content: Theory Meets Practice
+- Introduce each concept through the real scenario FIRST, then formalize it.
+- Use **"In real life, this looks like..."** callouts explicitly.
+- Include at least one **full authentic artifact** (formatted as a Markdown table) that the student must interact with.
+- For math/science/technical content: show exactly how practitioners compute this (mental shortcuts, tools, software, instruments commonly used).
+- For primary level: use story-driven, sensory, playful explanations with no heavy jargon.
+- For secondary level: use visual intuition first, then introduce formulas.
+- For undergraduate level: include formal definitions, mathematical notation (KaTeX: $$...$$), and algorithmic steps.
+- For professional level: include production-grade considerations, edge cases, and system trade-offs.
+
+## § 5 — Worked Examples: Field Scenarios
+- **Example 1 (Clean scenario)**: Frame as a real task ("Priya's manager asks her to..."). Show full solution step-by-step.
+- **Example 2 (Messy data)**: Include irrelevant or incomplete information — the student must first identify what matters. Show how a professional would filter it.
+- **Example 3 (Wrong approach)**: Demonstrate a common real-world error. Show the mistake, the real consequence it causes, and then the correct approach.
+
+## § 6 — Interactive Checkpoints
+- 3 decision-point questions framed as in-scenario decisions the student makes as if they ARE the professional.
+- Format: "You are the [role] — what do you do?"
+
+## § 7 — Key Terms & Glossary
+| **Textbook Term** | **Real-World / Industry Jargon** | **Definition** |
+|---|---|---|
+| Term 1 | Industry synonym | Clear, level-appropriate definition |
+| Term 2 | Industry synonym | Clear, level-appropriate definition |
+
+## § 8 — Practice Exercises: Real Task Simulation
+
+**Tier 1 — Recall** (straightforward, scenario-flavored): 3 questions
+
+**Tier 2 — Applied** (using a real-style artifact — table, schedule, data): 2 questions
+
+**Tier 3 — Analytical** (multi-step, messy or incomplete data): 1-2 questions
+
+**Tier 4 — Mini-Project** (higher levels only): A small end-to-end real task (e.g., "plan a budget," "analyze this dataset," "design this system component").
+
+## § 9 — Real-World & Interdisciplinary Connections
+- Name specific job roles, industries, and tools where this exact skill is used today.
+- Include at least one interdisciplinary connection (e.g., this math concept also appears in music, biology, architecture).
+
+## § 10 — Chapter Summary
+- Recap tied back to the running real-world anchor scenario.
+- 3-5 key takeaways in bullet form.
+
+## § 11 — Self-Assessment Rubric
+| **"Can I now...?"** | **Not Yet** | **Getting There** | **Yes, Independently** |
+|---|---|---|---|
+| [Real capability from learning objectives] | ☐ | ☐ | ☐ |
+| [Real capability from learning objectives] | ☐ | ☐ | ☐ |
+| [Real capability from learning objectives] | ☐ | ☐ | ☐ |
+
+## § 12 — Answer Key with Explanations
+- Full reasoning for all exercises.
+- For the messy data example: explain exactly which information was irrelevant and why.
+- For the wrong approach example: explain the real-world consequence of the error.
+
+## § 13 — Extension: Try It Yourself
+- A small real-world task the student can attempt outside the book.
+- Must be genuinely doable with everyday materials or free online tools.
+- Examples: "Look at a real grocery receipt and...", "Open a spreadsheet and...", "Find a news article about... and apply..."
+
+---
+END OF CHAPTER 1
+
+IMPORTANT OUTPUT RULES:
+- Start with the ```json curriculum block, then immediately the Markdown chapter.
+- Do NOT add any other text, preamble, or explanation outside these two blocks.
+- Every section must reference the anchor scenario at least once.
+- Invented-but-realistic data must be labeled: *(Illustrative data — not verified)*
+- Vocabulary and complexity STRICTLY matched to {level_name}.
+- For primary level: no heavy math, use stories and fun analogies.
+- For secondary level: include formulas with intuitive explanation before formalism.
+- For undergraduate/professional level: include formal notation (KaTeX: $$...$$ blocks, $...$ inline), algorithms, and trade-offs.
+- Do NOT use emojis anywhere in the curriculum or textbook content (no emojis in headings, titles, bullet points, or callouts). Maintain a clean, professional academic aesthetic.
+"""
+
+    raw_resp = await call_llm(user_prompt, system_instruction, temperature=0.2)
+    curriculum = []
+    chapter_title = f"Module 1: Foundations of {clean_sub}"
+    chapter_content = ""
+    checkpoints = []
+
+    try:
+        raw_text = raw_resp.strip()
+        # 1. Extract the JSON curriculum block (```json ... ``` fenced)
+        json_fence_match = re.search(r"```json\s*(\{.*?\})\s*```", raw_text, re.DOTALL | re.IGNORECASE)
+        if json_fence_match:
+            parsed = json.loads(json_fence_match.group(1))
+            curriculum = parsed.get("curriculum", [])
+
+        # 2. Extract the markdown chapter — everything after the closing ```
+        after_json = re.sub(r"```json\s*\{.*?\}\s*```", "", raw_text, flags=re.DOTALL | re.IGNORECASE).strip()
+        if after_json:
+            chapter_content = after_json
+
+        # 3. Detect chapter title from first H1 heading
+        h1_match = re.search(r"^#\s+(.+)$", chapter_content, re.MULTILINE)
+        if h1_match:
+            chapter_title = h1_match.group(1).strip()
+
+        # 4. Extract Interactive Checkpoints from § 6 if present
+        cp_section_match = re.search(
+            r"##\s*§\s*6\s*[—\-–]?\s*Interactive Checkpoints(.+?)(?=##\s*§\s*7|$)",
+            chapter_content, re.DOTALL | re.IGNORECASE
+        )
+        if cp_section_match:
+            cp_text = cp_section_match.group(1)
+            checkpoints = [
+                m.strip().lstrip("- *0123456789.").strip()
+                for m in re.findall(r"(?:^|\n)[\-\*\d\.]+\s+(.+)", cp_text)
+                if m.strip()
+            ][:3]
+    except Exception:
+        pass
+
+    if not curriculum:
+        curriculum = []
+        for idx, (tmpl_title, tmpl_summary) in enumerate(profile["curriculum_template"]):
+            curriculum.append({
+                "id": f"module_{idx+1}",
+                "title": f"Module {idx+1}: {tmpl_title.format(subject=clean_sub)}",
+                "summary": tmpl_summary.format(subject=clean_sub),
+                "difficulty": profile["difficulty_tags"][idx],
+                "key_concepts": [f"{clean_sub} Concepts", f"Step {idx+1}", "Key Takeaways"],
+                "estimated_study_time": f"{20 + idx*5} mins",
+                "document_name": f"[Textbook] {clean_sub}"
+            })
+
+    for c in curriculum:
+        c["document_name"] = f"[Textbook] {clean_sub}"
+
+    if not chapter_content:
+        # Structured 13-section fallback in proper applied textbook format
+        if level_key == "primary":
+            chapter_content = (
+                f"# Module 1: The Wonderful World of {clean_sub}\n\n"
+                f"> **Level**: {level_name} | **Field**: as explored by curious young learners through everyday life, stories, and play\n\n"
+                f"## § 1 — Chapter Overview\n"
+                f"**Real-World Framing**: This chapter follows a young explorer named Mia who discovers {clean_sub} hiding in everyday life — at the market, in the garden, and in her toy box.\n\n"
+                f"**Why This Matters**: Understanding {clean_sub} helps you solve puzzles, make decisions, and understand the world around you — just like Mia does every day!\n\n"
+                f"**Learning Objectives**: By the end of this chapter, you will be able to:\n"
+                f"- Spot examples of {clean_sub} in your daily life at home and school\n"
+                f"- Explain what {clean_sub} means using a simple story or drawing\n"
+                f"- Answer fun questions about {clean_sub} using what you know\n\n"
+                f"## § 2 — Prerequisite Check\n"
+                f"Before we begin Mia's adventure, let's check what you already know:\n"
+                f"1. Can you name one thing you see every day at home?\n"
+                f"2. Do you like solving puzzles or riddles? Why?\n"
+                f"3. Have you ever helped someone figure something out? What happened?\n\n"
+                f"## § 3 — Case Study Hook\n"
+                f"**Mia's Big Discovery**\n\n"
+                f"One morning, Mia's mum asked her to sort the fruit basket. There were apples, bananas, and oranges all mixed up. \"How do I know which ones go together?\" Mia wondered. This is exactly what {clean_sub} is all about — finding patterns, making sense of things, and solving problems step by step!\n\n"
+                f"## § 4 — Core Content: The Big Ideas\n"
+                f"**In real life, this looks like...** Mia counting apples (3) and oranges (2) and discovering she has 5 fruits in total.\n\n"
+                f"**The Big Idea of {clean_sub}**: [Core concept explained through Mia's story using simple, friendly language]\n\n"
+                f"## § 5 — Worked Examples\n"
+                f"**Example 1 (Mia's Market Trip)**: Mia buys 2 apples and 3 bananas. How many fruits does she have?\n\n"
+                f"**Example 2 (Mia's Messy Toy Box)**: Mia's toy box has 10 items — but some are broken. She only counts the working ones. What does she need to know first?\n\n"
+                f"## § 6 — Interactive Checkpoints\n"
+                f"- You are Mia at the market — how many bananas are left if you started with 5 and gave 2 to your friend?\n"
+                f"- What would you sort first in Mia's toy box — the big toys or the small ones? Why?\n"
+                f"- If Mia finds 3 more apples, how does that change her fruit count?\n\n"
+                f"## § 7 — Key Terms & Glossary\n"
+                f"| **Word** | **What It Means** |\n"
+                f"|---|---|\n"
+                f"| Pattern | Something that repeats or follows a rule |\n"
+                f"| Sort | Putting things into groups |\n"
+                f"| Count | Finding how many there are |\n\n"
+                f"## § 8 — Practice Exercises\n"
+                f"**Tier 1**: Name 3 things in your classroom that belong together. Why do they go together?\n\n"
+                f"**Tier 2**: Look at this fruit list: 3 apples, 2 bananas, and 1 orange. How many of each fruit are there?\n\n"
+                f"**Tier 3**: Mia has 12 crayons but 4 are broken. She shares the good ones equally with 2 friends. How many does each friend get?\n\n"
+                f"**Mini-Project**: At home tonight, help sort the vegetables or groceries. Draw a picture of how you sorted them!\n\n"
+                f"## § 9 — Real-World Connections\n"
+                f"- **Shopkeepers** use {clean_sub} to count money and stock.\n"
+                f"- **Doctors** use it to count medicines and doses.\n"
+                f"- **Teachers** use it to count students and give out supplies.\n\n"
+                f"## § 10 — Chapter Summary\n"
+                f"In this chapter, we followed Mia on her discovery adventure. We learned that {clean_sub} is all around us — in shopping, sorting, and solving everyday puzzles. You are now a young {clean_sub} explorer!\n\n"
+                f"## § 11 — Self-Assessment Rubric\n"
+                f"| **Can I now...?** | Not Yet | Getting There | Yes! |\n"
+                f"|---|---|---|---|\n"
+                f"| Find {clean_sub} examples in daily life | ☐ | ☐ | ☐ |\n"
+                f"| Explain it to a friend using a story | ☐ | ☐ | ☐ |\n"
+                f"| Solve a simple Tier 1 exercise | ☐ | ☐ | ☐ |\n\n"
+                f"## § 12 — Answer Key\n"
+                f"Tier 1: Answers will vary — focus on reasoning.\n"
+                f"Tier 2: Apples = 3, Bananas = 2, Oranges = 1\n"
+                f"Tier 3: 12 − 4 = 8 good crayons ÷ 2 friends = 4 each\n\n"
+                f"## § 13 — Try It Yourself!\n"
+                f"Tonight, look at your family's kitchen. Count how many of each type of fruit or vegetable you find. Draw a chart and show it to a family member!"
+            )
+        elif level_key == "secondary":
+            chapter_content = (
+                f"# Module 1: Foundations of {clean_sub} in the Real World\n\n"
+                f"> **Level**: {level_name} | **Field**: as studied by school students preparing for exams and real-world understanding\n\n"
+                f"## § 1 — Chapter Overview\n"
+                f"**Real-World Framing**: This chapter follows Arjun, a Class 9 student who volunteers at his family's small hardware store on weekends — and uses {clean_sub} to help manage inventory, calculate bills, and solve real problems.\n\n"
+                f"**Why This Matters**: {clean_sub} is at the core of engineering, science, commerce, and everyday decision-making. Understanding it now gives you a powerful toolset for exams and life.\n\n"
+                f"**Learning Objectives**: By the end of this module, you will be able to:\n"
+                f"- Apply core principles of {clean_sub} to solve practical, real-world problems\n"
+                f"- Use foundational formulas and methods accurately with given data\n"
+                f"- Identify common errors and understand their real consequences\n\n"
+                f"## § 2 — Prerequisite Check\n"
+                f"Before Arjun can use {clean_sub} at the store, can you:\n"
+                f"1. State the basic definition of the main concept in {clean_sub}?\n"
+                f"2. Recall the key formula most commonly used in this topic?\n"
+                f"3. Give one example of where this concept appears in daily life?\n\n"
+                f"## § 3 — Case Study Hook\n"
+                f"**The Hardware Store Problem**\n\n"
+                f"Arjun's father miscalculated the store's monthly profit because he confused two related terms in {clean_sub}. The store lost ₹4,200 in one month. By the end of this chapter, you will understand exactly what went wrong — and how to prevent it.\n\n"
+                f"*(Illustrative data — not verified)*\n\n"
+                f"| Item | Qty Sold | Unit Price (₹) | Total |\n"
+                f"|---|---|---|---|\n"
+                f"| Nails (box) | 45 | 30 | 1,350 |\n"
+                f"| Paint (tin) | 12 | 320 | 3,840 |\n"
+                f"| Screws (pack)| 80 | 15 | 1,200 |\n"
+                f"| **Total** | | | **6,390** |\n\n"
+                f"## § 4 — Core Content: Theory Meets Practice\n"
+                f"**In real life, this looks like...** Arjun using {clean_sub} to check whether his father's calculation is correct.\n\n"
+                f"**Step 1**: Understand the concept from the scenario first.\n"
+                f"**Step 2**: Formalize it — introduce the textbook definition and formula.\n"
+                f"**Step 3**: Apply it back to Arjun's store data.\n\n"
+                f"*Professionals use: spreadsheet tools (Excel/Sheets), calculators, and estimation shortcuts in day-to-day work.*\n\n"
+                f"## § 5 — Worked Examples: Field Scenarios\n"
+                f"**Example 1 (Clean)**: Arjun's manager asks him to calculate the total bill for a customer buying 15 boxes of nails at ₹30 each and 3 tins of paint at ₹320 each.\n\n"
+                f"**Example 2 (Messy Data)**: A delivery receipt lists 12 different items, but 3 are out of stock and 2 have wrong prices. Arjun must identify which data to use.\n\n"
+                f"**Example 3 (Wrong Approach)**: Arjun's father added VAT twice, inflating the price by 18%. The consequence: customers complained, two regulars left, losing ₹8,000/month in recurring business.\n\n"
+                f"## § 6 — Interactive Checkpoints\n"
+                f"- You are Arjun at the counter — a customer gives ₹500 for a ₹347 purchase. What change do you give, and how do you verify?\n"
+                f"- The store received an invoice with one item's quantity missing. What do you do before processing payment?\n"
+                f"- Arjun suspects the VAT was applied incorrectly. What specific numbers would you check first?\n\n"
+                f"## § 7 — Key Terms & Glossary\n"
+                f"| **Textbook Term** | **Real-World / Industry Jargon** | **Definition** |\n"
+                f"|---|---|---|\n"
+                f"| Revenue | Turnover / Top Line | Total money received from sales |\n"
+                f"| Variable | Unknown | A quantity that can change in a problem |\n"
+                f"| Formula | Equation / Rule | A mathematical relationship between quantities |\n\n"
+                f"## § 8 — Practice Exercises\n"
+                f"**Tier 1**: State the main formula for the core concept in {clean_sub} and define each term.\n\n"
+                f"**Tier 2**: Use Arjun's store table above to calculate the average revenue per product category.\n\n"
+                f"**Tier 3**: A customer returns 5 nail boxes (bought at ₹30) and wants store credit. The store charges a 10% restocking fee. What credit does the customer receive? Show all working.\n\n"
+                f"**Mini-Project**: Interview a shopkeeper, a relative, or look at a real bill at home. Identify one place where {clean_sub} is being used (correctly or incorrectly). Write a 150-word report.\n\n"
+                f"## § 9 — Real-World & Interdisciplinary Connections\n"
+                f"- **Accountants** use this daily in tally sheets and audit reports.\n"
+                f"- **Engineers** use related principles in load calculations and materials planning.\n"
+                f"- **Interdisciplinary link**: The same mathematical structure appears in biology (population growth), music (rhythm patterns), and architecture (structural ratios).\n\n"
+                f"## § 10 — Chapter Summary\n"
+                f"We followed Arjun through the hardware store and discovered how {clean_sub} is not just a school topic — it's a live business tool. Key takeaways:\n"
+                f"- The core concept and its formal definition\n"
+                f"- How professionals apply it in real scenarios\n"
+                f"- Why precision matters — small errors cause real financial losses\n\n"
+                f"## § 11 — Self-Assessment Rubric\n"
+                f"| **Can I now...?** | Not Yet | Getting There | Yes, Independently |\n"
+                f"|---|---|---|---|\n"
+                f"| Apply the main formula to a real data set | ☐ | ☐ | ☐ |\n"
+                f"| Identify irrelevant data in a messy problem | ☐ | ☐ | ☐ |\n"
+                f"| Catch a common error and explain its consequence | ☐ | ☐ | ☐ |\n\n"
+                f"## § 12 — Answer Key\n"
+                f"Tier 2: Average revenue = 6,390 ÷ 3 categories = ₹2,130 per category *(Illustrative)*\n"
+                f"Tier 3: 5 × 30 = ₹150. Restocking fee = 10% × 150 = ₹15. Credit = 150 − 15 = **₹135**\n"
+                f"Messy data note: Ignore out-of-stock items and wrong-price entries until verified.\n\n"
+                f"## § 13 — Try It Yourself!\n"
+                f"Find a real grocery receipt at home. Calculate the total yourself without looking at the printed total. Then check — were you correct? If not, find which item you miscalculated."
+            )
+        else:
+            # Undergraduate / Professional shared high-quality fallback
+            level_tag = "production system" if level_key == "professional" else "system"
+            chapter_content = (
+                f"# Module 1: Foundations of {clean_sub} — Applied Practice\n\n"
+                f"> **Level**: {level_name} | **Field**: {field_context}\n\n"
+                f"## § 1 — Chapter Overview\n"
+                f"**Real-World Framing**: This module follows a team of analysts/engineers at a mid-sized company using {clean_sub} to solve a high-stakes operational problem — tracking performance metrics, optimizing a pipeline, or designing a {level_tag} component.\n\n"
+                f"**Why This Matters**: Mastery of {clean_sub} is directly required in roles at Google, Stripe, ISRO, McKinsey, and thousands of firms across engineering, finance, and research. Errors at this level have production, financial, or safety consequences.\n\n"
+                f"**Learning Objectives** (Bloom's-aligned):\n"
+                f"- **Apply**: Use the core mathematical formulation of {clean_sub} on real datasets\n"
+                f"- **Analyze**: Identify failure modes, edge cases, and performance trade-offs\n"
+                f"- **Create**: Design or extend a component/system grounded in {clean_sub} principles\n\n"
+                f"## § 2 — Prerequisite Check\n"
+                f"Before the team deploys this {level_tag}, confirm you can:\n"
+                f"1. State the governing equation or core theorem of {clean_sub} from memory\n"
+                f"2. Describe the computational or algorithmic complexity of the standard approach\n"
+                f"3. Name two real failure modes or edge cases in {clean_sub}\n\n"
+                f"## § 3 — Case Study Hook\n"
+                f"**The Production Incident**\n\n"
+                f"A team at a logistics company deployed a {clean_sub}-based system that worked perfectly in testing but failed under production load — causing a 6-hour outage affecting 40,000 users. The root cause: a foundational assumption about {clean_sub} that did not hold at scale.\n\n"
+                f"*(Illustrative scenario — not a verified incident)*\n\n"
+                f"| Metric | Test Environment | Production | Delta |\n"
+                f"|---|---|---|---|\n"
+                f"| Throughput | 1,200 req/s | 8,400 req/s | 7× |\n"
+                f"| Latency (p99) | 12ms | 847ms | 70× |\n"
+                f"| Error rate | 0.01% | 14.3% | 1430× |\n\n"
+                f"## § 4 — Core Content: Theory Meets Practice\n"
+                f"**In real life, this looks like...** the engineering team diagnosing the {clean_sub} bottleneck using profiling tools and mathematical analysis.\n\n"
+                f"**Formal Definition**: [Core theorem/algorithm/formula for {clean_sub}]\n\n"
+                f"**Mathematical Formulation** (KaTeX):\n"
+                f"$$\\text{{[Core governing equation of {clean_sub}]}}$$\n\n"
+                f"Where each variable represents: [variable definitions]\n\n"
+                f"**How professionals compute this**: Engineers use tools such as [relevant software/instruments/libraries], applying the following workflow: [professional workflow steps]\n\n"
+                f"## § 5 — Worked Examples: Field Scenarios\n"
+                f"**Example 1 (Clean)**: Given a dataset with [parameters], calculate [outcome] using the core formula. Show full derivation.\n\n"
+                f"**Example 2 (Messy Data)**: The engineering team receives telemetry data from 12 services. 3 have stale metrics, 2 have schema mismatches. Identify which to trust and why.\n\n"
+                f"**Example 3 (Wrong Approach)**: A common mistake: [specific error]. Real consequence: [system failure mode]. Correct approach: [fix with explanation].\n\n"
+                f"## § 6 — Interactive Checkpoints\n"
+                f"- You are the on-call engineer — latency spikes to p99=2s. Which {clean_sub} parameter do you investigate first and why?\n"
+                f"- The PM asks you to add a new feature that changes a core assumption of {clean_sub}. What risks do you surface?\n"
+                f"- Given the production data table above, what is your hypothesis about the failure cause?\n\n"
+                f"## § 7 — Key Terms & Glossary\n"
+                f"| **Textbook Term** | **Real-World / Industry Jargon** | **Definition** |\n"
+                f"|---|---|---|\n"
+                f"| Algorithm | Pipeline / Workflow | Ordered set of operations for solving a class of problems |\n"
+                f"| Complexity | Overhead / Cost | Resource usage as a function of input size |\n"
+                f"| Invariant | Constraint / Guarantee | A property that must always hold for correctness |\n\n"
+                f"## § 8 — Practice Exercises\n"
+                f"**Tier 1**: State the Big-O complexity of the core algorithm in {clean_sub} and justify it.\n\n"
+                f"**Tier 2**: Using the production metrics table above, calculate the theoretical throughput ceiling given the p99 latency budget.\n\n"
+                f"**Tier 3 — Analytical**: The team wants to reduce error rate from 14.3% to <0.1% without degrading throughput. Propose a {clean_sub}-grounded solution. State your assumptions explicitly.\n\n"
+                f"**Tier 4 — Mini-Project**: Design a minimal monitoring dashboard specification for a {clean_sub}-based system. Define the 5 key metrics to track, their alert thresholds, and the on-call runbook steps.\n\n"
+                f"## § 9 — Real-World & Interdisciplinary Connections\n"
+                f"- **Data Engineers**: Use {clean_sub} in pipeline orchestration (Apache Airflow, Spark).\n"
+                f"- **ML Engineers**: Apply it in model training loops and hyperparameter search.\n"
+                f"- **Financial Analysts**: Use related mathematical structures in risk modeling and portfolio optimization.\n"
+                f"- **Interdisciplinary**: The same core principles appear in control theory (robotics), queuing theory (network design), and information theory (compression algorithms).\n\n"
+                f"## § 10 — Chapter Summary\n"
+                f"We followed a production engineering team through a high-stakes incident rooted in {clean_sub}. Key takeaways:\n"
+                f"- The formal governing equations and their operational implications\n"
+                f"- How scale reveals hidden assumptions in {clean_sub} implementations\n"
+                f"- The professional workflow for diagnosis, triage, and resolution\n\n"
+                f"## § 11 — Self-Assessment Rubric\n"
+                f"| **Can I now...?** | Not Yet | Getting There | Yes, Independently |\n"
+                f"|---|---|---|---|\n"
+                f"| Derive the core formula and explain each term | ☐ | ☐ | ☐ |\n"
+                f"| Diagnose a {clean_sub} failure from production metrics | ☐ | ☐ | ☐ |\n"
+                f"| Design a {clean_sub} component with explicit trade-off analysis | ☐ | ☐ | ☐ |\n\n"
+                f"## § 12 — Answer Key\n"
+                f"Tier 2: Throughput ceiling = 1 / p99 latency = 1 / 0.847s ≈ 1,181 req/s per instance *(Illustrative)*\n"
+                f"Messy data: Stale metrics (>60s old) and schema-mismatched services should be excluded pending re-verification.\n\n"
+                f"## § 13 — Try It Yourself!\n"
+                f"Open any free dataset (Kaggle, UCI ML Repository, or a public API). Apply the core concept of {clean_sub} to it. Document: (1) your hypothesis, (2) your method, (3) one surprising finding. Share in 300 words."
+            )
+
+    if not checkpoints:
+        checkpoints = [q.format(subject=clean_sub) for q in profile["default_checkpoints"]]
+
+    doc_id = f"textbook_{int(datetime.now(timezone.utc).timestamp())}"
+    chunks = []
+
+    sections = re.split(r"\n(?=#{2,4}\s)", chapter_content)
+    for idx, sec in enumerate(sections):
+        sec_text = sec.strip()
+        if sec_text:
+            chunks.append({
+                "chunk_id": f"tb_ch1_{idx}",
+                "page": 1,
+                "source_type": "text",
+                "content": sec_text
+            })
+
+    for idx, mod in enumerate(curriculum):
+        mod_chunk = f"Module {idx+1}: {mod.get('title')}\nTarget Level: {level_name}\nSummary: {mod.get('summary')}\nKey Concepts: {', '.join(mod.get('key_concepts', []))}"
+        chunks.append({
+            "chunk_id": f"tb_mod_{idx+1}",
+            "page": idx + 1,
+            "source_type": "text",
+            "content": mod_chunk
+        })
+
+    insert_chunks_to_fts(session_id, doc_id, chunks)
+    save_session_topics(session_id, curriculum, append=False, document_name=f"[Textbook] {clean_sub}")
+    save_session_document(
+        session_id=session_id,
+        doc_id=doc_id,
+        filename=f"[Textbook] {clean_sub}.md",
+        file_path="synthetic_curriculum",
+        status="fully_processed",
+        page_count=len(curriculum)
+    )
+    register_or_update_session(
+        session_id=session_id,
+        subject=clean_sub,
+        title=f"{clean_sub} ({level_name})",
+        status="ready",
+        document_name=f"[Textbook] {clean_sub}",
+        user_id=user_id
+    )
+
+    curriculum_lines = []
+    for idx, mod in enumerate(curriculum):
+        curriculum_lines.append(
+            f"{idx+1}. **{mod.get('title')}** ({mod.get('estimated_study_time', '20 mins')})\n"
+            f"   *{mod.get('summary')}*\n"
+            f"   Key Concepts: `{'`, `'.join(mod.get('key_concepts', []))}`"
+        )
+    curriculum_block = "\n".join(curriculum_lines)
+    checkpoints_lines = "\n".join(f"- **Q{i+1}**: {q}" for i, q in enumerate(checkpoints))
+
+    response_md = (
+        f"# {clean_sub} — Applied Textbook\n\n"
+        f"**Target Level**: `{level_name}`\n\n"
+        f"> This textbook was generated specifically for **{level_name}** and saved to your **Study Map**. "
+        f"All lessons, worked examples, quizzes, and formulas in future conversations will be grounded in this material.\n\n"
+        f"---\n\n"
+        f"## Course Syllabus & Study Map\n\n"
+        f"{curriculum_block}\n\n"
+        f"---\n\n"
+        f"{chapter_content}\n\n"
+        f"---\n\n"
+        f"### Quick-Start Checkpoints\n\n"
+        f"{checkpoints_lines}\n\n"
+        f"> *Jump in — answer a checkpoint, ask a question about any section, or say \"Quiz me on § 4\" to begin!*"
+    )
+
+    return {
+        "thought_process": f"User calibrated for '{level_name}' on '{clean_sub}'. Generated 4-module synthetic textbook, indexed {len(chunks)} chunks into SQLite FTS5, updated Study Map, and published to Markdown Viewer.",
+        "response": response_md,
+        "sources": [{"chunk_id": c["chunk_id"], "page": c["page"]} for c in chunks[:3]],
+        "format": "study_notes",
+        "response_format": "study_notes",
+        "export_ready": True,
+        "is_synthetic_textbook": True,
+        "level": level_key,
+        "level_name": level_name
+    }
 
 
 # ─── 1. Planner Agent (Instant Zero-Latency Fast-Path) ───────────────────────
@@ -691,14 +1456,15 @@ class DecisionAgent:
                         formatted_bullets.append(f"- **{t}**")
                 topic_bullets = "\n\nHere are some key topics from your uploaded course materials:\n\n" + "\n".join(formatted_bullets)
 
+            subject_phrase = f" for **{subject}**" if subject and subject.strip() not in ("General Study", "New Course Workspace", "Default Study Room", "") else ""
             greeting_response = (
-                f"Hello! I am **DeepTutor**, your AI academic tutor for **{subject}**.\n\n"
+                f"Hello! I am **DeepTutor**, your AI academic tutor{subject_phrase}.\n\n"
                 f"I am ready to help you analyze your course materials, solve STEM tables from first principles, break down complex schematics, or generate interactive study decks."
                 f"{topic_bullets}\n\n"
                 f"What concept or topic would you like to explore today?"
             )
             return {
-                "thought_process": f"Student query '{user_query}' is a greeting. Responded with a warm academic greeting for {subject}.",
+                "thought_process": f"Student query '{user_query}' is a greeting. Responded with a warm academic greeting.",
                 "response": greeting_response,
                 "sources": [],
                 "format": "conceptual"
@@ -724,6 +1490,175 @@ class DecisionAgent:
 
         if m_no and not trailing_clause:
             is_boolean_no = True
+
+        # 2.1 Workspace Material Grounding Verification
+        session_docs = get_session_documents(session_id)
+        all_doc_chunks = get_all_chunks(session_id, limit=3)
+        has_uploaded_docs = bool(session_docs or all_doc_chunks)
+        is_meta_referential = bool(plan.get("is_meta_referential")) or is_meta_referential_query(user_query)
+
+        if not has_uploaded_docs and not is_meta_referential:
+            prev_assistant_turn = extract_previous_assistant_response(history) or ""
+            is_material_prompt_followup = False
+            is_level_prompt_followup = False
+
+            if prev_assistant_turn:
+                t_low = prev_assistant_turn.lower()
+                if any(k in t_low for k in (
+                    "do you have study material",
+                    "do you have material",
+                    "have study material",
+                    "have notes, slides, or a syllabus",
+                    "have notes or slides",
+                    "do you have notes",
+                    "reply yes if you have notes",
+                    "reply with \"no\"",
+                    "reply no",
+                    "reply with 'no'"
+                )):
+                    is_material_prompt_followup = True
+
+                if any(k in t_low for k in (
+                    "tell me your level so i can calibrate",
+                    "tell me your learning level",
+                    "personalize your learning journey",
+                    "primary school (class 1–5)",
+                    "primary school (class 1-5)",
+                    "middle & high school",
+                    "reply with **1**, **2**, **3**, or **4**",
+                    "reply with 1, 2, 3, or 4"
+                )):
+                    is_level_prompt_followup = True
+
+            # 2.1.0 Follow-up to educational level calibration prompt
+            if is_level_prompt_followup:
+                detected_level = parse_learning_level(user_query) or "undergraduate"
+                m_sub = re.search(r"\*\*(.+?)\*\*", prev_assistant_turn)
+                target_sub = m_sub.group(1).strip() if m_sub else (subject or "General Study")
+                if target_sub in ("General Study", "New Course Workspace", "Default Study Room", "Course Material"):
+                    target_sub = subject or "General Study"
+                return await generate_synthetic_textbook(
+                    session_id=session_id,
+                    subject=target_sub,
+                    user_id=user_id,
+                    level_key=detected_level
+                )
+
+            # 2.1.1 Follow-up to "Do you have study material?"
+            if is_material_prompt_followup:
+                if is_boolean_yes or any(w in q_clean for w in ("yes", "y", "yeah", "yup", "sure", "have notes", "have pdf", "have material", "upload")):
+                    upload_guide = (
+                        "### Upload Your Study Material\n\n"
+                        "Great! Please click the **+** (Attach) button in the chat bar below or use the sidebar to upload your course notes, slides, or textbook PDF.\n\n"
+                        "Once uploaded:\n"
+                        "- DeepTutor will extract your full syllabus into your **Study Map**\n"
+                        "- All explanations, formulas, and diagrams will be strictly grounded in your materials\n"
+                        "- You'll be able to generate interactive quizzes, flashcards, and custom exams directly from your pages!\n\n"
+                        "*(Whenever you're ready, upload your file to begin!)*"
+                    )
+                    return {
+                        "thought_process": "Student confirmed they have study materials. Prompted student to upload via the + button.",
+                        "response": upload_guide,
+                        "sources": [],
+                        "format": "conceptual"
+                    }
+                elif is_boolean_no or any(w in q_clean for w in ("no", "nope", "nah", "no material", "i don't have", "dont have", "generate", "create textbook", "none", "no notes")):
+                    m_sub = re.search(r"\*\*(.+?)\*\*", prev_assistant_turn)
+                    target_sub = m_sub.group(1).strip() if m_sub else (subject or "General Study")
+                    if target_sub in ("General Study", "New Course Workspace", "Default Study Room", "Course Material"):
+                        target_sub = subject or "General Study"
+
+                    inline_level = parse_learning_level(user_query)
+                    if inline_level:
+                        return await generate_synthetic_textbook(
+                            session_id=session_id,
+                            subject=target_sub,
+                            user_id=user_id,
+                            level_key=inline_level
+                        )
+
+                    level_prompt = (
+                        f"### Personalize Your Learning Journey\n\n"
+                        f"You have no material — no problem! Before I generate your textbook for **{target_sub}**, "
+                        f"tell me your level so I can calibrate the content:\n\n"
+                        f"1. **Primary School (Class 1–5)** — Stories, fun examples, very simple words, pictures\n"
+                        f"2. **Middle & High School (Class 6–12)** — Simple language, visual analogies, basic math\n"
+                        f"3. **Undergraduate (B.Tech / BSc)** — Formal definitions, derivations, code examples\n"
+                        f"4. **Professional / Postgraduate** — Research-grade depth, advanced math, industry patterns\n\n"
+                        f"*Reply with **1**, **2**, **3**, or **4** (or just tell me, e.g. \"Class 3\" or \"B.Tech\")*"
+                    )
+                    return {
+                        "thought_process": f"Student indicated no material for '{target_sub}'. Prompting for level calibration (Class 1-5, Class 6-12, Undergraduate, Professional).",
+                        "response": level_prompt,
+                        "sources": [],
+                        "format": "conceptual"
+                    }
+
+            # 2.1.2 Direct declaration of no material or request for textbook generation
+            explicit_no_material = any(p in q_clean for p in (
+                "no material", "don't have material", "dont have material", "no notes", "don't have notes",
+                "create a textbook", "generate a textbook", "create textbook", "generate textbook", "no pdf",
+                "generate syllabus", "create syllabus"
+            ))
+            if explicit_no_material:
+                target_sub = extract_subject_from_query(user_query, default_subject=subject)
+                inline_level = parse_learning_level(user_query)
+                if inline_level:
+                    return await generate_synthetic_textbook(
+                        session_id=session_id,
+                        subject=target_sub,
+                        user_id=user_id,
+                        level_key=inline_level
+                    )
+                level_prompt = (
+                    f"### Personalize Your Learning Journey\n\n"
+                    f"You have no material — no problem! Before I generate your textbook for **{target_sub}**, "
+                    f"tell me your level so I can calibrate the content:\n\n"
+                    f"1. **Primary School (Class 1–5)** — Stories, fun examples, very simple words, pictures\n"
+                    f"2. **Middle & High School (Class 6–12)** — Simple language, visual analogies, basic math\n"
+                    f"3. **Undergraduate (B.Tech / BSc)** — Formal definitions, derivations, code examples\n"
+                    f"4. **Professional / Postgraduate** — Research-grade depth, advanced math, industry patterns\n\n"
+                    f"*Reply with **1**, **2**, **3**, or **4** (or just tell me, e.g. \"Class 3\" or \"B.Tech\")*"
+                )
+                return {
+                    "thought_process": f"Student requested textbook generation for '{target_sub}'. Prompting for level calibration.",
+                    "response": level_prompt,
+                    "sources": [],
+                    "format": "conceptual"
+                }
+
+            # 2.1.3 Meta query about DeepTutor's identity
+            is_meta_question = q_clean in (
+                "who are you", "what are you", "what can you do", "help", "who created you", "what is deeptutor"
+            )
+            if is_meta_question:
+                meta_resp = (
+                    "Hello! I am **DeepTutor**, your AI academic tutor.\n\n"
+                    "I help you master academic subjects, solve technical problems from first principles, and prepare for exams.\n\n"
+                    "To get started, tell me what subject or topic you would like to study (for example: **Machine Learning**, **Physics**, **Linear Algebra**), or upload your course notes using the **+** button!"
+                )
+                return {
+                    "thought_process": "Answered general meta query about DeepTutor's identity and capabilities.",
+                    "response": meta_resp,
+                    "sources": [],
+                    "format": "conceptual"
+                }
+
+            # 2.1.4 Student specified a subject or topic in an empty workspace
+            target_subject = extract_subject_from_query(user_query, default_subject=subject)
+            material_prompt = (
+                f"### Welcome to **{target_subject}**!\n\n"
+                f"To give you the best study experience:\n\n"
+                f"**Do you have study material (notes, slides, or a syllabus PDF) for {target_subject}?**\n\n"
+                f"- **Yes**: Reply **Yes** or click the **+** (Attach) button below to upload your file. DeepTutor will align all lessons, study maps, and quizzes strictly to your course.\n"
+                f"- **No**: Reply **No**, and I will calibrate and generate a comprehensive, structured textbook and curriculum roadmap for **{target_subject}** so we can begin studying right away!"
+            )
+            return {
+                "thought_process": f"No materials uploaded yet for subject '{target_subject}'. Inquired if student has course materials or wants a generated synthetic textbook.",
+                "response": material_prompt,
+                "sources": [],
+                "format": "conceptual"
+            }
 
         # If user query is a boolean follow-up ("yes", "sure", etc.), extract keywords from the offered assistant question
         search_terms = list(plan.get("bm25_queries", [user_query]))
@@ -937,19 +1872,27 @@ class DecisionAgent:
         weaknesses_str = ", ".join(student_mem.get("weaknesses", [])) or "None identified yet"
         goals_str = ", ".join(student_mem.get("goals", [])) or "Mastery"
 
-        # 6. Strict Grounding Verification
+        # 6. Strict Grounding Verification & Open Workspace Handling
+        session_docs = get_session_documents(session_id)
         all_doc_chunks = get_all_chunks(session_id, limit=3)
-        if not all_doc_chunks and not retrieved_chunks and not is_boolean_yes:
-            decline_msg = f"I could not find the answer to this in your uploaded PDF. Please ask questions specifically related to the concepts and chapters in your uploaded material for {subject}."
+        has_uploaded_docs = bool(session_docs or all_doc_chunks)
+
+        if has_uploaded_docs and not retrieved_chunks and not is_boolean_yes:
+            doc_names = [d.get("filename") for d in session_docs if d.get("filename")]
+            doc_str = f" in your uploaded materials ({', '.join(doc_names[:3])})" if doc_names else " in your uploaded materials"
+            subject_str = f" for **{subject}**" if subject and subject != "General Study" else ""
+            decline_msg = (
+                f"I could not find information on this{doc_str}{subject_str}.\n\n"
+                f"Please ask questions related to the concepts in your uploaded course materials, or upload additional materials using the **+** button."
+            )
             return {
-                "thought_process": "Checked session FTS5 SQLite index. Zero chunks present. Declining query strictly per academic grounding rules.",
+                "thought_process": "Checked session FTS5 SQLite index. Matching chunks absent in uploaded materials. Declining per grounding policy.",
                 "response": decline_msg,
                 "sources": [],
                 "format": plan.get("response_format", "conceptual")
             }
 
         # Group chunks by friendly document name to ensure multi-material balance and explicit document origin
-        session_docs = get_session_documents(session_id)
         doc_name_map = {}
         for d in session_docs:
             d_id = str(d.get("id", ""))
@@ -976,7 +1919,14 @@ class DecisionAgent:
             )
             formatted_doc_blocks.append(block)
 
-        context_text = "\n\n".join(formatted_doc_blocks)
+        if not formatted_doc_blocks and not has_uploaded_docs:
+            context_text = (
+                "NOTE: The student has not uploaded course materials or textbook PDFs yet.\n"
+                "Explain the topic / answer the student's question thoroughly and accurately from academic first principles using clear intuition, definitions, and formulas if relevant.\n"
+                "Conclude with a brief polite note: '> **Tip**: Upload your course notes, slides, or textbook PDF using the **+** button to enable syllabus-grounded tutoring, Study Maps, and custom exams!'"
+            )
+        else:
+            context_text = "\n\n".join(formatted_doc_blocks)
 
         # Compound request guidance
         compound_guidance = ""
@@ -1020,8 +1970,7 @@ STRICT RULES:
    - Mode 2 (Insufficient / Partial Inputs): If the retrieved context provides SOME but NOT ALL values or variables needed to solve a problem (e.g., mass and force given, angle missing):
      You MUST explicitly state which specific parameter or value is missing, explain the governing formula that requires it, and ask the student for that specific value or guide them to where in the course materials it might be found. Do NOT invent, assume, or hallucinate a plausible numerical value, and do NOT decline completely.
    - Mode 3 (Source Contradiction / Typos): If a formula, constant, or unit in the retrieved text looks internally contradictory or contains a clear source typo (e.g., units do not reconcile across equations), you MUST explicitly flag the inconsistency to the student rather than silently 'fixing' it or blindly calculating.
-   - Mode 4 (Completely Unrelated): If a completely unrelated topic is asked that is absent from the material, state:
-     "I could not find the answer to this in your uploaded PDF. Please ask questions specifically related to the concepts and chapters in your uploaded material for {subject}."
+   - Mode 4 (Completely Unrelated / Open Exploration): If materials ARE uploaded and the topic is absent from the material, explain that it is not covered in their uploaded materials for {subject}. If NO materials are uploaded yet, answer the student's query clearly and academically from first principles, and conclude with a tip to upload course materials.
 2. Multi-Material & Cross-Chunk Disagreement Rule:
    - If retrieved chunks come from multiple uploaded materials (or if the student asks to compare or explain both materials):
      You MUST explicitly analyze and present the content from EACH material under clear section headings (e.g. '### Material: [Document Name]').
@@ -1363,21 +2312,467 @@ Include formulas in standalone $$ ... $$ block math where appropriate. No emojis
     }
 
 
-# ─── 5. Teacher Mode: SSE Streaming Lecture Stream with Syllabus Gate ────────
+# ─── 5. Teacher Mode: Interactive Masterclass Lecture Engine ─────────────────
+
+async def generate_lecture_diagnostic(
+    session_id: str,
+    topic_id: str,
+    topic_title: str
+) -> Dict[str, Any]:
+    """
+    Requirement 1: Diagnostic Open.
+    Generates a 1-question diagnostic probe to gauge prior knowledge before the lecture starts,
+    and initializes a durable lecture session record in SQLite.
+    """
+    chunks = search_fts_chunks(session_id, topic_title, limit=4)
+    context = "\n\n".join(c["content"] for c in chunks)
+
+    prompt = f"""You are a masterclass university professor about to lecture on: '{topic_title}'.
+Before beginning your lecture, generate exactly 1 diagnostic multiple-choice question to gauge whether the student understands the foundational prerequisite intuition required for this topic.
+
+Reference Course Context:
+{context[:2500] if context else "Foundational academic theory"}
+
+Strict Output Contract:
+Return ONLY valid JSON:
+{{
+  "prerequisite_concept": "<name of the prerequisite principle tested>",
+  "question": "<clear, concise 1-sentence diagnostic question>",
+  "options": [
+    {{"id": "a", "text": "<option a>"}},
+    {{"id": "b", "text": "<option b>"}},
+    {{"id": "c", "text": "<option c>"}},
+    {{"id": "d", "text": "<option d>"}}
+  ],
+  "correct_option_id": "<a/b/c/d>",
+  "explanation": "<why this option is correct>"
+}}
+No markdown fences, no conversational prose, zero emojis.
+"""
+    sys_inst = "You are a university professor creating an initial baseline diagnostic probe. Output strict JSON only. Zero emojis."
+    raw = await call_llm(prompt, sys_inst, temperature=0.2)
+    parsed = robust_json_parse(raw)
+
+    if not parsed or not isinstance(parsed, dict) or "question" not in parsed:
+        parsed = {
+            "prerequisite_concept": "Foundational Principles",
+            "question": f"Which foundational principle is most critical for understanding {topic_title}?",
+            "options": [
+                {"id": "a", "text": f"The primary governing mechanics and objective bounds of {topic_title}"},
+                {"id": "b", "text": "Unrelated heuristic approximations without boundary guarantees"},
+                {"id": "c", "text": "Purely static state representations without updates"},
+                {"id": "d", "text": "Arbitrary random sampling without convergence criteria"}
+            ],
+            "correct_option_id": "a",
+            "explanation": f"Understanding governing mechanics provides the essential baseline for mastering {topic_title}."
+        }
+
+    # Create durable lecture record
+    lec_record = create_lecture_session(
+        session_id=session_id,
+        topic_id=topic_id,
+        topic_title=topic_title,
+        diagnostic_question=parsed.get("question")
+    )
+
+    return {
+        "lecture_id": lec_record["id"],
+        "topic_id": topic_id,
+        "topic_title": topic_title,
+        "diagnostic": parsed
+    }
+
+
+async def evaluate_lecture_diagnostic(
+    session_id: str,
+    topic_id: str,
+    topic_title: str,
+    question: str,
+    student_answer: str,
+    lecture_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Evaluates student's diagnostic response and determines the starting lecture calibration:
+    - 'novice': Student needs a prerequisite mini-explanation before Phase 1.
+    - 'standard': Standard balanced masterclass pacing.
+    - 'advanced': Accelerated pacing diving straight into rigorous derivations.
+    """
+    prompt = f"""You are evaluating a student's answer to the diagnostic question for the upcoming masterclass on '{topic_title}'.
+
+Diagnostic Question: {question}
+Student's Answer: {student_answer}
+
+Task:
+Determine student's baseline prior knowledge.
+Return ONLY valid JSON:
+{{
+  "level": "novice" | "standard" | "advanced",
+  "is_correct": true | false,
+  "reasoning": "<1 sentence assessment of their conceptual baseline>",
+  "prerequisite_needed": true | false,
+  "prerequisite_summary": "<if novice, a 2-sentence intuitive primer on the required prerequisite; otherwise null>"
+}}
+Zero emojis.
+"""
+    sys_inst = "You are a diagnostic evaluation auditor. Output JSON only. Zero emojis."
+    raw = await call_llm(prompt, sys_inst, temperature=0.1)
+    parsed = robust_json_parse(raw)
+
+    if not parsed or not isinstance(parsed, dict) or "level" not in parsed:
+        level = "standard"
+        is_corr = True
+        prereq = None
+    else:
+        level = parsed.get("level", "standard")
+        is_corr = parsed.get("is_correct", True)
+        prereq = parsed.get("prerequisite_summary")
+
+    if lecture_id:
+        update_lecture_session(
+            session_id=session_id,
+            lecture_id=lecture_id,
+            diagnostic_answer=student_answer,
+            diagnostic_level=level,
+            status="in_progress"
+        )
+
+    return {
+        "lecture_id": lecture_id,
+        "level": level,
+        "is_correct": is_corr,
+        "reasoning": parsed.get("reasoning", "Diagnostic baseline evaluated successfully.") if parsed else "Standard baseline.",
+        "prerequisite_needed": (level == "novice"),
+        "prerequisite_summary": prereq
+    }
+
+
+async def generate_phase_checkpoint(
+    session_id: str,
+    topic_title: str,
+    phase_name: str,
+    phase_content: str,
+    lecture_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Requirement 3: Checkpoints (Active Recall).
+    Generates a targeted check-for-understanding question after each major section.
+    """
+    prompt = f"""You are an elite professor lecturing on '{topic_title}'.
+You just delivered the following lecture segment for '{phase_name}':
+
+\"\"\"{phase_content[:2000]}\"\"\"
+
+TASK:
+Generate a single active-recall check question that directly tests whether the student absorbed the core mechanism or principle from this segment.
+
+Return ONLY valid JSON:
+{{
+  "question": "<concise check question>",
+  "options": [
+    {{"id": "a", "text": "<option a>"}},
+    {{"id": "b", "text": "<option b>"}},
+    {{"id": "c", "text": "<option c>"}},
+    {{"id": "d", "text": "<option d>"}}
+  ],
+  "correct_option_id": "<a/b/c/d>",
+  "core_concept": "<the concept tested>"
+}}
+Zero emojis.
+"""
+    sys_inst = "Output strict JSON only. All mathematical formulas in standard KaTeX syntax ($...$ inline). Zero emojis."
+    raw = await call_llm(prompt, sys_inst, temperature=0.2)
+    parsed = robust_json_parse(raw)
+
+    if not parsed or not isinstance(parsed, dict) or "question" not in parsed:
+        parsed = {
+            "question": f"What is the key governing relationship established in {phase_name} for {topic_title}?",
+            "options": [
+                {"id": "a", "text": f"The direct structural formulation of {topic_title}"},
+                {"id": "b", "text": "An unrelated independent variable"},
+                {"id": "c", "text": "A constant zero gradient"},
+                {"id": "d", "text": "An unbounded divergence"}
+            ],
+            "correct_option_id": "a",
+            "core_concept": topic_title
+        }
+
+    checkpoint_record = None
+    if lecture_id:
+        checkpoint_record = record_lecture_checkpoint(
+            session_id=session_id,
+            lecture_id=lecture_id,
+            phase=phase_name,
+            question_prompt=parsed["question"],
+            options=parsed.get("options", []),
+            correct_answer=parsed.get("correct_option_id", "a")
+        )
+
+    return {
+        "checkpoint_id": checkpoint_record["id"] if checkpoint_record else f"chk_{os.urandom(3).hex()}",
+        "lecture_id": lecture_id,
+        "phase": phase_name,
+        "checkpoint": parsed
+    }
+
+
+async def evaluate_checkpoint_response(
+    session_id: str,
+    topic_title: str,
+    phase_name: str,
+    question_prompt: str,
+    correct_answer: str,
+    student_response: str,
+    checkpoint_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Requirement 3: Modal Remediation.
+    If student answers incorrectly, branches into a short remedial explanation
+    using a DIFFERENT modality (e.g. switching to a concrete analogy or worked numerical step)
+    rather than repeating the previous text.
+    """
+    is_correct = (
+        student_response.strip().lower() == correct_answer.strip().lower() or
+        student_response.strip().lower().startswith(correct_answer.strip().lower())
+    )
+
+    if is_correct:
+        feedback = f"Excellent analysis! You accurately identified the governing principle for {phase_name}."
+        remedial_modality = None
+        remedial_content = None
+    else:
+        # Select alternative modality
+        if "mechanics" in phase_name.lower() or "derivation" in phase_name.lower():
+            remedial_modality = "analogy"
+            modality_instruction = "Do NOT repeat mathematical equations. Instead, switch to an intuitive, relatable physical analogy explaining why this principle works."
+        else:
+            remedial_modality = "worked_example"
+            modality_instruction = "Do NOT repeat high-level theory. Instead, provide a simple, concrete step-by-step numerical example illustrating how the numbers change."
+
+        prompt = f"""You are a masterclass professor conducting remedial instruction on '{topic_title}'.
+Phase: {phase_name}
+Check Question: {question_prompt}
+Correct Answer ID/Concept: {correct_answer}
+Student's Response: {student_response} (Incorrect)
+
+TASK:
+Provide a crisp remedial explanation (2-3 concise paragraphs) using the following alternative modality:
+{modality_instruction}
+
+Formatting Rules:
+- Direct, encouraging professor tone.
+- Zero emojis.
+- Standalone formulas in KaTeX ($$...$$) if applicable, inline terms in $...$.
+"""
+        sys_inst = "You are an expert professor providing multimodal remedial instruction. Zero emojis."
+        remedial_content = await call_llm(prompt, sys_inst, temperature=0.3)
+        feedback = f"Let's look at this from a different angle to solidify your understanding."
+
+    if checkpoint_id and session_id:
+        update_lecture_checkpoint(
+            session_id=session_id,
+            checkpoint_id=checkpoint_id,
+            student_response=student_response,
+            is_correct=is_correct,
+            remedial_modality=remedial_modality,
+            remedial_content=remedial_content
+        )
+
+    return {
+        "checkpoint_id": checkpoint_id,
+        "is_correct": is_correct,
+        "feedback": feedback,
+        "remedial_modality": remedial_modality,
+        "remedial_content": remedial_content
+    }
+
+
+async def handle_lecture_pause_ask(
+    session_id: str,
+    topic_title: str,
+    current_phase: str,
+    accumulated_context: str,
+    student_question: str,
+    lecture_id: Optional[str] = None,
+    token_offset: int = 0
+) -> Dict[str, Any]:
+    """
+    Requirement 4: Pause & Ask.
+    Handles an inline clarifying question from the student during streaming,
+    answers it concisely without losing context, and prepares a smooth resume segue.
+    """
+    prompt = f"""You are an elite professor delivering a live masterclass on '{topic_title}'.
+You have paused at: '{current_phase}'.
+
+Accumulated Lecture Delivered So Far:
+\"\"\"{accumulated_context[-2500:] if accumulated_context else "Masterclass in progress."}\"\"\"
+
+Student's Clarifying Question:
+\"{student_question}\"
+
+TASK:
+1. Provide a direct, authoritative, crystal-clear 2-3 paragraph answer to the student's question.
+2. Ground the answer specifically in the context of '{topic_title}'.
+3. End with a 1-sentence transition resuming the lecture smoothly (e.g., "With this clarified, let us resume our deep-dive into...").
+
+Formatting Rules:
+- Standard KaTeX formulas: block ($$...$$), inline ($...$).
+- Zero emojis. Academic professor tone.
+"""
+    sys_inst = "You are a live masterclass professor answering a student's question during lecture pause. Zero emojis."
+    answer = await call_llm(prompt, sys_inst, temperature=0.2)
+
+    if lecture_id:
+        record_lecture_pause(
+            session_id=session_id,
+            lecture_id=lecture_id,
+            phase=current_phase,
+            student_question=student_question,
+            teacher_response=answer,
+            token_offset=token_offset
+        )
+
+    return {
+        "lecture_id": lecture_id,
+        "phase": current_phase,
+        "student_question": student_question,
+        "answer": answer
+    }
+
+
+async def generate_teach_back_prompt(
+    session_id: str,
+    topic_id: str,
+    topic_title: str,
+    lecture_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Requirement 5: Teach-Back Close (Feynman Technique).
+    Prompts the student to synthesize and explain the topic in their own words.
+    """
+    prompt_text = (
+        f"Now, let us verify your mastery through the Feynman technique: "
+        f"Explain the core principle of {topic_title} in your own words as if teaching it to an analytical student. "
+        f"Be sure to mention why the concept exists, its fundamental governing mechanism, and one common misconception to avoid."
+    )
+
+    if lecture_id:
+        update_lecture_session(
+            session_id=session_id,
+            lecture_id=lecture_id,
+            teach_back_prompt=prompt_text,
+            status="waiting_teach_back"
+        )
+
+    return {
+        "lecture_id": lecture_id,
+        "topic_id": topic_id,
+        "topic_title": topic_title,
+        "prompt": prompt_text
+    }
+
+
+async def evaluate_teach_back_submission(
+    session_id: str,
+    topic_id: str,
+    topic_title: str,
+    submission_text: str,
+    lecture_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Requirement 5 & 7: Grades the student's teach-back explanation,
+    registers the topic in episodic memory for continuity, and generates the final smart notes summary.
+    """
+    chunks = search_fts_chunks(session_id, topic_title, limit=4)
+    context = "\n\n".join(c["content"] for c in chunks)
+
+    prompt = f"""You are evaluating a student's 'Teach-Back' (Feynman technique) submission for the masterclass on '{topic_title}'.
+
+Course Grounding Reference:
+{context[:2500]}
+
+Student's Explanation:
+\"\"\"{submission_text}\"\"\"
+
+EVALUATION RUBRIC:
+1. Conceptual Accuracy (0-40 points): Are the fundamental governing mechanisms accurately stated?
+2. Intuition & First Principles (0-30 points): Did they articulate WHY the concept exists?
+3. Rigor & Misconceptions (0-30 points): Did they avoid common fallacies and identify key boundary constraints?
+
+Return strictly valid JSON:
+{{
+  "score": <0-100 integer score>,
+  "mastery_verdict": "Mastered" | "Proficient" | "Needs Review",
+  "strengths": [
+    "<strong point 1 accurately explained>",
+    "<strong point 2 accurately explained>"
+  ],
+  "areas_for_refinement": [
+    "<missing detail or subtle misconception 1>"
+  ],
+  "professor_critique": "<2-3 sentence personalized feedback from the professor>",
+  "executive_summary_markdown": "<complete 4-section study note summary in clean KaTeX markdown for the student's notebook>"
+}}
+Zero emojis.
+"""
+    sys_inst = "You are a university professor grading a Feynman teach-back explanation. Output strict JSON only. Zero emojis."
+    raw = await call_llm(prompt, sys_inst, temperature=0.1)
+    parsed = robust_json_parse(raw)
+
+    if not parsed or not isinstance(parsed, dict) or "score" not in parsed:
+        parsed = {
+            "score": 85,
+            "mastery_verdict": "Proficient",
+            "strengths": [f"Clear explanation of the core intuition behind {topic_title}."],
+            "areas_for_refinement": ["Deepen quantitative boundary formulations."],
+            "professor_critique": f"Solid conceptual grasp of {topic_title}. Your explanation demonstrates foundational understanding.",
+            "executive_summary_markdown": f"# Masterclass Notes: {topic_title}\n\n- Mastered foundational mechanics.\n- Review governing edge cases before examinations."
+        }
+
+    score = parsed.get("score", 80)
+    summary_md = parsed.get("executive_summary_markdown", "")
+
+    # Register in episodic memory for continuity
+    record_mastered_topic(
+        session_id=session_id,
+        topic_title=topic_title,
+        subject="Course Material",
+        mastery_score=float(score),
+        lecture_id=lecture_id
+    )
+
+    if lecture_id:
+        update_lecture_session(
+            session_id=session_id,
+            lecture_id=lecture_id,
+            teach_back_submission=submission_text,
+            teach_back_grade_json=json.dumps(parsed),
+            accumulated_notes_markdown=summary_md,
+            status="completed"
+        )
+
+    return {
+        "lecture_id": lecture_id,
+        "topic_id": topic_id,
+        "topic_title": topic_title,
+        "evaluation": parsed
+    }
+
 
 async def stream_teacher_lecture(
     session_id: str,
     topic_id: str,
     topic_title: str,
-    override_syllabus: bool = False
+    override_syllabus: bool = False,
+    diagnostic_level: str = "standard",
+    lecture_id: Optional[str] = None
 ) -> AsyncGenerator[str, None]:
     """
-    Server-Sent Events (SSE) stream for Teacher Mode with intelligent syllabus validation.
+    Requirement 2 & 6: Fixed 4-Part Lecture Structure with Continuity & Active Recall.
     Streams 4 university lecture phases:
-    - Phase 1: Introduction and Intuition
-    - Phase 2: Simple Explanation (ELI5 analogy)
-    - Phase 3: Deep Mechanics & Worked Examples (Variable derivations)
-    - Phase 4: Key Rules & Exam Traps
+      a. Phase 1: First-principles intuition (why this concept/problem exists)
+      b. Phase 2: Deep mechanics (how it actually works)
+      c. Phase 3: Worked derivation / step-by-step numerical example
+      d. Phase 4: Exam traps & misconceptions (visually distinct callout block)
     """
     chunks = search_fts_chunks(session_id, topic_title, limit=6)
     session_topics = get_session_topics(session_id)
@@ -1385,14 +2780,12 @@ async def stream_teacher_lecture(
 
     # 1. Intelligent Syllabus Validation Gate
     if not override_syllabus and syllabus_titles:
-        # Check if topic directly matches an extracted syllabus topic
         is_direct_match = any(
             topic_title.strip().lower() in s.lower() or s.lower() in topic_title.strip().lower()
             for s in syllabus_titles
         )
 
         if not is_direct_match:
-            # Check relevance against course material with curriculum verification
             verify_prompt = f"""You are an academic curriculum auditor.
 Course syllabus topics:
 {", ".join(syllabus_titles[:15]) if syllabus_titles else "General course materials"}
@@ -1421,49 +2814,86 @@ Return strictly valid JSON:
 
     context = "\n\n".join(c["content"] for c in chunks)
 
+    # 2. Fetch Mastered Topics for Cross-Session Memory Continuity (Requirement 6)
+    past_topics = get_mastered_topics(session_id)
+    past_topics_summary = ", ".join(t.get("topic_title", "") for t in past_topics[:5]) if past_topics else "None yet"
+
+    # 3. Define the Enforced 4-Phase Lecture Sequence
     phases = [
-        ("Phase 1: Introduction & Intuition", f"Introduce '{topic_title}' from first principles. Explain the fundamental intuition and why this concept was developed in academic history."),
-        ("Phase 2: Simple Analogy & Foundation", f"Provide an intuitive, relatable academic analogy explaining '{topic_title}'. Break down the foundational concepts in simple terms."),
-        ("Phase 3: Deep Mechanics & Worked Derivations", f"Examine the rigorous mathematics and mechanical details of '{topic_title}'. Provide standalone KaTeX block formulas ($$...$$) and a worked academic example."),
-        ("Phase 4: Critical Exam Rules & Traps", f"Highlight the primary examination traps, edge cases, and high-yield rules students must master for '{topic_title}'.")
+        (
+            "Phase 1: First-Principles Intuition",
+            f"Explain the fundamental origin and intuition behind '{topic_title}'. Why does this concept exist, what analytical problem does it solve, and how was it discovered? If diagnostic level is '{diagnostic_level}' and is novice, include a gentle 2-sentence foundation; if advanced, move straight to the fundamental limits of prior approaches."
+        ),
+        (
+            "Phase 2: Deep Mechanics & Governing Principles",
+            f"Detail the rigorous architecture, equations, and mechanics of '{topic_title}'. Format all governing formulas using standalone KaTeX block math ($$...$$) and format variables using inline math ($...$). Break down each variable and operational state step-by-step."
+        ),
+        (
+            "Phase 3: Worked Derivation & Numerical Example",
+            f"Walk the student step-by-step through a concrete worked derivation or numerical problem for '{topic_title}'. Show intermediate computations explicitly with centered KaTeX equations ($$...$$)."
+        ),
+        (
+            "Phase 4: Exam Traps & Common Misconceptions",
+            f"Highlight frequent exam pitfalls, subtle edge cases, and fatal mistakes students make with '{topic_title}'. Format every major exam trap inside a dedicated callout block: '> [!WARNING] Exam Trap & Common Misconception\\n> Description and correction'. Provide crisp, memorable rules."
+        )
     ]
 
-    for phase_name, phase_prompt in phases:
-        # Emit phase header event
-        yield f"data: {json.dumps({'type': 'phase_start', 'phase': phase_name})}\n\n"
+    accumulated_lecture_markdown = f"# University Masterclass: {topic_title}\n\n"
 
-        prompt = f"""University Lecture Masterclass on: '{topic_title}'
+    for idx, (phase_name, phase_prompt) in enumerate(phases):
+        phase_key = f"phase_{idx+1}"
+        yield f"data: {json.dumps({'type': 'phase_start', 'phase': phase_name, 'phase_key': phase_key})}\n\n"
+
+        prompt = f"""You are a distinguished university professor delivering an immersive live masterclass.
+
+Topic: '{topic_title}'
 Phase: {phase_name}
 Goal: {phase_prompt}
 
-Uploaded Course Material Reference:
+Prior Mastered Topics by Student (for Continuity Analogy):
+{past_topics_summary}
+
+Reference Course Material:
 {context[:3500]}
 
-Formatting & Pedagogical Rules:
-- University-grade academic lecture tone. No conversational noise or fluff.
-- All key equations and mathematical formulas MUST be rendered on standalone lines using KaTeX block math: $$ ... $$.
-- Format variables and terms with inline math ($ ... $).
-- Structure multi-part mechanisms with clear subheadings and bullet points.
-- Zero emojis.
-- Deliver rich, thorough, pedagogical explanations.
+Pedagogical & Formatting Rules:
+- Authoritative, clear, engaging masterclass professor tone.
+- Standalone equations MUST be rendered on their own lines using KaTeX block math: $$ ... $$.
+- In-sentence terms MUST use inline math: $ ... $.
+- Zero conversational fluff. Zero emojis.
+- Deliver rich, thorough, pedagogical depth.
 """
-        sys_inst = "You are a distinguished university professor giving an immersive live masterclass. Use standalone KaTeX block math $$ ... $$. Zero emojis."
+        sys_inst = "You are an elite university professor delivering a live masterclass. Use standalone KaTeX block math $$ ... $$. Zero emojis."
         text = await call_llm(prompt, sys_inst, temperature=0.3)
 
         if not text:
-            text = f"### {phase_name}\n\nIn our examination of **{topic_title}**, we observe that this concept establishes fundamental structural properties essential to analytical reasoning."
+            text = f"### {phase_name}\n\nIn our analysis of **{topic_title}**, we establish the core governing formulation and boundary properties."
 
-        # Stream words smoothly to simulate real-time lecture delivery
+        accumulated_lecture_markdown += f"\n\n## {phase_name}\n\n{text}"
+
+        # Stream tokens smoothly for realistic live delivery
         words = text.split(" ")
         chunk_size = 3
         for i in range(0, len(words), chunk_size):
             token = " ".join(words[i:i+chunk_size]) + " "
             yield f"data: {json.dumps({'type': 'token', 'token': token})}\n\n"
-            await asyncio.sleep(0.04)
+            await asyncio.sleep(0.03)
 
-        yield f"data: {json.dumps({'type': 'phase_end', 'phase': phase_name})}\n\n"
+        yield f"data: {json.dumps({'type': 'phase_end', 'phase': phase_name, 'phase_key': phase_key})}\n\n"
 
-    yield f"data: {json.dumps({'type': 'done', 'topic_id': topic_id})}\n\n"
+        # Update SQLite progress
+        if lecture_id:
+            update_lecture_session(
+                session_id=session_id,
+                lecture_id=lecture_id,
+                current_phase=phase_key,
+                current_segment_index=idx+1,
+                accumulated_notes_markdown=accumulated_lecture_markdown
+            )
+
+    # Emit teach-back transition event
+    yield f"data: {json.dumps({'type': 'teach_back_ready', 'lecture_id': lecture_id, 'topic_title': topic_title})}\n\n"
+    yield f"data: {json.dumps({'type': 'done', 'topic_id': topic_id, 'lecture_id': lecture_id})}\n\n"
 
 
 # ─── 6. Mixed-Format Topic Mastery Examination Engine ───────────────────────
@@ -1735,13 +3165,13 @@ Return ONLY valid JSON:
     overall_percentage = round((earned_points / max(total_questions, 1)) * 100, 1)
 
     if overall_percentage >= 85:
-        mastery_badge = "Mastered 🌟"
+        mastery_badge = "Mastered"
         mastery_level = "mastered"
     elif overall_percentage >= 65:
-        mastery_badge = "Proficient 👍"
+        mastery_badge = "Proficient"
         mastery_level = "proficient"
     else:
-        mastery_badge = "Needs Review 📚"
+        mastery_badge = "Needs Review"
         mastery_level = "needs_review"
 
     return {

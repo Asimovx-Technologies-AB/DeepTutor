@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi import APIRouter, HTTPException, Depends, Header, Query
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from app.core import database as db
@@ -98,32 +98,52 @@ async def upgrade_to_premium(
     }
 
 
-def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
-    """Dependency: extract user from Bearer token."""
-    guest_user = {
-        "id": "guest-user",
-        "username": "Student Learner",
-        "email": "student@deeptutor.ai",
-        "role": "student",
-        "is_premium": True,
-        "plan": "premium",
-        "max_upload_size_mb": 100,
-    }
-
-    if not authorization or not authorization.startswith("Bearer "):
-        return guest_user
-
-    token = authorization.split(" ")[1]
-    # Allow demo tokens
+def get_user_from_token(token: str) -> dict:
+    """Validate token string and return user dict, or raise HTTPException(401)."""
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication token required")
     if token in ("demo-token", "demo-guest-token"):
-        return guest_user
-
+        return {
+            "id": "guest-user",
+            "username": "Student Learner",
+            "email": "student@deeptutor.ai",
+            "role": "student",
+            "is_premium": True,
+            "plan": "premium",
+            "max_upload_size_mb": 100,
+        }
     payload = decode_token(token)
-    if not payload:
-        return guest_user
-
+    if not payload or not payload.get("sub"):
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
     user = db.get_user_by_id(payload.get("sub", ""))
     if not user:
-        return guest_user
-
+        raise HTTPException(status_code=401, detail="User not found")
     return user
+
+
+def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
+    """Dependency: extract user from Bearer token."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    token = authorization.split(" ")[1]
+    return get_user_from_token(token)
+
+
+def get_user_from_header_or_query(
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None)
+) -> dict:
+    """Extract and validate user from Authorization header OR ?token= query parameter."""
+    raw_token = ""
+    if authorization and authorization.startswith("Bearer "):
+        raw_token = authorization.split(" ")[1]
+    elif token:
+        raw_token = token
+
+    if not raw_token:
+        raise HTTPException(status_code=401, detail="Authentication token required")
+
+    return get_user_from_token(raw_token)
+
+

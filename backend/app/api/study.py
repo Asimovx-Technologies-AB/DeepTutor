@@ -21,12 +21,35 @@ import asyncio
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Response, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Response, Depends, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.core.config import get_settings
-from app.api.auth import get_current_user
+from app.api.auth import get_current_user, get_user_from_token, get_user_from_header_or_query
+
+
+def verify_session_ownership(session_id: str, user_id: str) -> dict:
+    """Verify session exists and belongs to the authenticated user. Raise 403 on ownership violation."""
+    from app.services.study_storage import get_registry_session
+    meta = get_registry_session(session_id)
+    if meta:
+        if meta.get("user_id") and meta.get("user_id") != user_id:
+            raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
+        return meta
+
+    try:
+        from app.core import database as db
+        s = db.get_session(session_id)
+        if s:
+            if s.get("user_id") and s.get("user_id") != user_id:
+                raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
+            return s
+    except Exception:
+        pass
+
+    return {}
+
 from app.services.study_storage import (
     init_session_db,
     save_session_message,
@@ -50,8 +73,19 @@ from app.services.study_agents import (
     generate_core_idea,
     resolve_topic_doubt,
     stream_teacher_lecture,
+    generate_lecture_diagnostic,
+    evaluate_lecture_diagnostic,
+    generate_phase_checkpoint,
+    evaluate_checkpoint_response,
+    handle_lecture_pause_ask,
+    generate_teach_back_prompt,
+    evaluate_teach_back_submission,
     generate_mixed_exam,
     evaluate_exam_submission,
+)
+from app.services.study_storage import (
+    get_lecture_session,
+    get_lecture_checkpoints,
 )
 
 router = APIRouter(prefix="/study", tags=["Study Room"])
@@ -130,20 +164,39 @@ async def upload_document(
     - Dispatches background table & diagram workers
     """
     settings = get_settings()
-    study_id = session_id or str(uuid.uuid4())
+    upload_root = Path(settings.UPLOAD_DIR).resolve()
+
+    if session_id:
+        clean_sid = session_id.strip()
+        if not re.match(r"^[a-zA-Z0-9_\-]{1,64}$", clean_sid) or ".." in clean_sid:
+            raise HTTPException(status_code=400, detail="Invalid session_id format")
+        study_id = clean_sid
+        verify_session_ownership(study_id, user["id"])
+    else:
+        study_id = str(uuid.uuid4())
+
     init_session_db(study_id)
 
-    # Save uploaded file to disk
-    upload_dir = Path(settings.UPLOAD_DIR) / study_id
+    # Sanitize filename and check path traversal
+    safe_filename = Path(file.filename).name
+    if not safe_filename or ".." in safe_filename or "/" in safe_filename or "\\" in safe_filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    upload_dir = (upload_root / study_id).resolve()
+    file_path_obj = (upload_dir / safe_filename).resolve()
+
+    if not str(file_path_obj).startswith(str(upload_root)):
+        raise HTTPException(status_code=400, detail="Path traversal attempt detected")
+
     upload_dir.mkdir(parents=True, exist_ok=True)
-    file_path = str(upload_dir / file.filename)
+    file_path = str(file_path_obj)
 
     with open(file_path, "wb") as f:
         content = await file.read()
         f.write(content)
 
     doc_id = f"doc_{int(uuid.uuid4().int % 10000000)}"
-    clean_title = Path(file.filename).stem.replace("_", " ").title()
+    clean_title = Path(safe_filename).stem.replace("_", " ").title()
     effective_subject = subject.strip() if (subject and subject.strip() and subject.strip() != "General Study") else clean_title
 
     # Concurrent Execution: Ingestion + Fast Curriculum Reasoning
@@ -246,10 +299,14 @@ async def upload_document(
 # ─── 2. Two-Agent Reasoning Chat (Planner -> Executor) ───────────────────────
 
 @router.post("/agent/message")
-async def send_agent_message(body: AgentMessageRequest):
+async def send_agent_message(
+    body: AgentMessageRequest,
+    user: dict = Depends(get_current_user)
+):
     """
     Planner-Executor two-agent chat endpoint with FTS5 BM25 retrieval and memory.
     """
+    verify_session_ownership(body.session_id, user["id"])
     init_session_db(body.session_id)
 
     # Retrieve previous conversation history before adding new message
@@ -279,7 +336,7 @@ async def send_agent_message(body: AgentMessageRequest):
         user_query=body.message,
         plan=plan,
         session_id=body.session_id,
-        user_id=body.user_id or "default-user",
+        user_id=user["id"],
         subject=body.subject or "General Study",
         history=history
     )
@@ -306,6 +363,9 @@ async def send_agent_message(body: AgentMessageRequest):
         "format": exec_result.get("format", "conceptual"),
         "response_format": exec_result.get("response_format", exec_result.get("format", "conceptual")),
         "export_ready": exec_result.get("export_ready", False),
+        "is_synthetic_textbook": exec_result.get("is_synthetic_textbook", False),
+        "level": exec_result.get("level"),
+        "level_name": exec_result.get("level_name"),
         "confidence": plan.get("confidence", 0.9)
     }
 
@@ -313,8 +373,12 @@ async def send_agent_message(body: AgentMessageRequest):
 # ─── 3. Normal Mode: 4-Step Core Idea ───────────────────────────────────────
 
 @router.post("/topic/core-idea")
-async def get_topic_core_idea(body: CoreIdeaRequest):
+async def get_topic_core_idea(
+    body: CoreIdeaRequest,
+    user: dict = Depends(get_current_user)
+):
     """Returns 4-step structured breakdown for Normal Mode."""
+    verify_session_ownership(body.session_id, user["id"])
     return await generate_core_idea(
         session_id=body.session_id,
         topic_id=body.topic_id,
@@ -326,8 +390,12 @@ async def get_topic_core_idea(body: CoreIdeaRequest):
 # ─── 4. Topic Doubt Resolution ──────────────────────────────────────────────
 
 @router.post("/topic/doubt")
-async def post_topic_doubt(body: TopicDoubtRequest):
+async def post_topic_doubt(
+    body: TopicDoubtRequest,
+    user: dict = Depends(get_current_user)
+):
     """Resolves topic-specific doubts with grounded context."""
+    verify_session_ownership(body.session_id, user["id"])
     return await resolve_topic_doubt(
         session_id=body.session_id,
         topic_id=body.topic_id,
@@ -337,18 +405,77 @@ async def post_topic_doubt(body: TopicDoubtRequest):
     )
 
 
-# ─── 5. Teacher Mode: SSE Streaming Lecture ──────────────────────────────────
+# ─── 5. Teacher Mode: Interactive Masterclass Lecture Engine ─────────────────
+
+class DiagnosticStartRequest(BaseModel):
+    session_id: str
+    topic_id: str
+    topic_title: str
+
+
+@router.post("/topic/teach/diagnostic/start")
+async def start_diagnostic_endpoint(
+    body: DiagnosticStartRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Requirement 1: Generates 1-question diagnostic probe and initializes lecture session."""
+    verify_session_ownership(body.session_id, user["id"])
+    return await generate_lecture_diagnostic(
+        session_id=body.session_id,
+        topic_id=body.topic_id,
+        topic_title=body.topic_title
+    )
+
+
+class DiagnosticSubmitRequest(BaseModel):
+    session_id: str
+    topic_id: str
+    topic_title: str
+    question: str
+    student_answer: str
+    lecture_id: Optional[str] = None
+
+
+@router.post("/topic/teach/diagnostic/submit")
+async def submit_diagnostic_endpoint(
+    body: DiagnosticSubmitRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Requirement 1: Evaluates diagnostic answer and branches lecture level (novice/standard/advanced)."""
+    verify_session_ownership(body.session_id, user["id"])
+    return await evaluate_lecture_diagnostic(
+        session_id=body.session_id,
+        topic_id=body.topic_id,
+        topic_title=body.topic_title,
+        question=body.question,
+        student_answer=body.student_answer,
+        lecture_id=body.lecture_id
+    )
+
 
 @router.get("/topic/teach/stream")
 async def get_teacher_stream(
     session_id: str = Query(...),
     topic_id: str = Query(...),
     topic_title: str = Query(...),
-    override_syllabus: bool = Query(False)
+    override_syllabus: bool = Query(False),
+    diagnostic_level: str = Query("standard"),
+    lecture_id: Optional[str] = Query(None),
+    token: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
 ):
-    """Real-time SSE lecture stream across 4 pedagogical phases with syllabus verification."""
+    """Real-time SSE lecture stream across 4 enforced pedagogical phases with continuity and KaTeX math."""
+    user = get_user_from_header_or_query(authorization=authorization, token=token)
+    verify_session_ownership(session_id, user["id"])
     return StreamingResponse(
-        stream_teacher_lecture(session_id, topic_id, topic_title, override_syllabus=override_syllabus),
+        stream_teacher_lecture(
+            session_id=session_id,
+            topic_id=topic_id,
+            topic_title=topic_title,
+            override_syllabus=override_syllabus,
+            diagnostic_level=diagnostic_level,
+            lecture_id=lecture_id
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -356,6 +483,150 @@ async def get_teacher_stream(
             "X-Accel-Buffering": "no"
         }
     )
+
+
+class CheckpointGenerateRequest(BaseModel):
+    session_id: str
+    topic_title: str
+    phase_name: str
+    phase_content: str
+    lecture_id: Optional[str] = None
+
+
+@router.post("/topic/teach/checkpoint/generate")
+async def generate_checkpoint_endpoint(
+    body: CheckpointGenerateRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Requirement 3: Generates an active-recall checkpoint question for the phase."""
+    verify_session_ownership(body.session_id, user["id"])
+    return await generate_phase_checkpoint(
+        session_id=body.session_id,
+        topic_title=body.topic_title,
+        phase_name=body.phase_name,
+        phase_content=body.phase_content,
+        lecture_id=body.lecture_id
+    )
+
+
+class CheckpointSubmitRequest(BaseModel):
+    session_id: str
+    topic_title: str
+    phase_name: str
+    question_prompt: str
+    correct_answer: str
+    student_response: str
+    checkpoint_id: Optional[str] = None
+
+
+@router.post("/topic/teach/checkpoint/submit")
+async def submit_checkpoint_endpoint(
+    body: CheckpointSubmitRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Requirement 3: Evaluates checkpoint response and provides modal remediation if incorrect."""
+    verify_session_ownership(body.session_id, user["id"])
+    return await evaluate_checkpoint_response(
+        session_id=body.session_id,
+        topic_title=body.topic_title,
+        phase_name=body.phase_name,
+        question_prompt=body.question_prompt,
+        correct_answer=body.correct_answer,
+        student_response=body.student_response,
+        checkpoint_id=body.checkpoint_id
+    )
+
+
+class PauseAskRequest(BaseModel):
+    session_id: str
+    topic_title: str
+    current_phase: str
+    accumulated_context: str
+    student_question: str
+    lecture_id: Optional[str] = None
+    token_offset: Optional[int] = 0
+
+
+@router.post("/topic/teach/pause/ask")
+async def pause_ask_endpoint(
+    body: PauseAskRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Requirement 4: In-line Pause & Ask without losing lecture context or resetting stream."""
+    verify_session_ownership(body.session_id, user["id"])
+    return await handle_lecture_pause_ask(
+        session_id=body.session_id,
+        topic_title=body.topic_title,
+        current_phase=body.current_phase,
+        accumulated_context=body.accumulated_context,
+        student_question=body.student_question,
+        lecture_id=body.lecture_id,
+        token_offset=body.token_offset or 0
+    )
+
+
+class TeachBackPromptRequest(BaseModel):
+    session_id: str
+    topic_id: str
+    topic_title: str
+    lecture_id: Optional[str] = None
+
+
+@router.post("/topic/teach/teach-back/prompt")
+async def teach_back_prompt_endpoint(
+    body: TeachBackPromptRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Requirement 5: Prompts student for Feynman-technique teach-back."""
+    verify_session_ownership(body.session_id, user["id"])
+    return await generate_teach_back_prompt(
+        session_id=body.session_id,
+        topic_id=body.topic_id,
+        topic_title=body.topic_title,
+        lecture_id=body.lecture_id
+    )
+
+
+class TeachBackSubmitRequest(BaseModel):
+    session_id: str
+    topic_id: str
+    topic_title: str
+    submission_text: str
+    lecture_id: Optional[str] = None
+
+
+@router.post("/topic/teach/teach-back/submit")
+async def teach_back_submit_endpoint(
+    body: TeachBackSubmitRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Requirement 5 & 7: Evaluates teach-back, grades mastery, and outputs final smart notes summary."""
+    verify_session_ownership(body.session_id, user["id"])
+    return await evaluate_teach_back_submission(
+        session_id=body.session_id,
+        topic_id=body.topic_id,
+        topic_title=body.topic_title,
+        submission_text=body.submission_text,
+        lecture_id=body.lecture_id
+    )
+
+
+@router.get("/topic/teach/session/{session_id}/{lecture_id}")
+async def get_lecture_session_endpoint(
+    session_id: str,
+    lecture_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Retrieves full durable lecture session state, checkpoints, and notes."""
+    verify_session_ownership(session_id, user["id"])
+    session = get_lecture_session(session_id, lecture_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Lecture session not found")
+    checkpoints = get_lecture_checkpoints(session_id, lecture_id)
+    return {
+        "session": session,
+        "checkpoints": checkpoints
+    }
 
 
 class FlashcardDeckRequest(BaseModel):
@@ -369,8 +640,12 @@ class FlashcardDeckRequest(BaseModel):
 
 
 @router.post("/flashcard-deck")
-async def get_flashcard_deck_endpoint(body: FlashcardDeckRequest):
+async def get_flashcard_deck_endpoint(
+    body: FlashcardDeckRequest,
+    user: dict = Depends(get_current_user)
+):
     """Generates grounded dual-mode flashcard/quiz deck for a topic."""
+    verify_session_ownership(body.session_id, user["id"])
     from app.services.study_quiz_engine import generate_flashcard_deck
     return await generate_flashcard_deck(
         session_id=body.session_id,
@@ -386,8 +661,12 @@ async def get_flashcard_deck_endpoint(body: FlashcardDeckRequest):
 # ─── 6. Mixed-Format Topic Mastery Examination Engine ───────────────────────
 
 @router.post("/topic/exam")
-async def get_topic_exam(body: TopicExamRequest):
+async def get_topic_exam(
+    body: TopicExamRequest,
+    user: dict = Depends(get_current_user)
+):
     """Generates 3-format mixed exam (Written, MCQ, Fill-in-the-blank)."""
+    verify_session_ownership(body.session_id, user["id"])
     return await generate_mixed_exam(
         session_id=body.session_id,
         topic_id=body.topic_id,
@@ -396,8 +675,12 @@ async def get_topic_exam(body: TopicExamRequest):
 
 
 @router.post("/topic/evaluate")
-async def evaluate_topic_exam(body: ExamEvaluationRequest):
+async def evaluate_topic_exam(
+    body: ExamEvaluationRequest,
+    user: dict = Depends(get_current_user)
+):
     """Evaluates and scores student exam answers with rubrics."""
+    verify_session_ownership(body.session_id, user["id"])
     return await evaluate_topic_exam_submission(body)
 
 
@@ -413,7 +696,10 @@ async def evaluate_topic_exam_submission(body: ExamEvaluationRequest):
 # ─── 7. Export Suite: Markdown Attachment Download ──────────────────────────
 
 @router.post("/export/notes-md")
-async def export_notes_markdown(body: ExportMarkdownRequest):
+async def export_notes_markdown(
+    body: ExportMarkdownRequest,
+    user: dict = Depends(get_current_user)
+):
     """Returns downloadable Markdown (.md) attachment with Content-Disposition."""
     slug = re.sub(r"[^\w\-_]", "_", body.title or "study_notes").lower()
     return Response(
@@ -452,7 +738,15 @@ async def create_new_session(
 @router.get("/sessions/{session_id}")
 async def get_session_details(session_id: str, user: dict = Depends(get_current_user)):
     """Loads persisted conversation, topics, and documents for a session."""
+    from app.core import database as db
     meta = get_registry_session(session_id)
+    s = db.get_session(session_id)
+
+    if meta and meta.get("user_id") and meta.get("user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
+    if s and s.get("user_id") and s.get("user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
+
     if not meta:
         meta = register_or_update_session(session_id, user_id=user["id"])
     messages = get_session_messages(session_id)
@@ -468,15 +762,38 @@ async def get_session_details(session_id: str, user: dict = Depends(get_current_
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_study_session(session_id: str):
+async def delete_study_session(
+    session_id: str,
+    user: dict = Depends(get_current_user)
+):
     """Permanently deletes session, registry entry, and physical SQLite .db."""
-    delete_registry_session(session_id)
-    return {"success": True, "session_id": session_id}
+    from app.core import database as db
+    meta = get_registry_session(session_id)
+    s = db.get_session(session_id)
+
+    if meta and meta.get("user_id") and meta.get("user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
+    if s and s.get("user_id") and s.get("user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
+
+    if not meta and not s:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    ok_reg = delete_registry_session(session_id, user_id=user["id"])
+    del_res = db.delete_session(session_id, user_id=user["id"])
+    ok = ok_reg or del_res.get("deleted", False)
+
+    return {"success": ok, "session_id": session_id}
 
 
 @router.delete("/sessions/{session_id}/documents/{doc_name_or_id:path}")
-async def delete_session_document_endpoint(session_id: str, doc_name_or_id: str):
+async def delete_session_document_endpoint(
+    session_id: str,
+    doc_name_or_id: str,
+    user: dict = Depends(get_current_user)
+):
     """Deletes a specific material document from a study room session."""
+    verify_session_ownership(session_id, user["id"])
     from app.services.study_storage import delete_session_document
     ok = delete_session_document(session_id, doc_name_or_id)
     return {"success": ok, "session_id": session_id, "deleted_material": doc_name_or_id}
@@ -485,16 +802,27 @@ async def delete_session_document_endpoint(session_id: str, doc_name_or_id: str)
 # ─── 9. Student Episodic Memory ─────────────────────────────────────────────
 
 @router.get("/memory/{user_id}")
-async def fetch_student_memory(user_id: str):
+async def fetch_student_memory(
+    user_id: str,
+    user: dict = Depends(get_current_user)
+):
     """Fetches student learning profile, goals, weaknesses, and facts."""
+    if user_id != user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied: cannot access another student's memory")
     return get_student_memory(user_id)
 
 
 @router.post("/memory/{user_id}/fact")
-async def update_student_memory_fact(user_id: str, body: AddMemoryFactRequest):
+async def update_student_memory_fact(
+    user_id: str,
+    body: AddMemoryFactRequest,
+    user: dict = Depends(get_current_user)
+):
     """Adds or updates student goal, preference, or struggle area."""
+    if user_id != user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied: cannot modify another student's memory")
     return add_student_memory_fact(
-        user_id=user_id,
+        user_id=user["id"],
         fact=body.fact,
         learning_style=body.learning_style,
         goal=body.goal,
@@ -504,6 +832,12 @@ async def update_student_memory_fact(user_id: str, body: AddMemoryFactRequest):
 
 
 @router.delete("/memory/{user_id}")
-async def clear_student_memory(user_id: str):
+async def clear_student_memory(
+    user_id: str,
+    user: dict = Depends(get_current_user)
+):
     """Resets memory for a specific student."""
-    return {"success": reset_student_memory(user_id)}
+    if user_id != user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied: cannot delete another student's memory")
+    return {"success": reset_student_memory(user["id"])}
+

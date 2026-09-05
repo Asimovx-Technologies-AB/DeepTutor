@@ -24,7 +24,7 @@ def _create_engine_with_fallback(primary_url: str):
                 pool_size=20,
                 max_overflow=30,
                 pool_recycle=300,
-                connect_args={"connect_timeout": 5},
+                connect_args={"connect_timeout": 15},
             )
             # Test connection
             with eng.connect() as conn:
@@ -232,14 +232,27 @@ def get_session(session_id: str) -> Optional[dict]:
     return None
 
 
-def delete_session(session_id: str) -> bool:
+def delete_session(session_id: str, user_id: Optional[str] = None) -> dict:
     with DBContext() as db:
+        query = db.query(ChatSession).filter(ChatSession.id == session_id)
+        if user_id is not None:
+            query = query.filter(ChatSession.user_id == user_id)
+        s = query.first()
+        if not s:
+            return {"deleted": False}
+
+        doc_links = db.query(SessionDocument).filter(SessionDocument.session_id == session_id).all()
+        deleted_docs = []
+        for dl in doc_links:
+            d = db.query(Document).filter(Document.doc_hash == dl.doc_hash).first()
+            if d:
+                deleted_docs.append({"id": d.id, "file_path": d.file_path})
+            db.delete(dl)
+
         db.query(ChatMessage).filter(ChatMessage.session_id == session_id).delete(synchronize_session=False)
-        s = db.query(ChatSession).filter(ChatSession.id == session_id).first()
-        if s:
-            db.delete(s)
-            return True
-    return False
+        db.delete(s)
+        return {"deleted": True, "deleted_docs": deleted_docs}
+
 
 
 # ─── Message helpers ───────────────────────────────────────────────────────────

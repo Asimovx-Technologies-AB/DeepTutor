@@ -4,10 +4,10 @@ from pathlib import Path
 import asyncio
 import json
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from app.api.auth import get_current_user, decode_token
+from app.api.auth import get_current_user, decode_token, get_user_from_token, get_user_from_header_or_query
 from app.core import database as db
 from app.core.config import get_settings
 from app.rag.ollama_client import ollama
@@ -68,7 +68,7 @@ async def get_session(
     user: dict = Depends(get_current_user),
 ):
     session = db.get_session(session_id)
-    if not session:
+    if not session or session.get("user_id") != user["id"]:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
 
@@ -79,7 +79,7 @@ async def get_messages(
     user: dict = Depends(get_current_user),
 ):
     session = db.get_session(session_id)
-    if not session:
+    if not session or session.get("user_id") != user["id"]:
         raise HTTPException(status_code=404, detail="Session not found")
     messages = db.get_messages(session_id)
     return messages
@@ -121,7 +121,7 @@ async def send_message(
     user: dict = Depends(get_current_user),
 ):
     session = db.get_session(session_id)
-    if not session:
+    if not session or session.get("user_id") != user["id"]:
         raise HTTPException(status_code=404, detail="Session not found")
 
     # Save user message
@@ -193,15 +193,14 @@ async def send_message(
 async def stream_message(
     session_id: str,
     content: str = Query(...),
-    token: str = Query(""),
+    token: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
     language: str = Query("english"),
 ):
+    user = get_user_from_header_or_query(authorization=authorization, token=token)
     session = db.get_session(session_id)
-    if not session:
-        async def not_found():
-            yield f"data: {json.dumps({'type': 'token', 'data': '⚠️ Session not found.'})}\n\n"
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
-        return StreamingResponse(not_found(), media_type="text/event-stream")
+    if not session or session.get("user_id") != user["id"]:
+        raise HTTPException(status_code=404, detail="Session not found")
 
     user_id = session.get("user_id", "")
     db.add_message(session_id, "user", content)

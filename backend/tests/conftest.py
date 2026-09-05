@@ -95,8 +95,9 @@ async def async_client(app):
 
 def get_auth_headers(client: TestClient, username="testuser", password="testpassword") -> dict:
     """Register + login a test user, return Bearer auth headers."""
-    client.post("/api/auth/register", json={"username": username, "password": password, "email": f"{username}@test.com"})
-    resp = client.post("/api/auth/login", data={"username": username, "password": password})
+    email = f"{username}@test.com"
+    client.post("/api/auth/register", json={"username": username, "password": password, "email": email})
+    resp = client.post("/api/auth/login", json={"email": email, "password": password})
     if resp.status_code == 200:
         token = resp.json().get("access_token", "")
         return {"Authorization": f"Bearer {token}"}

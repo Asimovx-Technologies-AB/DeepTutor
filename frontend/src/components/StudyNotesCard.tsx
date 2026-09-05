@@ -10,9 +10,12 @@ interface StudyNotesCardProps {
 
 export function extractDocTitle(markdown: string): string {
   if (!markdown) return ''
-  const match = markdown.match(/^#\s+(.+)$/m)
+  const match = markdown.match(/^#+\s+(.+)$/m)
   if (match && match[1]) {
-    return match[1].replace(/#.*$/, '').trim()
+    return match[1]
+      .replace(/#.*$/, '')
+      .replace(/[\*\_~`]/g, '')
+      .trim()
   }
   return ''
 }

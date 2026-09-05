@@ -125,6 +125,70 @@ def init_session_db(session_id: str) -> Path:
             );
         """)
 
+        # 5. Teacher Mode: Lecture Sessions
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS lecture_sessions (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                topic_id TEXT NOT NULL,
+                topic_title TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'diagnostic',
+                diagnostic_question TEXT,
+                diagnostic_answer TEXT,
+                diagnostic_level TEXT DEFAULT 'standard',
+                current_phase TEXT DEFAULT 'phase_1',
+                current_segment_index INTEGER DEFAULT 0,
+                accumulated_notes_markdown TEXT DEFAULT '',
+                teach_back_prompt TEXT,
+                teach_back_submission TEXT,
+                teach_back_grade_json TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
+        # 6. Teacher Mode: Checkpoints
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS lecture_checkpoints (
+                id TEXT PRIMARY KEY,
+                lecture_id TEXT NOT NULL,
+                phase TEXT NOT NULL,
+                question_prompt TEXT NOT NULL,
+                options_json TEXT,
+                correct_answer TEXT NOT NULL,
+                student_response TEXT,
+                is_correct INTEGER,
+                remedial_modality TEXT,
+                remedial_content TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
+        # 7. Teacher Mode: Pause & Ask Events
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS lecture_pause_events (
+                id TEXT PRIMARY KEY,
+                lecture_id TEXT NOT NULL,
+                phase TEXT NOT NULL,
+                token_offset INTEGER DEFAULT 0,
+                student_question TEXT NOT NULL,
+                teacher_response TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
+        # 8. Teacher Mode: Mastered Topics Registry (for continuity)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_mastered_topics (
+                id TEXT PRIMARY KEY,
+                topic_title TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                mastery_score REAL DEFAULT 0.0,
+                lecture_id TEXT,
+                completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
         conn.commit()
     finally:
         conn.close()
@@ -698,19 +762,24 @@ def update_session_topic_count(session_id: str, count: int):
             pass
 
 
-def delete_registry_session(session_id: str) -> bool:
-    """Purge session from registry and delete physical SQLite database."""
+def delete_registry_session(session_id: str, user_id: Optional[str] = None) -> bool:
+    """Purge session from registry and delete physical SQLite database, scoped to user_id if provided."""
     ensure_data_directories()
     with _registry_lock:
         try:
             if REGISTRY_PATH.exists():
                 with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
                     sessions = json.load(f)
+                target = next((s for s in sessions if s.get("id") == session_id), None)
+                if not target:
+                    return False
+                if user_id and target.get("user_id") and target.get("user_id") != user_id:
+                    return False
                 sessions = [s for s in sessions if s.get("id") != session_id]
                 with open(REGISTRY_PATH, "w", encoding="utf-8") as f:
                     json.dump(sessions, f, indent=2)
         except Exception:
-            pass
+            return False
 
     # Delete physical db file
     db_path = get_session_db_path(session_id)
@@ -896,3 +965,273 @@ def check_and_restore_s3_backups():
                         pass
     except Exception:
         pass
+
+
+# ─── Teacher Mode Storage Helpers ──────────────────────────────────────────
+
+def create_lecture_session(
+    session_id: str,
+    topic_id: str,
+    topic_title: str,
+    diagnostic_question: Optional[str] = None
+) -> Dict[str, Any]:
+    """Creates a new durable lecture session record in SQLite."""
+    db_path = init_session_db(session_id)
+    lecture_id = f"lec_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{os.urandom(3).hex()}"
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO lecture_sessions (
+                id, session_id, topic_id, topic_title, status, diagnostic_question, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (lecture_id, session_id, topic_id, topic_title, "diagnostic", diagnostic_question, now_iso, now_iso)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    schedule_s3_db_backup(session_id)
+    return {
+        "id": lecture_id,
+        "session_id": session_id,
+        "topic_id": topic_id,
+        "topic_title": topic_title,
+        "status": "diagnostic",
+        "diagnostic_question": diagnostic_question,
+        "current_phase": "phase_1",
+        "accumulated_notes_markdown": ""
+    }
+
+
+def get_lecture_session(session_id: str, lecture_id: str) -> Optional[Dict[str, Any]]:
+    """Fetches a lecture session record by ID."""
+    db_path = get_session_db_path(session_id)
+    if not db_path.exists():
+        return None
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM lecture_sessions WHERE id = ?", (lecture_id,))
+        row = cur.fetchone()
+        if not row:
+            return None
+        res = dict(row)
+        if res.get("teach_back_grade_json"):
+            try:
+                res["teach_back_grade"] = json.loads(res["teach_back_grade_json"])
+            except Exception:
+                res["teach_back_grade"] = None
+        return res
+    finally:
+        conn.close()
+
+
+def update_lecture_session(session_id: str, lecture_id: str, **kwargs) -> bool:
+    """Updates fields of a lecture session record."""
+    db_path = get_session_db_path(session_id)
+    if not db_path.exists():
+        return False
+
+    valid_cols = {
+        "status", "diagnostic_question", "diagnostic_answer", "diagnostic_level",
+        "current_phase", "current_segment_index", "accumulated_notes_markdown",
+        "teach_back_prompt", "teach_back_submission", "teach_back_grade_json"
+    }
+    updates = {k: v for k, v in kwargs.items() if k in valid_cols}
+    if not updates:
+        return False
+
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    set_clauses = [f"{col} = ?" for col in updates.keys()]
+    values = list(updates.values()) + [lecture_id]
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.cursor()
+        cur.execute(f"UPDATE lecture_sessions SET {', '.join(set_clauses)} WHERE id = ?", values)
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def record_lecture_checkpoint(
+    session_id: str,
+    lecture_id: str,
+    phase: str,
+    question_prompt: str,
+    options: Optional[List[Dict[str, Any]]],
+    correct_answer: str
+) -> Dict[str, Any]:
+    """Records an active-recall checkpoint question for a lecture phase."""
+    db_path = init_session_db(session_id)
+    checkpoint_id = f"chk_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{os.urandom(3).hex()}"
+    options_json = json.dumps(options) if options else None
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO lecture_checkpoints (
+                id, lecture_id, phase, question_prompt, options_json, correct_answer, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (checkpoint_id, lecture_id, phase, question_prompt, options_json, correct_answer, datetime.now(timezone.utc).isoformat())
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {
+        "id": checkpoint_id,
+        "lecture_id": lecture_id,
+        "phase": phase,
+        "question_prompt": question_prompt,
+        "options": options or [],
+        "correct_answer": correct_answer
+    }
+
+
+def update_lecture_checkpoint(
+    session_id: str,
+    checkpoint_id: str,
+    student_response: str,
+    is_correct: bool,
+    remedial_modality: Optional[str] = None,
+    remedial_content: Optional[str] = None
+) -> bool:
+    """Updates a checkpoint record with student response and grading/remedial details."""
+    db_path = get_session_db_path(session_id)
+    if not db_path.exists():
+        return False
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE lecture_checkpoints
+            SET student_response = ?, is_correct = ?, remedial_modality = ?, remedial_content = ?
+            WHERE id = ?
+            """,
+            (student_response, 1 if is_correct else 0, remedial_modality, remedial_content, checkpoint_id)
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def get_lecture_checkpoints(session_id: str, lecture_id: str) -> List[Dict[str, Any]]:
+    """Retrieves all checkpoints recorded for a lecture session."""
+    db_path = get_session_db_path(session_id)
+    if not db_path.exists():
+        return []
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM lecture_checkpoints WHERE lecture_id = ? ORDER BY created_at ASC", (lecture_id,))
+        rows = cur.fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            if d.get("options_json"):
+                try:
+                    d["options"] = json.loads(d["options_json"])
+                except Exception:
+                    d["options"] = []
+            result.append(d)
+        return result
+    finally:
+        conn.close()
+
+
+def record_lecture_pause(
+    session_id: str,
+    lecture_id: str,
+    phase: str,
+    student_question: str,
+    teacher_response: str,
+    token_offset: int = 0
+) -> Dict[str, Any]:
+    """Records an inline pause-and-ask event during a lecture."""
+    db_path = init_session_db(session_id)
+    pause_id = f"pause_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{os.urandom(3).hex()}"
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO lecture_pause_events (
+                id, lecture_id, phase, token_offset, student_question, teacher_response, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (pause_id, lecture_id, phase, token_offset, student_question, teacher_response, datetime.now(timezone.utc).isoformat())
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {
+        "id": pause_id,
+        "lecture_id": lecture_id,
+        "phase": phase,
+        "student_question": student_question,
+        "teacher_response": teacher_response
+    }
+
+
+def record_mastered_topic(
+    session_id: str,
+    topic_title: str,
+    subject: str,
+    mastery_score: float = 100.0,
+    lecture_id: Optional[str] = None
+) -> bool:
+    """Registers a topic as mastered in the student's episodic memory registry."""
+    db_path = init_session_db(session_id)
+    topic_id = f"mst_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{os.urandom(3).hex()}"
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO user_mastered_topics (
+                id, topic_title, subject, mastery_score, lecture_id, completed_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (topic_id, topic_title, subject, mastery_score, lecture_id, datetime.now(timezone.utc).isoformat())
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def get_mastered_topics(session_id: str) -> List[Dict[str, Any]]:
+    """Retrieves all mastered topics for the session/student to enable cross-lecture continuity."""
+    db_path = get_session_db_path(session_id)
+    if not db_path.exists():
+        return []
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM user_mastered_topics ORDER BY completed_at DESC")
+        rows = cur.fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()

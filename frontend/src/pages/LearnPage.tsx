@@ -18,7 +18,7 @@ import {
   Calculator, Globe, Cpu, Dna, FlaskConical, Zap, Landmark
 } from 'lucide-react'
 
-import { studyApi, streamTeacherLecture } from '../services/api'
+import { studyApi, streamTeacherLecture, teacherApi } from '../services/api'
 import { exportNotesToPdf } from '../utils/pdfExport'
 import { useAuthStore } from '../stores/authStore'
 import confetti from 'canvas-confetti'
@@ -63,6 +63,7 @@ interface ChatMessage {
   format?: string
   response_format?: string
   export_ready?: boolean
+  is_synthetic_textbook?: boolean
   created_at?: string
 }
 
@@ -146,7 +147,7 @@ export default function LearnPage() {
   // ─── State: Workspaces & Sessions ───
   const [sessions, setSessions] = useState<StudySessionMeta[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string>(routeSessionId || '')
-  const [activeSubject, setActiveSubject] = useState<string>('Machine Learning & AI')
+  const [activeSubject, setActiveSubject] = useState<string>('General Study')
   const [documentName, setDocumentName] = useState<string>('')
   const [docStatus, setDocStatus] = useState<string>('text_ready')
   const [sessionDocuments, setSessionDocuments] = useState<any[]>([])
@@ -283,7 +284,7 @@ export default function LearnPage() {
   const [_topicDoubtAnswer, setTopicDoubtAnswer] = useState<string | null>(null)
   const [isLoadingDoubt, setIsLoadingDoubt] = useState(false)
 
-  // Teacher Mode
+  // Teacher Mode Masterclass State
   const [teacherLectureText, setTeacherLectureText] = useState('')
   const [currentLecturePhase, setCurrentLecturePhase] = useState('Introduction')
   const [isTeacherStreaming, setIsTeacherStreaming] = useState(false)
@@ -294,6 +295,44 @@ export default function LearnPage() {
     reason: string
     suggested_topics: string[]
   } | null>(null)
+  const [activeLectureId, setActiveLectureId] = useState<string | null>(null)
+  const [diagnosticData, setDiagnosticData] = useState<{
+    lecture_id: string
+    topic_title: string
+    diagnostic: {
+      prerequisite_concept: string
+      question: string
+      options: { id: string; text: string }[]
+      correct_option_id: string
+      explanation?: string
+    }
+  } | null>(null)
+  const [diagnosticSelectedOption, setDiagnosticSelectedOption] = useState<string | null>(null)
+  const [diagnosticResult, setDiagnosticResult] = useState<{
+    level: string
+    is_correct: boolean
+    reasoning: string
+    prerequisite_needed: boolean
+    prerequisite_summary?: string
+  } | null>(null)
+  const [isLoadingDiagnostic, setIsLoadingDiagnostic] = useState(false)
+  const [isEvaluatingDiagnostic, setIsEvaluatingDiagnostic] = useState(false)
+  
+  // Pause & Ask State
+  const [isPaused, setIsPaused] = useState(false)
+  const [pauseQuestion, setPauseQuestion] = useState('')
+  const [pauseAnswer, setPauseAnswer] = useState<string | null>(null)
+  const [isLoadingPause, setIsLoadingPause] = useState(false)
+
+  // Feynman Teach-Back State
+  const [teachBackPromptData, setTeachBackPromptData] = useState<{
+    prompt: string
+    topic_title: string
+    lecture_id?: string
+  } | null>(null)
+  const [teachBackInput, setTeachBackInput] = useState('')
+  const [teachBackResult, setTeachBackResult] = useState<any | null>(null)
+  const [isEvaluatingTeachBack, setIsEvaluatingTeachBack] = useState(false)
 
   // Mixed Exam Engine
   const [examQuestions, setExamQuestions] = useState<ExamQuestion[]>([])
@@ -384,9 +423,11 @@ export default function LearnPage() {
         const latestNotes = [...data.messages].reverse().find((m: any) =>
           m.role === 'assistant' && (
             m.export_ready ||
+            m.is_synthetic_textbook ||
             m.format === 'study_notes' ||
             m.response_format === 'study_notes' ||
-            (Boolean(m.text) && m.text.startsWith('# ') && m.text.toLowerCase().includes('study notes'))
+            (Boolean(m.text) && m.text.startsWith('# ') && m.text.toLowerCase().includes('study notes')) ||
+            (Boolean(m.text) && m.text.includes('Generated Study Textbook'))
           )
         )
         if (latestNotes) {
@@ -556,10 +597,18 @@ export default function LearnPage() {
         history: messages.slice(-4).map((m) => ({ role: m.role, text: m.text }))
       })
 
-      const isExport = res.data.export_ready ?? (
-        res.data.response_format === 'study_notes' ||
-        res.data.format === 'study_notes' ||
-        (Boolean(res.data.text) && res.data.text.startsWith('# ') && res.data.text.toLowerCase().includes('study notes'))
+      const isSyntheticTextbook = Boolean(
+        res.data.is_synthetic_textbook ||
+        (res.data.text && res.data.text.includes('Generated Study Textbook'))
+      )
+
+      const isExport = Boolean(
+        res.data.export_ready ?? (
+          res.data.response_format === 'study_notes' ||
+          res.data.format === 'study_notes' ||
+          (Boolean(res.data.text) && res.data.text.startsWith('# ') && res.data.text.toLowerCase().includes('study notes')) ||
+          isSyntheticTextbook
+        )
       )
 
       const assistantMsg: ChatMessage = {
@@ -572,14 +621,20 @@ export default function LearnPage() {
         format: res.data.format,
         response_format: res.data.response_format || res.data.format,
         export_ready: isExport,
+        is_synthetic_textbook: isSyntheticTextbook,
         created_at: new Date().toISOString()
       }
 
       // ── Push assistant reply into the chat ──
       setMessages((prev) => [...prev, assistantMsg])
 
-      // Update Artifact Viewer content with the latest notes/explanation (do not auto-popup; user clicks on box to pop up)
-      if (isExport) {
+      // ONLY the first generated textbook auto-opens in the MD file viewer!
+      if (isSyntheticTextbook) {
+        setCurrentArtifactMarkdown(res.data.text)
+        setArtifactDockSide('right')
+        setArtifactViewerOpen(true)
+        setStudyMapOpen(false)
+      } else if (isExport) {
         setCurrentArtifactMarkdown(res.data.text)
         setArtifactDockSide('right')
         setArtifactViewerOpen(false)
@@ -776,14 +831,82 @@ export default function LearnPage() {
     }
   }
 
-  // ─── 8. Teacher Mode SSE Stream ───
-  const handleStartTeacherLecture = (topicTitleOverride?: string, forceOverrideSyllabus = false) => {
+  // ─── 8. Teacher Mode Interactive Masterclass Engine ───
+  const handleInitiateTeacherLecture = async (topicTitleOverride?: string, forceOverrideSyllabus = false) => {
     const targetTitle = topicTitleOverride || customTeacherTopic.trim() || activeTopic?.title
     if (!targetTitle || !activeSessionId || isTeacherStreaming) return
-    setTeacherLectureText('')
+
+    setDiagnosticResult(null)
+    setDiagnosticSelectedOption(null)
+    setTeachBackResult(null)
+    setTeachBackPromptData(null)
+    setPauseAnswer(null)
+    setIsPaused(false)
     setOutOfSyllabusAlert(null)
+    setIsLoadingDiagnostic(true)
+
+    const topicId = activeTopic?.id || 'custom-topic'
+
+    try {
+      const res = await teacherApi.startDiagnostic({
+        session_id: activeSessionId,
+        topic_id: topicId,
+        topic_title: targetTitle
+      })
+      setDiagnosticData(res.data)
+      setActiveLectureId(res.data.lecture_id)
+    } catch (err) {
+      console.error('Diagnostic start error, falling back to direct stream:', err)
+      handleStartDirectLecture(targetTitle, 'standard', undefined, forceOverrideSyllabus)
+    } finally {
+      setIsLoadingDiagnostic(false)
+    }
+  }
+
+  const handleConfirmDiagnostic = async () => {
+    if (!diagnosticData || !diagnosticSelectedOption || !activeSessionId) return
+    setIsEvaluatingDiagnostic(true)
+    const targetTitle = diagnosticData.topic_title
+    const topicId = activeTopic?.id || 'custom-topic'
+
+    try {
+      const evalRes = await teacherApi.submitDiagnostic({
+        session_id: activeSessionId,
+        topic_id: topicId,
+        topic_title: targetTitle,
+        question: diagnosticData.diagnostic.question,
+        student_answer: diagnosticSelectedOption,
+        lecture_id: diagnosticData.lecture_id
+      })
+      setDiagnosticResult(evalRes.data)
+      
+      // Auto-start stream after 1.2s to show calibration feedback
+      setTimeout(() => {
+        handleStartDirectLecture(
+          targetTitle,
+          evalRes.data.level || 'standard',
+          diagnosticData.lecture_id
+        )
+      }, 1200)
+    } catch (err) {
+      console.error('Failed to submit diagnostic:', err)
+      handleStartDirectLecture(targetTitle, 'standard', diagnosticData.lecture_id)
+    } finally {
+      setIsEvaluatingDiagnostic(false)
+    }
+  }
+
+  const handleStartDirectLecture = (
+    targetTitle: string,
+    diagnosticLevel = 'standard',
+    lectureId?: string,
+    forceOverrideSyllabus = false
+  ) => {
+    if (!activeSessionId) return
+    setTeacherLectureText('')
     setIsTeacherStreaming(true)
-    setCurrentLecturePhase('Phase 1: Introduction & Intuition')
+    setIsPaused(false)
+    setCurrentLecturePhase('Phase 1: First-Principles Intuition')
 
     const topicId = activeTopic?.id || 'custom-topic'
     const controller = new AbortController()
@@ -796,6 +919,8 @@ export default function LearnPage() {
       topicId,
       topicTitle: targetTitle,
       overrideSyllabus: forceOverrideSyllabus,
+      diagnosticLevel,
+      lectureId,
       onOutOfSyllabus: (data) => {
         setOutOfSyllabusAlert(data)
         setIsTeacherStreaming(false)
@@ -808,12 +933,22 @@ export default function LearnPage() {
           `# University Masterclass: ${targetTitle}\n\n${accumulatedText}`
         )
       },
+      onTeachBackReady: async (data) => {
+        try {
+          const tbRes = await teacherApi.getTeachBackPrompt({
+            session_id: activeSessionId,
+            topic_id: topicId,
+            topic_title: targetTitle,
+            lecture_id: data.lecture_id || lectureId
+          })
+          setTeachBackPromptData(tbRes.data)
+        } catch (e) {
+          console.error('Teach-back prompt failed:', e)
+        }
+      },
       onPhaseEnd: () => { },
       onDone: () => {
         setIsTeacherStreaming(false)
-        setCurrentArtifactMarkdown(
-          `# University Masterclass: ${targetTitle}\n\n${accumulatedText}`
-        )
       },
       onError: (err) => {
         console.error('Lecture stream error:', err)
@@ -827,6 +962,60 @@ export default function LearnPage() {
     if (teacherAbortControllerRef.current) {
       teacherAbortControllerRef.current.abort()
       setIsTeacherStreaming(false)
+    }
+  }
+
+  const handlePauseLecture = () => {
+    if (isTeacherStreaming) {
+      teacherAbortControllerRef.current?.abort()
+      setIsTeacherStreaming(false)
+      setIsPaused(true)
+    }
+  }
+
+  const handleSubmitPauseQuestion = async () => {
+    if (!pauseQuestion.trim() || !activeSessionId) return
+    setIsLoadingPause(true)
+    const targetTitle = customTeacherTopic.trim() || activeTopic?.title || 'Course Material'
+
+    try {
+      const res = await teacherApi.pauseAndAsk({
+        session_id: activeSessionId,
+        topic_title: targetTitle,
+        current_phase: currentLecturePhase,
+        accumulated_context: teacherLectureText,
+        student_question: pauseQuestion.trim(),
+        lecture_id: activeLectureId || undefined
+      })
+      setPauseAnswer(res.data.answer)
+      setPauseQuestion('')
+    } catch (err) {
+      console.error('Pause Q&A error:', err)
+    } finally {
+      setIsLoadingPause(false)
+    }
+  }
+
+  const handleSubmitTeachBack = async () => {
+    if (!teachBackInput.trim() || !activeSessionId) return
+    setIsEvaluatingTeachBack(true)
+    const targetTitle = customTeacherTopic.trim() || activeTopic?.title || 'Course Material'
+    const topicId = activeTopic?.id || 'custom-topic'
+
+    try {
+      const res = await teacherApi.submitTeachBack({
+        session_id: activeSessionId,
+        topic_id: topicId,
+        topic_title: targetTitle,
+        submission_text: teachBackInput.trim(),
+        lecture_id: activeLectureId || undefined
+      })
+      setTeachBackResult(res.data.evaluation)
+      confetti({ particleCount: 60, spread: 55, origin: { y: 0.6 } })
+    } catch (err) {
+      console.error('Teach-back evaluation failed:', err)
+    } finally {
+      setIsEvaluatingTeachBack(false)
     }
   }
 
@@ -1656,11 +1845,16 @@ export default function LearnPage() {
                       {messages.map((msg) => {
                         const isUser = msg.role === 'user'
                         const isThoughtExpanded = expandedThoughtIds[msg.id] ?? false
+                        const isSyntheticTextbook = !isUser && (
+                          Boolean(msg.is_synthetic_textbook) ||
+                          (Boolean(msg.text) && msg.text.includes('Generated Study Textbook'))
+                        )
                         const isStudyNotes = !isUser && (
                           Boolean(msg.export_ready) ||
                           msg.response_format === 'study_notes' ||
                           msg.format === 'study_notes' ||
-                          (Boolean(msg.text) && msg.text.startsWith('# ') && msg.text.toLowerCase().includes('study notes'))
+                          (Boolean(msg.text) && msg.text.startsWith('# ') && msg.text.toLowerCase().includes('study notes')) ||
+                          isSyntheticTextbook
                         )
 
                         return (
@@ -1766,18 +1960,33 @@ export default function LearnPage() {
                                 ) : isStudyNotes ? (
                                   /* Study Notes Response (Matching Claude design) */
                                   <div className="w-full">
-                                    <p className="text-sm leading-relaxed text-slate-700 mb-2.5 font-serif">
-                                      I have prepared the structured study notes reference document for{' '}
-                                      <strong className="text-slate-900 font-semibold">
-                                        {extractDocTitle(msg.text) || `${activeSubject || 'Study'} notes`}
-                                      </strong>
-                                      . You can view the full formatted document in the Markdown viewer on the right or download the{' '}
-                                      <code className="text-xs font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-700">.md</code> file below.
-                                    </p>
+                                    {isSyntheticTextbook ? (
+                                      <div className="mb-2">
+                                        <p className="text-sm leading-relaxed text-slate-700 mb-1.5 font-serif">
+                                          📚 I have generated the foundational textbook for{' '}
+                                          <strong className="text-slate-900 font-semibold">
+                                            {extractDocTitle(msg.text) || activeSubject || 'this subject'}
+                                          </strong>
+                                          {' '}and opened it directly in your <strong className="text-indigo-600 font-semibold">Markdown File Viewer</strong> on the right.
+                                        </p>
+                                        <p className="text-xs text-slate-500 mb-2.5 font-serif">
+                                          You can explore the curriculum roadmap, study key formulas and mechanisms, or export the publication-grade <code className="text-xs font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-700">.md</code> file.
+                                        </p>
+                                      </div>
+                                    ) : (
+                                      <p className="text-sm leading-relaxed text-slate-700 mb-2.5 font-serif">
+                                        I have prepared the structured study notes reference document for{' '}
+                                        <strong className="text-slate-900 font-semibold">
+                                          {extractDocTitle(msg.text) || `${activeSubject || 'Study'} notes`}
+                                        </strong>
+                                        . You can view the full formatted document in the Markdown viewer on the right or download the{' '}
+                                        <code className="text-xs font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-700">.md</code> file below.
+                                      </p>
+                                    )}
 
                                     <StudyNotesCard
                                       markdown={msg.text}
-                                      title={extractDocTitle(msg.text) || `${activeSubject || 'Study'} notes`}
+                                      title={extractDocTitle(msg.text) || (isSyntheticTextbook ? `${activeSubject} Textbook` : `${activeSubject || 'Study'} notes`)}
                                       className="mb-2"
                                       onOpenViewer={() => {
                                         setCurrentArtifactMarkdown(msg.text)
@@ -1787,9 +1996,24 @@ export default function LearnPage() {
                                       }}
                                     />
 
+                                    {/* Render Interactive Checkpoint directly in chat below card */}
+                                    {isSyntheticTextbook && msg.text.includes('### 💡 Interactive Checkpoint') && (
+                                      <div className="mt-3 p-4 rounded-xl bg-amber-50/80 border border-amber-200/90 text-slate-800 shadow-xs">
+                                        <div className="markdown-content text-sm">
+                                          <ReactMarkdown
+                                            remarkPlugins={[remarkGfm, remarkMath]}
+                                            rehypePlugins={[rehypeKatex]}
+                                            components={customMarkdownComponents}
+                                          >
+                                            {msg.text.slice(msg.text.indexOf('### 💡 Interactive Checkpoint'))}
+                                          </ReactMarkdown>
+                                        </div>
+                                      </div>
+                                    )}
+
                                     <button
                                       onClick={() => setExpandedInlineNotes((p) => ({ ...p, [msg.id]: !p[msg.id] }))}
-                                      className="learn-caption font-semibold text-slate-400 hover:text-slate-700 transition flex items-center gap-1 mt-1 cursor-pointer font-sans"
+                                      className="learn-caption font-semibold text-slate-400 hover:text-slate-700 transition flex items-center gap-1 mt-2 cursor-pointer font-sans"
                                     >
                                       {expandedInlineNotes[msg.id] ? (
                                         <>Collapse inline preview <ChevronDown size={12} /></>
@@ -2274,18 +2498,35 @@ export default function LearnPage() {
                       </button>
 
                       {isTeacherStreaming ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handlePauseLecture}
+                            className="py-2 px-3.5 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold transition flex items-center gap-1.5 border border-amber-200 cursor-pointer"
+                            title="Pause lecture to ask a question inline"
+                          >
+                            <Pause size={13} /> Pause & Ask
+                          </button>
+                          <button
+                            onClick={handleStopTeacherLecture}
+                            className="py-2 px-3.5 rounded-full bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold transition flex items-center gap-1.5 border border-red-200 cursor-pointer"
+                          >
+                            Stop
+                          </button>
+                        </div>
+                      ) : isPaused ? (
                         <button
-                          onClick={handleStopTeacherLecture}
-                          className="py-2 px-4 rounded-full bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold transition flex items-center gap-1.5 border border-red-200 cursor-pointer"
+                          onClick={() => handleStartDirectLecture(customTeacherTopic.trim() || activeTopic?.title || 'Course Material', diagnosticResult?.level || 'standard', activeLectureId || undefined)}
+                          className="py-2.5 px-5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
                         >
-                          <Pause size={14} /> Stop
+                          <Play size={14} /> Resume Lecture
                         </button>
                       ) : (
                         <button
-                          onClick={() => handleStartTeacherLecture()}
-                          className="py-2.5 px-5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                          onClick={() => handleInitiateTeacherLecture()}
+                          disabled={isLoadingDiagnostic}
+                          className="py-2.5 px-5 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
                         >
-                          <Play size={14} /> Start Lecture
+                          {isLoadingDiagnostic ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />} Start Lecture
                         </button>
                       )}
                     </div>
@@ -2302,19 +2543,153 @@ export default function LearnPage() {
                         className="w-full text-xs px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:bg-white focus:border-indigo-400"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && customTeacherTopic.trim()) {
-                            handleStartTeacherLecture(customTeacherTopic.trim())
+                            handleInitiateTeacherLecture(customTeacherTopic.trim())
                           }
                         }}
                       />
                     </div>
                     <button
-                      onClick={() => customTeacherTopic.trim() && handleStartTeacherLecture(customTeacherTopic.trim())}
-                      disabled={!customTeacherTopic.trim() || isTeacherStreaming}
+                      onClick={() => customTeacherTopic.trim() && handleInitiateTeacherLecture(customTeacherTopic.trim())}
+                      disabled={!customTeacherTopic.trim() || isTeacherStreaming || isLoadingDiagnostic}
                       className="py-2.5 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer whitespace-nowrap"
                     >
-                      <Play size={13} /> Teach Custom Topic
+                      {isLoadingDiagnostic ? <RefreshCw size={13} className="animate-spin" /> : <Play size={13} />} Teach Custom Topic
                     </button>
                   </div>
+
+                  {/* ─── Diagnostic Open Card (Requirement 1) ─── */}
+                  {diagnosticData && !isTeacherStreaming && !teacherLectureText && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-6 rounded-3xl bg-white border-2 border-indigo-200 shadow-md space-y-4"
+                    >
+                      <div className="flex items-center justify-between border-b border-indigo-100 pb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse" />
+                          <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 font-sans">
+                            Diagnostic Baseline Probe
+                          </span>
+                        </div>
+                        <span className="text-xs px-3 py-1 rounded-full bg-indigo-50 text-indigo-800 font-semibold border border-indigo-200">
+                          Prerequisite: {diagnosticData.diagnostic.prerequisite_concept}
+                        </span>
+                      </div>
+
+                      <div className="space-y-3">
+                        <h4 className="text-base font-bold text-slate-900 font-serif leading-snug">
+                          {diagnosticData.diagnostic.question}
+                        </h4>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                          {diagnosticData.diagnostic.options.map((opt) => (
+                            <button
+                              key={opt.id}
+                              onClick={() => setDiagnosticSelectedOption(opt.id)}
+                              className={`p-3.5 rounded-2xl border text-left text-xs font-serif transition cursor-pointer flex items-start gap-2.5 ${
+                                diagnosticSelectedOption === opt.id
+                                  ? 'bg-indigo-50 border-indigo-500 text-indigo-950 font-semibold shadow-xs'
+                                  : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200 text-slate-800'
+                              }`}
+                            >
+                              <span className={`w-5 h-5 rounded-full border text-[11px] font-mono font-bold flex items-center justify-center shrink-0 mt-0.5 ${
+                                diagnosticSelectedOption === opt.id
+                                  ? 'bg-indigo-600 text-white border-indigo-600'
+                                  : 'bg-white text-slate-600 border-slate-300'
+                              }`}>
+                                {opt.id.toUpperCase()}
+                              </span>
+                              <span className="leading-snug">{opt.text}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Calibration feedback message */}
+                      {diagnosticResult && (
+                        <div className={`p-3.5 rounded-2xl text-xs font-serif leading-relaxed ${
+                          diagnosticResult.level === 'advanced'
+                            ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+                            : diagnosticResult.level === 'novice'
+                            ? 'bg-amber-50 text-amber-900 border border-amber-200'
+                            : 'bg-indigo-50 text-indigo-900 border border-indigo-200'
+                        }`}>
+                          <strong>Calibration: {diagnosticResult.level.toUpperCase()} Mode.</strong> {diagnosticResult.reasoning}
+                          {diagnosticResult.prerequisite_summary && (
+                            <p className="mt-1 text-[11px] opacity-90">{diagnosticResult.prerequisite_summary}</p>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between pt-2">
+                        <button
+                          onClick={() => setDiagnosticData(null)}
+                          className="text-xs text-slate-500 hover:text-slate-800 font-medium transition cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleConfirmDiagnostic}
+                          disabled={!diagnosticSelectedOption || isEvaluatingDiagnostic}
+                          className="py-2 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                        >
+                          {isEvaluatingDiagnostic ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />} Confirm & Begin Lecture
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* ─── Inline Pause & Ask Q&A Box (Requirement 4) ─── */}
+                  {isPaused && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="p-5 rounded-3xl bg-amber-50/90 border border-amber-200 shadow-sm space-y-3 text-slate-900"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Pause size={14} className="text-amber-600" />
+                          <span className="text-xs font-bold uppercase tracking-wider text-amber-800 font-sans">
+                            Masterclass Paused — Ask Professor Inline
+                          </span>
+                        </div>
+                        <span className="text-xs text-amber-700 font-medium">{currentLecturePhase}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={pauseQuestion}
+                          onChange={(e) => setPauseQuestion(e.target.value)}
+                          placeholder="Ask a clarifying question about this segment..."
+                          className="flex-1 text-xs px-4 py-2.5 rounded-2xl bg-white border border-amber-300 text-slate-900 focus:outline-none focus:border-amber-500"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSubmitPauseQuestion()
+                          }}
+                        />
+                        <button
+                          onClick={handleSubmitPauseQuestion}
+                          disabled={!pauseQuestion.trim() || isLoadingPause}
+                          className="py-2.5 px-4 rounded-2xl bg-amber-700 hover:bg-amber-800 disabled:opacity-50 text-white text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+                        >
+                          {isLoadingPause ? <RefreshCw size={13} className="animate-spin" /> : <Send size={13} />} Ask
+                        </button>
+                      </div>
+
+                      {pauseAnswer && (
+                        <div className="p-4 rounded-2xl bg-white border border-amber-200 text-xs font-serif leading-relaxed text-slate-800 space-y-2">
+                          <div className="font-bold text-amber-900 font-sans flex items-center gap-1.5">
+                            <GraduationCap size={14} className="text-amber-700" /> Professor&apos;s Answer:
+                          </div>
+                          <div className="markdown-content">
+                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                              {pauseAnswer}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
 
                   {/* Out-of-Syllabus Guardrail & Guidance Card */}
                   {outOfSyllabusAlert && (
@@ -2353,7 +2728,7 @@ export default function LearnPage() {
                                     key={i}
                                     onClick={() => {
                                       setCustomTeacherTopic(sug)
-                                      handleStartTeacherLecture(sug)
+                                      handleInitiateTeacherLecture(sug)
                                     }}
                                     className="text-xs px-3 py-1.5 rounded-full bg-white text-amber-900 border border-amber-300 hover:bg-amber-100 font-medium transition cursor-pointer"
                                   >
@@ -2366,7 +2741,7 @@ export default function LearnPage() {
 
                           <div className="mt-4 pt-3 border-t border-amber-200/80 flex items-center gap-3">
                             <button
-                              onClick={() => handleStartTeacherLecture(outOfSyllabusAlert.topic, true)}
+                              onClick={() => handleStartDirectLecture(outOfSyllabusAlert.topic, 'standard', undefined, true)}
                               className="text-xs px-4 py-2 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-semibold transition cursor-pointer"
                             >
                               Lecture Anyway (Foundational Prerequisite)
@@ -2386,21 +2761,91 @@ export default function LearnPage() {
                   {/* Streamed Lecture Canvas */}
                   <div className="p-8 rounded-3xl bg-white border border-slate-200/90 shadow-xs min-h-[50vh]">
                     {teacherLectureText ? (
-                      <div className="markdown-content max-w-none text-slate-900 leading-relaxed font-serif">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm, remarkMath]}
-                          rehypePlugins={[rehypeKatex]}
-                          components={customMarkdownComponents}
-                        >
-                          {teacherLectureText}
-                        </ReactMarkdown>
+                      <div className="space-y-6">
+                        <div className="markdown-content max-w-none text-slate-900 leading-relaxed font-serif">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm, remarkMath]}
+                            rehypePlugins={[rehypeKatex]}
+                            components={customMarkdownComponents}
+                          >
+                            {teacherLectureText}
+                          </ReactMarkdown>
+                        </div>
+
+                        {/* ─── Feynman Teach-Back Card (Requirement 5) ─── */}
+                        {teachBackPromptData && !isTeacherStreaming && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="mt-8 p-6 rounded-3xl bg-indigo-50/70 border border-indigo-200 shadow-xs space-y-4 text-slate-900 font-serif"
+                          >
+                            <div className="flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-wider text-indigo-700">
+                              <Brain size={16} />
+                              <span>Teach-Back Close (Feynman Technique)</span>
+                            </div>
+                            <p className="text-xs sm:text-sm text-slate-800 leading-relaxed">
+                              {teachBackPromptData.prompt}
+                            </p>
+
+                            {!teachBackResult ? (
+                              <div className="space-y-3">
+                                <textarea
+                                  value={teachBackInput}
+                                  onChange={(e) => setTeachBackInput(e.target.value)}
+                                  rows={4}
+                                  placeholder="Explain the concept in your own words (governing mechanism, intuition, common traps)..."
+                                  className="w-full text-xs p-3.5 rounded-2xl bg-white border border-indigo-200 text-slate-900 focus:outline-none focus:border-indigo-500 font-serif leading-relaxed"
+                                />
+                                <button
+                                  onClick={handleSubmitTeachBack}
+                                  disabled={!teachBackInput.trim() || isEvaluatingTeachBack}
+                                  className="py-2.5 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold font-sans transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                >
+                                  {isEvaluatingTeachBack ? <RefreshCw size={13} className="animate-spin" /> : <GraduationCap size={14} />} Submit Explanation for Grading
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="p-4 rounded-2xl bg-white border border-indigo-200 space-y-3 font-sans text-xs">
+                                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                                  <span className="font-bold text-slate-900 text-sm">
+                                    Mastery Score: {teachBackResult.score} / 100
+                                  </span>
+                                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                    teachBackResult.score >= 85
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : 'bg-indigo-100 text-indigo-800'
+                                  }`}>
+                                    {teachBackResult.mastery_verdict}
+                                  </span>
+                                </div>
+
+                                <p className="text-xs text-slate-700 font-serif leading-relaxed">
+                                  {teachBackResult.professor_critique}
+                                </p>
+
+                                {teachBackResult.strengths?.length > 0 && (
+                                  <div className="space-y-1">
+                                    <span className="font-bold text-emerald-800 text-[11px] uppercase tracking-wider block">
+                                      Key Strengths:
+                                    </span>
+                                    <ul className="list-disc pl-4 text-slate-700 space-y-0.5 font-serif">
+                                      {teachBackResult.strengths.map((s: string, idx: number) => (
+                                        <li key={idx}>{s}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
                       </div>
                     ) : (
                       <div className="text-center py-16">
                         <GraduationCap size={38} className="mx-auto text-slate-400 mb-3" />
                         <h4 className="text-sm font-bold text-slate-800">Live University Lecture Stream</h4>
                         <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto font-serif">
-                          Click &apos;Start Lecture&apos; or type a custom topic to begin real-time streaming of first-principles intuition, deep mechanics, worked derivations, and exam traps.
+                          Click &apos;Start Lecture&apos; to run an intelligent baseline diagnostic and begin real-time streaming of first-principles intuition, deep mechanics, worked derivations, and exam traps.
                         </p>
                       </div>
                     )}

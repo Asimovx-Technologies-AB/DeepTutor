@@ -409,14 +409,36 @@ export const studyApi = {
   clearMemory: (userId: string) => api.delete(`/study/memory/${userId}`),
 }
 
+export const teacherApi = {
+  startDiagnostic: (payload: { session_id: string; topic_id: string; topic_title: string }) =>
+    api.post('/study/topic/teach/diagnostic/start', payload),
+  submitDiagnostic: (payload: { session_id: string; topic_id: string; topic_title: string; question: string; student_answer: string; lecture_id?: string }) =>
+    api.post('/study/topic/teach/diagnostic/submit', payload),
+  generateCheckpoint: (payload: { session_id: string; topic_title: string; phase_name: string; phase_content: string; lecture_id?: string }) =>
+    api.post('/study/topic/teach/checkpoint/generate', payload),
+  submitCheckpoint: (payload: { session_id: string; topic_title: string; phase_name: string; question_prompt: string; correct_answer: string; student_response: string; checkpoint_id?: string }) =>
+    api.post('/study/topic/teach/checkpoint/submit', payload),
+  pauseAndAsk: (payload: { session_id: string; topic_title: string; current_phase: string; accumulated_context: string; student_question: string; lecture_id?: string; token_offset?: number }) =>
+    api.post('/study/topic/teach/pause/ask', payload),
+  getTeachBackPrompt: (payload: { session_id: string; topic_id: string; topic_title: string; lecture_id?: string }) =>
+    api.post('/study/topic/teach/teach-back/prompt', payload),
+  submitTeachBack: (payload: { session_id: string; topic_id: string; topic_title: string; submission_text: string; lecture_id?: string }) =>
+    api.post('/study/topic/teach/teach-back/submit', payload),
+  getLectureSession: (sessionId: string, lectureId: string) =>
+    api.get(`/study/topic/teach/session/${sessionId}/${lectureId}`),
+}
+
 export const streamTeacherLecture = async ({
   sessionId,
   topicId,
   topicTitle,
   overrideSyllabus = false,
+  diagnosticLevel = 'standard',
+  lectureId,
   onPhaseStart,
   onToken,
   onPhaseEnd,
+  onTeachBackReady,
   onOutOfSyllabus,
   onDone,
   onError,
@@ -426,16 +448,19 @@ export const streamTeacherLecture = async ({
   topicId: string
   topicTitle: string
   overrideSyllabus?: boolean
-  onPhaseStart?: (phase: string) => void
+  diagnosticLevel?: string
+  lectureId?: string
+  onPhaseStart?: (phase: string, phaseKey?: string) => void
   onToken: (token: string) => void
-  onPhaseEnd?: (phase: string) => void
+  onPhaseEnd?: (phase: string, phaseKey?: string) => void
+  onTeachBackReady?: (data: { lecture_id?: string; topic_title?: string }) => void
   onOutOfSyllabus?: (data: { topic: string; reason: string; suggested_topics: string[] }) => void
   onDone: () => void
   onError: (err: any) => void
   signal?: AbortSignal
 }) => {
   const baseUrl = getApiBaseUrl()
-  const url = `${baseUrl}/study/topic/teach/stream?session_id=${encodeURIComponent(sessionId)}&topic_id=${encodeURIComponent(topicId)}&topic_title=${encodeURIComponent(topicTitle)}&override_syllabus=${overrideSyllabus ? 'true' : 'false'}`
+  const url = `${baseUrl}/study/topic/teach/stream?session_id=${encodeURIComponent(sessionId)}&topic_id=${encodeURIComponent(topicId)}&topic_title=${encodeURIComponent(topicTitle)}&override_syllabus=${overrideSyllabus ? 'true' : 'false'}&diagnostic_level=${encodeURIComponent(diagnosticLevel)}${lectureId ? `&lecture_id=${encodeURIComponent(lectureId)}` : ''}`
 
   try {
     const res = await fetch(url, {
@@ -468,11 +493,13 @@ export const streamTeacherLecture = async ({
           if (evt.type === 'out_of_syllabus' && onOutOfSyllabus) {
             onOutOfSyllabus(evt)
           } else if (evt.type === 'phase_start' && onPhaseStart) {
-            onPhaseStart(evt.phase)
+            onPhaseStart(evt.phase, evt.phase_key)
           } else if (evt.type === 'token') {
             onToken(evt.token)
           } else if (evt.type === 'phase_end' && onPhaseEnd) {
-            onPhaseEnd(evt.phase)
+            onPhaseEnd(evt.phase, evt.phase_key)
+          } else if (evt.type === 'teach_back_ready' && onTeachBackReady) {
+            onTeachBackReady(evt)
           } else if (evt.type === 'done') {
             onDone()
             return

@@ -29,6 +29,7 @@ from app.services.study_storage import (
     insert_chunks_to_fts,
     delete_registry_session,
     save_session_message,
+    get_session_db_path,
 )
 
 
@@ -85,6 +86,12 @@ async def test_cross_document_context_labeling_and_disagreement_prompt():
             assert "differ" in res["response"].lower()
     finally:
         delete_registry_session(test_sid)
+        db_p = get_session_db_path(test_sid)
+        if db_p.exists():
+            try:
+                db_p.unlink()
+            except Exception:
+                pass
 
 
 # ─── Category 2: STEM "Solve Every Row" Problems with Subtle Traps ───────────
