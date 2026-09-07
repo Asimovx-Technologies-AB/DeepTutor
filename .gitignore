@@ -93,3 +93,8 @@ env
 .DS_Store
 Thumbs.db
 .gemini/
+
+# Runtime session/user artifacts created by ensure_data_directories() on import
+backend/data/
+**/data/sessions/
+**/data/users/

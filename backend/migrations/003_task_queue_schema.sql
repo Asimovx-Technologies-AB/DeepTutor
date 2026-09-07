@@ -1,7 +1,11 @@
 -- 003_task_queue_schema.sql: Durable Asynchronous Task Queue for DeepTutor
 -- Supports row-level leasing (FOR UPDATE SKIP LOCKED), retries, and failure tracking.
+-- NOTE: pgcrypto is deliberately NOT created here. Azure Database for
+-- PostgreSQL Flexible Server only permits extensions on its azure.extensions
+-- allow-list (VECTOR, PG_TRGM, UUID-OSSP), so CREATE EXTENSION pgcrypto
+-- aborts the whole migration transaction. PostgreSQL 13+ ships
+-- gen_random_uuid() in core, which is all these tables need.
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS background_tasks (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,5 +1,6 @@
 import uuid
 import json
+import time
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from sqlalchemy import create_engine, text
@@ -9,6 +10,11 @@ from app.core.models import Base, User, ChatSession, ChatMessage, Document, Quiz
 
 settings = get_settings()
 
+# Roughly a minute of patience in total (5s + 10s + 15s + 20s), which covers a
+# Postgres flexible server waking up without holding a failed deploy open.
+DB_CONNECT_ATTEMPTS = 5
+DB_CONNECT_BACKOFF_SECONDS = 5
+
 # Initialize database engine. The legacy/offline profile may fall back to
 # SQLite; canonical local and deployed profiles fail fast on PostgreSQL errors.
 db_url = settings.DATABASE_URL.replace("sqlite+aiosqlite://", "sqlite://")
@@ -17,33 +23,51 @@ if db_url.startswith("postgres://"):
 
 def _create_engine_with_fallback(primary_url: str):
     if primary_url.startswith("postgresql"):
-        try:
-            connect_args = {
-                "connect_timeout": 15,
-                "application_name": "deeptutor_backend",
-            }
+        connect_args = {
+            "connect_timeout": 15,
+            "application_name": "deeptutor_backend",
+        }
 
-            eng = create_engine(
-                primary_url,
-                pool_pre_ping=settings.DB_POOL_PRE_PING,
-                pool_size=settings.DB_POOL_SIZE,
-                max_overflow=settings.DB_MAX_OVERFLOW,
-                pool_timeout=settings.DB_POOL_TIMEOUT,
-                pool_recycle=settings.DB_POOL_RECYCLE,
-                connect_args=connect_args,
-            )
-            # Test connection with health check query
-            with eng.connect() as conn:
-                conn.execute(text("SELECT 1"))
-            return eng
-        except Exception as e:
-            if not settings.ALLOW_SQLITE_FALLBACK:
-                raise RuntimeError(
-                    "PostgreSQL is required but could not be reached. "
-                    "Start the local database or correct DATABASE_URL."
-                ) from e
-            print(f"[DATABASE] Warning: PostgreSQL unreachable ({e}). Falling back to local SQLite.")
-            return create_engine("sqlite:///./deep_tutor.db", connect_args={"check_same_thread": False})
+        eng = create_engine(
+            primary_url,
+            pool_pre_ping=settings.DB_POOL_PRE_PING,
+            pool_size=settings.DB_POOL_SIZE,
+            max_overflow=settings.DB_MAX_OVERFLOW,
+            pool_timeout=settings.DB_POOL_TIMEOUT,
+            pool_recycle=settings.DB_POOL_RECYCLE,
+            connect_args=connect_args,
+        )
+
+        # This runs at import time, so a failure here takes the whole process
+        # down. On Container Apps that is a crash loop, and the usual cause is
+        # transient: a replica scaling from zero can beat a burstable Postgres
+        # out of its own idle state. Retry with backoff before giving up.
+        last_error: Optional[Exception] = None
+        for attempt in range(1, DB_CONNECT_ATTEMPTS + 1):
+            try:
+                with eng.connect() as conn:
+                    conn.execute(text("SELECT 1"))
+                if attempt > 1:
+                    print(f"[DATABASE] Connected to PostgreSQL on attempt {attempt}.")
+                return eng
+            except Exception as e:
+                last_error = e
+                if attempt < DB_CONNECT_ATTEMPTS:
+                    delay = DB_CONNECT_BACKOFF_SECONDS * attempt
+                    print(
+                        f"[DATABASE] PostgreSQL not ready (attempt {attempt}/{DB_CONNECT_ATTEMPTS}): {e}. "
+                        f"Retrying in {delay}s."
+                    )
+                    time.sleep(delay)
+
+        if not settings.ALLOW_SQLITE_FALLBACK:
+            raise RuntimeError(
+                "PostgreSQL is required but could not be reached after "
+                f"{DB_CONNECT_ATTEMPTS} attempts. "
+                "Start the local database or correct DATABASE_URL."
+            ) from last_error
+        print(f"[DATABASE] Warning: PostgreSQL unreachable ({last_error}). Falling back to local SQLite.")
+        return create_engine("sqlite:///./deep_tutor.db", connect_args={"check_same_thread": False})
     else:
         return create_engine(primary_url, connect_args={"check_same_thread": False})
 

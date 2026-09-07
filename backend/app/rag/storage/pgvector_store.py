@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import uuid
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy import bindparam, create_engine, text
@@ -16,6 +17,10 @@ from sqlalchemy.engine import Engine
 from app.core.config import get_settings
 
 settings = get_settings()
+
+# Fixed namespace so a chunk key always maps to the same row id, across
+# processes and restarts.
+_CHUNK_NAMESPACE = uuid.UUID("6f9619ff-8b86-d011-b42d-00c04fc964ff")
 
 
 def _rrf(
@@ -60,25 +65,42 @@ class PgVectorStore:
         self._schema_ready = False
 
     def _ensure_schema(self) -> None:
+        """
+        Create document_chunks in its canonical shape if it is missing.
+
+        This table has two writers — this store, and PgFTSStore on the study
+        path — so the DDL here must match migrations/004_document_chunks_v2.sql
+        exactly. It previously declared `id text` with none of the session
+        columns, which meant whichever writer touched a fresh database first
+        decided the schema and broke the other one. Migrations normally get here
+        first; this is the safety net for a database that has not been migrated.
+        """
         if self._schema_ready:
             return
         with self._engine.begin() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             conn.execute(text(f"""
                 CREATE TABLE IF NOT EXISTS document_chunks (
-                    id text PRIMARY KEY,
-                    topic_id text NOT NULL,
-                    chunk_text text NOT NULL,
-                    metadata jsonb NOT NULL DEFAULT '{{}}'::jsonb,
-                    embedding vector({self.dimensions}) NOT NULL,
-                    search_vector tsvector GENERATED ALWAYS AS (
-                        to_tsvector('simple', coalesce(chunk_text, ''))
+                    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    session_id      TEXT NOT NULL DEFAULT '',
+                    topic_id        TEXT NOT NULL,
+                    doc_id          TEXT DEFAULT '',
+                    chunk_id        TEXT DEFAULT '',
+                    page            INT DEFAULT 1,
+                    source_type     TEXT DEFAULT 'text',
+                    chunk_text      TEXT NOT NULL,
+                    metadata        JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+                    embedding       vector({self.dimensions}) NOT NULL,
+                    search_vector   tsvector GENERATED ALWAYS AS (
+                        to_tsvector('english', coalesce(chunk_text, ''))
                     ) STORED,
-                    created_at timestamptz NOT NULL DEFAULT now(),
-                    updated_at timestamptz NOT NULL DEFAULT now()
+                    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
                 )
             """))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_document_chunks_topic ON document_chunks (topic_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_document_chunks_session_id ON document_chunks (session_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_document_chunks_topic_id ON document_chunks (topic_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_document_chunks_doc_id ON document_chunks (doc_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_document_chunks_metadata ON document_chunks USING gin (metadata)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_document_chunks_search ON document_chunks USING gin (search_vector)"))
             conn.execute(text(f"""
@@ -108,13 +130,25 @@ class PgVectorStore:
         return f"{topic_id}_{position}_{digest}"
 
     @staticmethod
+    def _chunk_uuid(chunk_key: str) -> str:
+        """
+        Stable UUID for a chunk key.
+
+        The primary key is a UUID in the canonical schema, but re-indexing the
+        same document must still update rather than duplicate rows. Deriving the
+        id from the text key preserves that idempotency, and the readable key is
+        kept alongside it in the chunk_id column.
+        """
+        return str(uuid.uuid5(_CHUNK_NAMESPACE, chunk_key))
+
+    @staticmethod
     def _row_to_chunk(row, score: float) -> Dict:
         values = row._mapping if hasattr(row, "_mapping") else None
         raw_metadata = values["metadata"] if values is not None else row.metadata
         metadata = raw_metadata if isinstance(raw_metadata, dict) else json.loads(raw_metadata or "{}")
         effective_text = metadata.get("parent_text") or row.chunk_text
         return {
-            "id": row.id,
+            "id": str(row.id),
             "text": effective_text,
             "child_text": row.chunk_text if metadata.get("parent_text") else None,
             "metadata": metadata,
@@ -128,8 +162,14 @@ class PgVectorStore:
             return
         self._ensure_schema()
         statement = text("""
-            INSERT INTO document_chunks (id, topic_id, chunk_text, metadata, embedding)
-            VALUES (:id, :topic_id, :chunk_text, CAST(:metadata AS jsonb), CAST(:embedding AS vector))
+            INSERT INTO document_chunks (
+                id, session_id, topic_id, doc_id, chunk_id, page, source_type,
+                chunk_text, metadata, embedding
+            )
+            VALUES (
+                CAST(:id AS UUID), :session_id, :topic_id, :doc_id, :chunk_id, :page, :source_type,
+                :chunk_text, CAST(:metadata AS jsonb), CAST(:embedding AS vector)
+            )
             ON CONFLICT (id) DO UPDATE SET
                 chunk_text = EXCLUDED.chunk_text,
                 metadata = EXCLUDED.metadata,
@@ -139,12 +179,25 @@ class PgVectorStore:
         records = []
         for position, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
             chunk_text = chunk.get("text", "")
+            metadata = chunk.get("metadata", {}) or {}
             vector = self._validate_embedding(embedding)
+            chunk_key = self._chunk_id(topic_id, position, chunk_text)
+            try:
+                page = int(metadata.get("page", 1) or 1)
+            except (TypeError, ValueError):
+                page = 1
             records.append({
-                "id": self._chunk_id(topic_id, position, chunk_text),
+                "id": self._chunk_uuid(chunk_key),
+                # session_id belongs to the study path; this store indexes by
+                # topic, so it stays empty rather than being faked.
+                "session_id": str(metadata.get("session_id", "") or ""),
                 "topic_id": topic_id,
+                "doc_id": str(metadata.get("doc_id", "") or ""),
+                "chunk_id": chunk_key,
+                "page": page,
+                "source_type": str(metadata.get("source_type", "text") or "text"),
                 "chunk_text": chunk_text,
-                "metadata": json.dumps(chunk.get("metadata", {}), default=str),
+                "metadata": json.dumps(metadata, default=str),
                 "embedding": self._vector_literal(vector),
             })
         with self._engine.begin() as conn:
@@ -191,10 +244,10 @@ class PgVectorStore:
         top_k = top_k or settings.TOP_K_RETRIEVAL
         statement = text("""
             SELECT id, chunk_text, metadata,
-                   ts_rank_cd(search_vector, plainto_tsquery('simple', :query)) AS score
+                   ts_rank_cd(search_vector, plainto_tsquery('english', :query)) AS score
             FROM document_chunks
             WHERE topic_id = :topic_id
-              AND search_vector @@ plainto_tsquery('simple', :query)
+              AND search_vector @@ plainto_tsquery('english', :query)
             ORDER BY score DESC
             LIMIT :top_k
         """)
