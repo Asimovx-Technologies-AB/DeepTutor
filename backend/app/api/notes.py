@@ -30,7 +30,6 @@ def process_document(file_path: str):
     return chunks
 
 settings = get_settings()
-gemini_client = GeminiClient()
 router = APIRouter(prefix="/notes", tags=["notes"])
 
 
@@ -440,29 +439,15 @@ Respond ONLY with valid JSON.
 
     parsed_data = None
 
-    # Try Gemini if configured
-    if await gemini_client.is_available():
-        try:
-            gemini_messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ]
-            resp = await gemini_client.chat(gemini_messages, temperature=0.3)
-            parsed_data = _robust_extract_json(resp)
-        except Exception as e:
-            print(f"[notes] Gemini generation error: {e}")
-
-    # Fallback to OpenAI LLM if needed
-    if not parsed_data:
-        try:
-            llm_messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ]
-            resp = await llm_client.chat(llm_messages, temperature=0.3)
-            parsed_data = _robust_extract_json(resp)
-        except Exception as e:
-            print(f"[notes] OpenAI LLM generation error: {e}")
+    try:
+        llm_messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        resp = await llm_client.chat(llm_messages, temperature=0.3)
+        parsed_data = _robust_extract_json(resp)
+    except Exception as e:
+        print(f"[notes] OpenAI LLM generation error: {e}")
 
     # Rich Fallback if LLM fails or is unconfigured
     if not parsed_data or not parsed_data.get("content_markdown"):

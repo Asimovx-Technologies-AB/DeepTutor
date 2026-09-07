@@ -8,7 +8,7 @@ router = APIRouter()
 async def get_verified_images(topic: str):
     """
     Search for topic-relevant educational images via Serper API (Google Images),
-    then use Gemini Flash VLM to validate accuracy, relevance, and visual quality.
+    then use OpenAI Vision VLM to validate accuracy, relevance, and visual quality.
     
     Returns a filtered, ranked list of only the best verified images with source attribution.
     Returns an empty list [] if zero images pass validation.

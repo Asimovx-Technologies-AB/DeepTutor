@@ -182,7 +182,7 @@ class UserMemoryStore:
 
     async def auto_extract_and_update(self, user_id: str, user_message: str, history: Optional[List[Dict[str, str]]] = None):
         """
-        Analyzes student message with Gemini in the background to automatically
+        Analyzes student message with LLM in the background to automatically
         discover new learning preferences, exam deadlines, or conceptual struggles.
         """
         msg_lower = user_message.lower()

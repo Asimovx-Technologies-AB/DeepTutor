@@ -51,71 +51,18 @@ async def call_gemini_vision(
     system_instruction: str = "",
     temperature: float = 0.1
 ) -> str:
-    """Universal VLM Caller: routes to OpenAI (GPT-4o), Azure OpenAI, or Google Gemini Vision."""
-    settings = get_settings()
-
-    # 1. Direct OpenAI Vision (GPT-4o)
+    """Universal VLM Caller: routes to OpenAI GPT-4o Vision."""
     try:
-        from app.rag.azure_openai_client import openai_client
-        if await openai_client.is_available():
-            resp = await openai_client.chat_vision(prompt, image_bytes, system_instruction, temperature)
-            if resp and resp.strip():
-                return resp.strip()
-    except Exception:
-        pass
-
-    # 2. Azure OpenAI Vision
-    try:
-        from app.rag.azure_openai_client import azure_openai
-        if await azure_openai.is_available():
-            resp = await azure_openai.chat_vision(prompt, image_bytes, system_instruction, temperature)
-            if resp and resp.strip():
-                return resp.strip()
-    except Exception:
-        pass
-
-    # 3. Google Gemini Vision Fallback
-    key = settings.GEMINI_API_KEY
-    if not key:
-        return ""
-    import base64
-    import httpx
-    b64_img = base64.b64encode(image_bytes).decode("utf-8")
-    payload = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [
-                    {"text": prompt},
-                    {
-                        "inline_data": {
-                            "mime_type": "image/png",
-                            "data": b64_img
-                        }
-                    }
-                ]
-            }
-        ],
-        "generationConfig": {"temperature": temperature}
-    }
-    if system_instruction:
-        payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
-
-    models = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest"]
-    for m in models:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key}"
-        try:
-            async with httpx.AsyncClient(timeout=22.0) as client:
-                res = await client.post(url, json=payload)
-                if res.status_code == 200:
-                    data = res.json()
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        if parts:
-                            return parts[0].get("text", "")
-        except Exception:
-            continue
+        from app.rag.vlm_client import vlm_client
+        resp = await vlm_client.extract_text_from_image(
+            image_bytes=image_bytes,
+            mime_type="image/png",
+            context_hint=f"{system_instruction} {prompt}".strip()
+        )
+        if resp and resp.strip():
+            return resp.strip()
+    except Exception as e:
+        print(f"[study_agents] VLM error: {e}")
     return ""
 
 call_openai_vision = call_gemini_vision

@@ -24,7 +24,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
-from app.rag.gemini_client import gemini_client
+from app.rag.vlm_client import vlm_client
 
 logger = logging.getLogger("image_search")
 settings = get_settings()
@@ -208,10 +208,9 @@ class ImageSearchService:
         )
 
         try:
-            vlm_response = await gemini_client.transcribe_image_vlm(
-                image_input=image_bytes,
-                prompt=prompt,
-                model=getattr(settings, "GEMINI_VLM_MODEL", "gemini-2.5-flash")
+            vlm_response = await vlm_client.caption_diagram(
+                image_bytes=image_bytes,
+                context_hint=f"Educational diagram for {topic}",
             )
             
             clean_res = vlm_response.strip()

@@ -210,12 +210,8 @@ class StudyDocumentProcessor:
             png_bytes = pix.tobytes("png")
             doc.close()
 
-            from app.services.study_agents import call_gemini_vision
-            prompt = (
-                "Transcribe this academic document page cleanly. Preserve all formulas in LaTeX ($...$ or $$...$$), "
-                "maintain academic heading structure, and output clean markdown text. Do not hallucinate."
-            )
-            resp = await call_gemini_vision(prompt, png_bytes)
+            from app.rag.vlm_client import vlm_client
+            resp = await vlm_client.extract_text_from_image(png_bytes, mime_type="image/png")
             if resp and resp.strip():
                 return resp.strip()
         except Exception:
