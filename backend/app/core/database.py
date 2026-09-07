@@ -256,6 +256,19 @@ def create_session(user_id: str, topic_id: str, title: str) -> dict:
     sid = new_id()
     started = now_iso()
     with DBContext() as db:
+        u = db.query(User).filter(User.id == user_id).first()
+        if not u:
+            u = User(
+                id=user_id,
+                username=user_id,
+                email=f"{user_id}@deeptutor.local",
+                password_hash="auto_provisioned_user",
+                role="student",
+                created_at=now_iso(),
+            )
+            db.add(u)
+            db.flush()
+
         session = ChatSession(
             id=sid,
             user_id=user_id,
@@ -389,6 +402,20 @@ def create_document(
 ) -> dict:
     doc_id = new_id()
     with DBContext() as db:
+        # Ensure user exists to satisfy foreign key constraints in PostgreSQL
+        u = db.query(User).filter(User.id == user_id).first()
+        if not u:
+            u = User(
+                id=user_id,
+                username=user_id,
+                email=f"{user_id}@deeptutor.local",
+                password_hash="auto_provisioned_user",
+                role="student",
+                created_at=now_iso(),
+            )
+            db.add(u)
+            db.flush()
+
         doc = Document(
             id=doc_id,
             user_id=user_id,

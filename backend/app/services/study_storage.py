@@ -264,21 +264,34 @@ def save_session_topics(
     session_id: str,
     topics: List[Dict[str, Any]],
     user_id: Optional[str] = None,
+    append: bool = True,
+    document_name: Optional[str] = None,
 ) -> List[str]:
     """Persist curriculum topics into PostgreSQL with UUID primary keys."""
     if not topics:
-        return []
+        return [t["id"] for t in get_session_topics(session_id)]
 
-    saved_ids = []
+    existing = get_session_topics(session_id)
+    if not append:
+        with engine.begin() as conn:
+            conn.execute(sql_text("DELETE FROM study_session_topics WHERE session_id = :sid"), {"sid": str(session_id)})
+        existing = []
+
+    existing_titles = {e["title"].strip().lower() for e in existing}
+
+    saved_ids = [e["id"] for e in existing]
     for t in topics:
+        title = t.get("title") or t.get("topic_title") or "Untitled Topic"
+        if append and title.strip().lower() in existing_titles:
+            continue
+        existing_titles.add(title.strip().lower())
         raw_id = t.get("id") or t.get("topic_id")
         t_id = to_uuid(raw_id, namespace_suffix=str(session_id))
-        title = t.get("title") or t.get("topic_title") or "Untitled Topic"
         summary = t.get("summary") or ""
         diff = t.get("difficulty") or "Intermediate"
         kconcepts = json.dumps(t.get("key_concepts") or t.get("key_concepts_json") or [])
         est_time = str(t.get("estimated_study_time") or t.get("estimated_time") or "15 mins")
-        doc_name = str(t.get("document_name") or "")
+        doc_name = str(t.get("document_name") or document_name or "")
 
         if _is_postgres():
             sql = sql_text("""
@@ -328,7 +341,7 @@ def save_session_topics(
             saved_ids.append(str(row[0]) if row else t_id)
 
     update_session_topic_count(session_id, len(saved_ids))
-    return saved_ids
+    return get_session_topics(session_id)
 
 
 def get_session_topics(
@@ -370,16 +383,43 @@ def get_session_topics(
 
 def save_session_document(
     session_id: str,
-    filename: str,
-    file_path: str,
+    doc_id_or_filename: str = "",
+    filename_or_path: str = "",
+    file_path: Optional[str] = None,
     status: str = "completed",
     page_count: int = 0,
     user_id: Optional[str] = None,
     doc_id: Optional[str] = None,
+    **kwargs: Any,
 ) -> str:
     """Save document metadata to PostgreSQL session_documents."""
-    d_id = to_uuid(doc_id, namespace_suffix=str(session_id)) if doc_id else str(uuid.uuid4())
-    doc_hash = "".join(c for c in f"{session_id}_{filename}" if c.isalnum())[:32]
+    # Determine positional ordering
+    if file_path is not None:
+        effective_doc_id = doc_id or doc_id_or_filename
+        effective_filename = filename_or_path
+        effective_file_path = file_path
+    else:
+        effective_doc_id = doc_id or kwargs.get("doc_id")
+        effective_filename = doc_id_or_filename
+        effective_file_path = filename_or_path
+
+    effective_status = kwargs.get("status", status)
+    effective_page_count = kwargs.get("page_count", page_count)
+
+    d_id = to_uuid(effective_doc_id, namespace_suffix=str(session_id)) if effective_doc_id else str(uuid.uuid4())
+    doc_hash = "".join(c for c in f"{session_id}_{effective_filename}" if c.isalnum())[:32]
+
+    # Resolve user_id if omitted
+    if not user_id:
+        try:
+            from app.core.database import get_session
+            sess = get_session(session_id)
+            if sess and sess.get("user_id"):
+                user_id = str(sess["user_id"])
+            else:
+                user_id = "default_user"
+        except Exception:
+            user_id = "default_user"
 
     if _is_postgres():
         sql = sql_text("""
@@ -415,10 +455,10 @@ def save_session_document(
             "session_id": str(session_id),
             "doc_hash": doc_hash,
             "user_id": user_id,
-            "filename": filename,
-            "file_path": file_path,
-            "status": status,
-            "page_count": page_count,
+            "filename": effective_filename,
+            "file_path": effective_file_path,
+            "status": effective_status,
+            "page_count": effective_page_count,
         })
         row = res.fetchone()
         return str(row[0]) if row else d_id
@@ -456,19 +496,25 @@ def get_session_documents(
     session_id: str,
     user_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """Retrieve all document metadata records for a session."""
+    """Retrieve all document metadata records for a session, filtering out empty or duplicate records."""
     statement = sql_text("""
         SELECT id::text AS id, session_id, filename, file_path, status, page_count, created_at
         FROM session_documents
         WHERE session_id = :session_id
+          AND filename IS NOT NULL AND filename != ''
         ORDER BY created_at ASC
     """)
     with engine.connect() as conn:
         rows = conn.execute(statement, {"session_id": str(session_id)}).mappings().fetchall()
 
     docs = []
+    seen_names = set()
     for r in rows:
         d = dict(r)
+        fn = (d.get("filename") or "").strip()
+        if not fn or fn in seen_names:
+            continue
+        seen_names.add(fn)
         if isinstance(d.get("created_at"), datetime):
             d["created_at"] = d["created_at"].isoformat()
         docs.append(d)
@@ -553,6 +599,15 @@ def register_or_update_session(
     """Idempotently register or update a workspace session in PostgreSQL."""
     now_str = datetime.now(timezone.utc).isoformat()
     clean_title = title or f"{subject} Study Session"
+    # Preserve existing title if already established
+    with engine.connect() as conn:
+        existing_row = conn.execute(
+            sql_text("SELECT title FROM workspace_sessions WHERE id = :id"),
+            {"id": str(session_id)}
+        ).fetchone()
+
+    if existing_row and existing_row[0] and existing_row[0] not in ("New Study Workspace", "General Study Study Session", "General Study (High School)", "General Study"):
+        clean_title = existing_row[0]
 
     # Verify user_id existence to prevent foreign key errors
     valid_uid = None
@@ -593,13 +648,19 @@ def register_or_update_session(
             "message_count": message_count,
         })
 
+    docs = get_session_documents(session_id)
+    doc_count = len(docs)
+    doc_names = [d.get("filename") for d in docs if d.get("filename")]
     return {
         "id": str(session_id),
         "user_id": valid_uid,
         "title": clean_title,
         "subject": subject,
         "status": status,
-        "document_name": document_name or "",
+        "document_name": document_name or (docs[0]["filename"] if docs else ""),
+        "document_count": doc_count,
+        "documents": doc_names,
+        "document_records": docs,
         "created_at": now_str,
         "last_active": now_str,
         "topic_count": topic_count or 0,
@@ -638,9 +699,14 @@ def update_session_topic_count(session_id: str, count: int):
 
 def delete_registry_session(session_id: str, user_id: Optional[str] = None) -> bool:
     """Delete a workspace session and all linked data."""
-    pg_fts_store.delete_session_chunks(session_id)
+    try:
+        pg_fts_store.delete_session_chunks(session_id)
+    except Exception as e:
+        print(f"[delete_registry_session] Warning deleting chunks: {e}")
 
     with engine.begin() as conn:
+        conn.execute(sql_text("DELETE FROM workspace_messages WHERE session_id = :sid"), {"sid": str(session_id)})
+        conn.execute(sql_text("DELETE FROM workspace_topics WHERE session_id = :sid"), {"sid": str(session_id)})
         conn.execute(sql_text("DELETE FROM study_session_messages WHERE session_id = :sid"), {"sid": str(session_id)})
         conn.execute(sql_text("DELETE FROM study_session_topics WHERE session_id = :sid"), {"sid": str(session_id)})
         conn.execute(sql_text("DELETE FROM session_documents WHERE session_id = :sid"), {"sid": str(session_id)})

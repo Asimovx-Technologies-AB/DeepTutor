@@ -45,7 +45,9 @@ from app.services.study_storage import (
 
 # ─── Universal Fast LLM Caller with Multi-Provider Cascade & Vision Grounding ─
 
-async def call_gemini_vision(
+settings = get_settings()
+
+async def call_vlm(
     prompt: str,
     image_bytes: bytes,
     system_instruction: str = "",
@@ -65,8 +67,8 @@ async def call_gemini_vision(
         print(f"[study_agents] VLM error: {e}")
     return ""
 
-call_openai_vision = call_gemini_vision
-call_vlm = call_gemini_vision
+call_openai_vision = call_vlm
+call_gemini_vision = call_vlm
 
 
 async def call_llm(
@@ -75,108 +77,25 @@ async def call_llm(
     temperature: float = 0.2,
     image_bytes: Optional[bytes] = None
 ) -> str:
-    """Universal Async LLM: OpenAI -> Azure OpenAI -> Unified LLM -> Google Gemini -> NVIDIA NIM -> Ollama."""
-    settings = get_settings()
-
+    """Universal Async LLM: OpenAI ChatGPT API (GPT-4o-mini / GPT-4o)."""
     # 0. High-Precision Vision Mode (for technical tables, circuits, formulas, diagrams)
     if image_bytes:
-        vision_resp = await call_gemini_vision(prompt, image_bytes, system_instruction, temperature)
+        vision_resp = await call_vlm(prompt, image_bytes, system_instruction, temperature)
         if vision_resp and vision_resp.strip():
             return vision_resp.strip()
 
-    # 1. Direct OpenAI Client (GPT-4o-mini / GPT-4o)
-    provider = getattr(settings, "LLM_PROVIDER", "openai").lower()
-    if provider in ("openai", "azure_openai"):
-        if provider == "openai":
-            try:
-                from app.rag.azure_openai_client import openai_client
-                if await openai_client.is_available():
-                    msgs = []
-                    if system_instruction:
-                        msgs.append({"role": "system", "content": system_instruction})
-                    msgs.append({"role": "user", "content": prompt})
-                    resp = await openai_client.chat(msgs, temperature=temperature)
-                    if resp and resp.strip():
-                        return resp.strip()
-            except Exception:
-                pass
-        elif provider == "azure_openai":
-            try:
-                from app.rag.azure_openai_client import azure_openai
-                if await azure_openai.is_available():
-                    msgs = []
-                    if system_instruction:
-                        msgs.append({"role": "system", "content": system_instruction})
-                    msgs.append({"role": "user", "content": prompt})
-                    resp = await azure_openai.chat(msgs, temperature=temperature)
-                    if resp and resp.strip():
-                        return resp.strip()
-            except Exception:
-                pass
-
-    # 2. Unified OpenAI Client Router
+    # 1. Primary OpenAI LLM Client
     try:
         from app.rag.llm_client import llm_client
-        if await llm_client.is_available():
-            msgs = []
-            if system_instruction:
-                msgs.append({"role": "system", "content": system_instruction})
-            msgs.append({"role": "user", "content": prompt})
-            resp = await llm_client.chat(msgs, temperature=temperature)
-            if resp and resp.strip():
-                return resp.strip()
-    except Exception:
-        pass
-
-    # 2. Google Gemini REST Fallback
-    if settings.GEMINI_API_KEY:
-        try:
-            import httpx
-            g_key = settings.GEMINI_API_KEY
-            g_model = getattr(settings, "GEMINI_MODEL", "gemini-3.1-flash-lite").replace("models/", "")
-            g_url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={g_key}"
-            g_payload: Dict[str, Any] = {
-                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                "generationConfig": {"temperature": temperature}
-            }
-            if system_instruction:
-                g_payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
-            async with httpx.AsyncClient(timeout=22.0) as client:
-                g_res = await client.post(g_url, json=g_payload)
-                if g_res.status_code == 200:
-                    g_data = g_res.json()
-                    g_cands = g_data.get("candidates", [])
-                    if g_cands:
-                        g_parts = g_cands[0].get("content", {}).get("parts", [])
-                        if g_parts and g_parts[0].get("text"):
-                            return g_parts[0].get("text")
-        except Exception:
-            pass
-
-    # 3. NVIDIA NIM Fallback
-    nvidia_key = getattr(settings, "NVIDIA_API_KEY", "") or os.getenv("NVIDIA_API_KEY", "")
-    if nvidia_key:
-        try:
-            import httpx
-            base_url = getattr(settings, "NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
-            chat_model = getattr(settings, "NVIDIA_CHAT_MODEL", "meta/llama-3.1-8b-instruct")
-            headers = {"Authorization": f"Bearer {nvidia_key}", "Content-Type": "application/json"}
-            messages = []
-            if system_instruction:
-                messages.append({"role": "system", "content": system_instruction})
-            messages.append({"role": "user", "content": prompt})
-
-            async with httpx.AsyncClient(timeout=20.0) as client:
-                res = await client.post(
-                    f"{base_url}/chat/completions",
-                    headers=headers,
-                    json={"model": chat_model, "messages": messages, "temperature": temperature}
-                )
-                if res.status_code == 200:
-                    data = res.json()
-                    return data["choices"][0]["message"]["content"]
-        except Exception:
-            pass
+        msgs = []
+        if system_instruction:
+            msgs.append({"role": "system", "content": system_instruction})
+        msgs.append({"role": "user", "content": prompt})
+        resp = await llm_client.chat(msgs, temperature=temperature)
+        if resp and resp.strip():
+            return resp.strip()
+    except Exception as e:
+        print(f"[call_llm] OpenAI chat error: {e}")
 
     return ""
 

@@ -197,33 +197,47 @@ async def upload_document(
         content = await file.read()
         f.write(content)
 
-    # Sync uploaded binary to Azure Blob Storage for cloud durability across scale-out replicas
-    azure_blob_store.upload_file(file_path, f"documents/{study_id}/{safe_filename}")
+    # Non-blocking cloud backup to Azure Blob Storage
+    asyncio.create_task(
+        asyncio.to_thread(azure_blob_store.upload_file, file_path, f"documents/{study_id}/{safe_filename}")
+    )
 
     doc_id = f"doc_{int(uuid.uuid4().int % 10000000)}"
     clean_title = Path(safe_filename).stem.replace("_", " ").title()
     effective_subject = subject.strip() if (subject and subject.strip() and subject.strip() != "General Study") else clean_title
 
-    # Concurrent Execution: Ingestion + Fast Curriculum Reasoning
-    async def _safe_extract_topics(sample_text: str):
-        return await extract_topics_and_validate(sample_text, subject=effective_subject, filename=file.filename)
+    # Quick sample text extraction for instant topic reasoning
+    def _quick_sample(fp: str) -> str:
+        try:
+            import pymupdf
+            d = pymupdf.open(fp)
+            pages = [d[i].get_text() for i in range(min(len(d), 5))]
+            d.close()
+            return "\n\n".join(p for p in pages if p)
+        except Exception:
+            return ""
+
+    sample_text = await asyncio.to_thread(_quick_sample, file_path)
+    if not sample_text:
+        sample_text = f"Subject: {effective_subject}. Topic: {clean_title}."
 
     # Check if session already has documents
     existing_docs = get_session_documents(study_id)
     is_existing_session = bool(existing_docs and len(existing_docs) > 0)
 
-    # 1. First run fast-path ingestion
-    ingest_result = await doc_processor.ingest_document(
+    # TRUE Parallel Execution: Run digital text chunking & curriculum reasoning concurrently
+    ingest_task = doc_processor.ingest_document(
         doc_id=doc_id,
         file_path=file_path,
         file_name=file.filename,
         subject=effective_subject,
         session_id=study_id,
+        user_id=user["id"] if user else None,
     )
+    topics_task = extract_topics_and_validate(sample_text, subject=effective_subject, filename=file.filename)
 
-    # 2. Concurrently classify and extract curriculum roadmap
-    sample_text = ingest_result.get("sample_text", "")
-    is_study_material, message, topics = await _safe_extract_topics(sample_text)
+    ingest_result, topics_tuple = await asyncio.gather(ingest_task, topics_task)
+    is_study_material, message, topics = topics_tuple
 
     if not is_study_material:
         raise HTTPException(
@@ -253,10 +267,10 @@ async def upload_document(
         user_id=user["id"]
     )
 
-    # Record in main database so it persists in the global study materials library
+    # Record in main database (without creating duplicate session document links)
     try:
         from app.core import database as db
-        from app.rag.document_dedup import get_file_hash, link_document_to_session
+        from app.rag.document_dedup import get_file_hash
         doc_hash = get_file_hash(content)
         ext = Path(file.filename).suffix.lower().lstrip(".")
         db_doc = db.create_document(
@@ -268,7 +282,6 @@ async def upload_document(
             doc_hash=doc_hash,
             status="completed",
         )
-        link_document_to_session(doc_hash, study_id, user["id"], db=db)
         topic_titles = [t.get("title", "") for t in (all_session_topics or topics) if t.get("title")]
         db.update_document_stats(
             doc_id=db_doc["id"],
@@ -279,25 +292,12 @@ async def upload_document(
             status="completed",
         )
     except Exception as e:
-        print(f"[study.upload] Warning: failed to save document to main db: {e}")
+        print(f"[study.upload] Warning: failed to save document stats to main db: {e}")
 
-    # Dispatch Stage 2 & 3 Non-blocking Background Enrichment Workers via durable task queue
-    try:
-        from app.services.task_queue import enqueue_task
-        enqueue_task(
-            task_type="doc_enrichment",
-            payload={
-                "session_id": study_id,
-                "doc_id": doc_id,
-                "file_path": file_path,
-            }
-        )
-    except Exception as e:
-        # Fallback to local async task if DB queue is offline
-        print(f"[study.upload] TaskQueue enqueue error, falling back to in-process task: {e}")
-        asyncio.create_task(
-            doc_processor.run_background_enrichment(study_id, doc_id, file_path)
-        )
+    # Dispatch Stage 2 & 3 Non-blocking Background Table & Diagram Extraction Workers
+    asyncio.create_task(
+        doc_processor.run_background_enrichment(study_id, doc_id, file_path)
+    )
 
     all_docs = get_session_documents(study_id)
     return {

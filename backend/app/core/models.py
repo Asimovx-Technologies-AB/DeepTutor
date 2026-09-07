@@ -145,7 +145,7 @@ class SessionDocument(Base):
 
     session_id = Column(String, primary_key=True)
     doc_hash = Column(String(64), primary_key=True, index=True)
-    user_id = Column(String, nullable=False, index=True)
+    user_id = Column(String, nullable=True, index=True, default="default_user")
     uploaded_at = Column(String, default=lambda: datetime.utcnow().isoformat())
 
 
