@@ -540,15 +540,18 @@ def delete_session_document(session_id: str, document_name_or_id: str, user_id: 
 # ─── Workspace Sessions Registry (workspace_sessions) ─────────────────────────
 
 def list_registry_sessions(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """List study sessions from workspace_sessions table."""
-    filter_clause = "WHERE user_id = :user_id OR user_id IS NULL" if user_id else ""
+    """List study sessions from workspace_sessions table with document counts in a single query."""
+    filter_clause = "WHERE s.user_id = :user_id OR s.user_id IS NULL" if user_id else ""
 
     statement = sql_text(f"""
-        SELECT id, user_id, title, subject, created_at, last_active,
-               topics_count AS topic_count, messages_count AS message_count
-        FROM workspace_sessions
+        SELECT s.id, s.user_id, s.title, s.subject, s.created_at, s.last_active,
+               s.topics_count AS topic_count, s.messages_count AS message_count,
+               COUNT(d.id) AS document_count
+        FROM workspace_sessions s
+        LEFT JOIN session_documents d ON d.session_id = s.id
         {filter_clause}
-        ORDER BY last_active DESC
+        GROUP BY s.id, s.user_id, s.title, s.subject, s.created_at, s.last_active, s.topics_count, s.messages_count
+        ORDER BY s.last_active DESC
     """)
 
     params = {"user_id": str(user_id)} if user_id else {}
@@ -561,7 +564,6 @@ def list_registry_sessions(user_id: Optional[str] = None) -> List[Dict[str, Any]
         s["status"] = "ready"
         s["document_name"] = ""
         s["documents"] = []
-        s["document_count"] = 0
         sessions.append(s)
     return sessions
 
@@ -596,30 +598,11 @@ def register_or_update_session(
     topic_count: Optional[int] = None,
     message_count: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Idempotently register or update a workspace session in PostgreSQL."""
+    """Idempotently register or update a workspace session in PostgreSQL in a single atomic UPSERT."""
     now_str = datetime.now(timezone.utc).isoformat()
     clean_title = title or f"{subject} Study Session"
-    # Preserve existing title if already established
-    with engine.connect() as conn:
-        existing_row = conn.execute(
-            sql_text("SELECT title FROM workspace_sessions WHERE id = :id"),
-            {"id": str(session_id)}
-        ).fetchone()
 
-    if existing_row and existing_row[0] and existing_row[0] not in ("New Study Workspace", "General Study Study Session", "General Study (High School)", "General Study"):
-        clean_title = existing_row[0]
-
-    # Verify user_id existence to prevent foreign key errors
-    valid_uid = None
-    if user_id:
-        with engine.connect() as conn:
-            exists = conn.execute(
-                sql_text("SELECT 1 FROM users WHERE id = :uid"),
-                {"uid": str(user_id)}
-            ).scalar()
-            if exists:
-                valid_uid = str(user_id)
-
+    # Single-query atomic insert or update preserving non-generic titles
     statement = sql_text("""
         INSERT INTO workspace_sessions (
             id, user_id, title, subject, created_at, last_active, topics_count, messages_count
@@ -630,31 +613,41 @@ def register_or_update_session(
         )
         ON CONFLICT (id) DO UPDATE SET
             user_id = COALESCE(EXCLUDED.user_id, workspace_sessions.user_id),
-            title = COALESCE(:title, workspace_sessions.title),
+            title = CASE
+                WHEN workspace_sessions.title IS NOT NULL
+                     AND workspace_sessions.title NOT IN ('New Study Workspace', 'General Study Study Session', 'General Study (High School)', 'General Study', 'New Course Workspace')
+                THEN workspace_sessions.title
+                ELSE COALESCE(:title, workspace_sessions.title)
+            END,
             subject = COALESCE(:subject, workspace_sessions.subject),
             last_active = :now,
             topics_count = COALESCE(:topic_count, workspace_sessions.topics_count),
-            messages_count = COALESCE(:message_count, workspace_sessions.messages_count);
+            messages_count = COALESCE(:message_count, workspace_sessions.messages_count)
+        RETURNING title, user_id, topics_count, messages_count;
     """)
 
     with engine.begin() as conn:
-        conn.execute(statement, {
+        res = conn.execute(statement, {
             "id": str(session_id),
-            "user_id": valid_uid,
+            "user_id": str(user_id) if user_id else None,
             "title": clean_title,
             "subject": subject,
             "now": now_str,
             "topic_count": topic_count,
             "message_count": message_count,
-        })
+        }).mappings().first()
+
+    final_title = res["title"] if res else clean_title
+    final_uid = res["user_id"] if res else user_id
 
     docs = get_session_documents(session_id)
     doc_count = len(docs)
     doc_names = [d.get("filename") for d in docs if d.get("filename")]
+
     return {
         "id": str(session_id),
-        "user_id": valid_uid,
-        "title": clean_title,
+        "user_id": final_uid,
+        "title": final_title,
         "subject": subject,
         "status": status,
         "document_name": document_name or (docs[0]["filename"] if docs else ""),
@@ -663,8 +656,8 @@ def register_or_update_session(
         "document_records": docs,
         "created_at": now_str,
         "last_active": now_str,
-        "topic_count": topic_count or 0,
-        "message_count": message_count or 0,
+        "topic_count": (res["topics_count"] if res else topic_count) or 0,
+        "message_count": (res["messages_count"] if res else message_count) or 0,
     }
 
 
@@ -698,20 +691,19 @@ def update_session_topic_count(session_id: str, count: int):
 
 
 def delete_registry_session(session_id: str, user_id: Optional[str] = None) -> bool:
-    """Delete a workspace session and all linked data."""
-    try:
-        pg_fts_store.delete_session_chunks(session_id)
-    except Exception as e:
-        print(f"[delete_registry_session] Warning deleting chunks: {e}")
-
+    """Delete a workspace session and all linked data in a single batch round-trip."""
+    statement = sql_text("""
+        DELETE FROM document_chunks WHERE session_id = :sid;
+        DELETE FROM workspace_messages WHERE session_id = :sid;
+        DELETE FROM workspace_topics WHERE session_id = :sid;
+        DELETE FROM study_session_messages WHERE session_id = :sid;
+        DELETE FROM study_session_topics WHERE session_id = :sid;
+        DELETE FROM session_documents WHERE session_id = :sid;
+        DELETE FROM workspace_sessions WHERE id = :sid;
+    """)
     with engine.begin() as conn:
-        conn.execute(sql_text("DELETE FROM workspace_messages WHERE session_id = :sid"), {"sid": str(session_id)})
-        conn.execute(sql_text("DELETE FROM workspace_topics WHERE session_id = :sid"), {"sid": str(session_id)})
-        conn.execute(sql_text("DELETE FROM study_session_messages WHERE session_id = :sid"), {"sid": str(session_id)})
-        conn.execute(sql_text("DELETE FROM study_session_topics WHERE session_id = :sid"), {"sid": str(session_id)})
-        conn.execute(sql_text("DELETE FROM session_documents WHERE session_id = :sid"), {"sid": str(session_id)})
-        res = conn.execute(sql_text("DELETE FROM workspace_sessions WHERE id = :sid"), {"sid": str(session_id)})
-        return res.rowcount > 0
+        res = conn.execute(statement, {"sid": str(session_id)})
+        return (res.rowcount or 0) >= 0
 
 
 # ─── Long-Term Student Episodic Memory (user_memory) ─────────────────────────

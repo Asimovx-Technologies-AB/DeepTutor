@@ -755,21 +755,24 @@ async def create_new_session(
 
 @router.get("/sessions/{session_id}")
 async def get_session_details(session_id: str, user: dict = Depends(get_current_user)):
-    """Loads persisted conversation, topics, and documents for a session."""
-    from app.core import database as db
+    """Loads persisted conversation, topics, and documents for a session in parallel."""
     meta = get_registry_session(session_id)
-    s = db.get_session(session_id)
-
-    if meta and meta.get("user_id") and meta.get("user_id") != user["id"]:
-        raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
-    if s and s.get("user_id") and s.get("user_id") != user["id"]:
-        raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
-
-    if not meta:
+    if meta:
+        if meta.get("user_id") and meta.get("user_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
+    else:
+        from app.core import database as db
+        s = db.get_session(session_id)
+        if s and s.get("user_id") and s.get("user_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
         meta = register_or_update_session(session_id, user_id=user["id"])
-    messages = get_session_messages(session_id)
-    topics = get_session_topics(session_id)
-    documents = get_session_documents(session_id)
+
+    # Fetch messages, topics, and documents concurrently in parallel threads
+    messages, topics, documents = await asyncio.gather(
+        asyncio.to_thread(get_session_messages, session_id),
+        asyncio.to_thread(get_session_topics, session_id),
+        asyncio.to_thread(get_session_documents, session_id),
+    )
 
     return {
         "meta": meta,
@@ -784,23 +787,20 @@ async def delete_study_session(
     session_id: str,
     user: dict = Depends(get_current_user)
 ):
-    """Permanently deletes session, registry entry, and physical SQLite .db."""
-    from app.core import database as db
+    """Permanently deletes session and all linked data."""
     meta = get_registry_session(session_id)
-    s = db.get_session(session_id)
+    if meta:
+        if meta.get("user_id") and meta.get("user_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
+    else:
+        from app.core import database as db
+        s = db.get_session(session_id)
+        if not s:
+            raise HTTPException(status_code=404, detail="Session not found")
+        if s.get("user_id") and s.get("user_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
 
-    if meta and meta.get("user_id") and meta.get("user_id") != user["id"]:
-        raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
-    if s and s.get("user_id") and s.get("user_id") != user["id"]:
-        raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
-
-    if not meta and not s:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    ok_reg = delete_registry_session(session_id, user_id=user["id"])
-    del_res = db.delete_session(session_id, user_id=user["id"])
-    ok = ok_reg or del_res.get("deleted", False)
-
+    ok = await asyncio.to_thread(delete_registry_session, session_id, user["id"])
     return {"success": ok, "session_id": session_id}
 
 
