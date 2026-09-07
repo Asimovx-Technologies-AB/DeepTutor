@@ -68,47 +68,105 @@ jobs:
             --file Dockerfile.slim \
             .
 
-      - name: Roll out new revision
+      # What the app is actually running, before we touch anything. When a
+      # rollout silently no-ops, this is the only record of the prior state.
+      - name: Pre-update revision state
         run: |
+          az containerapp show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
+            --query "{mode:properties.configuration.activeRevisionsMode,latest:properties.latestRevisionName,latestReady:properties.latestReadyRevisionName}" \
+            -o table
+          az containerapp revision list -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
+            --query "[].{rev:name,active:properties.active,traffic:properties.trafficWeight,running:properties.runningState,health:properties.healthState,created:properties.createdTime}" \
+            -o table
+
+      # --revision-suffix names the revision so the wait below can target it
+      # instead of guessing. GIT_SHA is surfaced by /health, which is what lets
+      # the verify step prove WHICH build answered rather than merely that
+      # something did.
+      - name: Roll out new revision
+        id: rollout
+        run: |
+          suffix="r${GITHUB_RUN_NUMBER}-$(echo "$GITHUB_SHA" | cut -c1-7)"
+          echo "suffix=$suffix" >> "$GITHUB_OUTPUT"
           az containerapp update \
             --name "$CONTAINER_APP" \
             --resource-group "$RESOURCE_GROUP" \
             --image "${{ steps.acr.outputs.login_server }}/${IMAGE_REPO}:${GITHUB_SHA}" \
+            --revision-suffix "$suffix" \
+            --set-env-vars "GIT_SHA=${GITHUB_SHA}" \
             --output none
 
-      - name: Smoke test
+      # `az containerapp update` returns when the control plane accepts the
+      # change, not when the revision serves traffic. Without this wait, a
+      # revision that crashes on startup leaves the previous one serving and the
+      # job still reports success.
+      - name: Wait for the new revision to become healthy
+        run: |
+          rev="${CONTAINER_APP}--${{ steps.rollout.outputs.suffix }}"
+          echo "Waiting for $rev"
+          for attempt in $(seq 1 40); do
+            state=$(az containerapp revision show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
+                      --revision "$rev" --query properties.runningState -o tsv 2>/dev/null || echo Unknown)
+            prov=$(az containerapp revision show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
+                      --revision "$rev" --query properties.provisioningState -o tsv 2>/dev/null || echo Unknown)
+            echo "attempt ${attempt}: running=${state} provisioning=${prov}"
+            case "$state" in
+              Running|RunningAtMaxScale) echo "Revision healthy."; exit 0 ;;
+              Failed|Degraded)           echo "Revision entered ${state}." >&2; exit 1 ;;
+            esac
+            sleep 15
+          done
+          echo "Revision did not become healthy within 10 minutes." >&2
+          exit 1
+
+      # The previous smoke test asserted only that / returned 200 — which the
+      # PREVIOUS revision answers perfectly well while the new one is failing.
+      # That is how run 34168403359 reported success while production kept
+      # serving the old image. Assert build identity instead.
+      - name: Verify the deployed build
         run: |
           fqdn=$(az containerapp show --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
                    --query properties.configuration.ingress.fqdn -o tsv)
-          url="https://${fqdn}/"
+          base="https://${fqdn}"
+          served=""
 
-          # min_replicas may be 0 — the first request pays the cold start.
           for attempt in $(seq 1 20); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$url" || true)
-            if [ "$code" = "200" ]; then
-              echo "OK after ${attempt} attempt(s): $url"
-              echo "API: $url" >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
-            echo "attempt ${attempt}: HTTP ${code}"
+            served=$(curl -s --max-time 30 "${base}/health" \
+                     | tr ',' '\n' | grep '"build"' | sed 's/.*"build"[^"]*"\([^"]*\)".*/\1/' || true)
+            if [ -n "$served" ]; then break; fi
+            echo "attempt ${attempt}: /health has no build field yet"
             sleep 15
           done
 
-          echo "Smoke test failed — dumping revision state and logs." >&2
+          echo "expected build: ${GITHUB_SHA}"
+          echo "served   build: ${served:-<none>}"
 
-          # Console logs need a live replica, and the interesting failures are
-          # exactly the ones where no replica came up. Revision state and the
-          # system log are readable either way, and name the cause: image pull
-          # refused, volume mount failed, probe never passed, container exited.
-          az containerapp revision list \
-            --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
-            --query "[].{revision:name, active:properties.active, replicas:properties.replicas, running:properties.runningState, health:properties.healthState, provisioning:properties.provisioningState}" \
+          if [ "$served" != "$GITHUB_SHA" ]; then
+            echo "MISMATCH: the app is not serving the commit this run built." >&2
+            exit 1
+          fi
+
+          if ! curl -sf --max-time 30 "${base}/openapi.json" | grep -q "/study/agent/message"; then
+            echo "Schema check failed: /study/agent/message absent from openapi.json." >&2
+            exit 1
+          fi
+
+          echo "Verified ${GITHUB_SHA} is live at ${base}"
+          echo "API: ${base} (build ${GITHUB_SHA})" >> "$GITHUB_STEP_SUMMARY"
+
+      # Runs whatever the outcome. On failure this is the diagnosis; on success
+      # it records which revision took traffic.
+      - name: Post-update revision state and logs
+        if: always()
+        run: |
+          az containerapp revision list -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
+            --query "[].{rev:name,active:properties.active,traffic:properties.trafficWeight,running:properties.runningState,health:properties.healthState,created:properties.createdTime}" \
             -o table || true
 
-          az containerapp logs show --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
+          echo "--- system log ---"
+          az containerapp logs show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
             --tail 100 --type system || true
 
-          # Best effort: only returns anything if a replica lived long enough.
-          az containerapp logs show --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
-            --tail 100 --type console || true
-          exit 1
+          echo "--- console log (only if a replica lived long enough) ---"
+          az containerapp logs show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
+            --tail 200 --type console || true

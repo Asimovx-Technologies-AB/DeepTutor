@@ -2,6 +2,7 @@
 FastAPI main application — DeepTutor v2 (4-Stage RAG Pipeline).
 """
 import asyncio
+import os
 import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -178,6 +179,10 @@ async def health():
     return {
         "api": "ok",
         "version": settings.APP_VERSION,
+        # The commit this image was built from, injected by the deploy workflow.
+        # Without it the pipeline can only prove that *something* answered, not
+        # that the build it just shipped is the one serving.
+        "build": os.getenv("GIT_SHA", "unknown"),
         "database": pool_metrics,
         "pipeline": {
             "status": "active",
