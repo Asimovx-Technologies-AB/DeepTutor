@@ -59,7 +59,14 @@ def _is_postgres() -> bool:
 def get_user_db_path(user_id: Optional[str] = None) -> Path:
     uid = user_id or "default-user"
     safe_uid = "".join(c for c in uid if c.isalnum() or c in ("-", "_"))
-    return USERS_DIR / f"user_{safe_uid}.db"
+    p = USERS_DIR / f"user_{safe_uid}.db"
+    if not p.exists():
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.touch()
+        except Exception:
+            pass
+    return p
 
 
 def get_session_db_path(session_id: str, user_id: Optional[str] = None) -> Path:

@@ -26,6 +26,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.rag.storage.azure_blob_store import azure_blob_store
 from app.api.auth import get_current_user, get_user_from_token, get_user_from_header_or_query
 
 
@@ -195,6 +196,9 @@ async def upload_document(
     with open(file_path, "wb") as f:
         content = await file.read()
         f.write(content)
+
+    # Sync uploaded binary to Azure Blob Storage for cloud durability across scale-out replicas
+    azure_blob_store.upload_file(file_path, f"documents/{study_id}/{safe_filename}")
 
     doc_id = f"doc_{int(uuid.uuid4().int % 10000000)}"
     clean_title = Path(safe_filename).stem.replace("_", " ").title()

@@ -103,6 +103,17 @@ class AzureBlobStore:
             logger.error(f"[AzureBlobStore] Download error for {blob_name}: {e}")
             return False
 
+    def ensure_local_copy(self, blob_name: str, local_path: str) -> str:
+        """Ensures file exists on local ephemeral disk, restoring from Azure Blob if missing."""
+        path_obj = Path(local_path)
+        if path_obj.exists() and path_obj.stat().st_size > 0:
+            return local_path
+
+        if self.download_file(blob_name, local_path):
+            logger.info(f"[AzureBlobStore] Restored missing blob {blob_name} to {local_path}")
+            return local_path
+        return local_path
+
     def delete_file(self, blob_name: str) -> bool:
         """Delete a blob."""
         client = self._get_client()

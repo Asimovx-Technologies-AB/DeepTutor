@@ -18,6 +18,7 @@ from typing import List, Dict, Any, Tuple, Optional
 from datetime import datetime
 
 from app.core.config import get_settings
+from app.rag.storage.azure_blob_store import azure_blob_store
 from app.services.study_storage import (
     init_session_db,
     insert_chunks_to_fts,
@@ -100,8 +101,12 @@ class StudyDocumentProcessor:
             status="indexing"
         )
 
-        # Trigger S3 cloud backup asynchronously
-        schedule_s3_document_backup(session_id, file_path, file_name)
+        # Trigger Azure Blob cloud backup and ensure local availability
+        blob_name = f"documents/{session_id}/{file_name}"
+        if Path(file_path).exists():
+            azure_blob_store.upload_file(file_path, blob_name)
+        else:
+            azure_blob_store.ensure_local_copy(blob_name, file_path)
 
         extracted_chunks: List[Dict[str, Any]] = []
         full_sample_text = ""
