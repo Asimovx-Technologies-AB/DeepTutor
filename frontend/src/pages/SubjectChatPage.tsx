@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Send, Sparkles, BookOpen, Brain,
   ArrowLeft, RefreshCw, Trophy, HelpCircle,
-  Layers, CheckCircle2, ChevronRight, Plus, RotateCcw
+  Layers, CheckCircle2, ChevronRight, Plus, RotateCcw,
+  Calculator, Zap, FlaskConical
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import { useSubjectStore } from '../stores/subjectStore'
@@ -29,7 +30,7 @@ const SUBJECT_CONFIGS: Record<string, {
   accentBg: string
   borderColor: string
   title: string
-  icon: string
+  icon: any
   starters: string[]
 }> = {
   'sslc-math': {
@@ -37,7 +38,7 @@ const SUBJECT_CONFIGS: Record<string, {
     accentBg: '#FFF0B3',
     borderColor: '#FDE68A',
     title: 'Class 10 Mathematics AI Tutor',
-    icon: '📐',
+    icon: Calculator,
     starters: [
       'Give me 5 minute cheatcode for Arithmetic Sequences.',
       'How to solve second degree equations by completing the square?',
@@ -50,7 +51,7 @@ const SUBJECT_CONFIGS: Record<string, {
     accentBg: '#F0F9FF',
     borderColor: '#BAE6FD',
     title: 'Class 10 Physics AI Tutor',
-    icon: '⚡',
+    icon: Zap,
     starters: [
       'Give me 5 minute cheatcode for Wave Motion & Light Refraction.',
       'Explain how convex lenses form images at different object distances.',
@@ -63,7 +64,7 @@ const SUBJECT_CONFIGS: Record<string, {
     accentBg: '#ECFDF5',
     borderColor: '#A7F3D0',
     title: 'Class 10 Chemistry AI Tutor',
-    icon: '🧪',
+    icon: FlaskConical,
     starters: [
       'Give me 5 minute cheatcode for Nomenclature of Organic Compounds.',
       'How do I write IUPAC names for branched alkanes and alkenes?',
@@ -275,7 +276,17 @@ export default function SubjectChatPage() {
             </button>
 
             <div className="flex items-center gap-2.5">
-              <span className="text-2xl">{config.icon}</span>
+              {(() => {
+                const ConfigIcon = config.icon
+                return (
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border"
+                    style={{ backgroundColor: config.accentBg, borderColor: config.borderColor, color: config.color }}
+                  >
+                    <ConfigIcon size={18} />
+                  </div>
+                )
+              })()}
               <div>
                 <h1 className="text-base sm:text-lg font-bold text-[#3C3C3C] leading-tight">
                   {subject.name} AI Tutor
@@ -301,7 +312,7 @@ export default function SubjectChatPage() {
                 }`}
                 title="Respond in English"
               >
-                <span>🇬🇧</span>
+                <span className="text-[10px] uppercase font-mono font-bold">EN</span>
                 <span>English</span>
               </button>
               <button
@@ -314,7 +325,7 @@ export default function SubjectChatPage() {
                 }`}
                 title="Svara på svenska"
               >
-                <span>🇸🇪</span>
+                <span className="text-[10px] uppercase font-mono font-bold">SV</span>
                 <span>Svenska</span>
               </button>
               <button
@@ -327,7 +338,7 @@ export default function SubjectChatPage() {
                 }`}
                 title="الرد باللغة العربية"
               >
-                <span>🇸🇦</span>
+                <span className="text-[10px] uppercase font-mono font-bold">AR</span>
                 <span>العربية</span>
               </button>
             </div>
@@ -367,13 +378,14 @@ export default function SubjectChatPage() {
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
           <button
             onClick={() => setSelectedTopicId('')}
-            className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+            className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
               selectedTopicId === ''
                 ? 'bg-[#3C3C3C] text-white elevation-2'
                 : 'bg-[#F2ECE4] text-[#777777] hover:bg-[#E2E8F0]'
             }`}
           >
-            📖 All Chapters
+            <BookOpen size={12} />
+            <span>All Chapters</span>
           </button>
           {topics.map((t) => {
             const isSelected = selectedTopicId === t.id

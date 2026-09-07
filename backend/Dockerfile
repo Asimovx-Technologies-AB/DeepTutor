@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir boto3 gunicorn uvicorn
+RUN pip install --no-cache-dir gunicorn uvicorn
 
 # Copy application source code
 COPY . .

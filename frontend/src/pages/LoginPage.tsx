@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Mail, Lock, ArrowRight, Eye, EyeOff, Sparkles, Brain, Globe, Send } from 'lucide-react'
+import { Mail, Lock, ArrowRight, Eye, EyeOff, Sparkles, GraduationCap, Globe, CheckCircle2, ShieldCheck } from 'lucide-react'
 import { authApi } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
-import { TextInput } from '../components/ui/TextInput'
-import { Button } from '../components/ui/Button'
+import { clearAllUserData } from '../stores/authStore'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -23,11 +22,12 @@ export default function LoginPage() {
     try {
       const res = await authApi.login(email, password)
       const { access_token, user } = res.data
+      clearAllUserData()
       login(user, access_token)
       navigate('/dashboard')
     } catch (err: any) {
       if (!err.response || err.code === 'ERR_NETWORK' || err.response?.status >= 500) {
-        setError('Network Error: Unable to connect to FastAPI backend server. Please verify backend (start.bat) is running on port 8000.')
+        setError('Network Error: Unable to connect to backend server. Please verify backend is running on port 8000.')
         return
       }
       setError(err.response?.data?.detail ?? 'Login failed. Please check your credentials and try again.')
@@ -37,188 +37,172 @@ export default function LoginPage() {
   }
 
   const handleGoogleLogin = () => {
+    clearAllUserData()
     login(
-      { id: 'google-user', username: 'Google Learner', email: 'google.student@indietutor.ai', role: 'student' },
+      { id: 'google-user', username: 'Google Scholar', email: 'scholar.student@deeptutor.ai', role: 'student' },
       'demo-google-token'
     )
     navigate('/dashboard')
   }
 
   return (
-    <div className="min-h-screen bg-transparent flex items-center justify-center p-4 sm:p-8 font-sans relative">
-      
-      {/* Outer Card Frame (Matching Reference Design) */}
-      <div className="w-full max-w-5xl bg-black/5 rounded-[36px] border border-border/60 shadow-sm p-6 sm:p-10 flex flex-col justify-between min-h-[640px] relative overflow-hidden backdrop-blur-3xl">
+    <div className="min-h-screen bg-[#FCF9F8] text-[#1B1C1C] font-serif flex items-center justify-center p-4 sm:p-8">
+      {/* ─── Outer Archival Container Frame ─── */}
+      <div className="w-full max-w-5xl bg-white rounded-3xl border border-[#E5E2D9] shadow-sm overflow-hidden flex flex-col lg:flex-row min-h-[620px]">
         
-        {/* Top Header Navigation */}
-        <header className="flex items-center justify-between z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[1.5rem] bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-sm">
-              <Brain size={22} />
+        {/* ─── LEFT COLUMN: Atmospheric Academic Banner ─── */}
+        <div className="lg:w-5/12 bg-[#F6F3F0] border-b lg:border-b-0 lg:border-r border-[#E5E2D9] p-8 sm:p-10 flex flex-col justify-between relative overflow-hidden">
+          {/* Subtle archival watermark pattern */}
+          <div className="space-y-6 relative z-10">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[#1B1C1C] text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                <GraduationCap size={18} />
+              </div>
+              <span className="font-serif font-bold text-lg text-[#1B1C1C] tracking-tight">DeepTutor</span>
             </div>
-            <div>
-              <span className="font-black text-slate-800 text-xl tracking-tight">IndieTutor</span>
-              <span className="block text-[10px] font-black text-indigo-600 uppercase tracking-widest">AI Learning Engine</span>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-3">
-            <button aria-label="Language" className="w-10 h-10 rounded-full border border-slate-200 bg-white text-slate-500 hover:text-indigo-600 hover:border-indigo-200 flex items-center justify-center transition-all shadow-sm cursor-pointer">
-              <Globe size={18} />
-            </button>
-            <button aria-label="Contact" className="w-10 h-10 rounded-full bg-slate-900 text-white hover:bg-slate-800 flex items-center justify-center transition-all shadow-sm cursor-pointer">
-              <Send size={16} />
-            </button>
-          </div>
-        </header>
-
-        {/* Main Content Area */}
-        <div className="flex-1 flex items-center justify-center my-6 relative z-10">
-          
-          {/* Decorative Side Illustration Element (Left) */}
-          <div className="hidden lg:flex flex-col items-center justify-center absolute left-6 bottom-4 select-none opacity-90">
-            <div className="relative">
-              <svg width="220" height="180" viewBox="0 0 220 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-                {/* Simplified Vector Study Blocks */}
-                <rect x="20" y="100" width="45" height="70" rx="6" fill="#FFFFFF" stroke="currentColor" className="text-slate-800" strokeWidth="2.5" />
-                <path d="M32 135L42 120" stroke="currentColor" className="text-slate-800" strokeWidth="2.5" strokeLinecap="round" />
-                <rect x="70" y="70" width="55" height="100" rx="6" fill="#EEF2FF" stroke="#4F46E5" strokeWidth="2.5" />
-                <rect x="150" y="90" width="50" height="80" rx="6" fill="#FFFFFF" stroke="currentColor" className="text-slate-800" strokeWidth="2.5" />
-                <rect x="180" y="45" width="35" height="125" rx="6" fill="#EEF2FF" stroke="#4F46E5" strokeWidth="2.5" />
-                
-                {/* Sitting Student Character */}
-                <circle cx="82" cy="40" r="12" fill="currentColor" className="text-slate-800" />
-                <path d="M72 58C72 52 92 52 92 58L95 82H69L72 58Z" fill="currentColor" className="text-slate-800" />
-                <path d="M69 82L62 105L85 105L88 82" fill="currentColor" className="text-slate-800" />
-                {/* Laptop */}
-                <path d="M92 72L108 62" stroke="#4F46E5" strokeWidth="4" strokeLinecap="round" />
-              </svg>
+            <div className="pt-4 space-y-3">
+              <span className="text-[11px] font-sans font-bold uppercase tracking-widest text-[#8C6212] bg-[#FDF6E9] border border-[#EBD5A2] px-2.5 py-1 rounded-full">
+                Scholarly Inquiry
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-bold text-[#1B1C1C] leading-snug font-serif italic">
+                “Mastery is the consequence of continuous, grounded inquiry.”
+              </h2>
+              <p className="text-xs text-[#66645E] font-sans leading-relaxed">
+                Connect directly with your course textbooks, structured lecture streams, and interactive study decks.
+              </p>
             </div>
           </div>
 
-          {/* Center Sign In Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.4 }}
-            className="w-full max-w-md bg-white rounded-[2rem] p-8 sm:p-10 border border-slate-200 shadow-md relative"
-          >
-            <div className="text-left mb-6">
-              <h1 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight mb-1.5 leading-tight">
-                Let's<br />Start Learning
+          {/* Academic Disciplines & Math Card Preview */}
+          <div className="space-y-4 pt-8 relative z-10 font-sans">
+            <div className="flex flex-wrap gap-1.5 text-[11px]">
+              <span className="px-2.5 py-1 rounded-md bg-white border border-[#E0DDD2] text-[#4A4843] font-medium">Computer Science</span>
+              <span className="px-2.5 py-1 rounded-md bg-white border border-[#E0DDD2] text-[#4A4843] font-medium">Applied Physics</span>
+              <span className="px-2.5 py-1 rounded-md bg-white border border-[#E0DDD2] text-[#4A4843] font-medium">Mathematics</span>
+            </div>
+
+            {/* Formula Preview Badge */}
+            <div className="p-3.5 rounded-xl bg-white border border-[#E5E2D9] shadow-xs text-xs space-y-1">
+              <div className="flex items-center justify-between text-[#7C7A74] text-[10px] font-mono">
+                <span>FOUNDATIONAL MECHANICS</span>
+                <span className="text-[#2E7D32] flex items-center gap-1"><ShieldCheck size={11} /> Grounded</span>
+              </div>
+              <div className="font-mono text-[#1B1C1C] font-bold text-center py-1">
+                ∇ × E = -∂B/∂t
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ─── RIGHT COLUMN: Sign In Form ─── */}
+        <div className="lg:w-7/12 p-8 sm:p-12 flex flex-col justify-center bg-white">
+          <div className="max-w-md w-full mx-auto space-y-6">
+            <div className="space-y-1 text-left">
+              <h1 className="text-2xl sm:text-3xl font-bold text-[#1B1C1C] font-serif">
+                Return to Your Studies
               </h1>
-              <p className="text-xs font-semibold text-slate-400">
-                Please login or sign up to continue
+              <p className="text-xs text-[#7C7A74] font-sans">
+                Sign in to access your course materials, lecture streams, and flashcard decks.
               </p>
             </div>
 
-            {/* Demo Hint */}
-            <div className="mb-5 p-3 rounded-[1.5rem] bg-indigo-50 border border-indigo-200 flex items-center gap-2.5">
-              <Sparkles size={16} className="text-indigo-600 flex-shrink-0" />
-              <p className="text-xs text-slate-700 font-medium">
-                <span className="font-bold text-indigo-600">Demo Mode:</span> Enter any credentials to sign in.
-              </p>
+            {/* Demo Hint Banner */}
+            <div className="p-3 rounded-xl bg-[#FAF9F5] border border-[#ECE9DF] flex items-center gap-2.5 text-xs font-sans text-[#55534E]">
+              <Sparkles size={14} className="text-[#996515] shrink-0" />
+              <span>
+                <strong>Quick Access:</strong> Enter any credentials or use Google Demo Sign-In.
+              </span>
             </div>
 
             {error && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="mb-4 p-3 rounded-[1.5rem] bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold"
-              >
+              <div className="p-3 rounded-xl bg-[#FDF0EE] border border-[#E89E94] text-xs font-sans text-[#7D2218]">
                 {error}
-              </motion.div>
+              </div>
             )}
 
-            <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
-              
-              <TextInput
-                id="login-email"
-                name="email"
-                type="email"
-                autoComplete="off"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Your Email"
-                leftIcon={<Mail size={18} />}
-                required
-              />
+            <form onSubmit={handleSubmit} className="space-y-4 font-sans text-xs">
+              <div className="space-y-1.5 text-left">
+                <label className="font-semibold text-[#4A4843]">Email Address</label>
+                <div className="relative">
+                  <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C8980]" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="student@university.edu"
+                    className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-[#DCD9CE] bg-[#FCF9F8] focus:bg-white focus:outline-none focus:border-[#1B1C1C] text-xs text-[#1B1C1C] transition-all"
+                  />
+                </div>
+              </div>
 
-              <TextInput
-                id="login-password"
-                name="current-password"
-                type={showPass ? 'text' : 'password'}
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Your Password"
-                leftIcon={<Lock size={18} />}
-                rightIcon={
+              <div className="space-y-1.5 text-left">
+                <div className="flex items-center justify-between">
+                  <label className="font-semibold text-[#4A4843]">Password</label>
+                  <a href="#forgot" onClick={(e) => { e.preventDefault(); alert("Please enter any test credentials in demo mode."); }} className="text-[11px] text-[#8C6212] hover:underline">
+                    Forgot password?
+                  </a>
+                </div>
+                <div className="relative">
+                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C8980]" />
+                  <input
+                    type={showPass ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-[#DCD9CE] bg-[#FCF9F8] focus:bg-white focus:outline-none focus:border-[#1B1C1C] text-xs text-[#1B1C1C] transition-all"
+                  />
                   <button
                     type="button"
-                    aria-label="Toggle password visibility"
                     onClick={() => setShowPass(!showPass)}
-                    className="hover:text-slate-800 text-slate-400 transition-colors cursor-pointer"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8C8980] hover:text-[#1B1C1C]"
                   >
-                    {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                    {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
-                }
-                required
-              />
+                </div>
+              </div>
 
-              {/* Primary Action Button */}
-              <Button
+              <button
                 type="submit"
-                id="login-submit"
-                variant="primary"
-                className="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 text-white"
-                isLoading={loading}
-                rightIcon={<ArrowRight size={18} />}
+                disabled={loading}
+                className="w-full py-3 px-4 rounded-xl bg-[#1B1C1C] hover:bg-[#33322E] text-[#FCF9F8] font-semibold text-xs transition cursor-pointer shadow-xs flex items-center justify-center gap-2"
               >
-                Sign In
-              </Button>
+                <span>{loading ? 'Authenticating...' : 'Sign In to DeepTutor'}</span>
+                <ArrowRight size={14} />
+              </button>
             </form>
 
-            {/* Google OAuth Button */}
-            <div className="mt-4">
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
-                onClick={handleGoogleLogin}
-                leftIcon={
-                  <svg width="18" height="18" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                  </svg>
-                }
-              >
-                Google
-              </Button>
+            <div className="relative flex items-center justify-center my-4">
+              <div className="border-t border-[#EFECE6] w-full" />
+              <span className="bg-white px-3 text-[11px] text-[#8C8980] font-sans uppercase tracking-wider shrink-0">
+                or continue with
+              </span>
+              <div className="border-t border-[#EFECE6] w-full" />
             </div>
 
-            {/* Switch to Register */}
-            <p className="text-center text-xs font-semibold text-slate-500 mt-5">
-              Don't have an account?{' '}
-              <Link to="/register" className="text-indigo-600 hover:text-indigo-700 font-black transition-colors">
-                Sign Up
+            <button
+              onClick={handleGoogleLogin}
+              className="w-full py-2.5 px-4 rounded-xl border border-[#DCD9CE] bg-white hover:bg-[#FAF9F5] text-[#1B1C1C] text-xs font-semibold font-sans transition cursor-pointer flex items-center justify-center gap-2.5 shadow-xs"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+              </svg>
+              <span>Continue with Google Scholar Demo</span>
+            </button>
+
+            <p className="text-center text-xs font-sans text-[#7C7A74] pt-2">
+              New to DeepTutor?{' '}
+              <Link to="/register" className="font-semibold text-[#1B1C1C] hover:underline">
+                Create your academic workspace
               </Link>
             </p>
-
-          </motion.div>
-        </div>
-
-        {/* Footer info */}
-        <footer className="flex items-center justify-between text-xs text-slate-400 font-semibold z-10 pt-2 border-t border-slate-200/60">
-          <div className="flex items-center gap-1.5 text-slate-500">
-            <Brain size={16} className="text-indigo-600" />
-            <span>Powered by IndieTutor AI Engine</span>
           </div>
-          <span>© 2026 IndieTutor Inc.</span>
-        </footer>
-
+        </div>
       </div>
     </div>
   )

@@ -11,6 +11,21 @@ export interface User {
   max_upload_size_mb?: number
 }
 
+/** All localStorage keys owned by user-scoped stores. Update here if store names change. */
+const USER_STORE_KEYS = [
+  'indietutor-chat-v2',       // chatStore
+  'indie-tutor-document-library', // subjectStore
+  // legacy key – remove after a few releases
+  'indie-tutor-chat',
+]
+
+/** Wipe all cached user data from localStorage. Call before switching users. */
+export function clearAllUserData() {
+  USER_STORE_KEYS.forEach((key) => {
+    try { localStorage.removeItem(key) } catch { /* ignore */ }
+  })
+}
+
 interface AuthState {
   user: User | null
   token: string | null
@@ -29,9 +44,9 @@ export const useAuthStore = create<AuthState>()(
       login: (user, token) =>
         set({ user, token, isAuthenticated: true }),
       logout: () => {
-        // Also wipe the chat store persisted data so the next user
-        // doesn't see a previous user's sessions on first render
-        try { localStorage.removeItem('indie-tutor-chat') } catch {}
+        // Wipe every user-scoped persisted store so the next user
+        // always starts with a clean slate
+        clearAllUserData()
         set({ user: null, token: null, isAuthenticated: false })
       },
       updateUser: (fields) =>

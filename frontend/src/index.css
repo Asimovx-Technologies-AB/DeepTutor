@@ -1,100 +1,79 @@
+@import url("https://cdn.jsdelivr.net/gh/vsalvino/computer-modern@main/fonts/serif.css");
 @import "tailwindcss";
 
 /* 
  * DESIGN DECISION ARCHITECTURAL NOTE:
- * Indie-Tutor has been transformed into a Soft Pastel & Glass aesthetic!
- * Think modern premium EdTech: pastel mesh gradients, heavy rounded corners, ultra-soft shadows.
+ * IndTutor — "Editorial Minimalism × Premium EdTech"
+ * Cognitive Minimalist design: ink-on-paper, serif long-form readability,
+ * floating translucent input bar, and amber word-by-word reading highlight.
  */
 
 :root {
-  /* ─── Typography Tokens ─── */
-  --font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+  /* ─── Typography Tokens (Editorial Book & Academic Serif) ─── */
+  --font-serif: "Newsreader", "Californian FB", "Cormorant Garamond", Georgia, serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
 
-  --font-size-xs: 12px;
-  --font-size-sm: 14px;
-  --font-size-md: 16px;
-  --font-size-lg: 18px;
-  --font-size-xl: 20px;
-  --font-size-2xl: 24px;
-  --font-size-3xl: 30px;
-  --font-size-display: 48px;
+  --font-family: var(--font-serif);
 
-  --font-regular: 400;
-  --font-medium: 500;
-  --font-semibold: 600;
-  --font-bold: 700;
+  /* Fluid Reading Base Size (16.5px mobile, clamp up to 17.5px desktop) */
+  --font-size-reading: clamp(16.5px, 0.85vw + 12.5px, 17.5px);
+  --line-height-reading: 1.72;
 
-  /* ─── Spacing Scale (8px base grid) ─── */
-  --space-1: 0.25rem;
-  /* 4px */
-  --space-2: 0.5rem;
-  /* 8px */
-  --space-3: 0.75rem;
-  /* 12px */
-  --space-4: 1.0rem;
-  /* 16px */
-  --space-6: 1.5rem;
-  /* 24px */
-  --space-8: 2.0rem;
-  /* 32px */
-  --space-10: 2.5rem;
-  /* 40px */
-  --space-12: 3.0rem;
-  /* 48px */
-  --space-16: 4.0rem;
-  /* 64px */
-  --space-24: 6.0rem;
-  /* 96px */
+  /* ─── Cognitive Minimalist Palette ─── */
+  --color-paper: #F9FAFB;      /* warm off-white paper bg */
+  --color-ink: #000000;        /* true black for maximum editorial contrast */
+  --color-soft-text: #1F2937;  /* slate-800 soft body */
+  --color-muted: #6B7280;      /* slate-500 captions */
+  --color-divider: #E5E7EB;    /* notebook rule tone */
+  --color-card: #FFFFFF;
 
-  /* ─── Radius Tokens ─── */
-  --radius-sm: 0.5rem;
-  /* 8px */
-  --radius-md: 1.0rem;
-  /* 16px */
-  --radius-lg: 1.5rem;
-  /* 24px */
-  --radius-xl: 2.0rem;
-  /* 32px */
+  /* Primary Blue */
+  --color-primary: #2563EB;
+  --color-primary-soft: #EFF6FF;
 
-  /* ─── Indigo Blue Color Tokens ─── */
-  --color-primary: #4F46E5; /* indigo-600 */
-  --color-brand-primary: #4F46E5;
-  --color-brand-primary-hover: #4338CA; /* indigo-700 */
-  --color-brand-primary-light: #E0E7FF; /* indigo-100 */
-  --color-brand-primary-soft: #EEF2FF; /* indigo-50 */
-  --color-brand-primary-accent: #A5B4FC; /* indigo-300 */
-  --color-brand-primary-focus: #818CF8; /* indigo-400 */
+  /* Sage Green (AI / Active) */
+  --color-sage: #059669;
+  --color-sage-soft: #ECFDF5;
 
-  --color-background: #F8FAFC; /* slate-50 */
+  /* Coral (Error / Warning) */
+  --color-coral: #DC2626;
+  --color-coral-soft: #FEF2F2;
+
+  /* Backward compatibility aliases */
+  --color-brand-primary: #2563EB;
+  --color-brand-primary-hover: #1D4ED8;
+  --color-brand-primary-light: #DBEAFE;
+  --color-brand-primary-soft: #EFF6FF;
+  --color-background: #F9FAFB;
   --color-surface: #FFFFFF;
-  --color-surface-muted: #F1F5F9;
-
-  --color-text-primary: #1E293B; /* slate-800 */
-  --color-text-secondary: #64748B; /* slate-500 */
-  --color-text-muted: #94A3B8; /* slate-400 */
-
-  --color-border: #E2E8F0; /* slate-200 */
-  --color-border-hover: #CBD5E1; /* slate-300 */
-
-  --color-success: #10B981; /* Emerald-500 */
+  --color-surface-muted: #F3F4F6;
+  --color-text-primary: #1F2937;
+  --color-text-secondary: #4B5563;
+  --color-text-muted: #6B7280;
+  --color-border: #E5E7EB;
+  --color-border-hover: #D1D5DB;
+  --color-success: #059669;
   --color-success-soft: #ECFDF5;
-  --color-warning: #F59E0B; /* Amber-500 */
-  --color-warning-soft: #FFFBEB;
-  --color-error: #EF4444; /* Rose-500 */
+  --color-error: #DC2626;
   --color-error-soft: #FEF2F2;
-  --color-info: #4F46E5; /* Indigo-600 */
-  --color-info-soft: #EEF2FF;
+  --color-warning: #F59E0B;
+  --color-warning-soft: #FEF3C7;
+  --color-info: #2563EB;
+  --color-info-soft: #EFF6FF;
+  --color-brand-primary-accent: #1D4ED8;
 
-  /* ─── Elevation / Shadow Tokens (Indigo-Tinted Shadows) ─── */
-  --shadow-sm: 0 4px 15px -5px rgba(79, 70, 229, 0.05);
-  --shadow-md: 0 10px 30px -10px rgba(79, 70, 229, 0.08);
-  --shadow-lg: 0 20px 40px -15px rgba(79, 70, 229, 0.12);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 14px -2px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.08);
+  --shadow-pill: 0 4px 20px rgba(0, 0, 0, 0.07);
 }
 
 @theme {
-  --font-sans: 'Outfit', ui-sans-serif, system-ui, sans-serif;
-  --font-display: 'Outfit', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-serif: "Newsreader", "Californian FB", "Cormorant Garamond", Georgia, serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-display: "Newsreader", "Californian FB", "Cormorant Garamond", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
   /* Typographic Scale */
   --text-xs: var(--font-size-xs);
@@ -282,6 +261,262 @@ h6 {
   font-family: var(--font-sans);
 }
 
+/* ─── Global Editorial Book & Academic Serif Typography ─── */
+html,
+body {
+  font-family: var(--font-serif);
+  font-size: clamp(16.5px, 0.85vw + 12.5px, 17.5px);
+  line-height: 1.72;
+  color: #000000;
+  background-color: #F9FAFB;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Headings: serif, geometricPrecision, feature settings */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-serif);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  text-rendering: geometricPrecision;
+  color: #000000;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, .markdown-content h1 {
+  font-size: clamp(1.5rem, 1.25rem + 0.8vw, 1.75rem);
+  font-weight: 750;
+  letter-spacing: -0.028em;
+  line-height: 1.25;
+}
+
+h2, .markdown-content h2 {
+  font-size: clamp(1.25rem, 1.15rem + 0.4vw, 1.35rem);
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.32;
+}
+
+h3, .markdown-content h3 {
+  font-size: clamp(1.10rem, 1.05rem + 0.2vw, 1.15rem);
+  font-weight: 700;
+  letter-spacing: -0.018em;
+  line-height: 1.4;
+}
+
+/* Secondary / UI Font (only for buttons, badges, controls) */
+button,
+select,
+.btn,
+.badge,
+.ui-label,
+nav,
+[role="button"] {
+  font-family: var(--font-sans);
+}
+
+/* Monospace & Code */
+code,
+pre,
+kbd,
+samp,
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+p, .markdown-content p {
+  line-height: 1.72;
+  color: #000000;
+}
+
+/* ─── Learn Session: Unified Font-Size Scale ─────────────────────
+ *  All UI inside the learn session uses this locked 3-tier scale.
+ *  Content / chat reading: 15px
+ *  Labels / sidebar items: 12px (text-xs)
+ *  Micro / captions:       11px
+ * ─────────────────────────────────────────────────────────────── */
+
+/* Main reading content in chat bubbles, Normal/Teacher/Exam panels */
+.learn-content,
+.learn-content p,
+.chat-reading {
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+/* Section titles, drawer item titles, tab labels */
+.learn-label {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Metadata captions, badges, timestamps, breadcrumbs */
+.learn-caption {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* ─── Artifact / MD Viewer: Academic LaTeX Aesthetic ─────────────
+ *  Computer Modern serif typography with academic typographic hierarchy,
+ *  open line-height (1.65), and comfortable 800px reading measure.
+ * ─────────────────────────────────────────────────────────────── */
+.artifact-md-viewer {
+  font-family: 'CMU Serif', 'Latin Modern Roman', 'Computer Modern Roman', 'Computer Modern Serif', Georgia, serif;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.65;
+  color: #111827;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+}
+
+.artifact-md-viewer h1 {
+  font-family: 'CMU Serif', 'Latin Modern Roman', 'Computer Modern Roman', 'Computer Modern Serif', Georgia, serif;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  margin-top: 0;
+  margin-bottom: 24px;
+  color: #111827;
+  letter-spacing: -0.015em;
+}
+
+.artifact-md-viewer h2 {
+  font-family: 'CMU Serif', 'Latin Modern Roman', 'Computer Modern Roman', 'Computer Modern Serif', Georgia, serif;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-top: 24px;
+  margin-bottom: 8px;
+  color: #111827;
+}
+
+.artifact-md-viewer h3 {
+  font-family: 'CMU Serif', 'Latin Modern Roman', 'Computer Modern Roman', 'Computer Modern Serif', Georgia, serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-top: 20px;
+  margin-bottom: 8px;
+  color: #111827;
+}
+
+.artifact-md-viewer h4,
+.artifact-md-viewer h5,
+.artifact-md-viewer h6 {
+  font-family: 'CMU Serif', 'Latin Modern Roman', 'Computer Modern Roman', 'Computer Modern Serif', Georgia, serif;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 16px;
+  margin-bottom: 6px;
+  color: #111827;
+}
+
+.artifact-md-viewer p {
+  font-family: 'CMU Serif', 'Latin Modern Roman', 'Computer Modern Roman', 'Computer Modern Serif', Georgia, serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.65;
+  margin-top: 0;
+  margin-bottom: 16px;
+  color: #1f2937;
+}
+
+.artifact-md-viewer ul,
+.artifact-md-viewer ol {
+  font-family: 'CMU Serif', 'Latin Modern Roman', 'Computer Modern Roman', 'Computer Modern Serif', Georgia, serif;
+  font-size: 16px;
+  line-height: 1.65;
+  padding-left: 1.6em;
+  margin-top: 0;
+  margin-bottom: 16px;
+  color: #1f2937;
+}
+
+.artifact-md-viewer li {
+  margin-bottom: 6px;
+  line-height: 1.65;
+}
+
+.artifact-md-viewer li > p {
+  margin-bottom: 6px;
+}
+
+.artifact-md-viewer table {
+  font-family: 'CMU Serif', 'Latin Modern Roman', 'Computer Modern Roman', 'Computer Modern Serif', Georgia, serif;
+  font-size: 14.5px;
+  line-height: 1.5;
+  border-collapse: collapse;
+  width: 100%;
+  margin: 20px 0;
+}
+
+.artifact-md-viewer th,
+.artifact-md-viewer td {
+  padding: 8px 12px;
+  border: 1px solid #E5E7EB;
+  text-align: left;
+}
+
+.artifact-md-viewer th {
+  background: #F9FAFB;
+  font-weight: 600;
+}
+
+.artifact-md-viewer code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  background: #F3F4F6;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+
+.artifact-md-viewer pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  background: #F8FAFC;
+  color: #0F172A;
+  padding: 1em 1.25em;
+  border-radius: 8px;
+  border: 1px solid #E2E8F0;
+  overflow-x: auto;
+  margin: 20px 0;
+}
+
+.artifact-md-viewer blockquote {
+  font-family: 'CMU Serif', 'Latin Modern Roman', 'Computer Modern Roman', 'Computer Modern Serif', Georgia, serif;
+  font-size: 15.5px;
+  border-left: 3px solid #CBD5E1;
+  padding-left: 16px;
+  color: #4B5563;
+  margin: 16px 0;
+  font-style: italic;
+}
+
+/* ─── Flowchart / Mermaid Node Text ────────────────────────────
+ *  13px to 14px (13.5px), line-height: 1.35, centered alignment
+ * ─────────────────────────────────────────────────────────────── */
+.artifact-md-viewer .mermaid-wrapper .node foreignObject div,
+.artifact-md-viewer .node foreignObject div,
+.artifact-md-viewer .node text,
+.mermaid-diagram-container .node foreignObject div,
+.mermaid-diagram-container .node text,
+.mermaid .node foreignObject div,
+.mermaid .node text {
+  font-family: 'CMU Serif', 'Latin Modern Roman', 'Computer Modern Roman', 'Computer Modern Serif', Georgia, serif !important;
+  font-size: 13.5px !important;
+  line-height: 1.35 !important;
+  text-align: center !important;
+}
+
 /* ─── Motion & Easing Utilities ─────────────────────────────── */
 .transition-150 {
   transition: all 150ms ease-out;
@@ -300,6 +535,15 @@ h6 {
   outline: 2px solid #818CF8;
   outline-offset: 2px;
   border-radius: inherit;
+}
+
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
 }
 
 /* ─── Global Scrollbars (Indigo Accent) ──────────────────────── */
@@ -422,49 +666,135 @@ h6 {
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
 
-/* Markdown overrides */
-.markdown-content h1,
-.markdown-content h2,
-.markdown-content h3 {
-  font-family: var(--font-display);
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin-top: 1.5em;
-  margin-bottom: 0.5em;
+/* ─── Markdown Overrides (Editorial Serif Reading Experience) ─── */
+.markdown-content {
+  font-family: var(--font-serif);
+  font-size: var(--font-size-reading);
+  line-height: var(--line-height-reading);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
 }
 
-/* ─── Markdown Tables (Clean, Bordered, Responsive) ─── */
+.markdown-content h1 {
+  font-family: var(--font-serif);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  text-rendering: geometricPrecision;
+  font-size: clamp(1.5rem, 1.25rem + 0.8vw, 1.75rem);
+  font-weight: 750;
+  letter-spacing: -0.028em;
+  color: #000000;
+  margin-top: 1.4em;
+  margin-bottom: 0.45em;
+  line-height: 1.25;
+}
+
+.markdown-content h2 {
+  font-family: var(--font-serif);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  text-rendering: geometricPrecision;
+  font-size: clamp(1.25rem, 1.15rem + 0.4vw, 1.35rem);
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  color: #000000;
+  margin-top: 1.25em;
+  margin-bottom: 0.4em;
+  line-height: 1.32;
+}
+
+.markdown-content h3 {
+  font-family: var(--font-serif);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  text-rendering: geometricPrecision;
+  font-size: clamp(1.10rem, 1.05rem + 0.2vw, 1.15rem);
+  font-weight: 700;
+  letter-spacing: -0.018em;
+  color: #1F2937;
+  margin-top: 1.1em;
+  margin-bottom: 0.35em;
+  line-height: 1.4;
+}
+
+.markdown-content p {
+  margin-top: 0.65em;
+  margin-bottom: 0.65em;
+}
+
+/* ─── Code / Formulas / Monospace (JetBrains Mono) ─── */
+.markdown-content code {
+  background-color: #F3F4F6;
+  color: #1F2937;
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  font-size: 0.86em;
+  font-family: var(--font-mono);
+  border: 1px solid #E5E7EB;
+}
+
+.markdown-content pre {
+  background-color: #F8FAFC;
+  color: #0F172A;
+  padding: 1.1rem;
+  border-radius: 0.75rem;
+  border: 1px solid #E2E8F0;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  margin: 1.25em 0;
+}
+
+.markdown-content pre:has(.mermaid-wrapper),
+.markdown-content pre:has(> div) {
+  background-color: transparent !important;
+  color: inherit !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  border: none !important;
+  margin: 0 !important;
+  overflow: visible !important;
+}
+
+.markdown-content pre code {
+  background-color: transparent;
+  color: inherit;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  font-size: 0.88em;
+}
+
+/* ─── Markdown Tables (Clean, Editorial, Responsive) ─── */
 .markdown-content table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   margin: 1.25rem 0;
-  border-radius: 1rem;
+  border-radius: 0.75rem;
   overflow: hidden;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #E5E7EB;
   font-size: 0.875rem;
   background-color: #FFFFFF;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .markdown-content th {
-  background-color: #F8FAFC;
-  color: #1E293B;
+  background-color: #F9FAFB;
+  color: #1F2937;
+  font-family: var(--font-sans);
   font-weight: 700;
   text-align: left;
   padding: 0.75rem 1rem;
-  border-bottom: 2px solid #E2E8F0;
-  font-size: 0.8125rem;
+  border-bottom: 1.5px solid #E5E7EB;
+  font-size: 0.80rem;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
 }
 
 .markdown-content td {
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #F1F5F9;
-  color: #334155;
+  border-bottom: 1px solid #F3F4F6;
+  color: #374151;
   vertical-align: top;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .markdown-content tr:last-child td {
@@ -472,32 +802,130 @@ h6 {
 }
 
 .markdown-content tbody tr:nth-child(even) td {
-  background-color: #F8FAFC;
+  background-color: #FAFAFA;
 }
 
 .markdown-content tbody tr:hover td {
-  background-color: #EEF2FF;
+  background-color: #F3F4F6;
 }
 
-.markdown-content code {
-  background-color: rgba(255, 255, 255, 0.6);
-  color: #1E293B;
-  padding: 0.2em 0.4em;
-  border-radius: 0.5rem;
-  font-size: 0.85em;
-  font-family: var(--font-mono);
-  border: 1px solid rgba(30, 41, 59, 0.05);
+/* ─── Floating Translucent Header & Input Bar Gradients ─── */
+.floating-header-gradient {
+  background: linear-gradient(
+    to bottom,
+    rgba(249, 250, 251, 0.96) 0%,
+    rgba(249, 250, 251, 0.82) 48%,
+    rgba(249, 250, 251, 0) 100%
+  );
 }
 
-.markdown-content pre {
-  background-color: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  color: #1E293B;
-  padding: 1rem;
-  border-radius: 1.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.02);
-  overflow-x: auto;
-  font-family: var(--font-mono);
-  margin: 1.5em 0;
+.floating-input-gradient {
+  background: linear-gradient(
+    to top,
+    rgba(249, 250, 251, 0.96) 0%,
+    rgba(249, 250, 251, 0.82) 48%,
+    rgba(249, 250, 251, 0) 100%
+  );
+}
+
+/* ─── Audio Equalizer Pulse Keyframes ─── */
+@keyframes audio-pulse {
+  0%, 100% {
+    height: 4px;
+    opacity: 0.6;
+  }
+  50% {
+    height: 14px;
+    opacity: 1;
+  }
+}
+
+.animate-audio-bar-1 {
+  animation: audio-pulse 0.9s infinite ease-in-out;
+  animation-delay: 0s;
+}
+
+.animate-audio-bar-2 {
+  animation: audio-pulse 0.9s infinite ease-in-out;
+  animation-delay: 0.2s;
+}
+
+.animate-audio-bar-3 {
+  animation: audio-pulse 0.9s infinite ease-in-out;
+  animation-delay: 0.4s;
+}
+
+/* ─── Typing Indicator Blink Keyframes ─── */
+@keyframes blink {
+  0%, 80%, 100% {
+    opacity: 0.2;
+    transform: scale(0.85);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-dot-1 {
+  animation: blink 1.2s infinite ease-in-out;
+  animation-delay: 0s;
+}
+
+.animate-dot-2 {
+  animation: blink 1.2s infinite ease-in-out;
+  animation-delay: 0.2s;
+}
+
+.animate-dot-3 {
+  animation: blink 1.2s infinite ease-in-out;
+  animation-delay: 0.4s;
+}
+
+/* ─── Document Scanner & Printing Keyframes ─── */
+@keyframes scan-line {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+.animate-scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #3B82F6, #60A5FA, transparent);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
+  animation: scan-line 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes shimmer-flow {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer-flow {
+  background: linear-gradient(
+    90deg,
+    rgba(241, 245, 249, 0.5) 0%,
+    rgba(226, 232, 240, 0.9) 50%,
+    rgba(241, 245, 249, 0.5) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-flow 1.8s infinite linear;
 }

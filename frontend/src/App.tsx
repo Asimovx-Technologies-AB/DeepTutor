@@ -11,7 +11,7 @@ import ServerWarmupNotice from './components/ServerWarmupNotice'
 
 // Directly import core primary pages for 0ms instant snappy navigation
 import DashboardPage from './pages/DashboardPage'
-import ChatPage from './pages/ChatPage'
+import LearnPage from './pages/LearnPage'
 import SubjectsPage from './pages/SubjectsPage'
 import StudentRecordsPage from './pages/StudentRecordsPage'
 import StudyPlanPage from './pages/StudyPlanPage'
@@ -72,8 +72,10 @@ function GlobalSessionLoader() {
       return
     }
 
-    // User switched (different account): clear old data before loading new
-    if (prevUserIdRef.current !== null && prevUserIdRef.current !== currentUserId) {
+    // User changed (new login, signup, or account switch):
+    // Always clear the in-memory store so stale data from another account
+    // can't flash before the fresh fetch resolves.
+    if (prevUserIdRef.current !== currentUserId) {
       setSessions([])
       setActiveSession(null)
       queryClient.clear()
@@ -89,9 +91,10 @@ function GlobalSessionLoader() {
   return null
 }
 
+
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  return isAuthenticated ? <>{children}</> : <Navigate to="/" replace />
+  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
@@ -127,8 +130,10 @@ export default function App() {
           <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
             {/* Root-level routes */}
             <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="chat" element={<ChatPage />} />
-            <Route path="chat/:sessionId" element={<ChatPage />} />
+            <Route path="chat" element={<LearnPage />} />
+            <Route path="chat/:sessionId" element={<LearnPage />} />
+            <Route path="learn" element={<LearnPage />} />
+            <Route path="learn/:sessionId" element={<LearnPage />} />
             <Route path="subjects" element={<SubjectsPage />} />
             <Route path="subjects/:subjectId" element={<SubjectWorkspacePage />} />
             <Route path="subjects/:subjectId/chat" element={<SubjectChatRoute />} />
@@ -156,8 +161,10 @@ export default function App() {
               <Route path="records" element={<StudentRecordsPage />} />
               <Route path="student-records" element={<StudentRecordsPage />} />
               <Route path="study-plan" element={<StudyPlanPage />} />
-              <Route path="chat" element={<ChatPage />} />
-              <Route path="chat/:sessionId" element={<ChatPage />} />
+              <Route path="chat" element={<LearnPage />} />
+              <Route path="chat/:sessionId" element={<LearnPage />} />
+              <Route path="learn" element={<LearnPage />} />
+              <Route path="learn/:sessionId" element={<LearnPage />} />
               <Route path="leaderboard" element={<Navigate to="/dashboard" replace />} />
               <Route path="quiz" element={<QuizPage />} />
               <Route path="quiz/:topicId" element={<QuizPage />} />

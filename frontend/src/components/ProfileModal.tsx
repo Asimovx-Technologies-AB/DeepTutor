@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { User, Mail, Sparkles, Check, Edit3, Save, X, LogOut, Award, Clock, BookOpen } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
@@ -14,6 +15,7 @@ interface ProfileModalProps {
 
 export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   const { user, updateUser, logout } = useAuthStore()
+  const navigate = useNavigate()
   const { uiLanguage } = useLanguageStore()
   const t = useTranslation(uiLanguage)
 
@@ -151,6 +153,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                     onClick={() => {
                       logout()
                       onClose()
+                      navigate('/login', { replace: true })
                     }}
                     className="btn-ghost py-2.5 px-4 text-xs flex items-center gap-1.5 cursor-pointer text-error hover:bg-error-soft"
                   >

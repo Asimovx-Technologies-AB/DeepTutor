@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { ArrowRight, BookOpen, FileText, Search, Sparkles, UploadCloud } from 'lucide-react'
+import { ArrowRight, BookOpen, FileText, Search, Sparkles, UploadCloud, Trash2 } from 'lucide-react'
 import { documentsApi } from '../services/api'
 import { useLanguageStore } from '../stores/languageStore'
+import ConfirmModal from '../components/ConfirmModal'
 
 interface StudyDocument {
   id: string
@@ -26,12 +27,29 @@ export default function SubjectsPage() {
   const navigate = useNavigate()
   const { uiLanguage } = useLanguageStore()
   const [search, setSearch] = useState('')
-  const { data: documents = [], isLoading } = useQuery<StudyDocument[]>({
+  const [materialToDelete, setMaterialToDelete] = useState<StudyDocument | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const { data: documents = [], isLoading, refetch } = useQuery<StudyDocument[]>({
     queryKey: ['documents'],
     queryFn: async () => (await documentsApi.list()).data,
     refetchInterval: (query) =>
       (query.state.data || []).some((doc) => doc.index_status === 'indexing' || doc.index_status === 'pending') ? 3000 : false,
   })
+
+  const confirmDeleteMaterial = async () => {
+    if (!materialToDelete) return
+    setIsDeleting(true)
+    try {
+      await documentsApi.delete(materialToDelete.id)
+      await refetch()
+      setMaterialToDelete(null)
+    } catch (err) {
+      console.error('Failed to delete material:', err)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   const filtered = documents.filter((doc) =>
     `${doc.file_name} ${(doc.key_topics || []).join(' ')}`.toLowerCase().includes(search.toLowerCase()),
@@ -75,7 +93,28 @@ export default function SubjectsPage() {
             {filtered.map((doc, index) => {
               const ready = doc.indexed || doc.index_status === 'done'
               return <motion.button key={doc.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04 }} disabled={!ready} onClick={() => navigate(`/chat/${doc.topic_id}`)} className="text-left bg-white border border-[#E2E8F0] rounded-[2rem] p-6 shadow-sm hover:shadow-lg hover:border-[#4F46E5]/40 transition-all disabled:cursor-wait">
-                <div className="flex items-start justify-between gap-3"><div className="w-14 h-14 rounded-2xl bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center"><FileText size={26} /></div><span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${ready ? 'bg-[#D7FFB8] text-[#46A302]' : 'bg-amber-100 text-amber-700'}`}>{ready ? copy.ready : `${copy.processing} ${doc.index_progress || 0}%`}</span></div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="w-14 h-14 rounded-2xl bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center">
+                    <FileText size={26} />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${ready ? 'bg-[#D7FFB8] text-[#46A302]' : 'bg-amber-100 text-amber-700'}`}>
+                      {ready ? copy.ready : `${copy.processing} ${doc.index_progress || 0}%`}
+                    </span>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      title="Delete material"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setMaterialToDelete(doc)
+                      }}
+                      className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                    >
+                      <Trash2 size={15} />
+                    </span>
+                  </div>
+                </div>
                 <h2 className="font-black text-xl text-[#3C3C3C] mt-5 capitalize line-clamp-2">{displayName(doc.file_name)}</h2>
                 <p className="text-[11px] text-[#777777] font-bold uppercase tracking-wide mt-1">{doc.detected_subject || 'Detecting subject'} · {doc.file_type}</p>
                 <div className="mt-5 min-h-20"><p className="text-[10px] font-black uppercase tracking-wider text-[#777777] mb-2">{copy.topics}</p><div className="flex flex-wrap gap-1.5">{(doc.key_topics || []).slice(0, 5).map((topic) => <span key={topic} className="px-2.5 py-1 rounded-full bg-[#F7F7F7] border border-[#E2E8F0] text-[11px] font-bold text-[#555]">{topic}</span>)}{ready && !doc.key_topics?.length && <span className="text-xs text-[#999]">Topics are being prepared</span>}</div></div>
@@ -85,6 +124,16 @@ export default function SubjectsPage() {
           </div>
         ) : <div className="bg-white border border-dashed border-[#C7D2FE] rounded-[2rem] py-20 px-6 text-center"><div className="w-20 h-20 rounded-[2rem] bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center mx-auto mb-5"><BookOpen size={34} /></div><h2 className="text-2xl font-black text-[#3C3C3C]">{search ? 'No matching material' : copy.emptyTitle}</h2><p className="text-[#777777] text-sm font-medium max-w-md mx-auto mt-2">{search ? copy.search : copy.emptyBody}</p>{!search && <button onClick={() => navigate('/chat')} className="btn-primary mt-6 px-6 py-3 rounded-2xl inline-flex items-center gap-2 font-black"><UploadCloud size={18} /> {copy.upload}</button>}</div>}
       </div>
+
+      <ConfirmModal
+        isOpen={!!materialToDelete}
+        title="Delete Study Material?"
+        itemName={materialToDelete ? displayName(materialToDelete.file_name) : ''}
+        warningNote="Permanent Data Removal: All extracted topics, AI study notes, and practice records for this material will be wiped."
+        isLoading={isDeleting}
+        onConfirm={confirmDeleteMaterial}
+        onCancel={() => setMaterialToDelete(null)}
+      />
     </div>
   )
 }

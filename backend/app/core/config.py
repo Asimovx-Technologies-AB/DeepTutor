@@ -28,13 +28,29 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./deep_tutor.db"
     # Canonical development and deployed environments must fail fast instead
     # of silently running against SQLite when PostgreSQL is unavailable.
-    ALLOW_SQLITE_FALLBACK: bool = True
+    # Keep False by default in production. Set to True via env var only for emergency rollback.
+    ALLOW_SQLITE_FALLBACK: bool = False
+
+    # ── Database Connection Pool Settings (Azure PostgreSQL & pgBouncer) ─────
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 30
+    DB_POOL_TIMEOUT: int = 30
+    DB_POOL_RECYCLE: int = 300
+    DB_POOL_PRE_PING: bool = True
+    DB_STATEMENT_TIMEOUT_MS: int = 30000  # 30s statement timeout protection
 
     # ── LLM / Chat Provider ──────────────────────────────────────────────────
-    # Switch via .env: LLM_PROVIDER=azure_openai | gemini | ollama
-    LLM_PROVIDER: str = "gemini"
+    # Switch via .env: LLM_PROVIDER=openai | azure_openai | gemini | ollama
+    LLM_PROVIDER: str = "openai"
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_VLM_MODEL: str = "gpt-4o"
     GEMINI_API_KEY: str = ""
-    GEMINI_CHAT_MODEL: str = "gemini-3.5-flash-lite"
+    GEMINI_CHAT_MODEL: str = "gemini-3.1-flash-lite"
+    GEMINI_MODEL: str = "gemini-3.1-flash-lite"
+    GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta"
     GEMINI_TIMEOUT: int = 60
 
     # ── Ollama local settings ────────────────────────────────────────────────
@@ -46,9 +62,8 @@ class Settings(BaseSettings):
     OLLAMA_NUM_PREDICT: int = 2048
 
     # ── Stage 2: Embedding Provider ─────────────────────────────────────────
-    # Switch via .env: EMBEDDING_PROVIDER=azure_openai | ollama | openai | gemini
-    EMBEDDING_PROVIDER: str = "gemini"
-    OPENAI_API_KEY: str = ""
+    # Switch via .env: EMBEDDING_PROVIDER=openai | azure_openai | ollama | gemini
+    EMBEDDING_PROVIDER: str = "openai"
     OPENAI_EMBED_MODEL: str = "text-embedding-3-small"   # or text-embedding-3-large
     AZURE_OPENAI_ENDPOINT: str = ""
     AZURE_OPENAI_API_KEY: str = ""  # local fallback only; Azure uses managed identity
@@ -60,7 +75,7 @@ class Settings(BaseSettings):
 
     # ── Stage 3: Vector Store Backend ───────────────────────────────────────
     # Switch via .env: VECTOR_STORE_BACKEND=pgvector | pinecone | faiss | chroma
-    VECTOR_STORE_BACKEND: str = "pinecone"
+    VECTOR_STORE_BACKEND: str = "pgvector"
     PGVECTOR_DIMENSIONS: int = 1536
     PGVECTOR_HNSW_M: int = 16
     PGVECTOR_HNSW_EF_CONSTRUCTION: int = 64
@@ -94,8 +109,9 @@ class Settings(BaseSettings):
     DOCLING_OCR_ENGINE: str = "easyocr"     # "easyocr" | "tesseract" | "rapidocr"
 
     # ── VLM (Vision-Language Model) Document & Image Parser ────────────────
-    ENABLE_VLM_PARSER: bool = True           # Use Gemini Flash VLM for diagrams, images, and scanned PDFs
-    GEMINI_VLM_MODEL: str = "gemini-2.5-flash"  # "gemini-2.5-flash" | "gemini-3.5-flash" | "gemini-flash-latest"
+    ENABLE_VLM_PARSER: bool = True           # Use VLM for diagrams, images, and scanned PDFs
+    VLM_PROVIDER: str = "openai"             # "openai" | "azure_openai" | "gemini"
+    GEMINI_VLM_MODEL: str = "gemini-3.6-flash"  # "gemini-3.6-flash" | "gemini-3.5-flash" | "gemini-flash-latest"
     VLM_MIN_WORDS_THRESHOLD: int = 50        # Flag page for VLM if word count < this threshold
     VLM_IMAGE_COVERAGE_THRESHOLD: float = 0.70  # Flag page for VLM if image coverage > this percentage
     VLM_CACHE_DIR: str = "./vlm_cache"       # Disk cache directory for per-page VLM transcriptions
@@ -153,12 +169,25 @@ class Settings(BaseSettings):
     FREE_MAX_UPLOAD_SIZE_MB: int = 5000
     PREMIUM_MAX_UPLOAD_SIZE_MB: int = 5000
 
-    # ── AWS S3 Document Cloud Storage ─────────────────────────────────────────
-    AWS_ACCESS_KEY_ID: str = ""
-    AWS_SECRET_ACCESS_KEY: str = ""
-    AWS_S3_BUCKET_NAME: str = "deeptutor-documents-storage"
-    AWS_REGION: str = "eu-north-1"
-    ENABLE_S3_STORAGE: bool = True
+    # ── Cloud Document Storage (Azure Blob) ──────────────────────────────────
+    STORAGE_BACKEND: str = "azure_blob"       # "azure_blob" | "local"
+    AZURE_STORAGE_ACCOUNT_NAME: str = ""
+    AZURE_STORAGE_CONTAINER_NAME: str = "deeptutor-documents"
+    # The deployed environment names the Terraform-managed container in
+    # AZURE_BLOB_DOCUMENTS_CONTAINER. It takes precedence over the setting above
+    # so uploads land in the container the infrastructure actually provisions
+    # rather than one the app creates for itself at runtime.
+    AZURE_BLOB_DOCUMENTS_CONTAINER: str = ""
+    AZURE_STORAGE_CONNECTION_STRING: str = ""
+
+    # ── CORS ─────────────────────────────────────────────────────────────────
+    # Comma-separated origin list, supplied by the deployment. Empty means "*".
+    CORS_ALLOWED_ORIGINS: str = ""
+
+    @property
+    def documents_container(self) -> str:
+        """The blob container uploads are written to."""
+        return self.AZURE_BLOB_DOCUMENTS_CONTAINER or self.AZURE_STORAGE_CONTAINER_NAME
 
     # ── Confidence / Grounding ───────────────────────────────────────────────
     MIN_CONFIDENCE_TO_STREAM: float = 0.0

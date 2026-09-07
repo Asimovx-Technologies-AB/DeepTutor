@@ -13,13 +13,23 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from app.api.auth import get_current_user
 from app.core import database as db
 from app.core.config import get_settings
-from app.rag.document_processor import process_document
-from app.rag.ollama_client import ollama
-from app.rag.gemini_client import GeminiClient
-from app.rag.entity_extractor import _extract_json
+from app.rag.curriculum_catalog import is_curriculum_topic, extract_textbook_chunks, get_chapter_title
+from app.rag.llm_client import llm_client
+
+def process_document(file_path: str):
+    import pypdf
+    chunks = []
+    try:
+        reader = pypdf.PdfReader(file_path)
+        for i, p in enumerate(reader.pages):
+            txt = p.extract_text() or ""
+            if txt.strip():
+                chunks.append({"text": txt, "metadata": {"page": i + 1, "source": Path(file_path).name}})
+    except Exception:
+        pass
+    return chunks
 
 settings = get_settings()
-gemini_client = GeminiClient()
 router = APIRouter(prefix="/notes", tags=["notes"])
 
 
@@ -191,7 +201,7 @@ async def generate_smart_notes(
 
     # If material_text is empty or sparse, retrieve authentic textbook curriculum context
     if not is_custom_upload or len(material_text.strip()) < 100:
-        from app.rag.textbook_reader import is_curriculum_topic, extract_textbook_chunks, get_chapter_title
+        from app.rag.curriculum_catalog import is_curriculum_topic, extract_textbook_chunks, get_chapter_title
         curriculum_target = topic_id
         if not is_curriculum_topic(curriculum_target):
             # Match by name in catalog
@@ -429,29 +439,15 @@ Respond ONLY with valid JSON.
 
     parsed_data = None
 
-    # Try Gemini if configured
-    if await gemini_client.is_available():
-        try:
-            gemini_messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ]
-            resp = await gemini_client.chat(gemini_messages, temperature=0.3)
-            parsed_data = _robust_extract_json(resp)
-        except Exception as e:
-            print(f"[notes] Gemini generation error: {e}")
-
-    # Fallback to Ollama if needed
-    if not parsed_data:
-        try:
-            ollama_messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ]
-            resp = await ollama.chat(ollama_messages, temperature=0.3)
-            parsed_data = _robust_extract_json(resp)
-        except Exception as e:
-            print(f"[notes] Ollama generation error: {e}")
+    try:
+        llm_messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        resp = await llm_client.chat(llm_messages, temperature=0.3)
+        parsed_data = _robust_extract_json(resp)
+    except Exception as e:
+        print(f"[notes] OpenAI LLM generation error: {e}")
 
     # Rich Fallback if LLM fails or is unconfigured
     if not parsed_data or not parsed_data.get("content_markdown"):

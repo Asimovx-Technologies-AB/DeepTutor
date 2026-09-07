@@ -38,15 +38,15 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     // Variant variations
     const variantStyles = {
       primary:
-        'bg-info text-white shadow-md shadow-info/20 hover:bg-[#1899D6] hover:shadow-lg hover:-translate-y-0.5',
+        'bg-blue-600 text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 hover:shadow-lg hover:-translate-y-0.5',
       secondary:
-        'bg-brand-primary-soft text-brand-primary border border-brand-primary/20 hover:bg-[#E2E8F0] shadow-sm',
+        'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 shadow-sm',
       ghost:
-        'bg-transparent text-text-secondary hover:text-text-primary hover:bg-black/5',
+        'bg-transparent text-slate-700 hover:text-slate-900 hover:bg-slate-100',
       danger:
-        'bg-error text-white shadow-md shadow-error/20 hover:bg-[#DC2626] hover:shadow-lg',
+        'bg-red-600 text-white shadow-md shadow-red-500/20 hover:bg-red-700 hover:shadow-lg',
       success:
-        'bg-success text-white shadow-md shadow-success/20 hover:bg-[#059669] hover:shadow-lg',
+        'bg-emerald-600 text-white shadow-md shadow-emerald-500/20 hover:bg-emerald-700 hover:shadow-lg',
     }
 
     return (

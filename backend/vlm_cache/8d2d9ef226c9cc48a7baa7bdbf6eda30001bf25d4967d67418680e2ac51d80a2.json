@@ -1,5 +1,0 @@
-{
-  "key": "8d2d9ef226c9cc48a7baa7bdbf6eda30001bf25d4967d67418680e2ac51d80a2",
-  "text": "{\"relevant\": true, \"accurate\": false, \"quality\": \"good\", \"reason\": \"While the image shows the general concept of linear separation, SVMs inherently perform binary classification using margin maximization rather than multi-class ray-like splitting shown here, which is more typical of decision trees or k-NN.\"}",
-  "metadata": {}
-}
