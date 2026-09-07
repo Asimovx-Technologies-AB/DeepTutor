@@ -13,9 +13,12 @@ Features:
 import os
 import io
 import asyncio
+import logging
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import get_settings
 from app.rag.storage.azure_blob_store import azure_blob_store
@@ -216,8 +219,19 @@ class StudyDocumentProcessor:
             resp = await vlm_client.extract_text_from_image(png_bytes, mime_type="image/png")
             if resp and resp.strip():
                 return resp.strip()
+            logger.warning(
+                "[StudyDocProcessor] VLM returned no text for page %s of %s. "
+                "Check the VLM credentials reported at startup.",
+                page_num, Path(pdf_path).name,
+            )
         except Exception:
-            pass
+            # Never swallow this silently: an unusable key, a bad deployment
+            # name or a rate limit all surface here, and without the traceback
+            # the only symptom is a document that transcribes to nothing.
+            logger.exception(
+                "[StudyDocProcessor] OCR failed for page %s of %s",
+                page_num, Path(pdf_path).name,
+            )
         return ""
 
     # ─── Word Document Ingestion ─────────────────────────────────────────────
@@ -282,11 +296,22 @@ class StudyDocumentProcessor:
                 "transcribe handwritten text, and explain technical diagrams in detail."
             )
             transcription = await call_vlm(prompt, img_bytes)
+            if not transcription:
+                logger.warning(
+                    "[StudyDocProcessor] VLM returned no transcription for %s. "
+                    "Check the VLM credentials reported at startup.",
+                    Path(file_path).name,
+                )
         except Exception:
-            pass
+            logger.exception(
+                "[StudyDocProcessor] Image transcription failed for %s",
+                Path(file_path).name,
+            )
 
         if not transcription:
-            transcription = f"Uploaded study image: {Path(file_path).name}"
+            # Placeholder so the document still registers, but mark it clearly
+            # rather than indexing the filename as if it were page content.
+            transcription = f"Uploaded study image: {Path(file_path).name} (no text could be extracted)"
 
         chunks = [{
             "chunk_id": f"{doc_id}_img_1",

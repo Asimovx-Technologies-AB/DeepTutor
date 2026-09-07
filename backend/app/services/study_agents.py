@@ -56,10 +56,13 @@ async def call_vlm(
     """Universal VLM Caller: routes to OpenAI GPT-4o Vision."""
     try:
         from app.rag.vlm_client import vlm_client
+        # The caller's prompt is the instruction, not a hint: callers here ask
+        # for diagram descriptions and table reads, not plain transcription.
         resp = await vlm_client.extract_text_from_image(
             image_bytes=image_bytes,
             mime_type="image/png",
-            context_hint=f"{system_instruction} {prompt}".strip()
+            prompt=prompt,
+            context_hint=system_instruction.strip(),
         )
         if resp and resp.strip():
             return resp.strip()

@@ -122,6 +122,36 @@ class TopicExtractor:
         return ext in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".tif"}
 
     @staticmethod
+    async def _ocr_pdf_head(file_path: str, subject: str, max_pages: int = 3) -> str:
+        """
+        Transcribe the opening pages of a scanned PDF.
+
+        A syllabus or contents page is rarely the very first sheet, so a single
+        page is often not enough to recover a curriculum; three keeps the cost
+        bounded while usually catching it.
+        """
+        parts: List[str] = []
+        for page_idx in range(max_pages):
+            try:
+                page_img = await asyncio.to_thread(
+                    vlm_client.render_pdf_page_to_image, file_path, page_idx, 150
+                )
+                if not page_img:
+                    break
+                page_text = await vlm_client.extract_text_from_image(
+                    page_img, mime_type="image/png", context_hint=f"Subject: {subject}"
+                )
+                if page_text and page_text.strip():
+                    parts.append(f"--- Page {page_idx + 1} ---\n{page_text.strip()}")
+            except Exception as e:
+                print(f"[TopicExtractor] Scanned page {page_idx + 1} OCR error: {e}")
+                break
+
+        if not parts:
+            print("[TopicExtractor] VLM produced no text for the scanned PDF.")
+        return "\n\n".join(parts)
+
+    @staticmethod
     def _fast_extract_pdf_text(file_path: str, max_pages: int = 25) -> str:
         """Fast extraction of text from PDF, automatically finding and prioritizing Table of Contents/Syllabus pages."""
         toc_parts = []
@@ -209,35 +239,35 @@ class TopicExtractor:
         subject_clean = (subject or "General Subject").strip()
         path = Path(file_path)
 
-        # Case 1: Standalone Image file -> Directly use OpenAI VLM
+        text_sample = ""
+        ext = path.suffix.lower()
+
+        # Case 1: Standalone image -> transcribe with the VLM, then run the
+        # transcription through the same curriculum pipeline a digital document
+        # takes. Doing it this way means images get the non-study-material
+        # guardrail and the heading fallbacks too, instead of a separate path.
         if self._is_image_file(file_path):
             try:
                 with open(file_path, "rb") as f:
                     img_bytes = f.read()
-                mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
-                return await vlm_client.analyze_scanned_image(
-                    img_bytes, mime_type=mime, subject_hint=subject_clean
+                mime = "image/png" if ext == ".png" else "image/jpeg"
+                text_sample = await vlm_client.extract_text_from_image(
+                    img_bytes, mime_type=mime, context_hint=f"Subject: {subject_clean}"
                 )
+                if not text_sample.strip():
+                    print("[TopicExtractor] VLM returned no text for image; using heuristics.")
             except Exception as e:
                 print(f"[TopicExtractor] Image VLM error: {e}")
                 return self._heuristic_fallback(subject_clean, path.stem)
 
         # Case 2: PDF or Text Document
-        text_sample = ""
-        ext = path.suffix.lower()
-        if ext == ".pdf":
+        elif ext == ".pdf":
             text_sample = self._fast_extract_pdf_text(file_path, max_pages=20)
 
             # If PDF has virtually no extractable digital text, it's a scanned PDF -> use VLM
             if len(text_sample.strip()) < 80:
                 print("[TopicExtractor] Scanned PDF detected (no digital text found), routing to OpenAI VLM...")
-                page_img = vlm_client.render_pdf_page_to_image(file_path, page_idx=0, dpi=150)
-                if page_img:
-                    vlm_topics = await vlm_client.analyze_scanned_image(
-                        page_img, mime_type="image/png", subject_hint=subject_clean
-                    )
-                    if vlm_topics and "topics" in vlm_topics and len(vlm_topics["topics"]) > 0:
-                        return vlm_topics
+                text_sample = await self._ocr_pdf_head(file_path, subject_clean) or text_sample
         elif ext in {".docx", ".doc"}:
             try:
                 import docx
