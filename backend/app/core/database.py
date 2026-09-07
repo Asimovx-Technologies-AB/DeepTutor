@@ -1,7 +1,7 @@
 import uuid
 import json
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session
 from app.core.config import get_settings
@@ -18,15 +18,21 @@ if db_url.startswith("postgres://"):
 def _create_engine_with_fallback(primary_url: str):
     if primary_url.startswith("postgresql"):
         try:
+            connect_args = {
+                "connect_timeout": 15,
+                "application_name": "deeptutor_backend",
+            }
+
             eng = create_engine(
                 primary_url,
-                pool_pre_ping=True,
-                pool_size=20,
-                max_overflow=30,
-                pool_recycle=300,
-                connect_args={"connect_timeout": 15},
+                pool_pre_ping=settings.DB_POOL_PRE_PING,
+                pool_size=settings.DB_POOL_SIZE,
+                max_overflow=settings.DB_MAX_OVERFLOW,
+                pool_timeout=settings.DB_POOL_TIMEOUT,
+                pool_recycle=settings.DB_POOL_RECYCLE,
+                connect_args=connect_args,
             )
-            # Test connection
+            # Test connection with health check query
             with eng.connect() as conn:
                 conn.execute(text("SELECT 1"))
             return eng
@@ -41,9 +47,42 @@ def _create_engine_with_fallback(primary_url: str):
     else:
         return create_engine(primary_url, connect_args={"check_same_thread": False})
 
+
 engine = _create_engine_with_fallback(db_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 db_session = scoped_session(SessionLocal)
+
+
+def get_db_pool_status() -> Dict[str, Any]:
+    """Returns real-time connection pool health metrics."""
+    import time
+    is_pg = engine.dialect.name.startswith("postgres")
+    pool = engine.pool
+    metrics: Dict[str, Any] = {
+        "dialect": engine.dialect.name,
+        "is_postgres": is_pg,
+        "pool_type": pool.__class__.__name__,
+        "status": "healthy",
+    }
+
+    if hasattr(pool, "size"):
+        metrics["pool_size"] = pool.size()
+        metrics["checked_in"] = pool.checkedin()
+        metrics["checked_out"] = pool.checkedout()
+        metrics["overflow"] = pool.overflow()
+
+    # Measure round-trip ping latency
+    try:
+        t0 = time.perf_counter()
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        ping_ms = round((time.perf_counter() - t0) * 1000, 2)
+        metrics["ping_latency_ms"] = ping_ms
+    except Exception as ex:
+        metrics["status"] = "unhealthy"
+        metrics["error"] = str(ex)
+
+    return metrics
 
 # Create tables automatically on startup
 try:

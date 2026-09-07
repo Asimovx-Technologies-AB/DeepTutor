@@ -54,7 +54,24 @@ async def lifespan(app: FastAPI):
         pass
 
     print("[MCP] FastMCP Server & Client Manager initialized")
+
+    # Start durable PostgreSQL task queue worker
+    try:
+        from app.services.task_queue import task_worker
+        await task_worker.start()
+        print("[TASK_QUEUE] Background task worker started.")
+    except Exception as e:
+        print(f"[TASK_QUEUE] Warning: could not start task worker: {e}")
+
     yield
+
+    # Shutdown
+    try:
+        from app.services.task_queue import task_worker
+        await task_worker.stop()
+    except Exception:
+        pass
+
     print("[STOP] Shutting down...")
 
 
@@ -112,31 +129,23 @@ async def root():
 @app.get("/health")
 @app.get("/api/health")
 async def health():
-    from app.rag.ollama_client import ollama
-
-    ollama_ok = await ollama.is_available()
-
-    # Database health check
-    db_status = "connected"
-    db_type = "Neon PostgreSQL (Cloud)" if "postgres" in settings.DATABASE_URL else "SQLite"
-    try:
-        from app.core.database import DBContext
-        from sqlalchemy import text
-        with DBContext() as db_session:
-            db_session.execute(text("SELECT 1"))
-    except Exception as e:
-        db_status = f"error: {e}"
+    from app.core.database import get_db_pool_status
+    pool_metrics = get_db_pool_status()
 
     return {
         "api": "ok",
         "version": settings.APP_VERSION,
-        "llm_online": ollama_ok,
-        "database": {
-            "status": db_status,
-            "type": db_type,
-        },
+        "database": pool_metrics,
         "pipeline": {
             "status": "active",
-            "storage": "sqlite_fts",
+            "vector_store": settings.VECTOR_STORE_BACKEND,
+            "dimensions": settings.PGVECTOR_DIMENSIONS,
         },
     }
+
+
+@app.get("/api/health/db")
+async def health_db():
+    """Detailed endpoint for database connection pool monitoring and latency probing."""
+    from app.core.database import get_db_pool_status
+    return get_db_pool_status()

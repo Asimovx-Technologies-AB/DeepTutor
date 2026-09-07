@@ -395,3 +395,17 @@ class StudyDocumentProcessor:
 
 
 doc_processor = StudyDocumentProcessor()
+
+
+# ─── Register Task Queue Handlers ────────────────────────────────────────────
+try:
+    from app.services.task_queue import register_task_handler
+
+    @register_task_handler("doc_enrichment")
+    async def _handle_doc_enrichment(payload: Dict[str, Any]):
+        s_id = payload.get("session_id", "")
+        d_id = payload.get("doc_id", "")
+        f_path = payload.get("file_path", "")
+        await doc_processor.run_background_enrichment(s_id, d_id, f_path)
+except Exception:
+    pass

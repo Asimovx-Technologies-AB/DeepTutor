@@ -46,5 +46,29 @@
     ],
     "facts": [],
     "last_active": "2026-09-07T05:43:52.933835"
+  },
+  "student_26b1b2e4": {
+    "user_id": "student_26b1b2e4",
+    "name": "Student",
+    "learning_style": "Visual learner preferring diagram-first breakdowns",
+    "active_goals": [
+      "Master academic coursework",
+      "Build strong conceptual foundations",
+      "Score 90% in Final Physics Exam"
+    ],
+    "studied_topics": [
+      {
+        "title": "Kinematics",
+        "subject": "Physics",
+        "first_studied": "2026-09-07 06:21",
+        "last_reviewed": "2026-09-07 06:21",
+        "review_count": 1
+      }
+    ],
+    "weaknesses": [
+      "Calculus integration in kinematics"
+    ],
+    "facts": [],
+    "last_active": "2026-09-07T06:21:40.778020"
   }
 }

@@ -281,10 +281,23 @@ async def upload_document(
     except Exception as e:
         print(f"[study.upload] Warning: failed to save document to main db: {e}")
 
-    # Dispatch Stage 2 & 3 Non-blocking Background Enrichment Workers
-    asyncio.create_task(
-        doc_processor.run_background_enrichment(study_id, doc_id, file_path)
-    )
+    # Dispatch Stage 2 & 3 Non-blocking Background Enrichment Workers via durable task queue
+    try:
+        from app.services.task_queue import enqueue_task
+        enqueue_task(
+            task_type="doc_enrichment",
+            payload={
+                "session_id": study_id,
+                "doc_id": doc_id,
+                "file_path": file_path,
+            }
+        )
+    except Exception as e:
+        # Fallback to local async task if DB queue is offline
+        print(f"[study.upload] TaskQueue enqueue error, falling back to in-process task: {e}")
+        asyncio.create_task(
+            doc_processor.run_background_enrichment(study_id, doc_id, file_path)
+        )
 
     all_docs = get_session_documents(study_id)
     return {

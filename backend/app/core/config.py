@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     # Keep False by default in production. Set to True via env var only for emergency rollback.
     ALLOW_SQLITE_FALLBACK: bool = False
 
+    # ── Database Connection Pool Settings (Azure PostgreSQL & pgBouncer) ─────
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 30
+    DB_POOL_TIMEOUT: int = 30
+    DB_POOL_RECYCLE: int = 300
+    DB_POOL_PRE_PING: bool = True
+    DB_STATEMENT_TIMEOUT_MS: int = 30000  # 30s statement timeout protection
+
     # ── LLM / Chat Provider ──────────────────────────────────────────────────
     # Switch via .env: LLM_PROVIDER=openai | azure_openai | gemini | ollama
     LLM_PROVIDER: str = "openai"
