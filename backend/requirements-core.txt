@@ -24,11 +24,11 @@ psycopg2-binary>=2.9.9
 pgvector>=0.3.6
 
 # ── Vector store ──────────────────────────────────────────────────────────────
-pinecone>=5.0.0
-# chromadb is NOT the active backend, but app/rag/vector_store.py imports it at
-# module scope and app/api/chat.py imports that module, so it is load-bearing
-# until those imports are made lazy. See the Azure report, §4.3.
-chromadb>=0.5.0
+# pgvector (above) is the active backend. The Pinecone, Chroma and FAISS stores
+# that used to force chromadb into this file were deleted along with the old
+# GraphRAG pipeline, and nothing in app/ imports them any more — so they are no
+# longer installed. Re-add a client here if a deployment switches
+# VECTOR_STORE_BACKEND back to one of them.
 
 # ── Embeddings / LLM providers ────────────────────────────────────────────────
 openai>=1.30.0
@@ -59,8 +59,8 @@ tenacity>=8.3.0
 mcp>=1.0.0
 
 # ── Cloud storage ─────────────────────────────────────────────────────────────
-# boto3 keeps the existing S3 path working; azure-* are for the Blob migration
-# and the managed-identity credential the container runs under.
-boto3>=1.34.0
+# Azure Blob is the only document store now; the S3 path and its boto3 client
+# were removed with the legacy storage adapters. azure-identity supplies the
+# managed-identity credential the container authenticates with.
 azure-identity>=1.17.0
 azure-storage-blob>=12.20.0

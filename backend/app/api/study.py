@@ -15,6 +15,7 @@ Endpoints:
 """
 
 import os
+import hashlib
 import uuid
 import re
 import asyncio
@@ -149,6 +150,51 @@ class AddMemoryFactRequest(BaseModel):
     studied_topic: Optional[str] = None
 
 
+async def _vlm_sample(file_path: str, subject: str, max_pages: int = 2) -> str:
+    """
+    Transcribe the first pages of a scanned PDF, or a standalone image, so topic
+    extraction has real content to reason about.
+
+    Kept to a couple of pages: this runs inline on the upload request, and each
+    page is a vision call.
+    """
+    from app.rag.vlm_client import vlm_client
+
+    if not vlm_client.is_configured():
+        return ""
+
+    ext = Path(file_path).suffix.lower()
+    try:
+        if ext in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".tif"}:
+            def _read() -> bytes:
+                with open(file_path, "rb") as f:
+                    return f.read()
+            img_bytes = await asyncio.to_thread(_read)
+            mime = "image/png" if ext == ".png" else "image/jpeg"
+            return await vlm_client.extract_text_from_image(
+                img_bytes, mime_type=mime, context_hint=f"Subject: {subject}"
+            )
+
+        if ext == ".pdf":
+            parts: List[str] = []
+            for page_idx in range(max_pages):
+                page_img = await asyncio.to_thread(
+                    vlm_client.render_pdf_page_to_image, file_path, page_idx, 130
+                )
+                if not page_img:
+                    break
+                page_text = await vlm_client.extract_text_from_image(
+                    page_img, mime_type="image/png", context_hint=f"Subject: {subject}"
+                )
+                if page_text and page_text.strip():
+                    parts.append(page_text.strip())
+            return "\n\n".join(parts)
+    except Exception as e:
+        print(f"[study.upload] VLM sampling failed for {Path(file_path).name}: {e}")
+
+    return ""
+
+
 # ─── 1. Document Upload & Concurrent Ingestion ──────────────────────────────
 
 @router.post("/upload")
@@ -193,9 +239,41 @@ async def upload_document(
     upload_dir.mkdir(parents=True, exist_ok=True)
     file_path = str(file_path_obj)
 
-    with open(file_path, "wb") as f:
-        content = await file.read()
-        f.write(content)
+    # Stream to disk in fixed-size blocks rather than await file.read().
+    #
+    # An API replica has 1 GiB of memory and runs two workers, so buffering a
+    # whole upload can take the container down. Streaming also gives a place to
+    # enforce MAX_UPLOAD_SIZE_MB, which was previously declared in config and
+    # checked nowhere, and lets the content hash be computed on the way past
+    # instead of requiring a second full copy in memory.
+    max_bytes = max(1, int(settings.MAX_UPLOAD_SIZE_MB)) * 1024 * 1024
+    hasher = hashlib.sha256()
+    total_bytes = 0
+
+    try:
+        with open(file_path, "wb") as f:
+            while True:
+                block = await file.read(1024 * 1024)
+                if not block:
+                    break
+                total_bytes += len(block)
+                if total_bytes > max_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File exceeds the {settings.MAX_UPLOAD_SIZE_MB} MB upload limit.",
+                    )
+                hasher.update(block)
+                f.write(block)
+    except Exception:
+        # Never leave a partial or oversized file behind on the shared volume.
+        Path(file_path).unlink(missing_ok=True)
+        raise
+
+    if total_bytes == 0:
+        Path(file_path).unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    content_hash = hasher.hexdigest()
 
     # Non-blocking cloud backup to Azure Blob Storage
     asyncio.create_task(
@@ -218,7 +296,15 @@ async def upload_document(
             return ""
 
     sample_text = await asyncio.to_thread(_quick_sample, file_path)
-    if not sample_text:
+
+    # A scanned PDF or an uploaded image has no digital text, so the sample above
+    # comes back empty and the curriculum would be inferred from the filename
+    # alone. Transcribe the opening pages first — this is the only point where
+    # topic extraction can see that content.
+    if len(sample_text.strip()) < 80:
+        sample_text = await _vlm_sample(file_path, effective_subject) or sample_text
+
+    if not sample_text.strip():
         sample_text = f"Subject: {effective_subject}. Topic: {clean_title}."
 
     # Check if session already has documents
@@ -270,8 +356,7 @@ async def upload_document(
     # Record in main database (without creating duplicate session document links)
     try:
         from app.core import database as db
-        from app.rag.document_dedup import get_file_hash
-        doc_hash = get_file_hash(content)
+        doc_hash = content_hash
         ext = Path(file.filename).suffix.lower().lstrip(".")
         db_doc = db.create_document(
             user_id=user["id"],

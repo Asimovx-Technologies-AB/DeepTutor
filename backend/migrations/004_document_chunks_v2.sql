@@ -1,6 +1,10 @@
 -- Azure PostgreSQL vector and hybrid-search storage for DeepTutor.
 -- PGVECTOR_DIMENSIONS is 1536 and must match the embedding provider (OpenAI / Azure OpenAI text-embedding-3-small).
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- NOTE: pgcrypto is deliberately NOT created here. Azure Database for
+-- PostgreSQL Flexible Server only permits extensions on its azure.extensions
+-- allow-list (VECTOR, PG_TRGM, UUID-OSSP), so CREATE EXTENSION pgcrypto
+-- aborts the whole migration transaction. PostgreSQL 13+ ships
+-- gen_random_uuid() in core, which is all these tables need.
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Migration safety: If an incompatible legacy table with TEXT id or non-1536 dimension exists,

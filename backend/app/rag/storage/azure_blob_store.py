@@ -17,7 +17,7 @@ class AzureBlobStore:
 
     def __init__(self):
         self.settings = get_settings()
-        self.container_name = self.settings.AZURE_STORAGE_CONTAINER_NAME
+        self.container_name = self.settings.documents_container
         self._client = None
         self._container_client = None
 

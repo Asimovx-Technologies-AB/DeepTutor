@@ -12,6 +12,10 @@ import sys
 from pathlib import Path
 import psycopg2
 
+# Arbitrary but fixed key for pg_advisory_lock, so concurrent workers cannot
+# apply the same migration twice.
+MIGRATION_LOCK_ID = 8734512901
+
 MIGRATIONS_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = MIGRATIONS_DIR.parent
 if str(BACKEND_DIR) not in sys.path:
@@ -98,6 +102,14 @@ def run_migrations():
     conn = psycopg2.connect(db_url)
 
     try:
+        # The API runs two Gunicorn workers and Container Apps may hold several
+        # replicas, all of which call this on startup. A session-level advisory
+        # lock serialises them: the first worker migrates, the rest block here
+        # and then find every file already applied.
+        with conn.cursor() as cur:
+            cur.execute("SELECT pg_advisory_lock(%s);", (MIGRATION_LOCK_ID,))
+        conn.commit()
+
         check_azure_and_pgvector(conn)
         init_tracking_table(conn)
         applied = get_applied_migrations(conn)
@@ -131,7 +143,32 @@ def run_migrations():
 
         print("[MIGRATION] All migrations are up to date.")
     finally:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT pg_advisory_unlock(%s);", (MIGRATION_LOCK_ID,))
+            conn.commit()
+        except Exception:
+            pass
         conn.close()
+
+
+def safe_run_migrations() -> bool:
+    """
+    run_migrations() wrapped for application startup.
+
+    Schema work must never be the reason a container fails to come up: an
+    unreachable database at boot is usually transient (Container Apps scaling
+    from zero against a burstable Postgres), and crashing the replica turns a
+    slow start into a crash loop. Failures are logged loudly and the API starts
+    anyway — the endpoints that need the new tables will surface the error.
+    """
+    try:
+        run_migrations()
+        return True
+    except Exception as e:
+        print(f"[MIGRATION] ERROR: schema migration failed: {e}")
+        print("[MIGRATION] The API will start, but endpoints needing the new tables will fail.")
+        return False
 
 
 if __name__ == "__main__":

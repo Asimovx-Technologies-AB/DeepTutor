@@ -1,6 +1,8 @@
 """
 FastAPI main application — DeepTutor v2 (4-Stage RAG Pipeline).
 """
+import asyncio
+import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -15,6 +17,25 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Apply SQL schema migrations before anything serves traffic.
+    #
+    # importing app.core.database has already run Base.metadata.create_all(),
+    # which covers the ORM models only. The study/lecture/task-queue tables and
+    # the canonical document_chunks shape live in backend/migrations/*.sql, and
+    # nothing else in the deployment runs them: the Container App starts the
+    # image directly, with no init container or release step. Doing it here is
+    # what makes a plain `containerapp update` a complete deploy.
+    try:
+        # backend/ is the image's WORKDIR, but add it explicitly so the runner
+        # is importable however the process was launched.
+        backend_dir = str(Path(__file__).resolve().parent.parent)
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
+        from migrations.run_migrations import safe_run_migrations
+        await asyncio.to_thread(safe_run_migrations)
+    except Exception as e:
+        print(f"[MIGRATION] Warning: migration runner unavailable: {e}")
+
     # Startup: create all required directories
     ensure_data_directories()
     check_and_restore_s3_backups()
@@ -45,6 +66,22 @@ async def lifespan(app: FastAPI):
     print(f"[LLM]   Provider: {settings.LLM_PROVIDER.upper()} | Model: {llm_model}")
     print(f"[VLM]   Provider: {vlm_provider} | Model: {vlm_model}")
     print(f"[EMBED] Provider: {settings.EMBEDDING_PROVIDER.upper()} | Model: {embed_model} ({settings.PGVECTOR_DIMENSIONS}d)")
+
+    # Say plainly at boot whether vision will work. Without this the only
+    # symptom of a missing key is documents that silently transcribe to nothing.
+    try:
+        from app.rag.vlm_client import vlm_client
+        if vlm_client.is_configured():
+            print(f"[VLM]   Credentials OK — scanned pages and images will be transcribed.")
+        else:
+            print(
+                "[VLM]   WARNING: no usable credentials "
+                f"(LLM_PROVIDER={settings.LLM_PROVIDER}). Scanned PDFs and images "
+                "will yield no text. Set OPENAI_API_KEY, or AZURE_OPENAI_ENDPOINT "
+                "with LLM_PROVIDER=azure_openai."
+            )
+    except Exception as e:
+        print(f"[VLM]   WARNING: could not verify VLM configuration: {e}")
 
     # Report active parser
     try:
@@ -82,10 +119,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
+# CORS. The deployed environment exports CORS_ALLOWED_ORIGINS (comma-separated)
+# so the API can be pinned to the Static Web App origin; an empty value keeps
+# the permissive default that local development relies on.
+_cors_origins = [o.strip() for o in settings.CORS_ALLOWED_ORIGINS.split(",") if o.strip()] or ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
+    # Auth travels in the Authorization header, not cookies, so credentials stay
+    # off — which is also what lets "*" remain a legal origin list.
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
