@@ -171,16 +171,66 @@ class SQLiteFTSStore:
         return " OR ".join(f'"{w}"' for w in filtered)
 
 
+class PgSessionStoreAdapter:
+    """Adapter wrapping PgFTSStore to match SQLiteFTSStore interface."""
+
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+
+    def index_chunks(self, chunks: List[Dict[str, Any]]) -> int:
+        from app.rag.pg_fts_store import pg_fts_store
+        if not chunks:
+            return 0
+        doc_id = chunks[0].get("doc_id", "default")
+        return pg_fts_store.index_chunks(self.session_id, doc_id, chunks)
+
+    def search(
+        self,
+        doc_id: str,
+        query: str,
+        source_type: Optional[str] = None,
+        limit: int = 6,
+    ) -> List[Dict[str, Any]]:
+        from app.rag.pg_fts_store import pg_fts_store
+        return pg_fts_store.search_bm25(self.session_id, query, limit=limit, source_type=source_type)
+
+    def get_all_chunks(self, doc_id: str, limit: int = 15) -> List[Dict[str, Any]]:
+        from app.rag.pg_fts_store import pg_fts_store
+        return pg_fts_store.get_all_chunks(self.session_id, limit=limit)
+
+    def get_chunks_by_pages(self, doc_id: str, pages: List[int]) -> List[Dict[str, Any]]:
+        from app.rag.pg_fts_store import pg_fts_store
+        return pg_fts_store.get_chunks_by_pages(self.session_id, pages)
+
+    def count(self, doc_id: str) -> int:
+        from app.rag.pg_fts_store import pg_fts_store
+        return pg_fts_store.count(self.session_id)
+
+    def delete_doc(self, doc_id: str) -> bool:
+        from app.rag.pg_fts_store import pg_fts_store
+        return pg_fts_store.delete_session_document(self.session_id, doc_id) > 0
+
+
 # Global singleton instance (default fallback)
 sqlite_fts_store = SQLiteFTSStore()
 
-_session_stores: Dict[str, SQLiteFTSStore] = {}
+_session_stores: Dict[str, Any] = {}
 
-def get_session_store(session_id: Optional[str] = None) -> SQLiteFTSStore:
-    """Returns an isolated SQLite FTS5 store for a specific session."""
+
+def get_session_store(session_id: Optional[str] = None):
+    """Returns a session store: PgSessionStoreAdapter if pgvector backend, else SQLite."""
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    sid = session_id or "global"
+    if settings.VECTOR_STORE_BACKEND == "pgvector":
+        if sid not in _session_stores:
+            _session_stores[sid] = PgSessionStoreAdapter(sid)
+        return _session_stores[sid]
+
     if not session_id:
         return sqlite_fts_store
-    
+
     if session_id not in _session_stores:
         session_db = DB_PATH.parent / "sessions" / f"{session_id}.db"
         _session_stores[session_id] = SQLiteFTSStore(db_path=session_db)
@@ -191,5 +241,6 @@ def close_session_store(session_id: str):
     """Evicts session store from cache."""
     if session_id in _session_stores:
         del _session_stores[session_id]
+
 
 

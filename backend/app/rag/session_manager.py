@@ -16,12 +16,13 @@ never linked to a user). get_session_data() will not return a session it
 can't verify a user_id match for, so old unclaimed sessions won't surface
 through user-scoped lookups until they're explicitly claimed.
 """
-import sqlite3
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+import threading
 
 from app.rag.sqlite_fts_store import close_session_store
+from app.rag.pg_fts_store import pg_fts_store
 from app.core.database import SessionLocal
 from app.core.models import WorkspaceSession, WorkspaceMessage, WorkspaceTopic
 
@@ -34,31 +35,22 @@ SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 class SessionManager:
     """Manages the lifecycle and metadata for study sessions via the shared DB."""
 
+    _state_lock = threading.Lock()
+
     # ── physical file: FTS index only ───────────────────────────────────
     def get_session_db_path(self, session_id: str) -> Path:
         """Physical SQLite file path — now used only for the FTS5 index."""
         return SESSIONS_DIR / f"{session_id}.db"
 
     def init_session_database(self, session_id: str):
-        """Initializes the physical SQLite file's FTS5 table only.
-        session_messages/session_topics no longer live here — see
-        workspace_messages/workspace_topics in the shared DB instead.
-        """
-        db_path = self.get_session_db_path(session_id)
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS document_fts USING fts5(
-                chunk_id UNINDEXED,
-                doc_id,
-                page UNINDEXED,
-                source_type,
-                content,
-                tokenize='porter unicode61'
-            );
-        """)
-        conn.commit()
-        conn.close()
+        """Initializes session FTS placeholder file for backward compatibility."""
+        fts_path = self.get_session_db_path(session_id)
+        if not fts_path.exists():
+            try:
+                fts_path.parent.mkdir(parents=True, exist_ok=True)
+                fts_path.touch()
+            except Exception:
+                pass
 
     # ── session lifecycle ────────────────────────────────────────────────
     def create_session(
@@ -218,13 +210,14 @@ class SessionManager:
             db.close()
 
         close_session_store(session_id)
+        pg_fts_store.delete_session_chunks(session_id)
 
         db_path = self.get_session_db_path(session_id)
         if db_path.exists():
             try:
                 db_path.unlink()
             except Exception as e:
-                print(f"[SessionManager] Error deleting FTS file {db_path}: {e}")
+                print(f"[SessionManager] Error deleting legacy FTS file {db_path}: {e}")
         return True
 
     # ── state save/load ─────────────────────────────────────────────────
@@ -249,46 +242,47 @@ class SessionManager:
         if not self.get_session_meta(session_id):
             self.init_session_database(session_id)
 
-        db = SessionLocal()
-        try:
-            if messages is not None:
-                db.query(WorkspaceMessage).filter(WorkspaceMessage.session_id == session_id).delete(
-                    synchronize_session=False
-                )
-                for m in messages:
-                    wm = WorkspaceMessage(
-                        id=m.get("id", ""),
-                        session_id=session_id,
-                        role=m.get("role", "assistant"),
-                        text=m.get("text", ""),
-                        thought_process=m.get("thoughtProcess", ""),
-                        is_explanation=bool(m.get("isExplanation")),
-                        created_at=datetime.now().isoformat(),
+        with self._state_lock:
+            db = SessionLocal()
+            try:
+                if messages is not None:
+                    db.query(WorkspaceMessage).filter(WorkspaceMessage.session_id == session_id).delete(
+                        synchronize_session=False
                     )
-                    wm.quiz_data = m.get("quizData")
-                    wm.topics = m.get("topics")
-                    wm.attachment = m.get("attachment")
-                    db.add(wm)
+                    for m in messages:
+                        wm = WorkspaceMessage(
+                            id=m.get("id", ""),
+                            session_id=session_id,
+                            role=m.get("role", "assistant"),
+                            text=m.get("text", ""),
+                            thought_process=m.get("thoughtProcess", ""),
+                            is_explanation=bool(m.get("isExplanation")),
+                            created_at=datetime.now().isoformat(),
+                        )
+                        wm.quiz_data = m.get("quizData")
+                        wm.topics = m.get("topics")
+                        wm.attachment = m.get("attachment")
+                        db.add(wm)
 
-            if topics is not None:
-                db.query(WorkspaceTopic).filter(WorkspaceTopic.session_id == session_id).delete(
-                    synchronize_session=False
-                )
-                for t in topics:
-                    wt = WorkspaceTopic(
-                        id=t.get("id", ""),
-                        session_id=session_id,
-                        title=t.get("title", ""),
-                        summary=t.get("summary", ""),
-                        difficulty=t.get("difficulty", "Beginner"),
-                        estimated_study_time=t.get("estimated_study_time", "15 mins"),
+                if topics is not None:
+                    db.query(WorkspaceTopic).filter(WorkspaceTopic.session_id == session_id).delete(
+                        synchronize_session=False
                     )
-                    wt.key_concepts = t.get("key_concepts", [])
-                    db.add(wt)
+                    for t in topics:
+                        wt = WorkspaceTopic(
+                            id=t.get("id", ""),
+                            session_id=session_id,
+                            title=t.get("title", ""),
+                            summary=t.get("summary", ""),
+                            difficulty=t.get("difficulty", "Beginner"),
+                            estimated_study_time=t.get("estimated_study_time", "15 mins"),
+                        )
+                        wt.key_concepts = t.get("key_concepts", [])
+                        db.add(wt)
 
-            db.commit()
-        finally:
-            db.close()
+                db.commit()
+            finally:
+                db.close()
 
         updates: Dict[str, Any] = {}
         if messages is not None:

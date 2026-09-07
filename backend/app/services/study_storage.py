@@ -1,27 +1,26 @@
 """
-Physical SQLite Session Storage & Student Episodic Memory Engine.
-
-Architecture:
-- 100% Physical database isolation per session: backend/data/sessions/{session_id}.db
-- Virtual FTS5 Full-Text Search table (document_fts) with BM25 ranking (porter unicode61)
-- Persisted conversation history (session_messages)
-- Persisted extracted topics (session_topics)
-- Document metadata & ingestion state (session_documents)
-- Global registry: backend/data/sessions_registry.json
-- Long-term student memory: backend/data/user_memory.json
-- Async AWS S3 backup & disaster recovery sync (eu-north-1)
+PostgreSQL Session Storage & Student Episodic Memory Engine for DeepTutor.
+Replaces legacy per-user and per-session local SQLite files with Azure Database for PostgreSQL (Flexible Server).
+Integrates with PgFTSStore for hybrid BM25 tsvector + pgvector semantic retrieval.
 """
-
-import os
 import json
-import sqlite3
-import asyncio
-from pathlib import Path
-from typing import List, Dict, Any, Optional
+import logging
+import os
+import re
+import uuid
 from datetime import datetime, timezone
-import threading
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-# Directory references
+from sqlalchemy import text as sql_text
+
+from app.core.config import get_settings
+from app.core.database import engine
+from app.rag.pg_fts_store import pg_fts_store
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = BACKEND_DIR / "data"
 SESSIONS_DIR = DATA_DIR / "sessions"
@@ -29,281 +28,67 @@ USERS_DIR = DATA_DIR / "users"
 REGISTRY_PATH = DATA_DIR / "sessions_registry.json"
 USER_MEMORY_PATH = DATA_DIR / "user_memory.json"
 
-_registry_lock = threading.Lock()
-_memory_lock = threading.Lock()
-
 
 def ensure_data_directories():
-    """Ensure data/, data/sessions/, and data/users/ exist."""
+    """Ensure directory structure exists for local artifacts/uploads."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
     USERS_DIR.mkdir(parents=True, exist_ok=True)
-
-    with _registry_lock:
-        if not REGISTRY_PATH.exists():
-            with open(REGISTRY_PATH, "w", encoding="utf-8") as f:
-                json.dump([], f, indent=2)
-
-    with _memory_lock:
-        if not USER_MEMORY_PATH.exists():
-            with open(USER_MEMORY_PATH, "w", encoding="utf-8") as f:
-                json.dump({}, f, indent=2)
 
 
 ensure_data_directories()
 
 
+def to_uuid(val: Optional[str], namespace_suffix: str = "") -> str:
+    """Safely converts any string identifier to a valid UUID string deterministically."""
+    if not val:
+        return str(uuid.uuid4())
+    try:
+        return str(uuid.UUID(str(val)))
+    except (ValueError, AttributeError):
+        seed = f"{val}:{namespace_suffix}" if namespace_suffix else str(val)
+        return str(uuid.uuid5(uuid.NAMESPACE_DNS, seed))
+
+
+def _is_postgres() -> bool:
+    return engine.dialect.name.startswith("postgres")
+
+
+# ─── Stubs for backward compatibility ─────────────────────────────────────────
+
 def get_user_db_path(user_id: Optional[str] = None) -> Path:
-    """Return the absolute path to the user's single physical SQLite database."""
     uid = user_id or "default-user"
     safe_uid = "".join(c for c in uid if c.isalnum() or c in ("-", "_"))
     return USERS_DIR / f"user_{safe_uid}.db"
 
 
 def get_session_db_path(session_id: str, user_id: Optional[str] = None) -> Path:
-    """
-    Backwards-compatible path resolver.
-    Routes to the user's single physical SQLite database.
-    """
     return get_user_db_path(user_id)
 
 
-def _get_db_connection(db_path: Path) -> sqlite3.Connection:
-    """Returns a thread-safe SQLite connection with WAL mode and busy timeout enabled, auto-recovering if malformed."""
-    try:
-        conn = sqlite3.connect(str(db_path), timeout=30.0)
-        try:
-            conn.execute("PRAGMA journal_mode=WAL;")
-        except Exception:
-            pass
-        return conn
-    except sqlite3.DatabaseError as e:
-        if "malformed" in str(e).lower() or "disk image" in str(e).lower():
-            for p in (db_path, Path(str(db_path) + "-wal"), Path(str(db_path) + "-shm")):
-                if p.exists():
-                    try:
-                        p.unlink()
-                    except Exception:
-                        pass
-            conn = sqlite3.connect(str(db_path), timeout=30.0)
-            try:
-                conn.execute("PRAGMA journal_mode=WAL;")
-            except Exception:
-                pass
-            return conn
-        raise
-
-
 def init_user_db(user_id: Optional[str] = None) -> Path:
-    """
-    Initialize the single physical SQLite database for a user with FTS5 and multi-session schema.
-    Idempotent.
-    """
-    ensure_data_directories()
-    db_path = get_user_db_path(user_id)
-
-    conn = _get_db_connection(db_path)
-    try:
-        cur = conn.cursor()
-
-        # 1. Virtual FTS5 Full-Text Table with session_id scoping
-        try:
-            cur.execute("SELECT session_id FROM document_fts LIMIT 1")
-        except Exception:
-            try:
-                cur.execute("DROP TABLE IF EXISTS document_fts;")
-            except Exception:
-                pass
-
-        cur.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS document_fts USING fts5(
-                chunk_id UNINDEXED,
-                session_id UNINDEXED,
-                doc_id,
-                page UNINDEXED,
-                source_type,
-                content,
-                tokenize='porter unicode61'
-            );
-        """)
-
-        # 2. Persisted Conversation History
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS session_messages (
-                id TEXT PRIMARY KEY,
-                session_id TEXT NOT NULL,
-                role TEXT,
-                text TEXT,
-                thought_process TEXT,
-                quiz_data_json TEXT,
-                topics_json TEXT,
-                attachment_json TEXT,
-                is_explanation INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-
-        # 3. Persisted Extracted Curriculum Topics
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS session_topics (
-                id TEXT PRIMARY KEY,
-                session_id TEXT NOT NULL,
-                title TEXT,
-                summary TEXT,
-                difficulty TEXT,
-                key_concepts_json TEXT,
-                estimated_study_time TEXT,
-                document_name TEXT DEFAULT ''
-            );
-        """)
-
-        # 4. Persisted Ingested Documents
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS session_documents (
-                id TEXT PRIMARY KEY,
-                session_id TEXT NOT NULL,
-                filename TEXT,
-                file_path TEXT,
-                status TEXT,
-                page_count INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-
-        # 5. Teacher Mode: Lecture Sessions
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS lecture_sessions (
-                id TEXT PRIMARY KEY,
-                session_id TEXT NOT NULL,
-                topic_id TEXT NOT NULL,
-                topic_title TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'diagnostic',
-                diagnostic_question TEXT,
-                diagnostic_answer TEXT,
-                diagnostic_level TEXT DEFAULT 'standard',
-                current_phase TEXT DEFAULT 'phase_1',
-                current_segment_index INTEGER DEFAULT 0,
-                accumulated_notes_markdown TEXT DEFAULT '',
-                teach_back_prompt TEXT,
-                teach_back_submission TEXT,
-                teach_back_grade_json TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-
-        # 6. Teacher Mode: Checkpoints
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS lecture_checkpoints (
-                id TEXT PRIMARY KEY,
-                lecture_id TEXT NOT NULL,
-                phase TEXT NOT NULL,
-                question_prompt TEXT NOT NULL,
-                options_json TEXT,
-                correct_answer TEXT NOT NULL,
-                student_response TEXT,
-                is_correct INTEGER,
-                remedial_modality TEXT,
-                remedial_content TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-
-        # 7. Teacher Mode: Pause & Ask Events
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS lecture_pause_events (
-                id TEXT PRIMARY KEY,
-                lecture_id TEXT NOT NULL,
-                phase TEXT NOT NULL,
-                token_offset INTEGER DEFAULT 0,
-                student_question TEXT NOT NULL,
-                teacher_response TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-
-        # 8. Teacher Mode: Mastered Topics Registry
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS user_mastered_topics (
-                id TEXT PRIMARY KEY,
-                session_id TEXT DEFAULT '',
-                topic_title TEXT NOT NULL,
-                subject TEXT NOT NULL,
-                mastery_score REAL DEFAULT 0.0,
-                lecture_id TEXT,
-                completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-
-        # Migration safeguards for existing schema columns
-        for tbl, col in [
-            ("session_messages", "session_id TEXT DEFAULT ''"),
-            ("session_topics", "session_id TEXT DEFAULT ''"),
-            ("session_topics", "document_name TEXT DEFAULT ''"),
-            ("session_documents", "session_id TEXT DEFAULT ''"),
-            ("user_mastered_topics", "session_id TEXT DEFAULT ''"),
-        ]:
-            try:
-                cur.execute(f"ALTER TABLE {tbl} ADD COLUMN {col}")
-            except Exception:
-                pass
-
-        conn.commit()
-    finally:
-        conn.close()
-
-    return db_path
+    return get_user_db_path(user_id)
 
 
 def init_session_db(session_id: str, user_id: Optional[str] = None) -> Path:
-    """
-    Backwards-compatible initializer.
-    Initializes and returns the user's single physical SQLite database.
-    """
-    return init_user_db(user_id)
+    return get_user_db_path(user_id)
 
 
-# ─── FTS5 BM25 Full-Text Retrieval ──────────────────────────────────────────
+# ─── Full-Text & Vector Search Delegation ─────────────────────────────────────
 
 def insert_chunks_to_fts(
     session_id: str,
     doc_id: str,
     chunks: List[Dict[str, Any]],
-    user_id: Optional[str] = None
-):
-    """
-    Batch index semantic chunks into document_fts with session_id scoping.
-    Each chunk dict should contain: chunk_id, page, source_type, content.
-    """
-    db_path = init_user_db(user_id)
-    conn = _get_db_connection(db_path)
-    try:
-        cur = conn.cursor()
-        data = [
-            (
-                str(c.get("chunk_id", i)),
-                str(session_id),
-                str(doc_id),
-                int(c.get("page", 1)),
-                str(c.get("source_type", "text")),
-                str(c.get("content", "")).strip(),
-            )
-            for i, c in enumerate(chunks)
-            if c.get("content", "").strip()
-        ]
-        if data:
-            cur.executemany(
-                """
-                INSERT INTO document_fts(chunk_id, session_id, doc_id, page, source_type, content)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                data
-            )
-            conn.commit()
-    finally:
-        conn.close()
-
-    schedule_s3_db_backup(session_id)
+    user_id: Optional[str] = None,
+) -> int:
+    """Batch index semantic chunks into document_chunks table with session scoping."""
+    return pg_fts_store.index_chunks(
+        session_id=session_id,
+        doc_id=doc_id,
+        chunks=chunks,
+        user_id=user_id,
+    )
 
 
 def search_fts_chunks(
@@ -311,878 +96,808 @@ def search_fts_chunks(
     query: str,
     limit: int = 5,
     source_type: Optional[str] = None,
-    user_id: Optional[str] = None
+    user_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """
-    Execute sub-2ms BM25 full-text search against the user's single physical SQLite database.
-    Strictly isolated by session_id.
-    """
-    db_path = get_user_db_path(user_id)
-    if not db_path.exists():
-        return []
-
-    conn = _get_db_connection(db_path)
-    conn.row_factory = sqlite3.Row
-    results = []
-
-    STOP_WORDS = {
-        "what", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
-        "do", "does", "did", "the", "a", "an", "and", "or", "but", "if", "then", "else",
-        "in", "on", "at", "to", "for", "of", "with", "by", "from", "about", "into", "through",
-        "during", "before", "after", "above", "below", "up", "down", "out", "over", "under",
-        "again", "further", "once", "here", "there", "when", "where", "why", "how", "all",
-        "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor",
-        "not", "only", "own", "same", "so", "than", "too", "very", "can", "will", "just",
-        "should", "now", "tell", "me", "explain", "give", "show", "define", "meaning", "solve"
-    }
-
-    raw_words = [
-        "".join(c for c in w if c.isalnum() or c in ("-", "_")).strip()
-        for w in query.split()
-    ]
-    raw_words = [w for w in raw_words if len(w) > 1]
-
-    if not raw_words:
-        return []
-
-    non_stop = [w for w in raw_words if w.lower() not in STOP_WORDS]
-    clean_words = non_stop if non_stop else raw_words
-
-    fts_query = " OR ".join(f'"{w}"' for w in clean_words[:8])
-
-    try:
-        cur = conn.cursor()
-        if source_type:
-            sql = """
-                SELECT chunk_id, doc_id, page, source_type, content, bm25(document_fts) as rank
-                FROM document_fts
-                WHERE document_fts MATCH ? AND session_id = ? AND source_type = ?
-                ORDER BY rank
-                LIMIT ?
-            """
-            cur.execute(sql, (fts_query, session_id, source_type, limit))
-        else:
-            sql = """
-                SELECT chunk_id, doc_id, page, source_type, content, bm25(document_fts) as rank
-                FROM document_fts
-                WHERE document_fts MATCH ? AND session_id = ?
-                ORDER BY rank
-                LIMIT ?
-            """
-            cur.execute(sql, (fts_query, session_id, limit))
-
-        rows = cur.fetchall()
-        for row in rows:
-            results.append({
-                "chunk_id": row["chunk_id"],
-                "doc_id": row["doc_id"],
-                "page": row["page"],
-                "source_type": row["source_type"],
-                "content": row["content"],
-                "score": round(float(row["rank"]), 4),
-            })
-    except Exception:
-        # Fallback to simple LIKE search if FTS syntax errors occur
-        try:
-            cur = conn.cursor()
-            first_term = f"%{clean_words[0]}%"
-            cur.execute(
-                """
-                SELECT chunk_id, doc_id, page, source_type, content
-                FROM document_fts
-                WHERE session_id = ? AND content LIKE ?
-                LIMIT ?
-                """,
-                (session_id, first_term, limit)
-            )
-            for row in cur.fetchall():
-                results.append({
-                    "chunk_id": row["chunk_id"],
-                    "doc_id": row["doc_id"],
-                    "page": row["page"],
-                    "source_type": row["source_type"],
-                    "content": row["content"],
-                    "score": 0.5,
-                })
-        except Exception:
-            pass
-    finally:
-        conn.close()
-
-    return results
+    """BM25 full-text search against PostgreSQL tsvector index."""
+    return pg_fts_store.search_bm25(
+        session_id=session_id,
+        query=query,
+        limit=limit,
+        source_type=source_type,
+    )
 
 
-def get_all_chunks(session_id: str, limit: int = 100, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Retrieve sample or all chunks from document_fts for a specific session."""
-    db_path = get_user_db_path(user_id)
-    if not db_path.exists():
-        return []
-
-    conn = _get_db_connection(db_path)
-    conn.row_factory = sqlite3.Row
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT chunk_id, doc_id, page, source_type, content FROM document_fts WHERE session_id = ? LIMIT ?",
-            (session_id, limit)
-        )
-        return [dict(r) for r in cur.fetchall()]
-    finally:
-        conn.close()
+def get_all_chunks(
+    session_id: str,
+    limit: int = 100,
+    user_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Retrieve all indexed chunks for a session."""
+    return pg_fts_store.get_all_chunks(session_id=session_id, limit=limit)
 
 
-def get_chunks_by_page(session_id: str, page: int, source_type: Optional[str] = None, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Retrieve all chunks from document_fts for an exact page number within a session."""
-    db_path = get_user_db_path(user_id)
-    if not db_path.exists():
-        return []
-
-    conn = _get_db_connection(db_path)
-    conn.row_factory = sqlite3.Row
-    try:
-        cur = conn.cursor()
-        if source_type:
-            cur.execute(
-                "SELECT chunk_id, doc_id, page, source_type, content FROM document_fts WHERE session_id = ? AND page = ? AND source_type = ?",
-                (session_id, page, source_type)
-            )
-        else:
-            cur.execute(
-                "SELECT chunk_id, doc_id, page, source_type, content FROM document_fts WHERE session_id = ? AND page = ?",
-                (session_id, page)
-            )
-        return [dict(r) for r in cur.fetchall()]
-    finally:
-        conn.close()
+def get_chunks_by_page(
+    session_id: str,
+    page: int,
+    source_type: Optional[str] = None,
+    user_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Retrieve all chunks on a specific page within a session."""
+    chunks = pg_fts_store.get_chunks_by_page(session_id=session_id, page=page)
+    if source_type:
+        chunks = [c for c in chunks if c.get("source_type") == source_type]
+    return chunks
 
 
-# ─── Session Messages CRUD ──────────────────────────────────────────────────
+# ─── Conversation History (study_session_messages) ───────────────────────────
 
 def save_session_message(
     session_id: str,
-    message_id: str,
-    role: str,
-    text: str,
+    message_id: Optional[str] = None,
+    role: str = "user",
+    text: Optional[str] = None,
     thought_process: str = "",
     quiz_data: Optional[Dict[str, Any]] = None,
     topics: Optional[List[Dict[str, Any]]] = None,
     attachment: Optional[Dict[str, Any]] = None,
     is_explanation: bool = False,
-    user_id: Optional[str] = None
-):
-    """Persist a conversation message to session_messages."""
-    init_user_db(user_id)
-    db_path = get_user_db_path(user_id)
-    conn = _get_db_connection(db_path)
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT OR REPLACE INTO session_messages(
-                id, session_id, role, text, thought_process, quiz_data_json, topics_json, attachment_json, is_explanation, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                message_id,
-                session_id,
-                role,
-                text,
-                thought_process,
-                json.dumps(quiz_data) if quiz_data else None,
-                json.dumps(topics) if topics else None,
-                json.dumps(attachment) if attachment else None,
-                1 if is_explanation else 0,
-                datetime.now(timezone.utc).isoformat(),
+    user_id: Optional[str] = None,
+    text_content: Optional[str] = None,
+) -> str:
+    """Persist a conversation message into PostgreSQL with DB-assigned UUID."""
+    # Handle positional invocation where message_id was omitted: (session_id, role, text)
+    if message_id in ("user", "assistant", "system") and role not in ("user", "assistant", "system"):
+        actual_text = role if text is None else text
+        actual_role = message_id
+        actual_msg_id = None
+    else:
+        actual_role = role
+        actual_msg_id = message_id
+        actual_text = text if text is not None else (text_content or "")
+
+    m_id = to_uuid(actual_msg_id) if actual_msg_id else str(uuid.uuid4())
+
+    quiz_json = json.dumps(quiz_data) if quiz_data is not None else None
+    topics_json = json.dumps(topics) if topics is not None else None
+    attachment_json = json.dumps(attachment) if attachment is not None else None
+
+    if _is_postgres():
+        sql = sql_text("""
+            INSERT INTO study_session_messages (
+                id, session_id, user_id, role, text, thought_process,
+                quiz_data_json, topics_json, attachment_json, is_explanation, created_at
             )
-        )
-        conn.commit()
-    finally:
-        conn.close()
+            VALUES (
+                CAST(:id AS UUID), :session_id, :user_id, :role, :text, :thought_process,
+                CAST(:quiz_json AS jsonb), CAST(:topics_json AS jsonb), CAST(:attachment_json AS jsonb),
+                :is_explanation, now()
+            )
+            ON CONFLICT (id) DO UPDATE SET
+                text = EXCLUDED.text,
+                thought_process = EXCLUDED.thought_process,
+                quiz_data_json = EXCLUDED.quiz_data_json,
+                topics_json = EXCLUDED.topics_json,
+                attachment_json = EXCLUDED.attachment_json,
+                is_explanation = EXCLUDED.is_explanation
+            RETURNING id::text;
+        """)
+    else:
+        sql = sql_text("""
+            INSERT INTO study_session_messages (
+                id, session_id, user_id, role, text, thought_process,
+                quiz_data_json, topics_json, attachment_json, is_explanation, created_at
+            )
+            VALUES (
+                :id, :session_id, :user_id, :role, :text, :thought_process,
+                :quiz_json, :topics_json, :attachment_json, :is_explanation, CURRENT_TIMESTAMP
+            )
+            RETURNING id;
+        """)
+
+    with engine.begin() as conn:
+        res = conn.execute(sql, {
+            "id": m_id,
+            "session_id": str(session_id),
+            "user_id": user_id,
+            "role": actual_role,
+            "text": actual_text or "",
+            "thought_process": thought_process or "",
+            "quiz_json": quiz_json,
+            "topics_json": topics_json,
+            "attachment_json": attachment_json,
+            "is_explanation": is_explanation,
+        })
+        row = res.fetchone()
+        assigned_id = str(row[0]) if row else m_id
 
     increment_session_message_count(session_id)
-    schedule_s3_db_backup(session_id)
-
-    # Mirror message to Neon Cloud PostgreSQL (chat_messages table)
-    try:
-        from app.core import database as pg_db
-        # Ensure session exists in PostgreSQL
-        try:
-            pg_db.ensure_session_exists(session_id, user_id=user_id or "default-user")
-        except Exception:
-            pass
-
-        pg_db.add_message(
-            session_id=session_id,
-            role=role,
-            content=text,
-            metadata={
-                "thought_process": thought_process,
-                "quiz_data": quiz_data,
-                "topics": topics,
-                "attachment": attachment,
-                "is_explanation": is_explanation,
-            }
-        )
-    except Exception as e:
-        pass
+    return assigned_id
 
 
-def get_session_messages(session_id: str, limit: Optional[int] = None, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Retrieve ordered conversation messages for a session."""
-    db_path = get_user_db_path(user_id)
-    if not db_path.exists():
-        return []
+def get_session_messages(
+    session_id: str,
+    limit: Optional[int] = None,
+    user_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Retrieve chronological messages for a study session."""
+    lim_clause = f"LIMIT {int(limit)}" if limit else ""
 
-    conn = _get_db_connection(db_path)
-    conn.row_factory = sqlite3.Row
-    try:
-        cur = conn.cursor()
-        if limit:
-            cur.execute("SELECT * FROM session_messages WHERE session_id = ? ORDER BY created_at DESC LIMIT ?", (session_id, limit))
-            rows = list(reversed(cur.fetchall()))
-        else:
-            cur.execute("SELECT * FROM session_messages WHERE session_id = ? ORDER BY created_at ASC", (session_id,))
-            rows = cur.fetchall()
-        msgs = []
-        for r in rows:
-            msgs.append({
-                "id": r["id"],
-                "role": r["role"],
-                "text": r["text"],
-                "thought_process": r["thought_process"] or "",
-                "quiz_data": json.loads(r["quiz_data_json"]) if r["quiz_data_json"] else None,
-                "topics": json.loads(r["topics_json"]) if r["topics_json"] else None,
-                "attachment": json.loads(r["attachment_json"]) if r["attachment_json"] else None,
-                "is_explanation": bool(r["is_explanation"]),
-                "created_at": r["created_at"],
-            })
-        return msgs
-    finally:
-        conn.close()
+    statement = sql_text(f"""
+        SELECT id::text AS id, session_id, user_id, role, text, thought_process,
+               quiz_data_json, topics_json, attachment_json, is_explanation,
+               created_at
+        FROM study_session_messages
+        WHERE session_id = :session_id
+        ORDER BY created_at ASC
+        {lim_clause}
+    """)
+
+    with engine.connect() as conn:
+        rows = conn.execute(statement, {"session_id": str(session_id)}).mappings().fetchall()
+
+    messages = []
+    for r in rows:
+        msg = dict(r)
+        # Parse JSON fields if stringified
+        for f in ("quiz_data_json", "topics_json", "attachment_json"):
+            if isinstance(msg.get(f), str):
+                try:
+                    msg[f] = json.loads(msg[f])
+                except Exception:
+                    pass
+        if isinstance(msg.get("created_at"), datetime):
+            msg["created_at"] = msg["created_at"].isoformat()
+        messages.append(msg)
+    return messages
 
 
-# ─── Session Curriculum Topics CRUD ─────────────────────────────────────────
+# ─── Curriculum Topics (study_session_topics) ────────────────────────────────
 
 def save_session_topics(
     session_id: str,
     topics: List[Dict[str, Any]],
-    append: bool = False,
-    document_name: Optional[str] = None,
-    user_id: Optional[str] = None
-) -> List[Dict[str, Any]]:
-    """Batch save extracted topics to session_topics with document_name attribution."""
-    init_user_db(user_id)
-    db_path = get_user_db_path(user_id)
-    conn = _get_db_connection(db_path)
-    try:
-        cur = conn.cursor()
-        existing_titles = set()
-        if append:
-            cur.execute("SELECT title FROM session_topics WHERE session_id = ?", (session_id,))
-            existing_titles = {str(row[0]).strip().lower() for row in cur.fetchall() if row[0]}
-        else:
-            cur.execute("DELETE FROM session_topics WHERE session_id = ?", (session_id,))
-
-        for t in topics:
-            title = str(t.get("title", "")).strip()
-            if not title:
-                continue
-            if append and title.lower() in existing_titles:
-                continue
-
-            topic_id = str(t.get("id", "")) or f"topic_{uuid.uuid4().hex[:8]}"
-            doc_name = str(t.get("document_name") or document_name or "").strip()
-            cur.execute(
-                """
-                INSERT OR REPLACE INTO session_topics(
-                    id, session_id, title, summary, difficulty, key_concepts_json, estimated_study_time, document_name
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    topic_id,
-                    session_id,
-                    title,
-                    str(t.get("summary", "")),
-                    str(t.get("difficulty", "Intermediate")),
-                    json.dumps(t.get("key_concepts", [])),
-                    str(t.get("estimated_study_time", "15 mins")),
-                    doc_name,
-                )
-            )
-            existing_titles.add(title.lower())
-        conn.commit()
-    finally:
-        conn.close()
-
-    total_topics = get_session_topics(session_id, user_id=user_id)
-    update_session_topic_count(session_id, len(total_topics))
-    schedule_s3_db_backup(session_id)
-    return total_topics
-
-
-def get_session_topics(session_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Retrieve saved topics for a session, including document_name."""
-    db_path = get_user_db_path(user_id)
-    if not db_path.exists():
+    user_id: Optional[str] = None,
+) -> List[str]:
+    """Persist curriculum topics into PostgreSQL with UUID primary keys."""
+    if not topics:
         return []
 
-    conn = _get_db_connection(db_path)
-    conn.row_factory = sqlite3.Row
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM session_topics WHERE session_id = ?", (session_id,))
-        rows = cur.fetchall()
-        topics = []
-        for r in rows:
-            row_keys = r.keys()
-            doc_name = r["document_name"] if "document_name" in row_keys and r["document_name"] else ""
-            topics.append({
-                "id": r["id"],
-                "title": r["title"],
-                "summary": r["summary"],
-                "difficulty": r["difficulty"],
-                "key_concepts": json.loads(r["key_concepts_json"]) if r["key_concepts_json"] else [],
-                "estimated_study_time": r["estimated_study_time"],
+    saved_ids = []
+    for t in topics:
+        raw_id = t.get("id") or t.get("topic_id")
+        t_id = to_uuid(raw_id, namespace_suffix=str(session_id))
+        title = t.get("title") or t.get("topic_title") or "Untitled Topic"
+        summary = t.get("summary") or ""
+        diff = t.get("difficulty") or "Intermediate"
+        kconcepts = json.dumps(t.get("key_concepts") or t.get("key_concepts_json") or [])
+        est_time = str(t.get("estimated_study_time") or t.get("estimated_time") or "15 mins")
+        doc_name = str(t.get("document_name") or "")
+
+        if _is_postgres():
+            sql = sql_text("""
+                INSERT INTO study_session_topics (
+                    id, session_id, user_id, title, summary, difficulty,
+                    key_concepts_json, estimated_study_time, document_name, created_at
+                )
+                VALUES (
+                    CAST(:id AS UUID), :session_id, :user_id, :title, :summary, :difficulty,
+                    CAST(:key_concepts AS jsonb), :estimated_time, :document_name, now()
+                )
+                ON CONFLICT (id) DO UPDATE SET
+                    title = EXCLUDED.title,
+                    summary = EXCLUDED.summary,
+                    difficulty = EXCLUDED.difficulty,
+                    key_concepts_json = EXCLUDED.key_concepts_json,
+                    estimated_study_time = EXCLUDED.estimated_study_time,
+                    document_name = EXCLUDED.document_name
+                RETURNING id::text;
+            """)
+        else:
+            sql = sql_text("""
+                INSERT INTO study_session_topics (
+                    id, session_id, user_id, title, summary, difficulty,
+                    key_concepts_json, estimated_study_time, document_name, created_at
+                )
+                VALUES (
+                    :id, :session_id, :user_id, :title, :summary, :difficulty,
+                    :key_concepts, :estimated_time, :document_name, CURRENT_TIMESTAMP
+                )
+                RETURNING id;
+            """)
+
+        with engine.begin() as conn:
+            res = conn.execute(sql, {
+                "id": t_id,
+                "session_id": str(session_id),
+                "user_id": user_id,
+                "title": title,
+                "summary": summary,
+                "difficulty": diff,
+                "key_concepts": kconcepts,
+                "estimated_time": est_time,
                 "document_name": doc_name,
             })
-        return topics
-    finally:
-        conn.close()
+            row = res.fetchone()
+            saved_ids.append(str(row[0]) if row else t_id)
+
+    update_session_topic_count(session_id, len(saved_ids))
+    return saved_ids
 
 
-# ─── Session Documents & Status ─────────────────────────────────────────────
+def get_session_topics(
+    session_id: str,
+    user_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Retrieve all curriculum topics for a session."""
+    statement = sql_text("""
+        SELECT id::text AS id, session_id, user_id, title, summary, difficulty,
+               key_concepts_json, estimated_study_time, document_name, created_at
+        FROM study_session_topics
+        WHERE session_id = :session_id
+        ORDER BY created_at ASC
+    """)
+
+    with engine.connect() as conn:
+        rows = conn.execute(statement, {"session_id": str(session_id)}).mappings().fetchall()
+
+    topics = []
+    for r in rows:
+        top = dict(r)
+        kc = top.get("key_concepts_json")
+        if isinstance(kc, str):
+            try:
+                top["key_concepts"] = json.loads(kc)
+            except Exception:
+                top["key_concepts"] = []
+        elif isinstance(kc, list):
+            top["key_concepts"] = kc
+        else:
+            top["key_concepts"] = []
+        if isinstance(top.get("created_at"), datetime):
+            top["created_at"] = top["created_at"].isoformat()
+        topics.append(top)
+    return topics
+
+
+# ─── Document Metadata (session_documents) ───────────────────────────────────
 
 def save_session_document(
     session_id: str,
-    doc_id: str,
     filename: str,
     file_path: str,
-    status: str = "indexing",
+    status: str = "completed",
     page_count: int = 0,
-    user_id: Optional[str] = None
-):
-    """Record an ingested document state."""
-    init_user_db(user_id)
-    db_path = get_user_db_path(user_id)
-    conn = _get_db_connection(db_path)
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT OR REPLACE INTO session_documents(
-                id, session_id, filename, file_path, status, page_count, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (doc_id, session_id, filename, file_path, status, page_count, datetime.now(timezone.utc).isoformat())
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    user_id: Optional[str] = None,
+    doc_id: Optional[str] = None,
+) -> str:
+    """Save document metadata to PostgreSQL session_documents."""
+    d_id = to_uuid(doc_id, namespace_suffix=str(session_id)) if doc_id else str(uuid.uuid4())
+    doc_hash = "".join(c for c in f"{session_id}_{filename}" if c.isalnum())[:32]
+
+    if _is_postgres():
+        sql = sql_text("""
+            INSERT INTO session_documents (
+                id, session_id, doc_hash, user_id, filename, file_path, status, page_count, created_at
+            )
+            VALUES (
+                CAST(:id AS UUID), :session_id, :doc_hash, :user_id, :filename, :file_path,
+                :status, :page_count, now()
+            )
+            ON CONFLICT (id) DO UPDATE SET
+                filename = EXCLUDED.filename,
+                file_path = EXCLUDED.file_path,
+                status = EXCLUDED.status,
+                page_count = EXCLUDED.page_count
+            RETURNING id::text;
+        """)
+    else:
+        sql = sql_text("""
+            INSERT INTO session_documents (
+                id, session_id, doc_hash, user_id, filename, file_path, status, page_count, created_at
+            )
+            VALUES (
+                :id, :session_id, :doc_hash, :user_id, :filename, :file_path,
+                :status, :page_count, CURRENT_TIMESTAMP
+            )
+            RETURNING id;
+        """)
+
+    with engine.begin() as conn:
+        res = conn.execute(sql, {
+            "id": d_id,
+            "session_id": str(session_id),
+            "doc_hash": doc_hash,
+            "user_id": user_id,
+            "filename": filename,
+            "file_path": file_path,
+            "status": status,
+            "page_count": page_count,
+        })
+        row = res.fetchone()
+        return str(row[0]) if row else d_id
 
 
-def update_document_status(session_id: str, doc_id: str, status: str, user_id: Optional[str] = None):
-    """Update status (e.g. 'indexing' -> 'text_ready' -> 'fully_processed')."""
-    db_path = get_user_db_path(user_id)
-    if not db_path.exists():
-        return
-    conn = _get_db_connection(db_path)
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE session_documents SET status = ? WHERE session_id = ? AND id = ?",
-            (status, session_id, doc_id)
-        )
-        conn.commit()
-    finally:
-        conn.close()
+def update_document_status(
+    session_id: str,
+    doc_id: str,
+    status: str,
+    page_count: Optional[int] = None,
+) -> bool:
+    """Update processing status for a session document."""
+    pc_clause = ", page_count = :page_count" if page_count is not None else ""
+    statement = sql_text(f"""
+        UPDATE session_documents
+        SET status = :status {pc_clause}
+        WHERE session_id = :session_id
+          AND (id::text = :doc_id OR filename = :doc_id)
+    """)
+
+    params: Dict[str, Any] = {
+        "session_id": str(session_id),
+        "doc_id": str(doc_id),
+        "status": status,
+    }
+    if page_count is not None:
+        params["page_count"] = int(page_count)
+
+    with engine.begin() as conn:
+        res = conn.execute(statement, params)
+        return res.rowcount > 0
 
 
-def get_session_documents(session_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Retrieve saved document records for a session."""
-    db_path = get_user_db_path(user_id)
-    if not db_path.exists():
-        return []
+def get_session_documents(
+    session_id: str,
+    user_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Retrieve all document metadata records for a session."""
+    statement = sql_text("""
+        SELECT id::text AS id, session_id, filename, file_path, status, page_count, created_at
+        FROM session_documents
+        WHERE session_id = :session_id
+        ORDER BY created_at ASC
+    """)
+    with engine.connect() as conn:
+        rows = conn.execute(statement, {"session_id": str(session_id)}).mappings().fetchall()
 
-    conn = _get_db_connection(db_path)
-    conn.row_factory = sqlite3.Row
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM session_documents WHERE session_id = ? ORDER BY created_at ASC", (session_id,))
-        rows = cur.fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        conn.close()
+    docs = []
+    for r in rows:
+        d = dict(r)
+        if isinstance(d.get("created_at"), datetime):
+            d["created_at"] = d["created_at"].isoformat()
+        docs.append(d)
+    return docs
 
 
 def delete_session_document(session_id: str, document_name_or_id: str, user_id: Optional[str] = None) -> bool:
-    """Deletes a specific material document and its extracted chunks from a study room session database."""
-    db_path = get_user_db_path(user_id)
-    if not db_path.exists():
-        return False
-    conn = _get_db_connection(db_path)
-    try:
-        cur = conn.cursor()
-        cur.execute("DELETE FROM session_documents WHERE session_id = ? AND (id = ? OR filename = ?)", (session_id, document_name_or_id, document_name_or_id))
-        try:
-            cur.execute("DELETE FROM document_fts WHERE session_id = ? AND (doc_id = ? OR chunk_id LIKE ?)", (session_id, document_name_or_id, f"{document_name_or_id}%"))
-        except Exception:
-            pass
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"[StudyStorage] Error deleting session document: {e}")
-        return False
-    finally:
-        conn.close()
+    """Delete a document and all its indexed chunks from PostgreSQL."""
+    # Delete chunks
+    pg_fts_store.delete_session_document(session_id, document_name_or_id)
+
+    # Delete from session_documents
+    statement = sql_text("""
+        DELETE FROM session_documents
+        WHERE session_id = :session_id
+          AND (id::text = :doc_id OR filename = :doc_id)
+    """)
+    with engine.begin() as conn:
+        res = conn.execute(statement, {"session_id": str(session_id), "doc_id": str(document_name_or_id)})
+        return res.rowcount > 0
 
 
-# ─── Global Sessions Registry (sessions_registry.json) ──────────────────────
+# ─── Workspace Sessions Registry (workspace_sessions) ─────────────────────────
 
 def list_registry_sessions(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """List all sessions recorded in sessions_registry.json, filtered by user_id if provided."""
-    ensure_data_directories()
-    with _registry_lock:
-        try:
-            if REGISTRY_PATH.exists():
-                with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
-                    all_sessions = json.load(f)
-                    if user_id:
-                        return [s for s in all_sessions if s.get("user_id") == user_id]
-                    return all_sessions
-        except Exception:
-            pass
-    return []
+    """List study sessions from workspace_sessions table."""
+    filter_clause = "WHERE user_id = :user_id OR user_id IS NULL" if user_id else ""
+
+    statement = sql_text(f"""
+        SELECT id, user_id, title, subject, created_at, last_active,
+               topics_count AS topic_count, messages_count AS message_count
+        FROM workspace_sessions
+        {filter_clause}
+        ORDER BY last_active DESC
+    """)
+
+    params = {"user_id": str(user_id)} if user_id else {}
+    with engine.connect() as conn:
+        rows = conn.execute(statement, params).mappings().fetchall()
+
+    sessions = []
+    for r in rows:
+        s = dict(r)
+        s["status"] = "ready"
+        s["document_name"] = ""
+        s["documents"] = []
+        s["document_count"] = 0
+        sessions.append(s)
+    return sessions
 
 
 def get_registry_session(session_id: str) -> Optional[Dict[str, Any]]:
-    sessions = list_registry_sessions()
-    for s in sessions:
-        if s.get("id") == session_id:
-            return s
-    return None
+    """Fetch session metadata by session_id."""
+    statement = sql_text("""
+        SELECT id, user_id, title, subject, created_at, last_active,
+               topics_count AS topic_count, messages_count AS message_count
+        FROM workspace_sessions
+        WHERE id = :session_id
+    """)
+    with engine.connect() as conn:
+        row = conn.execute(statement, {"session_id": str(session_id)}).mappings().first()
+        if not row:
+            return None
+        s = dict(row)
+        s["status"] = "ready"
+        s["document_name"] = ""
+        s["documents"] = []
+        s["document_count"] = 0
+        return s
 
 
 def register_or_update_session(
     session_id: str,
     subject: str = "General Study",
-    title: str = "Study Room Session",
-    status: str = "ready",
+    title: Optional[str] = None,
     document_name: Optional[str] = None,
-    user_id: Optional[str] = None
+    status: str = "ready",
+    user_id: Optional[str] = None,
+    topic_count: Optional[int] = None,
+    message_count: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Add or update session metadata in registry with user isolation and multi-material tracking."""
-    ensure_data_directories()
-    with _registry_lock:
-        sessions = []
-        try:
-            if REGISTRY_PATH.exists():
-                with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
-                    sessions = json.load(f)
-        except Exception:
-            sessions = []
+    """Idempotently register or update a workspace session in PostgreSQL."""
+    now_str = datetime.now(timezone.utc).isoformat()
+    clean_title = title or f"{subject} Study Session"
 
-        now_iso = datetime.now(timezone.utc).isoformat()
-        existing = next((s for s in sessions if s.get("id") == session_id), None)
-        if existing:
-            if subject and subject != "General Study":
-                existing["subject"] = subject
-            # Preserve room title if already meaningful
-            curr_title = existing.get("title", "")
-            is_placeholder = curr_title in ("New Study Workspace", "New Course Workspace", "Study Room Session", "Default Study Room", "")
-            if is_placeholder and title:
-                existing["title"] = title
+    # Verify user_id existence to prevent foreign key errors
+    valid_uid = None
+    if user_id:
+        with engine.connect() as conn:
+            exists = conn.execute(
+                sql_text("SELECT 1 FROM users WHERE id = :uid"),
+                {"uid": str(user_id)}
+            ).scalar()
+            if exists:
+                valid_uid = str(user_id)
 
-            if status:
-                existing["status"] = status
+    statement = sql_text("""
+        INSERT INTO workspace_sessions (
+            id, user_id, title, subject, created_at, last_active, topics_count, messages_count
+        )
+        VALUES (
+            :id, :user_id, :title, :subject, :now, :now,
+            COALESCE(:topic_count, 0), COALESCE(:message_count, 0)
+        )
+        ON CONFLICT (id) DO UPDATE SET
+            user_id = COALESCE(EXCLUDED.user_id, workspace_sessions.user_id),
+            title = COALESCE(:title, workspace_sessions.title),
+            subject = COALESCE(:subject, workspace_sessions.subject),
+            last_active = :now,
+            topics_count = COALESCE(:topic_count, workspace_sessions.topics_count),
+            messages_count = COALESCE(:message_count, workspace_sessions.messages_count);
+    """)
 
-            # Multi-document list tracking
-            doc_list = existing.get("documents", [])
-            if not isinstance(doc_list, list):
-                doc_list = [existing.get("document_name")] if existing.get("document_name") else []
-            if document_name and document_name not in doc_list:
-                doc_list.append(document_name)
+    with engine.begin() as conn:
+        conn.execute(statement, {
+            "id": str(session_id),
+            "user_id": valid_uid,
+            "title": clean_title,
+            "subject": subject,
+            "now": now_str,
+            "topic_count": topic_count,
+            "message_count": message_count,
+        })
 
-            existing["documents"] = doc_list
-            existing["document_count"] = len(doc_list)
-            if document_name:
-                existing["document_name"] = document_name
-
-            if user_id:
-                existing["user_id"] = user_id
-            existing["last_active"] = now_iso
-            res = existing
-        else:
-            initial_docs = [document_name] if document_name else []
-            res = {
-                "id": session_id,
-                "user_id": user_id or "guest-user",
-                "subject": subject,
-                "title": title,
-                "document_name": document_name or "",
-                "documents": initial_docs,
-                "document_count": len(initial_docs),
-                "status": status,
-                "topic_count": 0,
-                "message_count": 0,
-                "created_at": now_iso,
-                "last_active": now_iso,
-            }
-            sessions.insert(0, res)
-
-        with open(REGISTRY_PATH, "w", encoding="utf-8") as f:
-            json.dump(sessions, f, indent=2)
-
-    init_user_db(user_id)
-    return res
+    return {
+        "id": str(session_id),
+        "user_id": valid_uid,
+        "title": clean_title,
+        "subject": subject,
+        "status": status,
+        "document_name": document_name or "",
+        "created_at": now_str,
+        "last_active": now_str,
+        "topic_count": topic_count or 0,
+        "message_count": message_count or 0,
+    }
 
 
 def increment_session_message_count(session_id: str):
-    with _registry_lock:
-        try:
-            if REGISTRY_PATH.exists():
-                with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
-                    sessions = json.load(f)
-                for s in sessions:
-                    if s.get("id") == session_id:
-                        s["message_count"] = s.get("message_count", 0) + 1
-                        s["last_active"] = datetime.now(timezone.utc).isoformat()
-                        break
-                with open(REGISTRY_PATH, "w", encoding="utf-8") as f:
-                    json.dump(sessions, f, indent=2)
-        except Exception:
-            pass
+    statement = sql_text("""
+        UPDATE workspace_sessions
+        SET messages_count = messages_count + 1,
+            last_active = :now
+        WHERE id = :session_id
+    """)
+    with engine.begin() as conn:
+        conn.execute(statement, {
+            "session_id": str(session_id),
+            "now": datetime.now(timezone.utc).isoformat()
+        })
 
 
 def update_session_topic_count(session_id: str, count: int):
-    with _registry_lock:
-        try:
-            if REGISTRY_PATH.exists():
-                with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
-                    sessions = json.load(f)
-                for s in sessions:
-                    if s.get("id") == session_id:
-                        s["topic_count"] = count
-                        s["last_active"] = datetime.now(timezone.utc).isoformat()
-                        break
-                with open(REGISTRY_PATH, "w", encoding="utf-8") as f:
-                    json.dump(sessions, f, indent=2)
-        except Exception:
-            pass
+    statement = sql_text("""
+        UPDATE workspace_sessions
+        SET topics_count = :count,
+            last_active = :now
+        WHERE id = :session_id
+    """)
+    with engine.begin() as conn:
+        conn.execute(statement, {
+            "session_id": str(session_id),
+            "count": int(count),
+            "now": datetime.now(timezone.utc).isoformat()
+        })
 
 
 def delete_registry_session(session_id: str, user_id: Optional[str] = None) -> bool:
-    """Purge session from registry and delete session rows from user SQLite database, scoped to user_id if provided."""
-    ensure_data_directories()
-    with _registry_lock:
-        try:
-            if REGISTRY_PATH.exists():
-                with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
-                    sessions = json.load(f)
-                target = next((s for s in sessions if s.get("id") == session_id), None)
-                if not target:
-                    return False
-                if user_id and target.get("user_id") and target.get("user_id") != user_id:
-                    return False
-                sessions = [s for s in sessions if s.get("id") != session_id]
-                with open(REGISTRY_PATH, "w", encoding="utf-8") as f:
-                    json.dump(sessions, f, indent=2)
-        except Exception:
-            return False
+    """Delete a workspace session and all linked data."""
+    pg_fts_store.delete_session_chunks(session_id)
 
-    # Purge logical session rows from user database
-    db_path = get_user_db_path(user_id)
-    if db_path.exists():
-        try:
-            conn = sqlite3.connect(str(db_path))
-            cur = conn.cursor()
-            cur.execute("DELETE FROM session_messages WHERE session_id = ?", (session_id,))
-            cur.execute("DELETE FROM session_topics WHERE session_id = ?", (session_id,))
-            cur.execute("DELETE FROM session_documents WHERE session_id = ?", (session_id,))
-            try:
-                cur.execute("DELETE FROM document_fts WHERE session_id = ?", (session_id,))
-            except Exception:
-                pass
-            try:
-                cur.execute("DELETE FROM lecture_sessions WHERE session_id = ?", (session_id,))
-            except Exception:
-                pass
-            conn.commit()
-            conn.close()
-        except Exception:
-            pass
-
-    return True
+    with engine.begin() as conn:
+        conn.execute(sql_text("DELETE FROM study_session_messages WHERE session_id = :sid"), {"sid": str(session_id)})
+        conn.execute(sql_text("DELETE FROM study_session_topics WHERE session_id = :sid"), {"sid": str(session_id)})
+        conn.execute(sql_text("DELETE FROM session_documents WHERE session_id = :sid"), {"sid": str(session_id)})
+        res = conn.execute(sql_text("DELETE FROM workspace_sessions WHERE id = :sid"), {"sid": str(session_id)})
+        return res.rowcount > 0
 
 
-# ─── Long-Term Student Episodic Memory (user_memory.json) ────────────────────
+# ─── Long-Term Student Episodic Memory (user_memory) ─────────────────────────
 
 def get_student_memory(user_id: str) -> Dict[str, Any]:
-    """Retrieve student episodic profile."""
-    ensure_data_directories()
-    with _memory_lock:
-        try:
-            if USER_MEMORY_PATH.exists():
-                with open(USER_MEMORY_PATH, "r", encoding="utf-8") as f:
-                    all_mem = json.load(f)
-                    if user_id in all_mem:
-                        return all_mem[user_id]
-        except Exception:
-            pass
-
-    return {
-        "user_id": user_id,
-        "facts": [],
-        "goals": [],
-        "weaknesses": [],
-        "learning_style": "Visual & Step-by-Step",
-        "studied_topics": [],
-        "updated_at": datetime.now(timezone.utc).isoformat()
-    }
+    """Retrieve episodic student memory from PostgreSQL user_memory table."""
+    statement = sql_text("SELECT memory_json FROM user_memory WHERE user_id = :user_id")
+    with engine.connect() as conn:
+        row = conn.execute(statement, {"user_id": str(user_id)}).scalar()
+        if not row:
+            return {
+                "user_id": str(user_id),
+                "facts": [],
+                "goals": [],
+                "weaknesses": [],
+                "learning_style": "Visual & Step-by-Step",
+                "studied_topics": [],
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        mem = row if isinstance(row, dict) else json.loads(row)
+        if "user_id" not in mem:
+            mem["user_id"] = str(user_id)
+        return mem
 
 
 def add_student_memory_fact(
     user_id: str,
     fact: Optional[str] = None,
+    learning_style: Optional[str] = None,
     goal: Optional[str] = None,
     weakness: Optional[str] = None,
-    learning_style: Optional[str] = None,
-    studied_topic: Optional[str] = None
+    studied_topic: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Add episodic facts or struggle areas to student profile."""
-    ensure_data_directories()
-    with _memory_lock:
-        try:
-            all_mem = {}
-            if USER_MEMORY_PATH.exists():
-                with open(USER_MEMORY_PATH, "r", encoding="utf-8") as f:
-                    all_mem = json.load(f)
-        except Exception:
-            all_mem = {}
-
-        prof = all_mem.get(user_id, {
-            "user_id": user_id,
+    """Idempotently add an observation or preference to student memory."""
+    mem = get_student_memory(user_id)
+    if not isinstance(mem, dict):
+        mem = {
+            "user_id": str(user_id),
             "facts": [],
+            "learning_style": "Visual & Step-by-Step",
             "goals": [],
             "weaknesses": [],
-            "learning_style": "Visual & Step-by-Step",
             "studied_topics": [],
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        })
+        }
 
-        if fact and fact not in prof["facts"]:
-            prof["facts"].append(fact)
-        if goal and goal not in prof["goals"]:
-            prof["goals"].append(goal)
-        if weakness and weakness not in prof["weaknesses"]:
-            prof["weaknesses"].append(weakness)
-        if learning_style:
-            prof["learning_style"] = learning_style
-        if studied_topic and studied_topic not in prof["studied_topics"]:
-            prof["studied_topics"].append(studied_topic)
+    mem["user_id"] = str(user_id)
+    mem.setdefault("facts", [])
+    mem.setdefault("goals", [])
+    mem.setdefault("weaknesses", [])
+    mem.setdefault("studied_topics", [])
 
-        prof["updated_at"] = datetime.now(timezone.utc).isoformat()
-        all_mem[user_id] = prof
+    if fact and fact not in mem["facts"]:
+        mem["facts"].append(fact)
+    if learning_style:
+        mem["learning_style"] = learning_style
+    if goal and goal not in mem["goals"]:
+        mem["goals"].append(goal)
+    if weakness and weakness not in mem["weaknesses"]:
+        mem["weaknesses"].append(weakness)
+    if studied_topic and studied_topic not in mem["studied_topics"]:
+        mem["studied_topics"].append(studied_topic)
 
-        try:
-            with open(USER_MEMORY_PATH, "w", encoding="utf-8") as f:
-                json.dump(all_mem, f, indent=2)
-        except Exception:
-            pass
+    mem["updated_at"] = datetime.now(timezone.utc).isoformat()
+    json_str = json.dumps(mem)
 
-        return prof
+    if _is_postgres():
+        sql = sql_text("""
+            INSERT INTO user_memory (user_id, memory_json, updated_at)
+            VALUES (:user_id, CAST(:mem AS jsonb), now())
+            ON CONFLICT (user_id) DO UPDATE SET
+                memory_json = EXCLUDED.memory_json,
+                updated_at = now();
+        """)
+    else:
+        sql = sql_text("""
+            INSERT INTO user_memory (user_id, memory_json, updated_at)
+            VALUES (:user_id, :mem, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id) DO UPDATE SET
+                memory_json = EXCLUDED.memory_json,
+                updated_at = CURRENT_TIMESTAMP;
+        """)
+
+    with engine.begin() as conn:
+        conn.execute(sql, {"user_id": str(user_id), "mem": json_str})
+
+    return mem
 
 
 def reset_student_memory(user_id: str) -> bool:
-    ensure_data_directories()
-    with _memory_lock:
-        try:
-            if USER_MEMORY_PATH.exists():
-                with open(USER_MEMORY_PATH, "r", encoding="utf-8") as f:
-                    all_mem = json.load(f)
-                if user_id in all_mem:
-                    del all_mem[user_id]
-                    with open(USER_MEMORY_PATH, "w", encoding="utf-8") as f:
-                        json.dump(all_mem, f, indent=2)
-            return True
-        except Exception:
-            return False
+    """Clear memory for a student."""
+    empty_mem = {
+        "user_id": str(user_id),
+        "facts": [],
+        "learning_style": "Visual & Step-by-Step",
+        "goals": [],
+        "weaknesses": [],
+        "studied_topics": [],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    empty_json = json.dumps(empty_mem)
+    if _is_postgres():
+        sql = sql_text("""
+            INSERT INTO user_memory (user_id, memory_json, updated_at)
+            VALUES (:user_id, CAST(:empty AS jsonb), now())
+            ON CONFLICT (user_id) DO UPDATE SET
+                memory_json = CAST(:empty AS jsonb),
+                updated_at = now();
+        """)
+    else:
+        sql = sql_text("""
+            INSERT INTO user_memory (user_id, memory_json, updated_at)
+            VALUES (:user_id, :empty, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id) DO UPDATE SET
+                memory_json = :empty,
+                updated_at = CURRENT_TIMESTAMP;
+        """)
+    with engine.begin() as conn:
+        conn.execute(sql, {"user_id": str(user_id), "empty": empty_json})
+    return True
 
 
-# ─── AWS S3 Cloud Backup & Automated State Restoration ───────────────────────
-
-def _get_s3_client():
-    from app.core.config import get_settings
-    settings = get_settings()
-    if not (settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY and settings.AWS_S3_BUCKET_NAME):
-        return None, None
-    try:
-        import boto3
-        s3 = boto3.client(
-            "s3",
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-            region_name=settings.AWS_REGION or "eu-north-1",
-        )
-        return s3, settings.AWS_S3_BUCKET_NAME
-    except Exception:
-        return None, None
-
-
-def schedule_s3_db_backup(session_id: str):
-    """Non-blocking background upload of physical .db to AWS S3 if configured."""
-    def _task():
-        try:
-            s3, bucket = _get_s3_client()
-            if not s3 or not bucket:
-                return
-            db_path = get_session_db_path(session_id)
-            if db_path.exists():
-                s3.upload_file(str(db_path), bucket, f"data_backups/{session_id}.db")
-            if REGISTRY_PATH.exists():
-                s3.upload_file(str(REGISTRY_PATH), bucket, "data_backups/sessions_registry.json")
-        except Exception:
-            pass
-
-    threading.Thread(target=_task, daemon=True).start()
-
-
-def schedule_s3_document_backup(session_id: str, file_path: str, filename: str):
-    """Non-blocking background archival of raw document to S3."""
-    def _task():
-        try:
-            s3, bucket = _get_s3_client()
-            if not s3 or not bucket:
-                return
-            if Path(file_path).exists():
-                s3.upload_file(file_path, bucket, f"documents/{session_id}/{filename}")
-        except Exception:
-            pass
-
-    threading.Thread(target=_task, daemon=True).start()
-
-
-def check_and_restore_s3_backups():
-    """Startup check: inspect S3 for missing session databases and restore locally."""
-    try:
-        s3, bucket = _get_s3_client()
-        if not s3 or not bucket:
-            return
-        # Attempt to restore registry if missing
-        if not REGISTRY_PATH.exists() or REGISTRY_PATH.stat().st_size < 10:
-            try:
-                s3.download_file(bucket, "data_backups/sessions_registry.json", str(REGISTRY_PATH))
-            except Exception:
-                pass
-
-        # For every registered session, restore .db if missing locally
-        sessions = list_registry_sessions()
-        for s in sessions:
-            sid = s.get("id")
-            if sid:
-                local_db = get_session_db_path(sid)
-                if not local_db.exists():
-                    try:
-                        s3.download_file(bucket, f"data_backups/{sid}.db", str(local_db))
-                    except Exception:
-                        pass
-    except Exception:
-        pass
-
-
-# ─── Teacher Mode Storage Helpers ──────────────────────────────────────────
+# ─── Teacher Mode Lecture Tracking ───────────────────────────────────────────
 
 def create_lecture_session(
     session_id: str,
     topic_id: str,
     topic_title: str,
     diagnostic_question: Optional[str] = None,
-    user_id: Optional[str] = None
+    diagnostic_answer: Optional[str] = None,
+    diagnostic_level: str = "standard",
+    user_id: Optional[str] = None,
+    status: str = "diagnostic",
 ) -> Dict[str, Any]:
-    """Creates a new durable lecture session record in SQLite."""
-    db_path = init_user_db(user_id)
-    lecture_id = f"lec_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{os.urandom(3).hex()}"
-    now_iso = datetime.now(timezone.utc).isoformat()
+    """Initialize a teacher-mode interactive lecture session in PostgreSQL."""
+    lec_id = str(uuid.uuid4())
 
-    conn = sqlite3.connect(str(db_path))
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
+    if _is_postgres():
+        sql = sql_text("""
             INSERT INTO lecture_sessions (
-                id, session_id, topic_id, topic_title, status, diagnostic_question, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (lecture_id, session_id, topic_id, topic_title, "diagnostic", diagnostic_question, now_iso, now_iso)
-        )
-        conn.commit()
-    finally:
-        conn.close()
+                id, session_id, topic_id, topic_title, status, diagnostic_question,
+                diagnostic_answer, diagnostic_level, current_phase, current_segment_index,
+                accumulated_notes_markdown, created_at, updated_at
+            )
+            VALUES (
+                CAST(:id AS UUID), :session_id, :topic_id, :topic_title, :status, :diagnostic_q,
+                :diagnostic_a, :diagnostic_lvl, 'phase_1', 0, '', now(), now()
+            )
+            RETURNING id::text;
+        """)
+    else:
+        sql = sql_text("""
+            INSERT INTO lecture_sessions (
+                id, session_id, topic_id, topic_title, status, diagnostic_question,
+                diagnostic_answer, diagnostic_level, current_phase, current_segment_index,
+                accumulated_notes_markdown, created_at, updated_at
+            )
+            VALUES (
+                :id, :session_id, :topic_id, :topic_title, :status, :diagnostic_q,
+                :diagnostic_a, :diagnostic_lvl, 'phase_1', 0, '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            RETURNING id;
+        """)
 
-    schedule_s3_db_backup(session_id)
+    with engine.begin() as conn:
+        res = conn.execute(sql, {
+            "id": lec_id,
+            "session_id": str(session_id),
+            "topic_id": str(topic_id),
+            "topic_title": str(topic_title),
+            "status": status,
+            "diagnostic_q": diagnostic_question,
+            "diagnostic_a": diagnostic_answer,
+            "diagnostic_lvl": diagnostic_level,
+        })
+        row = res.fetchone()
+        assigned_id = str(row[0]) if row else lec_id
+
     return {
-        "id": lecture_id,
-        "session_id": session_id,
-        "topic_id": topic_id,
-        "topic_title": topic_title,
-        "status": "diagnostic",
+        "id": assigned_id,
+        "session_id": str(session_id),
+        "topic_id": str(topic_id),
+        "topic_title": str(topic_title),
+        "status": status,
         "diagnostic_question": diagnostic_question,
         "current_phase": "phase_1",
-        "accumulated_notes_markdown": ""
+        "accumulated_notes_markdown": "",
     }
 
 
-def get_lecture_session(session_id: str, lecture_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """Fetches a lecture session record by ID."""
-    db_path = get_user_db_path(user_id)
-    if not db_path.exists():
-        return None
-
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM lecture_sessions WHERE session_id = ? AND id = ?", (session_id, lecture_id))
-        row = cur.fetchone()
+def get_lecture_session(
+    session_id: str,
+    lecture_id: str,
+    user_id: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Retrieve full state of a teacher lecture session."""
+    statement = sql_text("""
+        SELECT id::text AS id, session_id, topic_id, topic_title, status, diagnostic_question,
+               diagnostic_answer, diagnostic_level, current_phase, current_segment_index,
+               accumulated_notes_markdown, teach_back_prompt, teach_back_submission,
+               teach_back_grade_json, created_at, updated_at
+        FROM lecture_sessions
+        WHERE session_id = :session_id AND (id::text = :lecture_id OR topic_id = :lecture_id)
+    """)
+    with engine.connect() as conn:
+        row = conn.execute(statement, {
+            "session_id": str(session_id),
+            "lecture_id": str(lecture_id),
+        }).mappings().first()
         if not row:
             return None
         res = dict(row)
-        if res.get("teach_back_grade_json"):
+        tb_grade = res.get("teach_back_grade_json")
+        if isinstance(tb_grade, str):
             try:
-                res["teach_back_grade"] = json.loads(res["teach_back_grade_json"])
+                res["teach_back_grade"] = json.loads(tb_grade)
             except Exception:
                 res["teach_back_grade"] = None
+        else:
+            res["teach_back_grade"] = tb_grade
         return res
-    finally:
-        conn.close()
 
 
-def update_lecture_session(session_id: str, lecture_id: str, user_id: Optional[str] = None, **kwargs) -> bool:
-    """Updates fields of a lecture session record."""
-    db_path = get_user_db_path(user_id)
-    if not db_path.exists():
+def update_lecture_session(
+    session_id: str,
+    lecture_id: str,
+    user_id: Optional[str] = None,
+    **kwargs,
+) -> bool:
+    """Update fields on a lecture session dynamically."""
+    if not kwargs:
         return False
 
-    valid_cols = {
-        "status", "diagnostic_question", "diagnostic_answer", "diagnostic_level",
-        "current_phase", "current_segment_index", "accumulated_notes_markdown",
-        "teach_back_prompt", "teach_back_submission", "teach_back_grade_json"
+    set_clauses = []
+    params: Dict[str, Any] = {
+        "session_id": str(session_id),
+        "lecture_id": str(lecture_id),
     }
-    updates = {k: v for k, v in kwargs.items() if k in valid_cols}
-    if not updates:
-        return False
 
-    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
-    set_clauses = [f"{col} = ?" for col in updates.keys()]
-    values = list(updates.values()) + [session_id, lecture_id]
+    for key, val in kwargs.items():
+        if key == "teach_back_grade":
+            key = "teach_back_grade_json"
+            val = json.dumps(val) if val is not None else None
+        elif isinstance(val, (dict, list)):
+            val = json.dumps(val)
 
-    conn = sqlite3.connect(str(db_path))
-    try:
-        cur = conn.cursor()
-        cur.execute(f"UPDATE lecture_sessions SET {', '.join(set_clauses)} WHERE session_id = ? AND id = ?", values)
-        conn.commit()
-        return cur.rowcount > 0
-    finally:
-        conn.close()
+        param_name = f"val_{key}"
+        set_clauses.append(f"{key} = :{param_name}")
+        params[param_name] = val
+
+    set_clauses.append("updated_at = now()" if _is_postgres() else "updated_at = CURRENT_TIMESTAMP")
+    sql = sql_text(f"""
+        UPDATE lecture_sessions
+        SET {', '.join(set_clauses)}
+        WHERE session_id = :session_id AND (id::text = :lecture_id OR topic_id = :lecture_id)
+    """)
+
+    with engine.begin() as conn:
+        res = conn.execute(sql, params)
+        return res.rowcount > 0
 
 
 def record_lecture_checkpoint(
@@ -1190,95 +905,124 @@ def record_lecture_checkpoint(
     lecture_id: str,
     phase: str,
     question_prompt: str,
-    options: Optional[List[Dict[str, Any]]],
-    correct_answer: str,
-    user_id: Optional[str] = None
+    options: Optional[List[Any]] = None,
+    correct_answer: str = "a",
+    user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Records an active-recall checkpoint question for a lecture phase."""
-    db_path = init_user_db(user_id)
-    checkpoint_id = f"chk_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{os.urandom(3).hex()}"
-    options_json = json.dumps(options) if options else None
+    """Store an active-recall checkpoint."""
+    cp_id = str(uuid.uuid4())
+    opt_json = json.dumps(options or [])
 
-    conn = sqlite3.connect(str(db_path))
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
+    if _is_postgres():
+        sql = sql_text("""
             INSERT INTO lecture_checkpoints (
-                id, lecture_id, phase, question_prompt, options_json, correct_answer, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (checkpoint_id, lecture_id, phase, question_prompt, options_json, correct_answer, datetime.now(timezone.utc).isoformat())
-        )
-        conn.commit()
-    finally:
-        conn.close()
+                id, session_id, lecture_id, phase, question_prompt, options_json, correct_answer, created_at
+            )
+            VALUES (
+                :id, :session_id, :lecture_id, :phase, :question_prompt, :options,
+                :correct_answer, now()
+            )
+            RETURNING id;
+        """)
+    else:
+        sql = sql_text("""
+            INSERT INTO lecture_checkpoints (
+                id, session_id, lecture_id, phase, question_prompt, options_json, correct_answer, created_at
+            )
+            VALUES (
+                :id, :session_id, :lecture_id, :phase, :question_prompt, :options,
+                :correct_answer, CURRENT_TIMESTAMP
+            )
+            RETURNING id;
+        """)
+
+    with engine.begin() as conn:
+        res = conn.execute(sql, {
+            "id": cp_id,
+            "session_id": str(session_id),
+            "lecture_id": str(lecture_id),
+            "phase": phase,
+            "question_prompt": question_prompt,
+            "options": opt_json,
+            "correct_answer": correct_answer,
+        })
+        row = res.fetchone()
+        assigned_id = str(row[0]) if row else cp_id
 
     return {
-        "id": checkpoint_id,
-        "lecture_id": lecture_id,
+        "id": assigned_id,
+        "session_id": str(session_id),
+        "lecture_id": str(lecture_id),
         "phase": phase,
         "question_prompt": question_prompt,
         "options": options or [],
-        "correct_answer": correct_answer
+        "correct_answer": correct_answer,
     }
 
 
 def update_lecture_checkpoint(
-    session_id: str,
     checkpoint_id: str,
     student_response: str,
     is_correct: bool,
     remedial_modality: Optional[str] = None,
     remedial_content: Optional[str] = None,
-    user_id: Optional[str] = None
+    session_id: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> bool:
-    """Updates a checkpoint record with student response and grading/remedial details."""
-    db_path = get_user_db_path(user_id)
-    if not db_path.exists():
-        return False
+    """Update checkpoint with student's answer and remediation outcome."""
+    cast_where = "id::text = :cp_id" if _is_postgres() else "id = :cp_id"
+    statement = sql_text(f"""
+        UPDATE lecture_checkpoints
+        SET student_response = :response,
+            is_correct = :is_correct,
+            remedial_modality = :remedial_modality,
+            remedial_content = :remedial_content
+        WHERE {cast_where}
+    """)
+    with engine.begin() as conn:
+        res = conn.execute(statement, {
+            "cp_id": str(checkpoint_id),
+            "response": student_response,
+            "is_correct": is_correct,
+            "remedial_modality": remedial_modality,
+            "remedial_content": remedial_content,
+        })
+        return res.rowcount > 0
 
-    conn = sqlite3.connect(str(db_path))
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            UPDATE lecture_checkpoints
-            SET student_response = ?, is_correct = ?, remedial_modality = ?, remedial_content = ?
-            WHERE id = ?
-            """,
-            (student_response, 1 if is_correct else 0, remedial_modality, remedial_content, checkpoint_id)
-        )
-        conn.commit()
-        return cur.rowcount > 0
-    finally:
-        conn.close()
 
+def get_lecture_checkpoints(
+    session_id: str,
+    lecture_id: str,
+    user_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Retrieve all checkpoints recorded for a lecture."""
+    cast_id = "id::text AS id" if _is_postgres() else "id"
+    statement = sql_text(f"""
+        SELECT {cast_id}, lecture_id, phase, question_prompt, options_json,
+               correct_answer, student_response, is_correct, remedial_modality,
+               remedial_content, created_at
+        FROM lecture_checkpoints
+        WHERE lecture_id = :lecture_id
+        ORDER BY created_at ASC
+    """)
+    with engine.connect() as conn:
+        rows = conn.execute(statement, {"lecture_id": str(lecture_id)}).mappings().fetchall()
 
-def get_lecture_checkpoints(session_id: str, lecture_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Retrieves all checkpoints recorded for a lecture session."""
-    db_path = get_user_db_path(user_id)
-    if not db_path.exists():
-        return []
-
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM lecture_checkpoints WHERE lecture_id = ? ORDER BY created_at ASC", (lecture_id,))
-        rows = cur.fetchall()
-        result = []
-        for r in rows:
-            d = dict(r)
-            if d.get("options_json"):
-                try:
-                    d["options"] = json.loads(d["options_json"])
-                except Exception:
-                    d["options"] = []
-            result.append(d)
-        return result
-    finally:
-        conn.close()
+    cps = []
+    for r in rows:
+        c = dict(r)
+        opt = c.get("options_json")
+        if isinstance(opt, str):
+            try:
+                c["options"] = json.loads(opt)
+            except Exception:
+                c["options"] = []
+        elif isinstance(opt, list):
+            c["options"] = opt
+        else:
+            c["options"] = []
+        cps.append(c)
+    return cps
 
 
 def record_lecture_pause(
@@ -1288,33 +1032,51 @@ def record_lecture_pause(
     student_question: str,
     teacher_response: str,
     token_offset: int = 0,
-    user_id: Optional[str] = None
+    user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Records an inline pause-and-ask event during a lecture."""
-    db_path = init_user_db(user_id)
-    pause_id = f"pause_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{os.urandom(3).hex()}"
-
-    conn = sqlite3.connect(str(db_path))
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
+    """Log student questions during inline lecture pause."""
+    p_id = str(uuid.uuid4())
+    if _is_postgres():
+        sql = sql_text("""
             INSERT INTO lecture_pause_events (
-                id, lecture_id, phase, token_offset, student_question, teacher_response, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (pause_id, lecture_id, phase, token_offset, student_question, teacher_response, datetime.now(timezone.utc).isoformat())
-        )
-        conn.commit()
-    finally:
-        conn.close()
+                id, session_id, lecture_id, phase, token_offset, student_question, teacher_response, created_at
+            )
+            VALUES (
+                :id, :session_id, :lecture_id, :phase, :token_offset, :question, :response, now()
+            )
+            RETURNING id;
+        """)
+    else:
+        sql = sql_text("""
+            INSERT INTO lecture_pause_events (
+                id, session_id, lecture_id, phase, token_offset, student_question, teacher_response, created_at
+            )
+            VALUES (
+                :id, :session_id, :lecture_id, :phase, :token_offset, :question, :response, CURRENT_TIMESTAMP
+            )
+            RETURNING id;
+        """)
+
+    with engine.begin() as conn:
+        res = conn.execute(sql, {
+            "id": p_id,
+            "session_id": str(session_id),
+            "lecture_id": str(lecture_id),
+            "phase": phase,
+            "token_offset": token_offset,
+            "question": student_question,
+            "response": teacher_response,
+        })
+        row = res.fetchone()
+        assigned_id = str(row[0]) if row else p_id
 
     return {
-        "id": pause_id,
-        "lecture_id": lecture_id,
+        "id": assigned_id,
+        "lecture_id": str(lecture_id),
         "phase": phase,
         "student_question": student_question,
-        "teacher_response": teacher_response
+        "teacher_response": teacher_response,
+        "token_offset": token_offset,
     }
 
 
@@ -1324,41 +1086,86 @@ def record_mastered_topic(
     subject: str,
     mastery_score: float = 100.0,
     lecture_id: Optional[str] = None,
-    user_id: Optional[str] = None
+    user_id: Optional[str] = None,
 ) -> bool:
-    """Registers a topic as mastered in the student's episodic memory registry."""
-    db_path = init_user_db(user_id)
-    topic_id = f"mst_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{os.urandom(3).hex()}"
-
-    conn = sqlite3.connect(str(db_path))
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
+    """Record mastery of a curriculum topic."""
+    m_id = str(uuid.uuid4())
+    if _is_postgres():
+        sql = sql_text("""
             INSERT INTO user_mastered_topics (
-                id, session_id, topic_title, subject, mastery_score, lecture_id, completed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (topic_id, session_id, topic_title, subject, mastery_score, lecture_id, datetime.now(timezone.utc).isoformat())
-        )
-        conn.commit()
+                id, session_id, user_id, topic_title, subject, mastery_score, lecture_id, completed_at
+            )
+            VALUES (
+                CAST(:id AS UUID), :session_id, :user_id, :topic_title, :subject,
+                :mastery_score, :lecture_id, now()
+            )
+            RETURNING id::text;
+        """)
+    else:
+        sql = sql_text("""
+            INSERT INTO user_mastered_topics (
+                id, session_id, user_id, topic_title, subject, mastery_score, lecture_id, completed_at
+            )
+            VALUES (
+                :id, :session_id, :user_id, :topic_title, :subject,
+                :mastery_score, :lecture_id, CURRENT_TIMESTAMP
+            )
+            RETURNING id;
+        """)
+
+    with engine.begin() as conn:
+        conn.execute(sql, {
+            "id": m_id,
+            "session_id": str(session_id),
+            "user_id": user_id,
+            "topic_title": topic_title,
+            "subject": subject,
+            "mastery_score": float(mastery_score),
+            "lecture_id": lecture_id,
+        })
         return True
-    finally:
-        conn.close()
 
 
-def get_mastered_topics(session_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Retrieves all mastered topics for the session/student to enable cross-lecture continuity."""
-    db_path = get_user_db_path(user_id)
-    if not db_path.exists():
-        return []
+def get_mastered_topics(
+    session_id: str,
+    user_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Retrieve all mastered topics for a user/session."""
+    clause = "WHERE session_id = :session_id" if session_id else ""
+    if user_id:
+        clause = f"{clause} OR user_id = :user_id" if clause else "WHERE user_id = :user_id"
 
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM user_mastered_topics WHERE session_id = ? OR session_id = '' ORDER BY completed_at DESC", (session_id,))
-        rows = cur.fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        conn.close()
+    cast_id = "id::text AS id" if _is_postgres() else "id"
+    statement = sql_text(f"""
+        SELECT {cast_id}, session_id, user_id, topic_title, subject,
+               mastery_score, lecture_id, completed_at
+        FROM user_mastered_topics
+        {clause}
+        ORDER BY completed_at DESC
+    """)
+    params = {}
+    if session_id:
+        params["session_id"] = str(session_id)
+    if user_id:
+        params["user_id"] = str(user_id)
+
+    with engine.connect() as conn:
+        rows = conn.execute(statement, params).mappings().fetchall()
+    return [dict(r) for r in rows]
+
+
+# ─── Cloud Storage / S3 Compatibility Stubs ──────────────────────────────────
+
+def schedule_s3_db_backup(session_id: str):
+    """No-op: Central PostgreSQL does not require local SQLite disk sync."""
+    pass
+
+
+def schedule_s3_document_backup(session_id: str, file_path: str, filename: str):
+    """Optional document binary backup stub."""
+    pass
+
+
+def check_and_restore_s3_backups():
+    """Startup verification stub."""
+    pass

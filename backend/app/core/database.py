@@ -51,25 +51,26 @@ try:
 except Exception as e:
     print(f"[DATABASE] Base.metadata.create_all warning: {e}")
 
-# Auto-migrate missing columns for existing SQLite database
-with engine.connect() as conn:
-    for sql in [
-        "ALTER TABLE documents ADD COLUMN key_topics TEXT DEFAULT '[]'",
-        "ALTER TABLE documents ADD COLUMN doc_hash VARCHAR(64)",
-        "ALTER TABLE documents ADD COLUMN status VARCHAR(20) DEFAULT 'pending'",
-        "ALTER TABLE documents ADD COLUMN error_message TEXT",
-        "ALTER TABLE users ADD COLUMN is_premium BOOLEAN DEFAULT 0",
-        "ALTER TABLE users ADD COLUMN plan VARCHAR DEFAULT 'free'",
-        "ALTER TABLE users ADD COLUMN current_streak INTEGER DEFAULT 0",
-        "ALTER TABLE users ADD COLUMN longest_streak INTEGER DEFAULT 0",
-        "ALTER TABLE users ADD COLUMN total_learning_hours REAL DEFAULT 0.0",
-        "ALTER TABLE users ADD COLUMN last_active_date TEXT",
-    ]:
-        try:
-            conn.execute(text(sql))
-            conn.commit()
-        except Exception:
-            pass
+# Auto-migrate missing columns for existing SQLite database (only when running against SQLite)
+if engine.dialect.name == "sqlite":
+    with engine.connect() as conn:
+        for sql in [
+            "ALTER TABLE documents ADD COLUMN key_topics TEXT DEFAULT '[]'",
+            "ALTER TABLE documents ADD COLUMN doc_hash VARCHAR(64)",
+            "ALTER TABLE documents ADD COLUMN status VARCHAR(20) DEFAULT 'pending'",
+            "ALTER TABLE documents ADD COLUMN error_message TEXT",
+            "ALTER TABLE users ADD COLUMN is_premium BOOLEAN DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN plan VARCHAR DEFAULT 'free'",
+            "ALTER TABLE users ADD COLUMN current_streak INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN longest_streak INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN total_learning_hours REAL DEFAULT 0.0",
+            "ALTER TABLE users ADD COLUMN last_active_date TEXT",
+        ]:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except Exception:
+                pass
 
 
 CHAPTER_TITLES = {

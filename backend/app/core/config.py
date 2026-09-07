@@ -28,7 +28,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./deep_tutor.db"
     # Canonical development and deployed environments must fail fast instead
     # of silently running against SQLite when PostgreSQL is unavailable.
-    ALLOW_SQLITE_FALLBACK: bool = True
+    # Keep False by default in production. Set to True via env var only for emergency rollback.
+    ALLOW_SQLITE_FALLBACK: bool = False
 
     # ── LLM / Chat Provider ──────────────────────────────────────────────────
     # Switch via .env: LLM_PROVIDER=openai | azure_openai | gemini | ollama
@@ -66,7 +67,7 @@ class Settings(BaseSettings):
 
     # ── Stage 3: Vector Store Backend ───────────────────────────────────────
     # Switch via .env: VECTOR_STORE_BACKEND=pgvector | pinecone | faiss | chroma
-    VECTOR_STORE_BACKEND: str = "pinecone"
+    VECTOR_STORE_BACKEND: str = "pgvector"
     PGVECTOR_DIMENSIONS: int = 1536
     PGVECTOR_HNSW_M: int = 16
     PGVECTOR_HNSW_EF_CONSTRUCTION: int = 64
@@ -160,12 +161,11 @@ class Settings(BaseSettings):
     FREE_MAX_UPLOAD_SIZE_MB: int = 5000
     PREMIUM_MAX_UPLOAD_SIZE_MB: int = 5000
 
-    # ── AWS S3 Document Cloud Storage ─────────────────────────────────────────
-    AWS_ACCESS_KEY_ID: str = ""
-    AWS_SECRET_ACCESS_KEY: str = ""
-    AWS_S3_BUCKET_NAME: str = "deeptutor-documents-storage"
-    AWS_REGION: str = "eu-north-1"
-    ENABLE_S3_STORAGE: bool = True
+    # ── Cloud Document Storage (Azure Blob) ──────────────────────────────────
+    STORAGE_BACKEND: str = "azure_blob"       # "azure_blob" | "local"
+    AZURE_STORAGE_ACCOUNT_NAME: str = ""
+    AZURE_STORAGE_CONTAINER_NAME: str = "deeptutor-documents"
+    AZURE_STORAGE_CONNECTION_STRING: str = ""
 
     # ── Confidence / Grounding ───────────────────────────────────────────────
     MIN_CONFIDENCE_TO_STREAM: float = 0.0
