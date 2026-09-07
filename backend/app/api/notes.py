@@ -14,7 +14,7 @@ from app.api.auth import get_current_user
 from app.core import database as db
 from app.core.config import get_settings
 from app.rag.curriculum_catalog import is_curriculum_topic, extract_textbook_chunks, get_chapter_title
-from app.rag.ollama_client import ollama, GeminiClient
+from app.rag.llm_client import llm_client
 
 def process_document(file_path: str):
     import pypdf
@@ -452,17 +452,17 @@ Respond ONLY with valid JSON.
         except Exception as e:
             print(f"[notes] Gemini generation error: {e}")
 
-    # Fallback to Ollama if needed
+    # Fallback to OpenAI LLM if needed
     if not parsed_data:
         try:
-            ollama_messages = [
+            llm_messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ]
-            resp = await ollama.chat(ollama_messages, temperature=0.3)
+            resp = await llm_client.chat(llm_messages, temperature=0.3)
             parsed_data = _robust_extract_json(resp)
         except Exception as e:
-            print(f"[notes] Ollama generation error: {e}")
+            print(f"[notes] OpenAI LLM generation error: {e}")
 
     # Rich Fallback if LLM fails or is unconfigured
     if not parsed_data or not parsed_data.get("content_markdown"):

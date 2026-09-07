@@ -13,7 +13,7 @@ from app.core import database as db
 from app.core.config import get_settings
 from app.rag.doc_processor import doc_processor
 from app.rag.topic_extractor import topic_extractor
-from app.rag.ollama_client import ollama
+from app.rag.llm_client import llm_client
 from app.rag.sqlite_fts_store import get_session_store
 from app.rag.document_dedup import get_file_hash, is_already_processed, link_document_to_session
 
@@ -266,7 +266,7 @@ Return JSON matching:
 }}
 JSON OUTPUT:"""
     try:
-        raw = await ollama.chat([{"role": "user", "content": prompt}], temperature=0.2)
+        raw = await llm_client.chat([{"role": "user", "content": prompt}], temperature=0.2)
         cleaned = raw.strip().removeprefix("```json").removesuffix("```").strip()
         parsed = json.loads(cleaned)
         _concept_cache[cache_key] = parsed

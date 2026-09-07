@@ -10,7 +10,7 @@ import json
 import re
 import asyncio
 from typing import Dict, List, Any, Optional
-from app.rag.ollama_client import ollama
+from app.rag.llm_client import llm_client
 
 EXAM_GENERATION_PROMPT = """You are an academic testing and assessment specialist.
 Create a comprehensive 3 to 4 question examination for the topic: "{topic_title}".
@@ -97,7 +97,7 @@ class ExamGenerator:
         )
 
         try:
-            resp = await ollama.chat(
+            resp = await llm_client.chat(
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
             )
@@ -232,7 +232,7 @@ class ExamGenerator:
                             sample_correct_answer=q.get("sample_correct_answer", ""),
                             student_answer=user_ans,
                         )
-                        eval_resp = await ollama.chat(
+                        eval_resp = await llm_client.chat(
                             messages=[{"role": "user", "content": eval_prompt}],
                             temperature=0.1,
                         )

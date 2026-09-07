@@ -8,7 +8,7 @@ import json
 import re
 import asyncio
 from typing import AsyncGenerator, Dict, List, Optional, Any
-from app.rag.ollama_client import ollama
+from app.rag.llm_client import llm_client
 
 NORMAL_CORE_IDEA_PROMPT = """You are an elite academic tutor. The student is exploring the topic: "{topic_title}".
 Context summary: {topic_summary}
@@ -144,7 +144,7 @@ class TeachingEngine:
         ]
 
         try:
-            raw = await ollama.chat(messages, temperature=0.2)
+            raw = await llm_client.chat(messages, temperature=0.2)
             cleaned = raw.strip()
             if cleaned.startswith("```"):
                 cleaned = cleaned.split("\n", 1)[1]
@@ -220,7 +220,7 @@ class TeachingEngine:
             {"role": "user", "content": prompt},
         ]
 
-        async for chunk in ollama.chat_stream(messages, temperature=0.3):
+        async for chunk in llm_client.chat_stream(messages, temperature=0.3):
             # Clean any accidental emojis
             sanitized_chunk = re.sub(r'[\U00010000-\U0010ffff]', '', chunk)
             yield sanitized_chunk
@@ -251,7 +251,7 @@ class TeachingEngine:
 
         messages.append({"role": "user", "content": prompt})
 
-        res = await ollama.chat(messages, temperature=0.2)
+        res = await llm_client.chat(messages, temperature=0.2)
         return re.sub(r'[\U00010000-\U0010ffff]', '', res).strip()
 
 

@@ -167,15 +167,15 @@ async def call_llm(
             except Exception:
                 pass
 
-    # 2. Unified Client Router
+    # 2. Unified OpenAI Client Router
     try:
-        from app.rag.ollama_client import ollama
-        if await ollama.is_available():
+        from app.rag.llm_client import llm_client
+        if await llm_client.is_available():
             msgs = []
             if system_instruction:
                 msgs.append({"role": "system", "content": system_instruction})
             msgs.append({"role": "user", "content": prompt})
-            resp = await ollama.chat(msgs, temperature=temperature)
+            resp = await llm_client.chat(msgs, temperature=temperature)
             if resp and resp.strip():
                 return resp.strip()
     except Exception:

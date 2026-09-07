@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import Dict, List, Optional
 from app.api.auth import get_current_user
 from app.core import database as db
-from app.rag.ollama_client import ollama
+from app.rag.llm_client import llm_client
 from app.rag.exam_generator import exam_generator
 from app.rag.doc_processor import doc_processor
 from app.rag.sqlite_fts_store import get_session_store

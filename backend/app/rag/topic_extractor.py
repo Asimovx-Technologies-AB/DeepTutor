@@ -13,7 +13,7 @@ import pypdf
 
 import httpx
 from app.core.config import get_settings
-from app.rag.ollama_client import ollama, CASCADE_MODELS
+from app.rag.llm_client import llm_client
 from app.rag.vlm_client import vlm_client
 
 settings = get_settings()
@@ -285,10 +285,10 @@ class TopicExtractor:
                 subject=subject_clean, text_sample=truncated
             )
 
-            # Attempt 1: Fast LLM (Ollama / Gemini cascade)
+            # Attempt 1: Fast LLM (OpenAI ChatGPT)
             try:
                 response = await asyncio.wait_for(
-                    ollama.chat(
+                    llm_client.chat(
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0.2,
                     ),

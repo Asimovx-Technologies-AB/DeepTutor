@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from app.api.auth import get_current_user
 from app.core import database as db
-from app.rag.ollama_client import ollama
+from app.rag.llm_client import llm_client
 from app.rag.doc_processor import doc_processor
 from app.rag.sqlite_fts_store import get_session_store
 
@@ -60,7 +60,7 @@ Return ONLY a valid JSON list of flashcard objects matching this exact schema:
 ]
 JSON OUTPUT:"""
 
-    raw = await ollama.chat([{"role": "user", "content": prompt}], temperature=0.2)
+    raw = await llm_client.chat([{"role": "user", "content": prompt}], temperature=0.2)
     cleaned = raw.strip().removeprefix("```json").removesuffix("```").strip()
 
     try:

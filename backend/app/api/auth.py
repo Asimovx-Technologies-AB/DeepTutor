@@ -102,16 +102,6 @@ def get_user_from_token(token: str) -> dict:
     """Validate token string and return user dict, or raise HTTPException(401)."""
     if not token:
         raise HTTPException(status_code=401, detail="Authentication token required")
-    if token in ("demo-token", "demo-guest-token"):
-        return {
-            "id": "guest-user",
-            "username": "Student Learner",
-            "email": "student@deeptutor.ai",
-            "role": "student",
-            "is_premium": True,
-            "plan": "premium",
-            "max_upload_size_mb": 100,
-        }
     payload = decode_token(token)
     if not payload or not payload.get("sub"):
         raise HTTPException(status_code=401, detail="Invalid or expired token")

@@ -30,7 +30,7 @@ import re
 import asyncio
 from dataclasses import dataclass, field, asdict
 from typing import Dict, Any, List, Optional
-from app.rag.ollama_client import ollama
+from app.rag.llm_client import llm_client
 
 
 PLANNER_SYSTEM_PROMPT = """You are the Planning Agent for IndieTutor, an AI educational platform.
@@ -163,13 +163,63 @@ class QueryAnalyzerAgent:
         raw_msg = message.strip()
         lower = raw_msg.lower()
 
-        # Fast-path heuristic: no need to spend an LLM call on a bare greeting.
+        # ─── Fast-path Heuristics (<0.2ms, zero LLM cost) ───────────
+        # 1. Bare greeting
         if re.fullmatch(r"(hi|hello|hey|good morning|good evening|hey there|greetings)[.!]?", lower):
             return QueryPlan(
                 intent="GREETING",
                 reasoning="Message is a bare greeting with no topical content.",
-                confidence=0.95,
+                confidence=0.98,
                 recommended_action="GREET",
+            ).as_dict()
+
+        # 2. Direct Confirmation / Denial
+        if re.fullmatch(r"(yes|yeah|yep|sure|ok|okay|please do|no|nope|not now)[.!]?", lower):
+            is_yes = lower in ("yes", "yeah", "yep", "sure", "ok", "okay", "please do")
+            return QueryPlan(
+                intent="CONFIRMATION" if is_yes else "NEGATION",
+                reasoning=f"Message is a conversational {'affirmation' if is_yes else 'negation'}.",
+                confidence=0.95,
+                recommended_action="PROCEED" if is_yes else "ACKNOWLEDGE",
+            ).as_dict()
+
+        # 3. Direct Comparison
+        comp_match = re.search(r"\b(?:diff(?:erence)?\s+between|vs\.?|versus|compare)\s+([a-zA-Z0-9\s]+?)(?:\s+and\s+|\s+vs\.?\s+)([a-zA-Z0-9\s]+)", lower)
+        if comp_match:
+            item_a, item_b = comp_match.group(1).strip(), comp_match.group(2).strip()
+            return QueryPlan(
+                intent="EXPLANATION_REQUEST",
+                reasoning=f"Direct comparison query between {item_a} and {item_b}.",
+                target_topic=f"{item_a} vs {item_b}",
+                search_queries=[f"{item_a} {item_b}", item_a, item_b],
+                response_format="comparison",
+                requires_table_data=True,
+                confidence=0.95,
+                recommended_action="EXPLAIN",
+            ).as_dict()
+
+        # 4. Study Notes Request
+        if re.search(r"\b(?:notes?|study\s*notes?|summary|cheat\s*sheet)\s*(?:on|for|about)?\s*([a-zA-Z0-9\s]+)", lower):
+            topic_str = _clean_topic_string(raw_msg)
+            return QueryPlan(
+                intent="EXPLANATION_REQUEST",
+                reasoning="Student explicitly requested reference study notes.",
+                target_topic=topic_str or current_subject,
+                search_queries=[topic_str or raw_msg],
+                response_format="study_notes",
+                confidence=0.92,
+                recommended_action="EXPLAIN",
+            ).as_dict()
+
+        # 5. Quiz / Test Request
+        if re.search(r"\b(?:quiz\s*me|test\s*me|ask\s*me\s*\d*\s*questions?)\b", lower):
+            return QueryPlan(
+                intent="QUIZ_REQUEST",
+                reasoning="Student requested an active recall quiz.",
+                target_topic=current_subject,
+                response_format="quiz",
+                confidence=0.95,
+                recommended_action="QUIZ",
             ).as_dict()
 
         plan = await self._plan_with_retries(raw_msg, current_subject, history)
@@ -225,7 +275,7 @@ class QueryAnalyzerAgent:
         messages.append({"role": "user", "content": f'Analyze this student query: "{raw_msg}"'})
 
         temperature = 0.1 if not strict else 0.0
-        raw_response = await ollama.chat(messages, temperature=temperature)
+        raw_response = await llm_client.chat(messages, temperature=temperature)
         return _extract_json(raw_response)
 
     def _parse_plan(self, data: Dict[str, Any], raw_msg: str) -> QueryPlan:

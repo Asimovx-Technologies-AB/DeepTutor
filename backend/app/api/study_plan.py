@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from app.api.auth import get_current_user
 from app.core import database as db
-from app.rag.ollama_client import ollama
+from app.rag.llm_client import llm_client
 
 router = APIRouter(prefix="/study-plan", tags=["study-plan"])
 
@@ -50,7 +50,7 @@ FORMAT REQUIREMENTS:
   8. ## Quick-Reference Glossary (Two-column Markdown table of key terms and concise definitions).
   9. **Topics to expand next:** (1 line suggestion of next logical study topic).
 """
-    notes = await ollama.chat([{"role": "user", "content": prompt}], temperature=0.2)
+    notes = await llm_client.chat([{"role": "user", "content": prompt}], temperature=0.2)
     return notes.strip()
 
 
@@ -78,7 +78,7 @@ Return ONLY a valid JSON list of day objects with this exact structure:
 ]
 JSON OUTPUT:"""
 
-    raw = await ollama.chat([{"role": "user", "content": prompt}], temperature=0.2)
+    raw = await llm_client.chat([{"role": "user", "content": prompt}], temperature=0.2)
     cleaned = raw.strip().removeprefix("```json").removesuffix("```").strip()
 
     try:

@@ -28,7 +28,7 @@ import re
 import json
 import asyncio
 from typing import Dict, Any, List, Optional
-from app.rag.ollama_client import ollama
+from app.rag.llm_client import llm_client
 from app.rag.user_memory import user_memory_store
 
 
@@ -219,7 +219,7 @@ Respond with ONLY this JSON object:
                     })
                 messages.append({"role": "user", "content": f"Student's question: {message}"})
 
-                raw = await ollama.chat(messages, temperature=0.2 if attempt == 0 else 0.0)
+                raw = await llm_client.chat(messages, temperature=0.2 if attempt == 0 else 0.0)
                 parsed = self._parse_llm_response(raw)
                 if parsed and parsed.get("reply"):
                     result = parsed
@@ -466,7 +466,7 @@ Respond with ONLY this JSON object:
                 },
                 {"role": "user", "content": f"Student's question: {message}"},
             ]
-            raw = await ollama.chat(messages, temperature=0.0)
+            raw = await llm_client.chat(messages, temperature=0.0)
             parsed = self._parse_llm_response(raw)
             if parsed and parsed.get("reply"):
                 return self._finalize(parsed, message)
@@ -480,7 +480,7 @@ Respond with ONLY this JSON object:
             {"role": "system", "content": self.VERIFIER_SYSTEM_PROMPT},
             {"role": "user", "content": f"RETRIEVED COURSE MATERIAL:\n{context.strip()[:4000]}\n\nDRAFT ANSWER:\n{reply}"},
         ]
-        raw = await ollama.chat(messages, temperature=0.0)
+        raw = await llm_client.chat(messages, temperature=0.0)
         cleaned = self._strip_code_fences(raw)
         if "{" not in cleaned or "}" not in cleaned:
             return None

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field, asdict
 
-from app.rag.ollama_client import ollama
+from app.rag.llm_client import llm_client
 
 MEMORY_FILE_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "user_memory.json"
 
@@ -210,7 +210,7 @@ class UserMemoryStore:
         )
 
         try:
-            res_text = await ollama.chat([{"role": "user", "content": prompt}], temperature=0.1)
+            res_text = await llm_client.chat([{"role": "user", "content": prompt}], temperature=0.1)
             # Parse JSON
             cleaned = res_text.strip()
             if cleaned.startswith("```"):
