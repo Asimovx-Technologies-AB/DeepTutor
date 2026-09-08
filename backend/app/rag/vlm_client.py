@@ -161,9 +161,6 @@ class OpenAIVLMClient:
         if not image_bytes:
             return ""
 
-<<<<<<< HEAD
-        img_bytes_norm, valid_mime = normalize_image_for_vlm(image_bytes, mime_type)
-=======
         if not self.is_configured():
             print(
                 "[OpenAIVLM] Skipped: no usable credentials. "
@@ -171,7 +168,7 @@ class OpenAIVLMClient:
             )
             return ""
 
->>>>>>> db31f5c33fa7d0222ab185e3dc6893dd08329d8d
+        img_bytes_norm, valid_mime = normalize_image_for_vlm(image_bytes, mime_type)
         client = self._get_client()
         b64_img = base64.b64encode(img_bytes_norm).decode("utf-8")
         data_uri = f"data:{valid_mime};base64,{b64_img}"
@@ -215,9 +212,6 @@ class OpenAIVLMClient:
         if not image_bytes:
             return ""
 
-<<<<<<< HEAD
-        img_bytes_norm, valid_mime = normalize_image_for_vlm(image_bytes, mime_type)
-=======
         if not self.is_configured():
             print(
                 "[OpenAIVLM] Skipped: no usable credentials. "
@@ -225,7 +219,7 @@ class OpenAIVLMClient:
             )
             return ""
 
->>>>>>> db31f5c33fa7d0222ab185e3dc6893dd08329d8d
+        img_bytes_norm, valid_mime = normalize_image_for_vlm(image_bytes, mime_type)
         client = self._get_client()
         b64_img = base64.b64encode(img_bytes_norm).decode("utf-8")
         data_uri = f"data:{valid_mime};base64,{b64_img}"
