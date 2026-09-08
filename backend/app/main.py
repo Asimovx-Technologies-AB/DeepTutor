@@ -2,10 +2,12 @@
 FastAPI main application — DeepTutor v2 (4-Stage RAG Pipeline).
 """
 import asyncio
+import logging
 import os
 import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from pathlib import Path
 from app.core.config import get_settings
@@ -14,6 +16,7 @@ from app.api.endpoints import images
 from app.services.study_storage import ensure_data_directories, check_and_restore_s3_backups
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 def _run_schema_setup_in_background():
@@ -142,6 +145,62 @@ app = FastAPI(
     version=settings.APP_VERSION,
     lifespan=lifespan,
 )
+
+
+class CORSSafeErrorMiddleware:
+    """Answer unhandled exceptions from inside CORSMiddleware.
+
+    Starlette's ServerErrorMiddleware wraps everything registered here, so an
+    exception that reaches it is turned into a bare 500 that never passes back
+    out through CORSMiddleware. The browser sees a response with no
+    Access-Control-Allow-Origin and reports a CORS failure, which is why a
+    crashing endpoint reads as a CORS misconfiguration: the dashboard 500s
+    looked identical to an origin that had not been allowed, even though
+    preflight and every handled 4xx carried the header correctly.
+
+    Plain ASGI rather than BaseHTTPMiddleware: the streaming chat endpoints send
+    their bodies incrementally, and this has to stay out of that path.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        started = False
+
+        async def _send(message):
+            nonlocal started
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, _send)
+        except Exception:
+            # Container stdout is what ships to Log Analytics, and the 500 body
+            # carries nothing, so the traceback is the only record of the cause.
+            logger.exception(
+                "Unhandled error serving %s %s",
+                scope.get("method", "?"),
+                scope.get("path", "?"),
+            )
+            if started:
+                # Status and headers are already on the wire; the response can
+                # only be truncated, not replaced.
+                raise
+            response = JSONResponse(
+                status_code=500, content={"detail": "Internal Server Error"}
+            )
+            await response(scope, receive, send)
+
+
+# Registered before CORSMiddleware and therefore *inside* it: add_middleware
+# prepends, so the last middleware added is the outermost one.
+app.add_middleware(CORSSafeErrorMiddleware)
 
 # CORS. The deployed environment exports CORS_ALLOWED_ORIGINS (comma-separated)
 # so the API can be pinned to the Static Web App origin; an empty value keeps
