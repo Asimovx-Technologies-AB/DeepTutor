@@ -38,10 +38,22 @@ def _create_engine_with_fallback(primary_url: str):
             connect_args=connect_args,
         )
 
-        # This runs at import time, so a failure here takes the whole process
-        # down. On Container Apps that is a crash loop, and the usual cause is
-        # transient: a replica scaling from zero can beat a burstable Postgres
-        # out of its own idle state. Retry with backoff before giving up.
+        # No connectivity probe unless a SQLite fallback is actually on the
+        # table. SQLAlchemy engines connect lazily and pool_pre_ping validates
+        # each checkout, so the probe below buys nothing in production — it only
+        # costs. Its worst case was 5 attempts x 15s connect_timeout plus 50s of
+        # backoff: 125s of blocking I/O at import time, in the Gunicorn worker,
+        # before FastAPI existed. The Container Apps readiness probe gives a
+        # replica ~45s, so a cold Neon compute made the container unstartable.
+        #
+        # With the fallback disabled (the production default) the first real
+        # query surfaces any connection error, which is the right place for it.
+        if not settings.ALLOW_SQLITE_FALLBACK:
+            return eng
+
+        # Local development, where the point of the probe is deciding whether to
+        # fall back to SQLite. Nothing is serving traffic yet, so blocking here
+        # is free.
         last_error: Optional[Exception] = None
         for attempt in range(1, DB_CONNECT_ATTEMPTS + 1):
             try:
@@ -108,11 +120,20 @@ def get_db_pool_status() -> Dict[str, Any]:
 
     return metrics
 
-# Create tables automatically on startup
-try:
-    Base.metadata.create_all(bind=engine)
-except Exception as e:
-    print(f"[DATABASE] Base.metadata.create_all warning: {e}")
+def create_all_tables() -> None:
+    """Create the ORM tables. Called off the startup path by app.main."""
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print(f"[DATABASE] Base.metadata.create_all warning: {e}")
+
+
+# Deliberately NOT called at import. create_all round-trips to the database to
+# reflect existing tables, and on the import path that is the same blocking I/O
+# the engine probe above was removed for. app.main runs it alongside the SQL
+# migrations once the app is already serving.
+if engine.dialect.name == "sqlite":
+    create_all_tables()
 
 # Auto-migrate missing columns for existing SQLite database (only when running against SQLite)
 if engine.dialect.name == "sqlite":

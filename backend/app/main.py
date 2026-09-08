@@ -16,18 +16,23 @@ from app.services.study_storage import ensure_data_directories, check_and_restor
 settings = get_settings()
 
 
-def _run_migrations_in_background():
-    """Apply backend/migrations/*.sql off the startup path."""
+def _run_schema_setup_in_background():
+    """Create ORM tables and apply backend/migrations/*.sql off the startup path."""
     try:
         # backend/ is the image's WORKDIR, but add it explicitly so the runner
         # is importable however the process was launched.
         backend_dir = str(Path(__file__).resolve().parent.parent)
         if backend_dir not in sys.path:
             sys.path.insert(0, backend_dir)
+        # ORM tables first: create_all reflects the existing schema, which is a
+        # database round trip and therefore no longer done at import.
+        from app.core.database import create_all_tables
+        create_all_tables()
+
         from migrations.run_migrations import safe_run_migrations
         safe_run_migrations()
     except Exception as e:
-        print(f"[MIGRATION] Warning: migration runner unavailable: {e}")
+        print(f"[MIGRATION] Warning: schema setup unavailable: {e}")
 
 
 @asynccontextmanager
@@ -53,7 +58,7 @@ async def lifespan(app: FastAPI):
     # safe_run_migrations() already swallows and logs its own failures, so
     # nothing here depends on the result.
     app.state.migration_task = asyncio.create_task(
-        asyncio.to_thread(_run_migrations_in_background)
+        asyncio.to_thread(_run_schema_setup_in_background)
     )
 
     # Startup: create all required directories
