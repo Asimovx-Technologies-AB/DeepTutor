@@ -152,7 +152,10 @@ jobs:
         run: |
           rev="${CONTAINER_APP}--${{ steps.rollout.outputs.suffix }}"
           echo "Waiting for $rev"
-          for attempt in $(seq 1 40); do
+          # 12 attempts, not 40. A revision that is going to come up does so
+          # inside a minute; waiting ten to confirm a failure only slows the
+          # next iteration.
+          for attempt in $(seq 1 12); do
             state=$(az containerapp revision show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
                       --revision "$rev" --query properties.runningState -o tsv 2>/dev/null || echo Unknown)
             prov=$(az containerapp revision show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
@@ -164,7 +167,7 @@ jobs:
             esac
             sleep 15
           done
-          echo "Revision did not become healthy within 10 minutes." >&2
+          echo "Revision did not become healthy within 3 minutes." >&2
           exit 1
 
       # The previous smoke test asserted only that / returned 200 — which the

@@ -39,11 +39,10 @@ def _run_schema_setup_in_background():
 async def lifespan(app: FastAPI):
     # Schema migrations run ALONGSIDE serving, never ahead of it.
     #
-    # importing app.core.database has already run Base.metadata.create_all(),
-    # which covers the ORM models only. The study/lecture/task-queue tables and
-    # the canonical document_chunks shape live in backend/migrations/*.sql, and
-    # nothing else in the deployment runs them: the Container App starts the
-    # image directly, with no init container or release step.
+    # create_all covers the ORM models; the study/lecture/task-queue tables and
+    # the canonical document_chunks shape live in backend/migrations/*.sql. The
+    # Container App starts the image directly, with no init container or release
+    # step, so nothing else in the deployment would run either of them.
     #
     # Awaiting them here is what broke every deploy after 775fe08. Gunicorn's
     # master binds :8000 immediately, so the Container Apps readiness probe
