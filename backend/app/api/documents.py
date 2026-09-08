@@ -342,9 +342,10 @@ async def get_document_markdown(doc_id: str, user: dict = Depends(get_current_us
     text = doc_processor.get_document_text(doc_id)
     if not text and Path(file_path).exists():
         try:
-            import pypdf
-            reader = pypdf.PdfReader(file_path)
-            text = "\n\n".join([p.extract_text() or "" for p in reader.pages[:20]])
+            import pymupdf
+            doc_p = pymupdf.open(file_path)
+            text = "\n\n".join([p.get_text() or "" for p in doc_p[:20]])
+            doc_p.close()
         except Exception:
             text = "Unable to preview document content."
 

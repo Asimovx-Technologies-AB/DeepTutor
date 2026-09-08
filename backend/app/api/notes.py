@@ -17,14 +17,15 @@ from app.rag.curriculum_catalog import is_curriculum_topic, extract_textbook_chu
 from app.rag.llm_client import llm_client
 
 def process_document(file_path: str):
-    import pypdf
+    import pymupdf
     chunks = []
     try:
-        reader = pypdf.PdfReader(file_path)
-        for i, p in enumerate(reader.pages):
-            txt = p.extract_text() or ""
+        doc = pymupdf.open(file_path)
+        for i, p in enumerate(doc):
+            txt = p.get_text() or ""
             if txt.strip():
                 chunks.append({"text": txt, "metadata": {"page": i + 1, "source": Path(file_path).name}})
+        doc.close()
     except Exception:
         pass
     return chunks

@@ -351,31 +351,34 @@ class StudyDocumentProcessor:
 
         enrichment_chunks: List[Dict[str, Any]] = []
 
-        # Stage 2: pdfplumber Table Extraction
+        # Stage 2: PyMuPDF Native C-Engine Table Extraction (Fast & Memory-Efficient)
         try:
-            import pdfplumber
-            with pdfplumber.open(file_path) as pdf:
-                for p_idx, page in enumerate(pdf.pages[:20]):
-                    tables = page.extract_tables()
-                    for t_idx, table in enumerate(tables):
-                        if table and len(table) > 1:
-                            # Convert to clean markdown table
-                            header = " | ".join(str(cell or "").strip() for cell in table[0])
-                            divider = " | ".join(["---"] * len(table[0]))
-                            rows = [
-                                " | ".join(str(cell or "").strip() for cell in row)
-                                for row in table[1:]
-                                if any(row)
-                            ]
-                            md_table = f"\n| {header} |\n| {divider} |\n" + "\n".join(f"| {r} |" for r in rows)
-                            enrichment_chunks.append({
-                                "chunk_id": f"{doc_id}_tbl_p{p_idx+1}_{t_idx}",
-                                "page": p_idx + 1,
-                                "source_type": "table",
-                                "content": f"[Doc: {path.name} | Page {p_idx+1} | Type: table]\n{md_table}"
-                            })
-        except Exception:
-            pass
+            import pymupdf
+            doc_tbl = pymupdf.open(file_path)
+            for p_idx in range(min(len(doc_tbl), 25)):
+                page = doc_tbl[p_idx]
+                tabs = page.find_tables()
+                for t_idx, tab in enumerate(tabs):
+                    table = tab.extract()
+                    if table and len(table) > 1:
+                        # Convert to clean markdown table
+                        header = " | ".join(str(cell or "").replace("\n", " ").strip() for cell in table[0])
+                        divider = " | ".join(["---"] * len(table[0]))
+                        rows = [
+                            " | ".join(str(cell or "").replace("\n", " ").strip() for cell in row)
+                            for row in table[1:]
+                            if any(row)
+                        ]
+                        md_table = f"\n| {header} |\n| {divider} |\n" + "\n".join(f"| {r} |" for r in rows)
+                        enrichment_chunks.append({
+                            "chunk_id": f"{doc_id}_tbl_p{p_idx+1}_{t_idx}",
+                            "page": p_idx + 1,
+                            "source_type": "table",
+                            "content": f"[Doc: {path.name} | Page {p_idx+1} | Type: table]\n{md_table}"
+                        })
+            doc_tbl.close()
+        except Exception as e:
+            logger.debug(f"[StudyDocProcessor] PyMuPDF table extraction notice: {e}")
 
         # Stage 3: PyMuPDF Embedded Figures Contextual Captioning
         try:

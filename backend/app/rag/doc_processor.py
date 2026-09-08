@@ -27,8 +27,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 
-import pypdf
-import pdfplumber
+import pymupdf
 from PIL import Image
 
 from app.core.config import get_settings
@@ -217,19 +216,21 @@ class DocumentProcessor:
         if ext == ".pdf":
             try:
                 def _extract_pdf_pages():
-                    reader = pypdf.PdfReader(file_path)
+                    doc_pdf = pymupdf.open(file_path)
                     pages_text = []
                     scanned_indices = []
-                    for idx, page in enumerate(reader.pages):
+                    for idx, page in enumerate(doc_pdf):
                         try:
-                            txt = page.extract_text() or ""
+                            txt = page.get_text() or ""
                         except Exception:
                             txt = ""
                         if len(txt.strip()) >= 40:
                             pages_text.append((idx + 1, txt))
                         else:
                             scanned_indices.append(idx)
-                    return len(reader.pages), pages_text, scanned_indices
+                    total_p = len(doc_pdf)
+                    doc_pdf.close()
+                    return total_p, pages_text, scanned_indices
 
                 total_pages, digital_pages, scanned_pages_to_vlm = await asyncio.to_thread(_extract_pdf_pages)
                 text_chunks: List[DocumentChunk] = []
@@ -404,29 +405,31 @@ class DocumentProcessor:
         doc.status = "fully_processed"
 
     def _extract_tables_from_pdf(self, file_path: str, doc_id: str) -> List[DocumentChunk]:
-        """Extracts tables per page using pdfplumber and formats them as Markdown tables."""
+        """Extracts tables per page using PyMuPDF native table engine and formats them as Markdown tables."""
         table_chunks: List[DocumentChunk] = []
         try:
-            with pdfplumber.open(file_path) as pdf:
-                for page_idx, page in enumerate(pdf.pages):
-                    page_num = page_idx + 1
-                    tables = page.extract_tables()
-                    for t_idx, table in enumerate(tables):
-                        if not table or len(table) < 2:
-                            continue
-                        md_table = self._format_table_as_markdown(table)
-                        if md_table.strip():
-                            chunk = DocumentChunk(
-                                chunk_id=f"{doc_id}_p{page_num}_tbl_{t_idx + 1}",
-                                doc_id=doc_id,
-                                page=page_num,
-                                source_type="table",
-                                content=md_table,
-                                metadata={"table_index": t_idx + 1, "rows": len(table), "cols": len(table[0]) if table else 0}
-                            )
-                            table_chunks.append(chunk)
+            doc_tbl = pymupdf.open(file_path)
+            for page_idx, page in enumerate(doc_tbl):
+                page_num = page_idx + 1
+                tabs = page.find_tables()
+                for t_idx, tab in enumerate(tabs):
+                    table = tab.extract()
+                    if not table or len(table) < 2:
+                        continue
+                    md_table = self._format_table_as_markdown(table)
+                    if md_table.strip():
+                        chunk = DocumentChunk(
+                            chunk_id=f"{doc_id}_p{page_num}_tbl_{t_idx + 1}",
+                            doc_id=doc_id,
+                            page=page_num,
+                            source_type="table",
+                            content=md_table,
+                            metadata={"table_index": t_idx + 1, "rows": len(table), "cols": len(table[0]) if table else 0}
+                        )
+                        table_chunks.append(chunk)
+            doc_tbl.close()
         except Exception as e:
-            print(f"[DocProcessor] pdfplumber table error: {e}")
+            print(f"[DocProcessor] PyMuPDF table error: {e}")
         return table_chunks
 
     def _format_table_as_markdown(self, table: List[List[Any]]) -> str:

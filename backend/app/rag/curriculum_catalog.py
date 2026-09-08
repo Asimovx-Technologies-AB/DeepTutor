@@ -189,18 +189,19 @@ def extract_textbook_chunks(
         return []
 
     try:
-        import pypdf
-        reader = pypdf.PdfReader(str(pdf_path))
+        import pymupdf
+        doc_cat = pymupdf.open(str(pdf_path))
         extracted_page_texts: List[Tuple[int, str]] = []
         target_pages = set(info["pages"])
 
-        for p_idx, page in enumerate(reader.pages):
+        for p_idx in range(len(doc_cat)):
             page_num = p_idx + 1
             if page_num in target_pages:
-                txt = page.extract_text() or ""
+                txt = doc_cat[p_idx].get_text() or ""
                 txt = txt.strip()
                 if txt and len(txt) > 40:
                     extracted_page_texts.append((page_num, txt))
+        doc_cat.close()
 
         raw_chunks: List[Dict] = []
         for page_num, p_text in extracted_page_texts:

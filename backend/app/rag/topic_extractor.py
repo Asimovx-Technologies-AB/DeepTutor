@@ -9,7 +9,6 @@ import json
 import asyncio
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-import pypdf
 
 import httpx
 from app.core.config import get_settings
@@ -153,15 +152,16 @@ class TopicExtractor:
 
     @staticmethod
     def _fast_extract_pdf_text(file_path: str, max_pages: int = 25) -> str:
-        """Fast extraction of text from PDF, automatically finding and prioritizing Table of Contents/Syllabus pages."""
+        """Fast extraction of text from PDF using PyMuPDF, automatically finding and prioritizing Table of Contents/Syllabus pages."""
         toc_parts = []
         regular_parts = []
         try:
-            reader = pypdf.PdfReader(file_path)
-            total = min(len(reader.pages), max_pages)
+            import pymupdf
+            doc = pymupdf.open(file_path)
+            total = min(len(doc), max_pages)
 
             for i in range(total):
-                page_text = reader.pages[i].extract_text() or ""
+                page_text = doc[i].get_text() or ""
                 if not page_text.strip():
                     continue
 
@@ -172,6 +172,7 @@ class TopicExtractor:
                 else:
                     regular_parts.append(f"--- Page {i+1} ---\n{page_text}")
 
+            doc.close()
         except Exception as e:
             print(f"[TopicExtractor] Fast PDF text error: {e}")
 
