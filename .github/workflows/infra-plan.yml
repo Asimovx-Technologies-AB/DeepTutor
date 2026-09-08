@@ -69,7 +69,7 @@ jobs:
         id: plan
         run: |
           set -o pipefail
-          terraform plan -no-color -input=false \
+          terraform plan -no-color -input=false -lock-timeout=10m \
             -var-file=envs/dev.tfvars \
             -out=tfplan | tee plan.txt
 
