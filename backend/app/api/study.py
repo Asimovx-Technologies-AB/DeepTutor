@@ -202,6 +202,7 @@ async def upload_document(
     file: UploadFile = File(...),
     subject: str = Form("General Study"),
     session_id: Optional[str] = Form(None),
+    query_session_id: Optional[str] = Query(None, alias="session_id"),
     user: dict = Depends(get_current_user)
 ):
     """
@@ -213,8 +214,9 @@ async def upload_document(
     settings = get_settings()
     upload_root = Path(settings.UPLOAD_DIR).resolve()
 
-    if session_id:
-        clean_sid = session_id.strip()
+    resolved_sid = (session_id or query_session_id or "").strip()
+    if resolved_sid:
+        clean_sid = resolved_sid
         if not re.match(r"^[a-zA-Z0-9_\-]{1,64}$", clean_sid) or ".." in clean_sid:
             raise HTTPException(status_code=400, detail="Invalid session_id format")
         study_id = clean_sid
@@ -283,6 +285,74 @@ async def upload_document(
     doc_id = f"doc_{int(uuid.uuid4().int % 10000000)}"
     clean_title = Path(safe_filename).stem.replace("_", " ").title()
     effective_subject = subject.strip() if (subject and subject.strip() and subject.strip() != "General Study") else clean_title
+
+    # Fast-Path Deduplication: Check if user already processed this exact document
+    try:
+        from app.core import database as db
+        from app.services.study_storage import (
+            save_session_document,
+            get_session_documents,
+            save_session_topics,
+            get_registry_session,
+            register_or_update_session,
+        )
+        existing_doc = db.get_document_by_hash(content_hash, user["id"])
+        if existing_doc and existing_doc.get("status") == "completed":
+            existing_topics_raw = existing_doc.get("key_topics") or []
+            cached_subject = next((t for t in existing_topics_raw if str(t).startswith("__subject__:")), "")
+            effective_subject = cached_subject.removeprefix("__subject__:").strip() or effective_subject
+            topic_titles = [t for t in existing_topics_raw if not str(t).startswith("__subject__:")]
+
+            cached_topics = [
+                {"id": f"topic_{i+1}", "title": t, "document_name": file.filename}
+                for i, t in enumerate(topic_titles)
+            ] if topic_titles else [{"id": "topic_1", "title": clean_title, "document_name": file.filename}]
+
+            db.link_document_to_session(doc_hash=content_hash, session_id=study_id, user_id=user["id"])
+            save_session_document(
+                session_id=study_id,
+                doc_id=existing_doc["id"],
+                filename=file.filename,
+                file_path=file_path,
+                status="completed",
+                user_id=user["id"],
+                doc_hash=content_hash,
+                page_count=existing_doc.get("chunk_count", 0),
+            )
+
+            existing_docs = get_session_documents(study_id)
+            is_existing_session = bool(existing_docs and len(existing_docs) > 1)
+            save_session_topics(study_id, cached_topics, append=is_existing_session, document_name=file.filename)
+
+            existing_reg = get_registry_session(study_id)
+            prev_title = existing_reg.get("title") if existing_reg else None
+            is_generic_title = not prev_title or prev_title in ("New Study Workspace", "New Course Workspace", "Study Room Session", "Default Study Room")
+            session_title = f"{clean_title} Study Room" if is_generic_title else prev_title
+
+            register_or_update_session(
+                session_id=study_id,
+                subject=effective_subject,
+                title=session_title,
+                status="text_ready",
+                document_name=file.filename,
+                user_id=user["id"]
+            )
+
+            all_docs = get_session_documents(study_id)
+            return {
+                "status": "text_ready",
+                "session_id": study_id,
+                "doc_id": existing_doc["id"],
+                "filename": file.filename,
+                "documents": all_docs,
+                "topics": cached_topics,
+                "subject": effective_subject,
+                "doc_hash": content_hash,
+                "reused": True,
+                "message": "Reused previously processed document content.",
+            }
+    except Exception as e:
+        print(f"[study.upload] Deduplication check fallback: {e}")
 
     # Quick sample text extraction for instant topic reasoning
     def _quick_sample(fp: str) -> str:
@@ -391,6 +461,7 @@ async def upload_document(
         "status": "text_ready",
         "session_id": study_id,
         "doc_id": doc_id,
+        "doc_hash": content_hash,
         "filename": file.filename,
         "documents": all_docs,
         "document_count": len(all_docs),

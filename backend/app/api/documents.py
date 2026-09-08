@@ -5,7 +5,7 @@ import os
 import asyncio
 import json
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, BackgroundTasks
 from pydantic import BaseModel
 from app.api.auth import get_current_user
@@ -34,6 +34,8 @@ async def list_user_documents(
     topic_id: Optional[str] = None,
     user: dict = Depends(get_current_user),
 ):
+    from app.services.study_storage import list_registry_sessions, get_session_topics
+    
     docs = []
     try:
         docs = (
@@ -45,6 +47,18 @@ async def list_user_documents(
         print(f"[documents.list] DB fetch error: {e}")
         docs = []
 
+    # Fetch all user sessions from registry to compute session links
+    sessions_by_id = {}
+    try:
+        user_sessions = list_registry_sessions(user_id=user["id"])
+        for s in user_sessions:
+            if s.get("id"):
+                sessions_by_id[s["id"]] = s
+    except Exception as e:
+        print(f"[documents.list] Session registry error: {e}")
+        user_sessions = []
+
+    # Map each document with indexing status and subjects
     for doc in docs:
         topics = doc.get("key_topics") or []
         subject_marker = next((topic for topic in topics if str(topic).startswith("__subject__:")), "")
@@ -55,53 +69,87 @@ async def list_user_documents(
         doc["index_progress"] = status.get("progress", 0) if status else (100 if doc.get("indexed") else 0)
         doc["index_stats"] = status.get("stats", {}) if status else {}
 
-    # Merge materials uploaded through Study Room / Learn Page sessions
-    try:
-        from app.services.study_storage import list_registry_sessions, get_session_topics
-        sessions = list_registry_sessions(user_id=user["id"])
-        existing_filenames = {d["file_name"].lower() for d in docs if d.get("file_name")}
-        existing_topics = {d.get("topic_id") for d in docs if d.get("topic_id")}
+    # Merge session materials not yet captured in documents table
+    existing_filenames = {d["file_name"].lower() for d in docs if d.get("file_name")}
+    for s in user_sessions:
+        sid = s.get("id")
+        if not sid:
+            continue
+        doc_names = s.get("documents") or ([s.get("document_name")] if s.get("document_name") else [])
+        if not doc_names:
+            continue
 
-        for s in sessions:
-            sid = s.get("id")
-            if not sid:
-                continue
-            if topic_id and sid != topic_id:
-                continue
-            doc_names = s.get("documents") or ([s.get("document_name")] if s.get("document_name") else [])
-            if not doc_names:
-                continue
+        session_topics = get_session_topics(sid)
+        topic_titles = [t.get("title", "") for t in session_topics if t.get("title")]
 
-            session_topics = get_session_topics(sid)
-            topic_titles = [t.get("title", "") for t in session_topics if t.get("title")]
+        for fn in doc_names:
+            if not fn or fn.lower() in existing_filenames:
+                continue
+            existing_filenames.add(fn.lower())
+            clean_title = Path(fn).stem.replace("_", " ").title()
+            subject_name = s.get("subject") or clean_title
+            docs.append({
+                "id": f"{sid}_{fn}",
+                "user_id": s.get("user_id", user["id"]),
+                "topic_id": sid,
+                "file_name": fn,
+                "file_path": str(Path(settings.UPLOAD_DIR) / sid / fn),
+                "file_type": Path(fn).suffix.lower().lstrip(".") or "pdf",
+                "indexed": True,
+                "entity_count": len(topic_titles),
+                "chunk_count": s.get("topic_count", 0),
+                "detected_subject": subject_name,
+                "key_topics": topic_titles,
+                "index_status": "done",
+                "index_progress": 100,
+                "index_stats": {},
+                "created_at": s.get("created_at"),
+            })
 
-            for fn in doc_names:
-                if not fn or fn.lower() in existing_filenames:
-                    continue
-                existing_filenames.add(fn.lower())
-                clean_title = Path(fn).stem.replace("_", " ").title()
-                subject_name = s.get("subject") or clean_title
-                docs.append({
-                    "id": f"{sid}_{fn}",
-                    "user_id": s.get("user_id", user["id"]),
-                    "topic_id": sid,
-                    "file_name": fn,
-                    "file_path": str(Path(settings.UPLOAD_DIR) / sid / fn),
-                    "file_type": Path(fn).suffix.lower().lstrip(".") or "pdf",
-                    "indexed": True,
-                    "entity_count": len(topic_titles),
-                    "chunk_count": s.get("topic_count", 0),
-                    "detected_subject": subject_name,
-                    "key_topics": topic_titles,
-                    "index_status": "done",
-                    "index_progress": 100,
-                    "index_stats": {},
+    # Deduplication & Session Linking: Group by doc_hash or normalized file_name
+    deduped_map: Dict[str, Dict[str, Any]] = {}
+    for doc in docs:
+        key = str(doc.get("doc_hash") or "").strip().lower()
+        if not key or len(key) < 16:
+            key = f"fn_{str(doc.get('file_name', '')).strip().lower()}"
+
+        if key not in deduped_map:
+            doc_copy = dict(doc)
+            doc_copy["linked_sessions"] = []
+            deduped_map[key] = doc_copy
+        else:
+            # Merge key_topics if current doc has more details
+            existing = deduped_map[key]
+            if not existing.get("key_topics") and doc.get("key_topics"):
+                existing["key_topics"] = doc.get("key_topics")
+            if not existing.get("detected_subject") and doc.get("detected_subject"):
+                existing["detected_subject"] = doc.get("detected_subject")
+
+    # Match linked sessions for each deduplicated document
+    for key, doc in deduped_map.items():
+        doc_fn = str(doc.get("file_name", "")).strip().lower()
+        matched_sessions = []
+        for sid, s in sessions_by_id.items():
+            s_docs = [str(name).strip().lower() for name in (s.get("documents") or ([s.get("document_name")] if s.get("document_name") else []))]
+            if doc_fn in s_docs or sid == doc.get("topic_id"):
+                matched_sessions.append({
+                    "id": sid,
+                    "title": s.get("title") or f"{doc.get('detected_subject') or 'Study'} Room",
+                    "subject": s.get("subject") or doc.get("detected_subject"),
                     "created_at": s.get("created_at"),
                 })
-    except Exception as e:
-        print(f"[documents.list] Error merging study session materials: {e}")
+        doc["linked_sessions"] = matched_sessions
+        doc["session_count"] = len(matched_sessions)
+        if matched_sessions and not doc.get("topic_id"):
+            doc["topic_id"] = matched_sessions[0]["id"]
 
-    return docs
+    results = list(deduped_map.values())
+    if topic_id:
+        results = [
+            d for d in results
+            if d.get("topic_id") == topic_id or any(s["id"] == topic_id for s in d.get("linked_sessions", []))
+        ]
+    return results
 
 
 async def _run_indexing(doc_id: str, section_id: str, file_path: str, user_id: str, file_name: str):
