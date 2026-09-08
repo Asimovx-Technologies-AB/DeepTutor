@@ -17,6 +17,14 @@ postgres_storage_mb = 32768
 # Off until backend/app/worker.py lands.
 enable_worker = false
 
+# The SPA is served from this custom domain as well as the Static Web App
+# default hostname, and the browser treats it as its own origin. Without it
+# every call from https://indie-tutor.com fails preflight.
+frontend_custom_domains = [
+  "indie-tutor.com",
+  "www.indie-tutor.com",
+]
+
 # Azure-native RAG: Azure OpenAI chat and embeddings with PostgreSQL pgvector.
 # Existing Pinecone vectors must be re-indexed at 1536 dimensions.
 enable_azure_openai = true

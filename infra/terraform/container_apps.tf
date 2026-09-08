@@ -160,17 +160,25 @@ resource "azurerm_container_app" "api" {
         transport               = "HTTP"
         port                    = 8000
         path                    = "/"
-        initial_delay           = 20
+        initial_delay           = 60
         interval_seconds        = 30
         failure_count_threshold = 3
       }
 
+      // initial_delay matters more than it looks. Gunicorn's master binds :8000
+      // before its workers finish importing the app, so the probe connects and
+      // then waits on a response no worker can produce yet. With no delay and a
+      // 3-failure threshold at 15s, a replica had ~45s to import ~6k lines of
+      // study services on 0.5 vCPU or be killed and back-off looped. That is
+      // what left every post-775fe08 revision in ActivationFailed with traffic
+      // stranded on the previous one.
       readiness_probe {
         transport               = "HTTP"
         port                    = 8000
         path                    = "/"
+        initial_delay           = 30
         interval_seconds        = 15
-        failure_count_threshold = 3
+        failure_count_threshold = 6
       }
 
       volume_mounts {

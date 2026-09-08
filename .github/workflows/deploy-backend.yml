@@ -68,47 +68,178 @@ jobs:
             --file Dockerfile.slim \
             .
 
-      - name: Roll out new revision
+      # Measure startup against the real image, on the runner.
+      #
+      # Azure hides exactly the evidence we need: the readiness probe kills the
+      # replica and KEDA scales it to zero, so console logs answer "Could not
+      # find a replica" and the Python traceback is gone. Here the container is
+      # ours and nothing reaps it.
+      #
+      # DATABASE_URL points into a black hole on purpose. With the eager engine
+      # probe removed, a production-shaped import must not touch the database
+      # at all, so it should finish fast even with nothing listening. Slow means
+      # blocking I/O is still on the import path; a traceback means a worker is
+      # crashing rather than booting slowly.
+      - name: Measure container startup
+        continue-on-error: true
+        env:
+          DEAD_DB: postgresql://nobody:nobody@198.51.100.1:5432/none
         run: |
+          az acr login --name "${{ steps.acr.outputs.name }}"
+          img="${{ steps.acr.outputs.login_server }}/${IMAGE_REPO}:${GITHUB_SHA}"
+          docker pull -q "$img"
+
+          echo "=== import app.main (unreachable database) ==="
+          timeout 300 docker run --rm \
+            -e DATABASE_URL="$DEAD_DB" \
+            -e ALLOW_SQLITE_FALLBACK=false \
+            -e PYTHONPATH=/app             "$img" python scripts/time_import.py 2>&1 || echo "EXIT=$?"
+
+          echo "=== can gunicorn bind and answer GET / ? ==="
+          cid=$(docker run -d -p 18000:8000 \
+            -e DATABASE_URL="$DEAD_DB" \
+            -e ALLOW_SQLITE_FALLBACK=false \
+            "$img")
+          served=""
+          for i in $(seq 1 24); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:18000/ || true)
+            echo "t+$((i * 5))s: HTTP ${code:-none}"
+            if [ "$code" = "200" ]; then served="$((i * 5))"; break; fi
+            sleep 5
+          done
+          if [ -n "$served" ]; then
+            echo "SERVED after ~${served}s (Container Apps allows ~45s)"
+          else
+            echo "NEVER SERVED within 120s"
+          fi
+          echo "--- container stdout ---"
+          docker logs "$cid" 2>&1 | tail -60
+          docker rm -f "$cid" >/dev/null 2>&1 || true
+
+      # What the app is actually running, before we touch anything. When a
+      # rollout silently no-ops, this is the only record of the prior state.
+      - name: Pre-update revision state
+        run: |
+          az containerapp show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
+            --query "{mode:properties.configuration.activeRevisionsMode,latest:properties.latestRevisionName,latestReady:properties.latestReadyRevisionName}" \
+            -o table
+          az containerapp revision list -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
+            --query "[].{rev:name,active:properties.active,traffic:properties.trafficWeight,running:properties.runningState,health:properties.healthState,created:properties.createdTime}" \
+            -o table
+
+      # --revision-suffix names the revision so the wait below can target it
+      # instead of guessing. GIT_SHA is surfaced by /health, which is what lets
+      # the verify step prove WHICH build answered rather than merely that
+      # something did.
+      - name: Roll out new revision
+        id: rollout
+        run: |
+          suffix="r${GITHUB_RUN_NUMBER}-$(echo "$GITHUB_SHA" | cut -c1-7)"
+          echo "suffix=$suffix" >> "$GITHUB_OUTPUT"
           az containerapp update \
             --name "$CONTAINER_APP" \
             --resource-group "$RESOURCE_GROUP" \
             --image "${{ steps.acr.outputs.login_server }}/${IMAGE_REPO}:${GITHUB_SHA}" \
+            --revision-suffix "$suffix" \
+            --set-env-vars "GIT_SHA=${GITHUB_SHA}" \
             --output none
 
-      - name: Smoke test
+      # `az containerapp update` returns when the control plane accepts the
+      # change, not when the revision serves traffic. Without this wait, a
+      # revision that crashes on startup leaves the previous one serving and the
+      # job still reports success.
+      - name: Wait for the new revision to become healthy
+        run: |
+          rev="${CONTAINER_APP}--${{ steps.rollout.outputs.suffix }}"
+          echo "Waiting for $rev"
+          # 12 attempts, not 40. A revision that is going to come up does so
+          # inside a minute; waiting ten to confirm a failure only slows the
+          # next iteration.
+          for attempt in $(seq 1 12); do
+            state=$(az containerapp revision show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
+                      --revision "$rev" --query properties.runningState -o tsv 2>/dev/null || echo Unknown)
+            prov=$(az containerapp revision show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
+                      --revision "$rev" --query properties.provisioningState -o tsv 2>/dev/null || echo Unknown)
+            echo "attempt ${attempt}: running=${state} provisioning=${prov}"
+            case "$state" in
+              Running|RunningAtMaxScale) echo "Revision healthy."; exit 0 ;;
+              Failed|Degraded)           echo "Revision entered ${state}." >&2; exit 1 ;;
+            esac
+            sleep 15
+          done
+          echo "Revision did not become healthy within 3 minutes." >&2
+          exit 1
+
+      # The previous smoke test asserted only that / returned 200 — which the
+      # PREVIOUS revision answers perfectly well while the new one is failing.
+      # That is how run 34168403359 reported success while production kept
+      # serving the old image. Assert build identity instead.
+      - name: Verify the deployed build
         run: |
           fqdn=$(az containerapp show --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
                    --query properties.configuration.ingress.fqdn -o tsv)
-          url="https://${fqdn}/"
+          base="https://${fqdn}"
+          served=""
 
-          # min_replicas may be 0 — the first request pays the cold start.
           for attempt in $(seq 1 20); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$url" || true)
-            if [ "$code" = "200" ]; then
-              echo "OK after ${attempt} attempt(s): $url"
-              echo "API: $url" >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
-            echo "attempt ${attempt}: HTTP ${code}"
+            served=$(curl -s --max-time 30 "${base}/health" \
+                     | tr ',' '\n' | grep '"build"' | sed 's/.*"build"[^"]*"\([^"]*\)".*/\1/' || true)
+            if [ -n "$served" ]; then break; fi
+            echo "attempt ${attempt}: /health has no build field yet"
             sleep 15
           done
 
-          echo "Smoke test failed — dumping revision state and logs." >&2
+          echo "expected build: ${GITHUB_SHA}"
+          echo "served   build: ${served:-<none>}"
 
-          # Console logs need a live replica, and the interesting failures are
-          # exactly the ones where no replica came up. Revision state and the
-          # system log are readable either way, and name the cause: image pull
-          # refused, volume mount failed, probe never passed, container exited.
-          az containerapp revision list \
-            --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
-            --query "[].{revision:name, active:properties.active, replicas:properties.replicas, running:properties.runningState, health:properties.healthState, provisioning:properties.provisioningState}" \
+          if [ "$served" != "$GITHUB_SHA" ]; then
+            echo "MISMATCH: the app is not serving the commit this run built." >&2
+            exit 1
+          fi
+
+          if ! curl -sf --max-time 30 "${base}/openapi.json" | grep -q "/study/agent/message"; then
+            echo "Schema check failed: /study/agent/message absent from openapi.json." >&2
+            exit 1
+          fi
+
+          echo "Verified ${GITHUB_SHA} is live at ${base}"
+          echo "API: ${base} (build ${GITHUB_SHA})" >> "$GITHUB_STEP_SUMMARY"
+
+      # Runs whatever the outcome. On failure this is the diagnosis; on success
+      # it records which revision took traffic.
+      - name: Post-update revision state and logs
+        if: always()
+        run: |
+          az containerapp revision list -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
+            --query "[].{rev:name,active:properties.active,traffic:properties.trafficWeight,running:properties.runningState,health:properties.healthState,created:properties.createdTime}" \
             -o table || true
 
-          az containerapp logs show --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
+          echo "--- system log ---"
+          timeout 120 az containerapp logs show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
             --tail 100 --type system || true
 
-          # Best effort: only returns anything if a replica lived long enough.
-          az containerapp logs show --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
-            --tail 100 --type console || true
-          exit 1
+          # The container's own stdout, from Log Analytics rather than from the
+          # replica.
+          #
+          # `az containerapp logs --type console` streams from a LIVE replica,
+          # so for the failure we are chasing it answers "Could not find a
+          # replica": the readiness probe has already killed it and KEDA has
+          # scaled the deployment to zero. It can also hang waiting for one,
+          # which is why the step above it now has a timeout.
+          #
+          # The Container App Environment ships console output to the
+          # ContainerAppConsoleLogs_CL table, which outlives the replica. That
+          # is where a Python traceback survives, and it needs no access beyond
+          # the OIDC identity this workflow already uses.
+          ws=$(az monitor log-analytics workspace list -g "$RESOURCE_GROUP" \
+                 --query "[0].customerId" -o tsv 2>/dev/null || true)
+          if [ -n "$ws" ]; then
+            echo "--- console log from Log Analytics (workspace ${ws}) ---"
+            timeout 180 az monitor log-analytics query \
+              --workspace "$ws" \
+              --analytics-query "ContainerAppConsoleLogs_CL | where ContainerAppName_s == '${CONTAINER_APP}' | where TimeGenerated > ago(30m) | project TimeGenerated, RevisionName_s, Log_s | order by TimeGenerated asc | take 300" \
+              -o table \
+              || echo "Log Analytics query failed — the deploy identity may lack Log Analytics Reader on $RESOURCE_GROUP."
+          else
+            echo "No Log Analytics workspace found in $RESOURCE_GROUP."
+          fi
