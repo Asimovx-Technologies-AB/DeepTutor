@@ -16,6 +16,11 @@ import psycopg2
 # apply the same migration twice.
 MIGRATION_LOCK_ID = 8734512901
 
+# Bounds for every database call made on the startup path.
+CONNECT_TIMEOUT_SECONDS = 10
+LOCK_TIMEOUT_SECONDS = 30
+STATEMENT_TIMEOUT_SECONDS = 300
+
 MIGRATIONS_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = MIGRATIONS_DIR.parent
 if str(BACKEND_DIR) not in sys.path:
@@ -99,16 +104,34 @@ def run_migrations():
         db_url = db_url.replace("postgres://", "postgresql://", 1)
 
     print(f"[MIGRATION] Connecting to database: {db_url.split('@')[-1] if '@' in db_url else db_url}")
-    conn = psycopg2.connect(db_url)
+    # Every call here is bounded. An unreachable database or a lock held by
+    # another replica must surface as a logged failure, never as a hang: this
+    # runs inside a container whose readiness probe is counting.
+    conn = psycopg2.connect(db_url, connect_timeout=CONNECT_TIMEOUT_SECONDS)
 
     try:
+        with conn.cursor() as cur:
+            cur.execute("SET lock_timeout = %s;", (f"{LOCK_TIMEOUT_SECONDS}s",))
+            cur.execute("SET statement_timeout = %s;", (f"{STATEMENT_TIMEOUT_SECONDS}s",))
+        conn.commit()
+
         # The API runs two Gunicorn workers and Container Apps may hold several
         # replicas, all of which call this on startup. A session-level advisory
-        # lock serialises them: the first worker migrates, the rest block here
-        # and then find every file already applied.
+        # lock serialises them: the first worker migrates, the rest find every
+        # file already applied.
+        #
+        # pg_try_advisory_lock, not pg_advisory_lock: the blocking form waits
+        # forever, and "forever" here means a replica that never reports ready.
+        # Losing the race is a normal outcome — another worker is migrating —
+        # so bail out quietly rather than queue behind it.
         with conn.cursor() as cur:
-            cur.execute("SELECT pg_advisory_lock(%s);", (MIGRATION_LOCK_ID,))
+            cur.execute("SELECT pg_try_advisory_lock(%s);", (MIGRATION_LOCK_ID,))
+            got_lock = bool(cur.fetchone()[0])
         conn.commit()
+
+        if not got_lock:
+            print("[MIGRATION] Another worker holds the migration lock; skipping.")
+            return
 
         check_azure_and_pgvector(conn)
         init_tracking_table(conn)

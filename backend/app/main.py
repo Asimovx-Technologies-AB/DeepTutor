@@ -16,16 +16,8 @@ from app.services.study_storage import ensure_data_directories, check_and_restor
 settings = get_settings()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Apply SQL schema migrations before anything serves traffic.
-    #
-    # importing app.core.database has already run Base.metadata.create_all(),
-    # which covers the ORM models only. The study/lecture/task-queue tables and
-    # the canonical document_chunks shape live in backend/migrations/*.sql, and
-    # nothing else in the deployment runs them: the Container App starts the
-    # image directly, with no init container or release step. Doing it here is
-    # what makes a plain `containerapp update` a complete deploy.
+def _run_migrations_in_background():
+    """Apply backend/migrations/*.sql off the startup path."""
     try:
         # backend/ is the image's WORKDIR, but add it explicitly so the runner
         # is importable however the process was launched.
@@ -33,9 +25,36 @@ async def lifespan(app: FastAPI):
         if backend_dir not in sys.path:
             sys.path.insert(0, backend_dir)
         from migrations.run_migrations import safe_run_migrations
-        await asyncio.to_thread(safe_run_migrations)
+        safe_run_migrations()
     except Exception as e:
         print(f"[MIGRATION] Warning: migration runner unavailable: {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Schema migrations run ALONGSIDE serving, never ahead of it.
+    #
+    # importing app.core.database has already run Base.metadata.create_all(),
+    # which covers the ORM models only. The study/lecture/task-queue tables and
+    # the canonical document_chunks shape live in backend/migrations/*.sql, and
+    # nothing else in the deployment runs them: the Container App starts the
+    # image directly, with no init container or release step.
+    #
+    # Awaiting them here is what broke every deploy after 775fe08. Gunicorn's
+    # master binds :8000 immediately, so the Container Apps readiness probe
+    # connects and then waits on GET / for a response no worker can give while
+    # it is still blocked in startup. The probe runs every 15s with a
+    # 3-failure threshold, so a boot slower than ~45s is killed and back-off
+    # looped — "Readiness probe failed: context deadline exceeded ... awaiting
+    # headers", then ContainerBackOff, then ActivationFailed, with traffic
+    # stranded on the previous revision. On 0.5 vCPU, psycopg2.connect() and
+    # pg_advisory_lock() with no timeouts never stood a chance.
+    #
+    # safe_run_migrations() already swallows and logs its own failures, so
+    # nothing here depends on the result.
+    app.state.migration_task = asyncio.create_task(
+        asyncio.to_thread(_run_migrations_in_background)
+    )
 
     # Startup: create all required directories
     ensure_data_directories()
