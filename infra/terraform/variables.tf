@@ -93,9 +93,26 @@ variable "enable_worker" {
 }
 
 variable "allowed_cors_origins" {
-  description = "Origins the API accepts. Empty list means 'the Static Web App hostname only', wired automatically."
+  description = "Origins the API accepts. Empty list means 'the Static Web App hostname plus frontend_custom_domains', wired automatically."
   type        = list(string)
   default     = []
+}
+
+variable "frontend_custom_domains" {
+  description = <<-EOT
+    Custom domains the SPA is served from, as bare hostnames ("example.com").
+    Each becomes an allowed CORS origin alongside the Static Web App default
+    hostname. A browser treats every hostname as a distinct origin, so a domain
+    missing here fails preflight even though the same app works on the default
+    hostname. Ignored when allowed_cors_origins is set.
+  EOT
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for d in var.frontend_custom_domains : !can(regex("^https?://|/", d))])
+    error_message = "frontend_custom_domains takes bare hostnames, without a scheme or path."
+  }
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
