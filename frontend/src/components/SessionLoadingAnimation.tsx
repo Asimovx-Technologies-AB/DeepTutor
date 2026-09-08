@@ -42,3 +42,4 @@ export const SessionLoadingAnimation: React.FC<SessionLoadingAnimationProps> = (
 }
 
 export default SessionLoadingAnimation
+

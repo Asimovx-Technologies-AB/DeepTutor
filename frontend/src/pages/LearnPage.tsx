@@ -443,6 +443,7 @@ export default function LearnPage() {
           setCurrentArtifactMarkdown(latestNotes.text)
           setArtifactDockSide('right')
         }
+
         setArtifactViewerOpen(false)
       } else {
         setArtifactViewerOpen(false)

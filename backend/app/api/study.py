@@ -310,8 +310,16 @@ async def upload_document(
         except Exception:
             return "", []
 
-    sample_text = await asyncio.to_thread(_quick_sample, file_path)
-    if not sample_text:
+    sample_text, fast_toc_topics = await asyncio.to_thread(_quick_sample_and_toc, file_path)
+
+    # A scanned PDF or an uploaded image has no digital text, so the sample above
+    # comes back empty and the curriculum would be inferred from the filename
+    # alone. Transcribe the opening pages first — this is the only point where
+    # topic extraction can see that content.
+    if len(sample_text.strip()) < 80:
+        sample_text = await _vlm_sample(file_path, effective_subject) or sample_text
+
+    if not sample_text.strip():
         sample_text = f"Subject: {effective_subject}. Topic: {clean_title}."
 
     # Check if session already has documents
