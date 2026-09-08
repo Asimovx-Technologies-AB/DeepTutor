@@ -506,13 +506,21 @@ async def link_document_to_session_endpoint(
     if not session_id:
         raise HTTPException(status_code=400, detail="session_id is required")
 
-    from app.services.study_storage import save_session_document, get_session_documents
+    from app.services.study_storage import (
+        save_session_document,
+        get_session_documents,
+        save_session_topics,
+        get_session_topics,
+        register_or_update_session,
+        list_registry_sessions,
+    )
     from app.rag.document_dedup import link_document_to_session
 
     doc_id = req.doc_id
     doc_hash = req.doc_hash
     filename = req.filename
     file_path = req.file_path
+    doc = None
 
     # If doc_id was passed, attempt to look it up in the Document database
     if doc_id:
@@ -542,6 +550,56 @@ async def link_document_to_session_endpoint(
         filename=effective_filename,
         file_path=effective_file_path,
         status="completed",
+        user_id=user_id,
+        doc_hash=doc_hash or "",
+    )
+
+    # Populate curriculum topics in new session if not yet present
+    current_session_topics = get_session_topics(session_id, user_id=user_id)
+    if not current_session_topics:
+        prior_topics = []
+        if doc_id:
+            try:
+                prior_topics = db.get_topics_for_document(doc_id) or []
+            except Exception:
+                prior_topics = []
+
+        if not prior_topics and effective_filename:
+            try:
+                user_sessions = list_registry_sessions(user_id=user_id)
+                for s in user_sessions:
+                    if s["id"] != session_id and effective_filename.lower() in [str(n).lower() for n in s.get("documents", [])]:
+                        prior_topics = get_session_topics(s["id"], user_id=user_id)
+                        if prior_topics:
+                            break
+            except Exception as e:
+                print(f"[link_document_to_session] Warning retrieving prior topics: {e}")
+
+        if not prior_topics and doc and doc.get("key_topics"):
+            for t_title in doc["key_topics"]:
+                if str(t_title).startswith("__subject__:"):
+                    continue
+                prior_topics.append({
+                    "title": str(t_title),
+                    "summary": f"Core study topic from {effective_filename}",
+                    "difficulty": "Intermediate",
+                    "key_concepts": [],
+                    "document_name": effective_filename,
+                })
+
+        if prior_topics:
+            try:
+                save_session_topics(session_id, prior_topics, user_id=user_id)
+            except Exception as e:
+                print(f"[link_document_to_session] Warning saving topics: {e}")
+
+    # Update session registry entry so it displays properly on the page
+    clean_title = Path(effective_filename).stem.replace("_", " ").title()
+    register_or_update_session(
+        session_id=session_id,
+        subject=doc.get("detected_subject") if doc else "General Study",
+        title=f"{clean_title} Study Room",
+        document_name=effective_filename,
         user_id=user_id,
     )
 

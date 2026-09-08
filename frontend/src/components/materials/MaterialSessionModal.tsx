@@ -30,6 +30,7 @@ interface MaterialSessionModalProps {
   document: StudyDocument | null
   isOpen: boolean
   onClose: () => void
+  onSessionCreated?: (sessionId: string) => void
 }
 
 function displayName(fileName: string) {
@@ -50,6 +51,7 @@ export default function MaterialSessionModal({
   document,
   isOpen,
   onClose,
+  onSessionCreated,
 }: MaterialSessionModalProps) {
   const navigate = useNavigate()
   const [isCreating, setIsCreating] = useState(false)
@@ -88,12 +90,14 @@ export default function MaterialSessionModal({
         console.warn('Document link warning:', linkErr)
       }
 
+      onSessionCreated?.(newSessionId)
       onClose()
       navigate(`/chat/${newSessionId}`)
     } catch (err) {
       console.error('Failed to create new session with material:', err)
       // Fallback: navigate with timestamp session ID
       const fallbackId = `session_${Date.now()}`
+      onSessionCreated?.(fallbackId)
       onClose()
       navigate(`/chat/${fallbackId}`)
     } finally {

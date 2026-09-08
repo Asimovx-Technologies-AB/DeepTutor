@@ -149,6 +149,7 @@ export default function SubjectsPage() {
         document={selectedMaterial}
         isOpen={!!selectedMaterial}
         onClose={() => setSelectedMaterial(null)}
+        onSessionCreated={() => refetch()}
       />
 
       <ConfirmModal

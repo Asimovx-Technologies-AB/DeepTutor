@@ -444,10 +444,10 @@ export default function LearnPage() {
       const list = res.data || []
       setSessions(list)
       if (list.length > 0 && !activeSessionIdRef.current) {
-        const first = list[0]
-        setActiveSessionId(first.id)
-        setActiveSubject(first.subject || 'General Study')
-        setDocumentName(first.document_name || '')
+        const target = routeSessionId ? (list.find((s: any) => s.id === routeSessionId) || list[0]) : list[0]
+        setActiveSessionId(target.id)
+        setActiveSubject(target.subject || 'General Study')
+        setDocumentName(target.document_name || '')
       } else if (list.length === 0 && !activeSessionIdRef.current) {
         studyApi.createSession({ subject: 'General Study', title: 'Default Study Room' }).then((r) => {
           if (r.data && r.data.id) {
@@ -459,11 +459,19 @@ export default function LearnPage() {
     } catch (err) {
       console.error('Failed to load study sessions:', err)
     }
-  }, [])
+  }, [routeSessionId])
 
   useEffect(() => {
     fetchSessions()
   }, [fetchSessions])
+
+  // Sync activeSessionId whenever route URL parameter changes
+  useEffect(() => {
+    if (routeSessionId && routeSessionId !== activeSessionId) {
+      setActiveSessionId(routeSessionId)
+      fetchSessions()
+    }
+  }, [routeSessionId, activeSessionId, fetchSessions])
 
   // ─── 2. Load Session Details & SQLite Data ───
   const loadSessionDetails = useCallback(async (sid: string) => {
