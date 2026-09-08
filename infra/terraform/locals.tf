@@ -23,10 +23,15 @@ locals {
 
   postgres_database_name = "deeptutor"
 
-  # CORS: the SPA origin unless the operator pinned an explicit list.
-  cors_origins = length(var.allowed_cors_origins) > 0 ? var.allowed_cors_origins : [
-    "https://${azurerm_static_web_app.frontend.default_host_name}"
-  ]
+  # CORS: the SPA's origins. The Static Web App default hostname is wired in
+  # automatically, but a custom domain fronting the same SPA is a *separate*
+  # browser origin and Terraform does not provision it, so it has to be named
+  # in frontend_custom_domains. An explicit allowed_cors_origins still replaces
+  # the whole list.
+  cors_origins = length(var.allowed_cors_origins) > 0 ? var.allowed_cors_origins : concat(
+    ["https://${azurerm_static_web_app.frontend.default_host_name}"],
+    [for domain in var.frontend_custom_domains : "https://${domain}"]
+  )
 
   # The Azure-native path authenticates to Azure OpenAI with managed identity
   # and pgvector with DATABASE_URL, so it needs no third-party API keys.
