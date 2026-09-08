@@ -93,7 +93,7 @@ jobs:
           timeout 300 docker run --rm \
             -e DATABASE_URL="$DEAD_DB" \
             -e ALLOW_SQLITE_FALLBACK=false \
-            "$img" python scripts/time_import.py 2>&1 || echo "EXIT=$?"
+            -e PYTHONPATH=/app             "$img" python scripts/time_import.py 2>&1 || echo "EXIT=$?"
 
           echo "=== can gunicorn bind and answer GET / ? ==="
           cid=$(docker run -d -p 18000:8000 \

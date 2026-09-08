@@ -49,6 +49,17 @@ COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 COPY --chown=appuser:appuser . .
 
+# Fail the BUILD on a syntax error rather than the deploy.
+#
+# app/api/flashcards.py carried a nested f-string with a backslash in its
+# expression part: legal on the Python 3.12 used for local development, a
+# SyntaxError on the 3.11 in this image. Nothing caught it. The image built,
+# pushed and deployed clean; every Gunicorn worker then died at import, the
+# revision never passed its readiness probe, and Container Apps quietly kept
+# serving the previous one. Compiling here turns that whole class of failure
+# into a red build. Bytecode is discarded afterwards to keep the layer small.
+RUN python -m compileall -q app scripts     && find . -name '__pycache__' -type d -prune -exec rm -rf {} +
+
 # Writable mount points. /data/* are backed by Azure Files volumes; /tmp/* hold
 # rebuildable caches and are expected to vanish with the replica.
 #
