@@ -451,7 +451,22 @@ def save_session_document(
     effective_page_count = kwargs.get("page_count", page_count)
 
     d_id = to_uuid(effective_doc_id, namespace_suffix=str(session_id)) if effective_doc_id else str(uuid.uuid4())
-    doc_hash = hashlib.sha256(f"{session_id}:{effective_filename}".encode("utf-8")).hexdigest()[:32]
+
+    # Cryptographic SHA-256 Content Hash Resolution
+    passed_hash = kwargs.get("doc_hash") or kwargs.get("content_hash")
+    if passed_hash and len(str(passed_hash).strip()) >= 32:
+        doc_hash = str(passed_hash).strip().lower()
+    elif effective_file_path and os.path.isfile(effective_file_path):
+        try:
+            hasher = hashlib.sha256()
+            with open(effective_file_path, "rb") as f:
+                while block := f.read(65536):
+                    hasher.update(block)
+            doc_hash = hasher.hexdigest()
+        except Exception:
+            doc_hash = hashlib.sha256(f"{session_id}:{effective_filename}".encode("utf-8")).hexdigest()
+    else:
+        doc_hash = hashlib.sha256(f"{session_id}:{effective_filename}".encode("utf-8")).hexdigest()
 
     # Resolve user_id if omitted
     if not user_id:
@@ -490,7 +505,7 @@ def save_session_document(
                         status = :status,
                         page_count = :page_count,
                         doc_hash = :doc_hash
-                    WHERE id = CAST(:id AS UUID) OR (session_id = :session_id AND doc_hash = :doc_hash);
+                    WHERE id = CAST(:id AS UUID) OR (session_id = :session_id AND (doc_hash = :doc_hash OR filename = :filename));
                 """)
                 conn.execute(update_sql, {
                     "id": existing_id,
@@ -534,7 +549,8 @@ def save_session_document(
                     SET filename = :filename,
                         file_path = :file_path,
                         status = :status,
-                        page_count = :page_count
+                        page_count = :page_count,
+                        doc_hash = :doc_hash
                     WHERE session_id = :session_id AND (doc_hash = :doc_hash OR filename = :filename);
                 """), {
                     "session_id": str(session_id),
@@ -569,7 +585,7 @@ def save_session_document(
                         status = :status,
                         page_count = :page_count,
                         doc_hash = :doc_hash
-                    WHERE id = :id OR (session_id = :session_id AND doc_hash = :doc_hash);
+                    WHERE id = :id OR (session_id = :session_id AND (doc_hash = :doc_hash OR filename = :filename));
                 """), {
                     "id": existing_id,
                     "session_id": str(session_id),
@@ -636,7 +652,7 @@ def get_session_documents(
 ) -> List[Dict[str, Any]]:
     """Retrieve all document metadata records for a session, filtering out empty or duplicate records."""
     statement = sql_text("""
-        SELECT id::text AS id, session_id, filename, file_path, status, page_count, created_at
+        SELECT id::text AS id, session_id, doc_hash, filename, file_path, status, page_count, created_at
         FROM session_documents
         WHERE session_id = :session_id
           AND filename IS NOT NULL AND filename != ''
@@ -655,6 +671,7 @@ def get_session_documents(
         seen_names.add(fn)
         if isinstance(d.get("created_at"), datetime):
             d["created_at"] = d["created_at"].isoformat()
+        d["doc_hash"] = str(d.get("doc_hash") or "")
         docs.append(d)
     return docs
 

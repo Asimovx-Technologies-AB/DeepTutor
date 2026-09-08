@@ -650,14 +650,28 @@ def link_document_to_session(doc_hash: str, session_id: str, user_id: str) -> bo
             SessionDocument.session_id == session_id,
             SessionDocument.doc_hash == doc_hash
         ).first()
+        doc = db.query(Document).filter(
+            Document.doc_hash == doc_hash,
+            Document.user_id == user_id
+        ).first()
+
         if not existing:
             link = SessionDocument(
                 session_id=session_id,
                 doc_hash=doc_hash,
                 user_id=user_id,
+                filename=doc.file_name if doc else "",
+                file_path=doc.file_path if doc else "",
+                status=getattr(doc, "status", "completed") if doc else "completed",
+                page_count=getattr(doc, "chunk_count", 0) if doc else 0,
                 uploaded_at=now_iso(),
             )
             db.add(link)
+        elif not existing.filename and doc and doc.file_name:
+            existing.filename = doc.file_name
+            existing.file_path = doc.file_path
+            existing.status = getattr(doc, "status", "completed")
+            existing.page_count = getattr(doc, "chunk_count", 0)
     return True
 
 

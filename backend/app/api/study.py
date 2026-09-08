@@ -319,6 +319,7 @@ async def upload_document(
         subject=effective_subject,
         session_id=study_id,
         user_id=user["id"] if user else None,
+        doc_hash=content_hash,
     )
     topics_task = extract_topics_and_validate(sample_text, subject=effective_subject, filename=file.filename)
 
@@ -376,6 +377,7 @@ async def upload_document(
             key_topics=[f"__subject__:{effective_subject}", *topic_titles],
             status="completed",
         )
+        db.link_document_to_session(doc_hash=content_hash, session_id=study_id, user_id=user["id"])
     except Exception as e:
         print(f"[study.upload] Warning: failed to save document stats to main db: {e}")
 
