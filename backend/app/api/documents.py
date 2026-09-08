@@ -437,3 +437,71 @@ async def session_documents_status(session_id: str, user: dict = Depends(get_cur
 async def session_documents_list(session_id: str, user: dict = Depends(get_current_user)):
     """Returns all documents linked to the specified session."""
     return db.get_session_documents(session_id, user["id"])
+
+
+class LinkDocumentToSessionRequest(BaseModel):
+    session_id: str
+    doc_id: Optional[str] = None
+    doc_hash: Optional[str] = None
+    filename: Optional[str] = None
+    file_path: Optional[str] = None
+
+
+@router.post("/link-to-session")
+async def link_document_to_session_endpoint(
+    req: LinkDocumentToSessionRequest,
+    user: dict = Depends(get_current_user),
+):
+    """Link a previously uploaded material to a specific study session."""
+    user_id = user["id"]
+    session_id = (req.session_id or "").strip()
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+
+    from app.services.study_storage import save_session_document, get_session_documents
+    from app.rag.document_dedup import link_document_to_session
+
+    doc_id = req.doc_id
+    doc_hash = req.doc_hash
+    filename = req.filename
+    file_path = req.file_path
+
+    # If doc_id was passed, attempt to look it up in the Document database
+    if doc_id:
+        doc = db.get_document(doc_id)
+        if doc:
+            doc_hash = doc_hash or doc.get("doc_hash")
+            filename = filename or doc.get("file_name")
+            file_path = file_path or doc.get("file_path")
+
+    if not filename and not doc_id and not doc_hash:
+        raise HTTPException(status_code=400, detail="Must provide at least doc_id, filename, or doc_hash")
+
+    effective_filename = filename or f"doc_{doc_id or 'unknown'}"
+    effective_file_path = file_path or effective_filename
+
+    # If doc_hash available, record cross-session deduplication link
+    if doc_hash:
+        try:
+            link_document_to_session(doc_hash, session_id, user_id, db=db)
+        except Exception as e:
+            print(f"[link_document_to_session] Warning: {e}")
+
+    # Register in session_documents table
+    save_session_document(
+        session_id=session_id,
+        doc_id=doc_id,
+        filename=effective_filename,
+        file_path=effective_file_path,
+        status="completed",
+        user_id=user_id,
+    )
+
+    # Return the refreshed document list for this session
+    updated_docs = get_session_documents(session_id, user_id)
+    return {
+        "ok": True,
+        "message": f"Successfully linked '{effective_filename}' to session.",
+        "documents": updated_docs,
+    }
+

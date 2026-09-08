@@ -318,6 +318,9 @@ export const documentsApi = {
     api.post('/documents/concept-explain', { concept, topic_id: topicId }),
   delete: (docId: string) => api.delete(`/documents/${docId}`),
   deleteSection: (sectionId: string) => api.delete(`/documents/section/${sectionId}`),
+  linkToSession: (payload: { session_id: string; doc_id?: string; filename?: string; doc_hash?: string; file_path?: string }) =>
+    api.post('/documents/link-to-session', payload),
+  getSessionDocuments: (sessionId: string) => api.get(`/documents/session/${sessionId}`),
 }
 
 

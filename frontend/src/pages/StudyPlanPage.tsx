@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
@@ -22,7 +22,10 @@ import {
   Volume2,
   Copy,
   Check,
-  X
+  X,
+  Search,
+  Layers,
+  ArrowRight
 } from 'lucide-react'
 import { studyPlanApi, documentsApi, default as api } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
@@ -69,7 +72,10 @@ export default function StudyPlanPage() {
 
   // Generator form state
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [materialSourceMode, setMaterialSourceMode] = useState<'upload' | 'library' | 'session'>('library')
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string>('')
   const [selectedSessionId, setSelectedSessionId] = useState<string>('')
+  const [modalDocSearchQuery, setModalDocSearchQuery] = useState<string>('')
   const [targetDate, setTargetDate] = useState<string>(() => {
     const d = new Date()
     d.setDate(d.getDate() + 10)
@@ -77,6 +83,45 @@ export default function StudyPlanPage() {
   })
   const [hoursPerDay, setHoursPerDay] = useState<number>(2.0)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+
+  // Fetch all user uploaded materials across library and sessions
+  const { data: userDocuments = [] } = useQuery<any[]>({
+    queryKey: ['user-documents'],
+    queryFn: async () => {
+      const res = await documentsApi.list()
+      return res.data || []
+    },
+    staleTime: 30_000,
+  })
+
+  // Deduplicate materials by file_name and pick richest metadata
+  const uniqueUserDocuments = useMemo(() => {
+    const map = new Map<string, any>()
+    for (const doc of userDocuments) {
+      const key = (doc.file_name || doc.id || '').toLowerCase().trim()
+      if (!key) continue
+      if (!map.has(key)) {
+        map.set(key, doc)
+      } else {
+        const existing = map.get(key)
+        if ((doc.key_topics?.length || 0) > (existing.key_topics?.length || 0)) {
+          map.set(key, doc)
+        }
+      }
+    }
+    return Array.from(map.values())
+  }, [userDocuments])
+
+  // Filter documents for the modal search
+  const filteredModalDocuments = useMemo(() => {
+    if (!modalDocSearchQuery.trim()) return uniqueUserDocuments
+    const q = modalDocSearchQuery.toLowerCase()
+    return uniqueUserDocuments.filter((doc) =>
+      (doc.file_name && doc.file_name.toLowerCase().includes(q)) ||
+      (doc.detected_subject && doc.detected_subject.toLowerCase().includes(q)) ||
+      (doc.key_topics && doc.key_topics.some((kt: string) => String(kt).toLowerCase().includes(q)))
+    )
+  }, [uniqueUserDocuments, modalDocSearchQuery])
 
   // Study Notes Modal State
   const [activeNotesModal, setActiveNotesModal] = useState<{
@@ -261,11 +306,16 @@ export default function StudyPlanPage() {
       let topicId = 'general'
       let sessionId: string | undefined = undefined
 
-      // If user uploaded a new file directly in the Study Plan generator
-      if (selectedFile) {
+      if (materialSourceMode === 'upload' && selectedFile) {
         topicId = `plan_${Date.now()}`
         await documentsApi.upload(topicId, selectedFile)
-      } else if (selectedSessionId) {
+      } else if (materialSourceMode === 'library' && selectedDocumentId) {
+        const doc = userDocuments.find((d: any) => d.id === selectedDocumentId)
+        if (doc) {
+          topicId = doc.topic_id || doc.id || 'general'
+          sessionId = doc.topic_id || doc.id
+        }
+      } else if (materialSourceMode === 'session' && selectedSessionId) {
         sessionId = selectedSessionId
         const session = sessions.find((s) => s.id === selectedSessionId)
         topicId = session?.topic_id || selectedSessionId || 'general'
@@ -282,9 +332,13 @@ export default function StudyPlanPage() {
 
       queryClient.invalidateQueries({ queryKey: ['study-plans'] })
       queryClient.invalidateQueries({ queryKey: ['progress-summary'] })
-      setActivePlanId(res.data.id)
+      if (res.data?.id) {
+        setActivePlanId(res.data.id)
+      }
       setShowCreateModal(false)
       setSelectedFile(null)
+      setSelectedDocumentId('')
+      setSelectedSessionId('')
     } catch (err: any) {
       console.error(err)
       alert(err.response?.data?.detail || 'Failed to generate study plan. Make sure Ollama is running.')
@@ -613,125 +667,304 @@ export default function StudyPlanPage() {
       {/* ─── CREATE / GENERATE STUDY PLAN MODAL ─── */}
       <AnimatePresence>
         {showCreateModal && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-lg bg-white rounded-[2rem] p-7 shadow-2xl border border-slate-100 relative overflow-hidden"
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-2xl bg-white rounded-[2.5rem] p-6 sm:p-9 shadow-2xl border border-slate-200/90 relative overflow-hidden my-auto"
             >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-[1.5rem] bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100">
-                  <Sparkles size={20} />
+              {/* Modal Header */}
+              <div className="flex items-start justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-2xs">
+                    <Sparkles size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 font-sans tracking-tight">Generate AI Study Plan</h3>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">
+                      Personalized day-by-day revision roadmap grounded in your study material
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">Generate AI Study Plan</h3>
-                  <p className="text-xs text-slate-500">Analyze PDF context & calculate date schedule</p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
               </div>
 
-              <form onSubmit={handleGeneratePlan} className="space-y-4">
-                {/* PDF File Upload */}
+              <form onSubmit={handleGeneratePlan} className="space-y-6">
+                {/* ─── Step 1: Select Study Material ─── */}
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-                    1. Upload PDF Document (or Select Existing Session)
-                  </label>
-                  
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.docx,.doc,.csv,.xlsx,.xls,.pptx,.ppt,.html,.json,.txt,.md"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        setSelectedFile(file)
-                        setSelectedSessionId('')
-                      }
-                    }}
-                  />
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                      1. Choose Study Material
+                    </label>
+                    <span className="text-xs font-medium text-indigo-600">
+                      {materialSourceMode === 'library' && uniqueUserDocuments.length > 0 && `${uniqueUserDocuments.length} available in library`}
+                    </span>
+                  </div>
 
-                  <div className="flex gap-2">
+                  {/* Segmented Control */}
+                  <div className="flex p-1.5 bg-slate-100 rounded-2xl mb-3.5 gap-1.5 border border-slate-200/60">
                     <button
                       type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className={`flex-1 p-3 border rounded-[1.5rem] text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                        selectedFile
-                          ? 'bg-indigo-50 border-indigo-400 text-indigo-900'
-                          : 'bg-black/5 border-border text-slate-600 hover:bg-black/10'
+                      onClick={() => {
+                        setMaterialSourceMode('library')
+                        setSelectedFile(null)
+                        setSelectedSessionId('')
+                      }}
+                      className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                        materialSourceMode === 'library'
+                          ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/60'
+                          : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
-                      <UploadCloud size={16} className="text-indigo-600" />
-                      <span className="truncate">{selectedFile ? selectedFile.name : 'Upload Document PDF'}</span>
+                      <Layers size={14} className={materialSourceMode === 'library' ? 'text-indigo-600' : 'text-slate-400'} />
+                      <span>From Library ({uniqueUserDocuments.length})</span>
                     </button>
 
-                    {sessions.length > 0 && (
-                      <select
-                        value={selectedSessionId}
-                        onChange={(e) => {
-                          setSelectedSessionId(e.target.value)
-                          setSelectedFile(null)
-                        }}
-                        className="bg-black/5 border border-border text-xs font-semibold text-slate-700 rounded-[1.5rem] px-3 py-2.5 focus:outline-none"
-                      >
-                        <option value="">Or pick chat session...</option>
-                        {sessions.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.session_title}
-                          </option>
-                        ))}
-                      </select>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMaterialSourceMode('upload')
+                        setSelectedDocumentId('')
+                        setSelectedSessionId('')
+                      }}
+                      className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                        materialSourceMode === 'upload'
+                          ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/60'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <UploadCloud size={14} className={materialSourceMode === 'upload' ? 'text-indigo-600' : 'text-slate-400'} />
+                      <span>Upload New File</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMaterialSourceMode('session')
+                        setSelectedFile(null)
+                        setSelectedDocumentId('')
+                      }}
+                      className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                        materialSourceMode === 'session'
+                          ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/60'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <BookOpen size={14} className={materialSourceMode === 'session' ? 'text-indigo-600' : 'text-slate-400'} />
+                      <span>Chat Room ({sessions.length})</span>
+                    </button>
                   </div>
-                </div>
 
-                {/* Target Date Picker */}
-                <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-                    2. Target Completion / Exam Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={targetDate}
-                    onChange={(e) => setTargetDate(e.target.value)}
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full bg-black/5 border border-border rounded-[1.5rem] px-4 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-indigo-500"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    AI will automatically calculate days remaining until this date to construct your schedule.
-                  </p>
-                </div>
+                  {/* Mode A: Select from Library */}
+                  {materialSourceMode === 'library' && (
+                    <div className="space-y-3">
+                      {uniqueUserDocuments.length > 4 && (
+                        <div className="relative">
+                          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            value={modalDocSearchQuery}
+                            onChange={(e) => setModalDocSearchQuery(e.target.value)}
+                            placeholder="Search your library materials..."
+                            className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-indigo-400 focus:bg-white"
+                          />
+                        </div>
+                      )}
 
-                {/* Hours Per Day */}
-                <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-                    3. Daily Study Time Available
-                  </label>
-                  <div className="flex gap-2">
-                    {[1.0, 2.0, 3.0, 4.0].map((hrs) => (
+                      {uniqueUserDocuments.length === 0 ? (
+                        <div className="p-8 rounded-3xl bg-slate-50 border-2 border-dashed border-slate-200 text-center">
+                          <BookOpen size={28} className="text-slate-400 mx-auto mb-2 opacity-60" />
+                          <p className="text-sm font-bold text-slate-700 mb-1">No previously uploaded materials found</p>
+                          <p className="text-xs text-slate-400 mb-3">Upload your first PDF textbook or chapter notes to get started.</p>
+                          <button
+                            type="button"
+                            onClick={() => setMaterialSourceMode('upload')}
+                            className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition cursor-pointer"
+                          >
+                            Upload Study PDF Now →
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                          {filteredModalDocuments.map((doc: any) => {
+                            const isSelected = selectedDocumentId === doc.id || (!selectedDocumentId && uniqueUserDocuments[0]?.id === doc.id)
+                            return (
+                              <div
+                                key={doc.id}
+                                onClick={() => setSelectedDocumentId(doc.id)}
+                                className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between gap-3 text-left ${
+                                  isSelected
+                                    ? 'bg-indigo-50/90 border-indigo-500 text-indigo-950 shadow-sm'
+                                    : 'bg-slate-50/70 border-slate-200/80 text-slate-700 hover:bg-white hover:border-slate-300'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div
+                                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
+                                      isSelected
+                                        ? 'bg-indigo-600 text-white border-indigo-600'
+                                        : 'bg-white text-indigo-600 border-slate-200'
+                                    }`}
+                                  >
+                                    <FileText size={16} />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <h4 className="text-xs font-bold truncate text-slate-900 max-w-[170px]" title={doc.file_name}>
+                                      {doc.file_name}
+                                    </h4>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-100/70 px-1.5 py-0.2 rounded-md">
+                                        {doc.detected_subject || 'General Study'}
+                                      </span>
+                                      {doc.key_topics?.length > 0 && (
+                                        <span className="text-[10px] text-slate-400 truncate">
+                                          • {doc.key_topics.length} topics
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="shrink-0">
+                                  {isSelected ? (
+                                    <div className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                                      <Check size={12} strokeWidth={3} />
+                                    </div>
+                                  ) : (
+                                    <div className="w-5 h-5 rounded-full border-2 border-slate-300" />
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Mode B: Upload New File */}
+                  {materialSourceMode === 'upload' && (
+                    <div>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.docx,.doc,.csv,.xlsx,.xls,.pptx,.ppt,.html,.json,.txt,.md"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            setSelectedFile(file)
+                          }
+                        }}
+                      />
                       <button
-                        key={hrs}
                         type="button"
-                        onClick={() => setHoursPerDay(hrs)}
-                        className={`flex-1 py-2 rounded-[1.25rem] text-xs font-bold border transition-all cursor-pointer ${
-                          hoursPerDay === hrs
-                            ? 'bg-indigo-600 text-white border-indigo-600 elevation-3'
-                            : 'bg-black/5 text-slate-600 border-border hover:bg-black/10'
+                        onClick={() => fileInputRef.current?.click()}
+                        className={`w-full p-6 border-2 border-dashed rounded-3xl text-xs font-semibold flex flex-col items-center justify-center gap-2.5 transition-all cursor-pointer ${
+                          selectedFile
+                            ? 'bg-indigo-50/80 border-indigo-400 text-indigo-950'
+                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100/80 hover:border-slate-300 text-slate-600'
                         }`}
                       >
-                        {hrs} hr{hrs > 1 ? 's' : ''}/day
+                        <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
+                          <UploadCloud size={24} />
+                        </div>
+                        <div className="text-center">
+                          <span className="font-bold text-sm text-slate-900 block truncate max-w-xs">
+                            {selectedFile ? selectedFile.name : 'Click to select study PDF / Document'}
+                          </span>
+                          <span className="text-[11px] text-slate-400 font-normal">
+                            Supports PDF, DOCX, Markdown, Lecture Slides, and Images
+                          </span>
+                        </div>
                       </button>
-                    ))}
+                    </div>
+                  )}
+
+                  {/* Mode C: Pick Chat Room */}
+                  {materialSourceMode === 'session' && (
+                    <div>
+                      {sessions.length === 0 ? (
+                        <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-400">
+                          No active chat notebooks found.
+                        </div>
+                      ) : (
+                        <select
+                          value={selectedSessionId}
+                          onChange={(e) => setSelectedSessionId(e.target.value)}
+                          className="w-full bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 text-xs font-semibold text-slate-900 rounded-2xl px-4 py-3.5 focus:outline-none focus:border-indigo-500"
+                        >
+                          <option value="">Choose an active chat notebook...</option>
+                          {sessions.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.session_title || `Chat Notebook #${s.id.slice(-4)}`}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* ─── Step 2 & 3: Target Date & Daily Study Time Grid ─── */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-1">
+                  {/* Target Date Picker */}
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2">
+                      2. Target Completion Date
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={targetDate}
+                      onChange={(e) => setTargetDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="w-full bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-900 font-bold focus:outline-none focus:border-indigo-500 transition-all shadow-2xs"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1.5 font-medium">
+                      Remaining days are automatically calculated for your schedule.
+                    </p>
+                  </div>
+
+                  {/* Daily Study Time */}
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2">
+                      3. Daily Study Time
+                    </label>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {[1.0, 2.0, 3.0, 4.0].map((hrs) => (
+                        <button
+                          key={hrs}
+                          type="button"
+                          onClick={() => setHoursPerDay(hrs)}
+                          className={`py-3 rounded-2xl text-xs font-bold border transition-all cursor-pointer flex flex-col items-center justify-center ${
+                            hoursPerDay === hrs
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200 scale-[1.02]'
+                              : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200/80'
+                          }`}
+                        >
+                          <span className="text-sm font-black">{hrs}h</span>
+                          <span className="text-[9px] opacity-80 uppercase font-semibold">/day</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
-                {/* Buttons */}
-                <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+                {/* ─── Footer Action Buttons ─── */}
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setShowCreateModal(false)}
-                    className="btn-ghost py-2.5 px-4 text-xs text-slate-600"
+                    className="py-3 px-5 rounded-2xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -739,15 +972,17 @@ export default function StudyPlanPage() {
                   <button
                     type="submit"
                     disabled={generating}
-                    className="btn-primary py-2.5 px-6 text-xs flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+                    className="py-3 px-7 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/25 transition-all cursor-pointer disabled:opacity-50"
                   >
                     {generating ? (
                       <>
-                        <RefreshCw size={15} className="animate-spin" /> Analyzing & Planning...
+                        <RefreshCw size={15} className="animate-spin" />
+                        <span>Building Your Schedule...</span>
                       </>
                     ) : (
                       <>
-                        <Sparkles size={15} /> Generate Schedule
+                        <Sparkles size={15} />
+                        <span>Generate Schedule</span>
                       </>
                     )}
                   </button>

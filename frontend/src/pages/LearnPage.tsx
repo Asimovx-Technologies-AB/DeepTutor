@@ -18,7 +18,7 @@ import {
   Calculator, Globe, Cpu, Dna, FlaskConical, Zap, Landmark
 } from 'lucide-react'
 
-import { studyApi, streamTeacherLecture, teacherApi } from '../services/api'
+import { studyApi, documentsApi, streamTeacherLecture, teacherApi } from '../services/api'
 import { exportNotesToPdf } from '../utils/pdfExport'
 import { useAuthStore } from '../stores/authStore'
 import confetti from 'canvas-confetti'
@@ -157,6 +157,14 @@ export default function LearnPage() {
   const [isMaterialsPopoverOpen, setIsMaterialsPopoverOpen] = useState(false)
   const materialsPopoverRef = useRef<HTMLDivElement | null>(null)
   const addMaterialInputRef = useRef<HTMLInputElement | null>(null)
+
+  // Previous materials library selection modal & attach menu
+  const [isSelectLibraryModalOpen, setIsSelectLibraryModalOpen] = useState(false)
+  const [libraryDocuments, setLibraryDocuments] = useState<any[]>([])
+  const [isLibraryLoading, setIsLibraryLoading] = useState(false)
+  const [librarySearchQuery, setLibrarySearchQuery] = useState('')
+  const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false)
+  const attachMenuRef = useRef<HTMLDivElement | null>(null)
 
   // Option A & B Navigation & Search states
   const [courseDropdownOpen, setCourseDropdownOpen] = useState(false)
@@ -544,6 +552,62 @@ export default function LearnPage() {
       setUploadingFileMeta(null)
       const msg = err.response?.data?.detail || err.message || 'Upload failed'
       setUploadError(msg)
+    }
+  }
+
+  // ─── 4.1 Browse and Link Previously Uploaded Material ───
+  const handleOpenLibraryModal = async () => {
+    setIsSelectLibraryModalOpen(true)
+    setIsLibraryLoading(true)
+    try {
+      const res = await documentsApi.list()
+      setLibraryDocuments(res.data || [])
+    } catch (err) {
+      console.error('Failed to load library materials:', err)
+    } finally {
+      setIsLibraryLoading(false)
+    }
+  }
+
+  const handleLinkMaterialToActiveSession = async (doc: any) => {
+    if (!activeSessionId) {
+      console.warn('No active session id')
+      return
+    }
+    try {
+      const res = await documentsApi.linkToSession({
+        session_id: activeSessionId,
+        doc_id: doc.id,
+        filename: doc.file_name,
+        doc_hash: doc.doc_hash,
+        file_path: doc.file_path,
+      })
+
+      if (res.data?.documents) {
+        setSessionDocuments(res.data.documents)
+      } else {
+        const r = await studyApi.getSession(activeSessionId)
+        if (r.data?.documents) setSessionDocuments(r.data.documents)
+      }
+
+      setIsSelectLibraryModalOpen(false)
+
+      // Add student-friendly notice in chat
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `sys-${Date.now()}`,
+          role: 'assistant',
+          text: `Attached previously uploaded material **${doc.file_name}** to this study room.\n\nYou can now ask doubts, explore concepts, or generate study notes from it.`,
+          thought_process: `Linked existing material ${doc.file_name} to session ${activeSessionId}.`,
+          format: 'conceptual',
+        },
+      ])
+
+      fetchSessions()
+    } catch (err: any) {
+      console.error('Failed to link material:', err)
+      alert(err?.response?.data?.detail || 'Failed to attach previous material')
     }
   }
 
@@ -1592,16 +1656,28 @@ export default function LearnPage() {
                               ))}
                             </div>
 
-                            <button
-                              onClick={() => {
-                                setIsMaterialsPopoverOpen(false)
-                                addMaterialInputRef.current?.click()
-                              }}
-                              className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-xs transition cursor-pointer"
-                            >
-                              <Plus size={13} />
-                              <span>Add Another Material</span>
-                            </button>
+                            <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setIsMaterialsPopoverOpen(false)
+                                  addMaterialInputRef.current?.click()
+                                }}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-xs transition cursor-pointer"
+                              >
+                                <UploadCloud size={12} />
+                                <span>Upload New</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setIsMaterialsPopoverOpen(false)
+                                  handleOpenLibraryModal()
+                                }}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs border border-slate-200/80 shadow-xs transition cursor-pointer"
+                              >
+                                <Layers size={12} className="text-indigo-600" />
+                                <span>From Library</span>
+                              </button>
+                            </div>
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -2184,14 +2260,68 @@ export default function LearnPage() {
 
                     {/* ChatInputForm Pill */}
                     <div className="rounded-full bg-white border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.07)] focus-within:ring-2 focus-within:ring-slate-800/10 focus-within:border-slate-800 transition-all px-2.5 py-1.5 sm:px-3.5 sm:py-2 flex items-center gap-2">
-                      {/* ① [+] Attach Button */}
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition shrink-0 cursor-pointer"
-                        title="Attach notes or document"
-                      >
-                        <Plus size={15} />
-                      </button>
+                      {/* ① [+] Attach Button & Popover */}
+                      <div className="relative shrink-0" ref={attachMenuRef}>
+                        <button
+                          type="button"
+                          onClick={() => setIsAttachMenuOpen(!isAttachMenuOpen)}
+                          className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition shrink-0 cursor-pointer"
+                          title="Attach document or select from library"
+                        >
+                          <Plus size={15} className={`transition-transform duration-200 ${isAttachMenuOpen ? 'rotate-45 text-slate-900' : ''}`} />
+                        </button>
+
+                        <AnimatePresence>
+                          {isAttachMenuOpen && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 6, scale: 0.95 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute bottom-full left-0 mb-3 w-64 bg-white/98 backdrop-blur-xl border border-slate-200/90 rounded-2xl shadow-xl p-2 z-50 font-sans"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                Add Study Material
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsAttachMenuOpen(false)
+                                  fileInputRef.current?.click()
+                                }}
+                                className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-50 text-left transition cursor-pointer"
+                              >
+                                <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
+                                  <UploadCloud size={14} />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-slate-800">Upload from Device</p>
+                                  <p className="text-[10px] text-slate-400">PDF, Word, or Markdown</p>
+                                </div>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsAttachMenuOpen(false)
+                                  handleOpenLibraryModal()
+                                }}
+                                className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-50 text-left transition cursor-pointer"
+                              >
+                                <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
+                                  <Layers size={14} />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-slate-800">Select Previous Material</p>
+                                  <p className="text-[10px] text-slate-400">Attach from your library</p>
+                                </div>
+                              </button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
                       <input
                         type="file"
                         ref={fileInputRef}
@@ -3092,15 +3222,26 @@ export default function LearnPage() {
                     <Layers size={13} className="text-indigo-600" />
                     Materials ({sessionDocuments.length})
                   </span>
-                  <button
-                    onClick={() => addMaterialInputRef.current?.click()}
-                    disabled={isUploading}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/50 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Add another material to this room"
-                  >
-                    {isUploading ? <RefreshCw size={11} className="animate-spin" /> : <Plus size={11} />}
-                    <span>{isUploading ? 'Adding...' : 'Add'}</span>
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleOpenLibraryModal()}
+                      disabled={isUploading}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 transition cursor-pointer disabled:opacity-50"
+                      title="Select previously uploaded material from library"
+                    >
+                      <Layers size={11} className="text-indigo-600" />
+                      <span>Library</span>
+                    </button>
+                    <button
+                      onClick={() => addMaterialInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/50 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Upload new file"
+                    >
+                      {isUploading ? <RefreshCw size={11} className="animate-spin" /> : <Plus size={11} />}
+                      <span>{isUploading ? 'Adding...' : 'Upload'}</span>
+                    </button>
+                  </div>
                   <input
                     type="file"
                     ref={addMaterialInputRef}
@@ -3292,6 +3433,159 @@ export default function LearnPage() {
         onConfirm={confirmDeleteSession}
         onCancel={() => setSessionToDelete(null)}
       />
+
+      {/* ─── MODAL: SELECT PREVIOUSLY UPLOADED MATERIAL ─── */}
+      <AnimatePresence>
+        {isSelectLibraryModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 font-sans"
+            onClick={() => setIsSelectLibraryModalOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col max-h-[85vh]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-2xs">
+                    <Layers size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 font-sans">Previously Uploaded Materials</h3>
+                    <p className="text-xs text-slate-500 font-sans">Select any material from your library to attach to this room</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsSelectLibraryModalOpen(false)}
+                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="my-3.5 relative shrink-0">
+                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={librarySearchQuery}
+                  onChange={(e) => setLibrarySearchQuery(e.target.value)}
+                  placeholder="Search materials by title or subject..."
+                  className="w-full pl-9 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-indigo-400 focus:bg-white font-sans"
+                />
+              </div>
+
+              {/* Document List */}
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[200px]">
+                {isLibraryLoading ? (
+                  <div className="py-16 text-center">
+                    <RefreshCw size={24} className="animate-spin text-indigo-600 mx-auto mb-2.5" />
+                    <p className="text-xs text-slate-500 font-sans">Loading your materials...</p>
+                  </div>
+                ) : (() => {
+                  const filtered = libraryDocuments.filter((doc: any) => {
+                    if (!librarySearchQuery.trim()) return true
+                    const q = librarySearchQuery.toLowerCase()
+                    return (
+                      (doc.file_name && doc.file_name.toLowerCase().includes(q)) ||
+                      (doc.detected_subject && doc.detected_subject.toLowerCase().includes(q)) ||
+                      (doc.key_topics && doc.key_topics.some((kt: string) => String(kt).toLowerCase().includes(q)))
+                    )
+                  })
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="py-12 text-center text-xs text-slate-400 font-sans">
+                        {libraryDocuments.length === 0
+                          ? 'No previously uploaded materials found in your account.'
+                          : 'No materials matched your search.'}
+                      </div>
+                    )
+                  }
+
+                  return filtered.map((doc: any) => {
+                    const isAlreadyAttached = sessionDocuments.some(
+                      (sd: any) => (sd.filename && sd.filename.toLowerCase() === doc.file_name?.toLowerCase()) || sd.id === doc.id
+                    )
+                    return (
+                      <div
+                        key={doc.id}
+                        className={`p-3 rounded-2xl border transition flex items-center justify-between gap-3 ${
+                          isAlreadyAttached
+                            ? 'bg-emerald-50/60 border-emerald-200/80 text-emerald-950'
+                            : 'bg-slate-50/70 hover:bg-indigo-50/50 border-slate-200/80 hover:border-indigo-200 text-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
+                            isAlreadyAttached ? 'bg-emerald-100 border-emerald-200 text-emerald-700' : 'bg-white border-slate-200 text-indigo-600 shadow-2xs'
+                          }`}>
+                            <FileText size={16} />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="text-xs font-bold truncate text-slate-900">{doc.file_name}</h4>
+                            <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
+                              <span className="font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md border border-indigo-100/60">
+                                {doc.detected_subject || 'General Study'}
+                              </span>
+                              {doc.key_topics && doc.key_topics.length > 0 && (
+                                <span>{doc.key_topics.length} topics</span>
+                              )}
+                              {doc.created_at && (
+                                <span>• {new Date(doc.created_at).toLocaleDateString()}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {isAlreadyAttached ? (
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold shrink-0 flex items-center gap-1 border border-emerald-200/60">
+                            <Check size={12} />
+                            <span>Attached</span>
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleLinkMaterialToActiveSession(doc)}
+                            className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5"
+                          >
+                            <Plus size={13} />
+                            <span>Attach</span>
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })
+                })()}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="pt-3 border-t border-slate-100 mt-2 flex items-center justify-between shrink-0">
+                <span className="text-[11px] text-slate-400 font-sans">
+                  {libraryDocuments.length} material{libraryDocuments.length !== 1 ? 's' : ''} available
+                </span>
+                <button
+                  onClick={() => {
+                    setIsSelectLibraryModalOpen(false)
+                    addMaterialInputRef.current?.click()
+                  }}
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer font-sans"
+                >
+                  <UploadCloud size={13} />
+                  <span>Upload new file instead</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 
