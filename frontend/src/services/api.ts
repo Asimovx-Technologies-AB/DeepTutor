@@ -294,6 +294,8 @@ export const dashboardApi = {
   continue: () => api.get('/dashboard/continue'),
   recordActivity: (data: { activity_type: string; title: string; subject_id?: string; topic_id?: string }) =>
     api.post('/dashboard/activity/record', data),
+  sendHeartbeat: (activeSeconds: number = 30) =>
+    api.post('/dashboard/heartbeat', { active_seconds: activeSeconds }),
   updateProgress: (data: { subject_id: string; topic_id: string; progress_percentage: number }) =>
     api.post('/dashboard/progress/update', data),
   goals: () => api.get('/dashboard/goals'),

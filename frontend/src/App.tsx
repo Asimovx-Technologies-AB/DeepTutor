@@ -8,6 +8,7 @@ import { lazy, Suspense } from 'react'
 import Layout from './components/Layout'
 import MouseSpotlight from './components/MouseSpotlight'
 import ServerWarmupNotice from './components/ServerWarmupNotice'
+import { useActiveTimeTracker } from './hooks/useActiveTimeTracker'
 
 // Directly import core primary pages for 0ms instant snappy navigation
 import DashboardPage from './pages/DashboardPage'
@@ -54,6 +55,7 @@ const queryClient = new QueryClient({
  * - On logout: wipes all cached session data
  */
 function GlobalSessionLoader() {
+  useActiveTimeTracker()
   const user = useAuthStore((s) => s.user)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const setSessions = useChatStore((s) => s.setSessions)

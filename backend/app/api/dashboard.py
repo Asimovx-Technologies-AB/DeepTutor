@@ -25,6 +25,10 @@ class ProgressRequest(BaseModel):
     progress_percentage: int
 
 
+class HeartbeatRequest(BaseModel):
+    active_seconds: int = 30
+
+
 @router.get("/stats")
 async def get_dashboard_stats(user: dict = Depends(get_current_user)):
     user_id = user["id"]
@@ -81,14 +85,8 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
             len(sessions) + len(attempts) + len(docs)
         )
 
-        # 4. Learning hours calculation
-        calculated_hours = round(
-            max(
-                user_record.total_learning_hours or 0.0,
-                (len(sessions) * 0.45) + (len(attempts) * 0.25) + (len(docs) * 0.35) + (total_messages * 0.04)
-            ),
-            1
-        )
+        # 4. Real wall-clock learning hours
+        calculated_hours = round(user_record.total_learning_hours or 0.0, 1)
 
         # 5. Dynamic Streak Calculation across all dates
         activity_dates = set()
@@ -138,7 +136,6 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
         # Sync back to user record
         user_record.current_streak = final_streak
         user_record.longest_streak = longest_streak
-        user_record.total_learning_hours = calculated_hours
         if today_str in activity_dates or streak_days > 0:
             user_record.last_active_date = now_iso()
         db.commit()
@@ -177,8 +174,8 @@ async def get_recent_activity(limit: int = 10, user: dict = Depends(get_current_
                 "id": a.id,
                 "activity_type": a.activity_type,
                 "title": a.title,
-                "subject_id": a.subject_id,
-                "topic_id": a.topic_id,
+                "subject_id": a.subject_id or a.topic_id,
+                "topic_id": a.topic_id or a.subject_id,
                 "timestamp": a.timestamp
             })
 
@@ -205,8 +202,8 @@ async def get_recent_activity(limit: int = 10, user: dict = Depends(get_current_
                 "id": f"chat_{s.id}",
                 "activity_type": "chat",
                 "title": f"Studied '{s.session_title}' with AI Tutor",
-                "subject_id": s.topic_id,
-                "topic_id": s.topic_id,
+                "subject_id": s.id,
+                "topic_id": s.topic_id or s.id,
                 "timestamp": s.started_at
             })
 
@@ -327,6 +324,42 @@ async def record_activity(req: ActivityRequest, user: dict = Depends(get_current
         db.commit()
         
         return {"status": "success", "message": "Activity recorded"}
+
+
+@router.post("/heartbeat")
+async def record_heartbeat(req: HeartbeatRequest, user: dict = Depends(get_current_user)):
+    with DBContext() as db:
+        user_record = db.query(User).filter(User.id == user["id"]).first()
+        if not user_record:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Allow between 1 and 300 active seconds per heartbeat
+        secs = max(1, min(req.active_seconds, 300))
+        additional_hours = secs / 3600.0
+        new_total_hours = (user_record.total_learning_hours or 0.0) + additional_hours
+        user_record.total_learning_hours = round(new_total_hours, 4)
+
+        now = now_iso()
+        today_date = now.split('T')[0]
+        if user_record.last_active_date:
+            last_date = user_record.last_active_date.split('T')[0]
+            if last_date != today_date:
+                user_record.current_streak = (user_record.current_streak or 0) + 1
+                if user_record.current_streak > (user_record.longest_streak or 0):
+                    user_record.longest_streak = user_record.current_streak
+        else:
+            user_record.current_streak = 1
+            user_record.longest_streak = 1
+
+        user_record.last_active_date = now
+        db.commit()
+
+        return {
+            "status": "ok",
+            "active_seconds": secs,
+            "total_learning_hours": round(user_record.total_learning_hours, 2),
+            "current_streak": user_record.current_streak
+        }
 
 
 @router.post("/progress/update")
