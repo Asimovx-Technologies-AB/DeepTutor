@@ -21,6 +21,11 @@ permissions:
 
 # Terraform state takes one writer at a time. Never cancel a run in progress —
 # an interrupted apply leaves a lease on the state blob.
+#
+# This serialises applies against each other, but not against infra-plan, which
+# locks the same blob from its own concurrency group. Merging a PR starts an
+# apply while that PR's plan is often still running, so the two race for the
+# lock; -lock-timeout below makes the loser wait instead of failing.
 concurrency:
   group: infra-apply-dev
   cancel-in-progress: false
@@ -65,13 +70,15 @@ jobs:
             -backend-config="key=dev.terraform.tfstate" \
             -backend-config="use_azuread_auth=true"
 
+      # -lock-timeout: a plan holds the state lock for about a minute, so wait
+      # it out rather than failing the deploy the moment a merge overlaps one.
       - name: terraform apply
         if: ${{ !inputs.destroy }}
-        run: terraform apply -auto-approve -input=false -var-file=envs/dev.tfvars
+        run: terraform apply -auto-approve -input=false -lock-timeout=10m -var-file=envs/dev.tfvars
 
       - name: terraform destroy
         if: ${{ inputs.destroy }}
-        run: terraform destroy -auto-approve -input=false -var-file=envs/dev.tfvars
+        run: terraform destroy -auto-approve -input=false -lock-timeout=10m -var-file=envs/dev.tfvars
 
       - name: Publish endpoints
         if: ${{ !inputs.destroy }}
