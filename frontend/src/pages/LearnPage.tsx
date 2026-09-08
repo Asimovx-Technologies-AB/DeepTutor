@@ -14,7 +14,7 @@ import {
   Trash2, Plus, FileText, UploadCloud, RefreshCw, PanelLeft,
   PanelRight, Maximize2, Minimize2, Split, HelpCircle, Award,
   Brain, FileSpreadsheet, Eye, Play, Pause, X, ArrowUp,
-  ThumbsUp, ThumbsDown, Search, FolderPlus,
+  ThumbsUp, ThumbsDown, Search, FolderPlus, CheckSquare, Square,
   Calculator, Globe, Cpu, Dna, FlaskConical, Zap, Landmark
 } from 'lucide-react'
 
@@ -1301,6 +1301,56 @@ export default function LearnPage() {
     }
   }
 
+  // Batch session selection & deletion state
+  const [isMultiDeleteMode, setIsMultiDeleteMode] = useState(false)
+  const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([])
+  const [isConfirmBatchDeleteOpen, setIsConfirmBatchDeleteOpen] = useState(false)
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false)
+
+  const toggleSelectSession = (sid: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    setSelectedSessionIds((prev) =>
+      prev.includes(sid) ? prev.filter((id) => id !== sid) : [...prev, sid]
+    )
+  }
+
+  const handleSelectAllSessions = () => {
+    if (selectedSessionIds.length === sessions.length) {
+      setSelectedSessionIds([])
+    } else {
+      setSelectedSessionIds(sessions.map((s) => s.id))
+    }
+  }
+
+  const confirmBatchDeleteSessions = async () => {
+    if (selectedSessionIds.length === 0) return
+    setIsBatchDeleting(true)
+    try {
+      await studyApi.deleteSessionsBatch(selectedSessionIds)
+      const deletedSet = new Set(selectedSessionIds)
+      const remaining = sessions.filter((s) => !deletedSet.has(s.id))
+      setSessions(remaining)
+
+      if (activeSessionId && deletedSet.has(activeSessionId)) {
+        if (remaining.length > 0) {
+          handleSelectSession(remaining[0].id)
+        } else {
+          setActiveSessionId('')
+          setMessages([])
+          setTopics([])
+        }
+      }
+
+      setSelectedSessionIds([])
+      setIsMultiDeleteMode(false)
+      setIsConfirmBatchDeleteOpen(false)
+    } catch (err) {
+      console.error('Batch delete sessions failed:', err)
+    } finally {
+      setIsBatchDeleting(false)
+    }
+  }
+
   // ─── Markdown / PDF Export ───
   const handleExportMarkdown = async () => {
     try {
@@ -1519,13 +1569,47 @@ export default function LearnPage() {
                 <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0">
                   <div className="flex items-center justify-between px-1 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
                     <span>Your Notebooks ({filteredDrawerSessions.length})</span>
-                    <button
-                      onClick={() => navigate('/subjects')}
-                      className="hover:text-indigo-600 lowercase font-medium transition text-[11px]"
-                    >
-                      all library →
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setIsMultiDeleteMode((prev) => !prev)
+                          setSelectedSessionIds([])
+                        }}
+                        className={`hover:text-indigo-600 font-medium transition text-[11px] flex items-center gap-1 ${
+                          isMultiDeleteMode ? 'text-red-600 font-bold' : 'text-slate-500'
+                        }`}
+                      >
+                        <CheckSquare size={12} />
+                        <span>{isMultiDeleteMode ? 'Done' : 'Select Multiple'}</span>
+                      </button>
+                      <button
+                        onClick={() => navigate('/subjects')}
+                        className="hover:text-indigo-600 lowercase font-medium transition text-[11px]"
+                      >
+                        all library →
+                      </button>
+                    </div>
                   </div>
+
+                  {isMultiDeleteMode && (
+                    <div className="p-2 rounded-xl bg-slate-100 border border-slate-200/80 flex items-center justify-between my-2">
+                      <button
+                        onClick={handleSelectAllSessions}
+                        className="text-xs font-semibold text-slate-700 hover:text-indigo-600 flex items-center gap-1.5 transition"
+                      >
+                        {selectedSessionIds.length === sessions.length ? <CheckSquare size={14} className="text-indigo-600" /> : <Square size={14} />}
+                        <span>Select All ({sessions.length})</span>
+                      </button>
+                      <button
+                        disabled={selectedSessionIds.length === 0}
+                        onClick={() => setIsConfirmBatchDeleteOpen(true)}
+                        className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white text-xs font-bold flex items-center gap-1 transition shadow-xs cursor-pointer"
+                      >
+                        <Trash2 size={12} />
+                        <span>Delete ({selectedSessionIds.length})</span>
+                      </button>
+                    </div>
+                  )}
 
                   {filteredDrawerSessions.length === 0 ? (
                     <div className="py-8 text-center text-xs text-slate-400">
@@ -1539,15 +1623,35 @@ export default function LearnPage() {
                       return (
                         <div
                           key={s.id}
-                          onClick={() => handleSelectSession(s.id)}
+                          onClick={() => {
+                            if (isMultiDeleteMode) {
+                              toggleSelectSession(s.id)
+                            } else {
+                              handleSelectSession(s.id)
+                            }
+                          }}
                           className={`group relative p-3 rounded-2xl cursor-pointer transition border ${
-                            isActive
+                            selectedSessionIds.includes(s.id)
+                              ? 'bg-red-50/80 border-red-200 shadow-sm'
+                              : isActive
                               ? 'bg-indigo-50 border-indigo-200/90 shadow-sm'
                               : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80 shadow-2xs hover:border-slate-300'
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2.5">
                             <div className="flex items-start gap-2.5 min-w-0">
+                              {isMultiDeleteMode && (
+                                <div
+                                  onClick={(e) => toggleSelectSession(s.id, e)}
+                                  className="mt-1 cursor-pointer shrink-0"
+                                >
+                                  {selectedSessionIds.includes(s.id) ? (
+                                    <CheckSquare size={18} className="text-red-600 fill-red-50" />
+                                  ) : (
+                                    <Square size={18} className="text-slate-300 hover:text-slate-500" />
+                                  )}
+                                </div>
+                              )}
                               <div
                                 className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border shadow-2xs ${
                                   isActive ? 'bg-white border-indigo-200 text-indigo-600 shadow-sm' : visual.bg
@@ -1796,18 +1900,54 @@ export default function LearnPage() {
                             {sessions.length}
                           </span>
                         </div>
-                        <button
-                          onClick={() => {
-                            setCourseDropdownOpen(false)
-                            setWorkspaceOpen(true)
-                            setIsUploadDrawerOpen(true)
-                          }}
-                          className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition cursor-pointer"
-                        >
-                          <Plus size={12} />
-                          <span>Upload Material</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setIsMultiDeleteMode((prev) => !prev)
+                              setSelectedSessionIds([])
+                            }}
+                            className={`text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer ${
+                              isMultiDeleteMode ? 'text-red-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                            title="Select multiple courses to delete"
+                          >
+                            <Trash2 size={12} />
+                            <span>{isMultiDeleteMode ? 'Done' : 'Select Multiple'}</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setCourseDropdownOpen(false)
+                              setWorkspaceOpen(true)
+                              setIsUploadDrawerOpen(true)
+                            }}
+                            className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition cursor-pointer"
+                          >
+                            <Plus size={12} />
+                            <span>Upload</span>
+                          </button>
+                        </div>
                       </div>
+
+                      {/* Multi-Delete Control Bar */}
+                      {isMultiDeleteMode && (
+                        <div className="my-2 p-2 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-between">
+                          <button
+                            onClick={handleSelectAllSessions}
+                            className="text-xs font-semibold text-slate-700 hover:text-indigo-600 flex items-center gap-1.5 transition"
+                          >
+                            {selectedSessionIds.length === sessions.length ? <CheckSquare size={14} className="text-indigo-600" /> : <Square size={14} />}
+                            <span>All ({sessions.length})</span>
+                          </button>
+                          <button
+                            disabled={selectedSessionIds.length === 0}
+                            onClick={() => setIsConfirmBatchDeleteOpen(true)}
+                            className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white text-xs font-bold flex items-center gap-1 transition shadow-xs cursor-pointer"
+                          >
+                            <Trash2 size={12} />
+                            <span>Delete ({selectedSessionIds.length})</span>
+                          </button>
+                        </div>
+                      )}
 
                       {/* Dropdown Quick Search (shown if > 2 courses) */}
                       {sessions.length > 2 && (
@@ -1838,14 +1978,34 @@ export default function LearnPage() {
                             return (
                               <div
                                 key={s.id}
-                                onClick={() => handleSelectSession(s.id)}
+                                onClick={() => {
+                                  if (isMultiDeleteMode) {
+                                    toggleSelectSession(s.id)
+                                  } else {
+                                    handleSelectSession(s.id)
+                                  }
+                                }}
                                 className={`group flex items-center justify-between p-2 rounded-xl cursor-pointer transition ${
-                                  isActive
+                                  selectedSessionIds.includes(s.id)
+                                    ? 'bg-red-50 border border-red-200'
+                                    : isActive
                                     ? 'bg-indigo-50 border border-indigo-100 shadow-sm'
                                     : 'hover:bg-slate-100 text-slate-800 border border-transparent'
                                 }`}
                               >
                                 <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                  {isMultiDeleteMode && (
+                                    <div
+                                      onClick={(e) => toggleSelectSession(s.id, e)}
+                                      className="cursor-pointer shrink-0"
+                                    >
+                                      {selectedSessionIds.includes(s.id) ? (
+                                        <CheckSquare size={16} className="text-red-600 fill-red-50" />
+                                      ) : (
+                                        <Square size={16} className="text-slate-300 hover:text-slate-500" />
+                                      )}
+                                    </div>
+                                  )}
                                   <div
                                     className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
                                       isActive ? 'bg-white border-indigo-200 text-indigo-600 shadow-sm' : visual.bg
@@ -3520,6 +3680,16 @@ export default function LearnPage() {
         isLoading={isDeletingSession}
         onConfirm={confirmDeleteSession}
         onCancel={() => setSessionToDelete(null)}
+      />
+
+      {/* Batch Delete Workspaces Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isConfirmBatchDeleteOpen}
+        title={`Delete ${selectedSessionIds.length} Selected Workspace${selectedSessionIds.length > 1 ? 's' : ''}?`}
+        warningNote={`Permanent Data Removal: All chat messages, generated notes, and database records for ${selectedSessionIds.length} selected workspace${selectedSessionIds.length > 1 ? 's' : ''} will be permanently deleted from the database.`}
+        isLoading={isBatchDeleting}
+        onConfirm={confirmBatchDeleteSessions}
+        onCancel={() => setIsConfirmBatchDeleteOpen(false)}
       />
 
       {/* ─── MODAL: SELECT PREVIOUSLY UPLOADED MATERIAL ─── */}

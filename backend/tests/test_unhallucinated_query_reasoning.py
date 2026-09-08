@@ -1,0 +1,43 @@
+"""
+test_unhallucinated_query_reasoning.py
+======================================
+Tests to ensure queries in empty workspaces do NOT hallucinate fake subjects (e.g. 'The Topic')
+and that the LLM performs step-by-step reasoning for user queries.
+"""
+import pytest
+from app.services.study_agents import (
+    normalize_subject_title,
+    extract_subject_from_query,
+    is_academic_question_or_query,
+    executor_agent
+)
+
+
+def test_normalize_subject_title_filters_generic_phrases():
+    assert normalize_subject_title("what is the topic") == "General Study"
+    assert normalize_subject_title("the topic") == "General Study"
+    assert normalize_subject_title("this topic") == "General Study"
+    assert normalize_subject_title("current subject") == "General Study"
+    assert normalize_subject_title("machine learning") == "Machine Learning"
+    assert normalize_subject_title("ml") == "Machine Learning"
+
+
+def test_is_academic_question_or_query():
+    assert is_academic_question_or_query("what is the topic") is True
+    assert is_academic_question_or_query("what is physics?") is True
+    assert is_academic_question_or_query("explain calculus") is True
+    assert is_academic_question_or_query("Machine Learning") is False
+
+
+@pytest.mark.asyncio
+async def test_executor_agent_empty_workspace_meta_query():
+    result = await executor_agent.execute(
+        user_query="what is the topic",
+        plan={"confidence": 0.9},
+        session_id="test_empty_session_123",
+        user_id="test_user",
+        subject="General Study"
+    )
+    assert "The Topic" not in result["response"]
+    assert "Welcome to **The Topic**" not in result["response"]
+    assert result["thought_process"] != ""

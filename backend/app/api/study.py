@@ -889,6 +889,35 @@ async def delete_study_session(
     return {"success": ok, "session_id": session_id}
 
 
+class BatchDeleteStudySessionsRequest(BaseModel):
+    session_ids: List[str]
+
+
+@router.post("/sessions/batch-delete")
+@router.delete("/sessions/batch")
+async def delete_study_sessions_batch(
+    req: BatchDeleteStudySessionsRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Deletes multiple sessions and linked database resources in a single batch."""
+    user_id = user["id"]
+    deleted_ids = []
+    failed_ids = []
+    for sid in req.session_ids:
+        try:
+            await asyncio.to_thread(delete_registry_session, sid, user_id)
+            try:
+                from app.core import database as db
+                db.delete_session(sid, user_id=user_id)
+            except Exception:
+                pass
+            deleted_ids.append(sid)
+        except Exception:
+            failed_ids.append(sid)
+    return {"success": True, "deleted_count": len(deleted_ids), "deleted_session_ids": deleted_ids, "failed_session_ids": failed_ids}
+
+
+
 @router.delete("/sessions/{session_id}/documents/{doc_name_or_id:path}")
 async def delete_session_document_endpoint(
     session_id: str,
