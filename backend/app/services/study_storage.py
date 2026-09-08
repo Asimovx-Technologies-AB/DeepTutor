@@ -3,6 +3,7 @@ PostgreSQL Session Storage & Student Episodic Memory Engine for DeepTutor.
 Replaces legacy per-user and per-session local SQLite files with Azure Database for PostgreSQL (Flexible Server).
 Integrates with PgFTSStore for hybrid BM25 tsvector + pgvector semantic retrieval.
 """
+import hashlib
 import json
 import logging
 import os
@@ -401,24 +402,56 @@ def save_session_document(
     page_count: int = 0,
     user_id: Optional[str] = None,
     doc_id: Optional[str] = None,
+    filename: Optional[str] = None,
     **kwargs: Any,
 ) -> str:
-    """Save document metadata to PostgreSQL session_documents."""
-    # Determine positional ordering
-    if file_path is not None:
-        effective_doc_id = doc_id or doc_id_or_filename
-        effective_filename = filename_or_path
-        effective_file_path = file_path
-    else:
-        effective_doc_id = doc_id or kwargs.get("doc_id")
-        effective_filename = doc_id_or_filename
-        effective_file_path = filename_or_path
+    """Save document metadata to PostgreSQL session_documents with robust positional and keyword handling."""
+    # Determine positional ordering vs keyword arguments
+    effective_doc_id = doc_id or kwargs.get("doc_id")
+    effective_filename = filename or kwargs.get("filename") or kwargs.get("file_name")
+    effective_file_path = file_path or kwargs.get("file_path")
+
+    # If positional parameters were provided
+    if not effective_filename and not effective_file_path:
+        if doc_id_or_filename and filename_or_path and file_path is not None:
+            # 4 positional args: (session_id, doc_id, filename, file_path)
+            effective_doc_id = doc_id_or_filename
+            effective_filename = filename_or_path
+            effective_file_path = file_path
+        elif doc_id_or_filename and filename_or_path:
+            # 3 positional args: (session_id, doc_id_or_name, filename_or_path)
+            if doc_id_or_filename.startswith("doc_") or "/" in filename_or_path or "\\" in filename_or_path:
+                effective_doc_id = doc_id_or_filename
+                effective_filename = Path(filename_or_path).name
+                effective_file_path = filename_or_path
+            else:
+                effective_doc_id = doc_id or str(uuid.uuid4())
+                effective_filename = doc_id_or_filename
+                effective_file_path = filename_or_path
+        elif doc_id_or_filename:
+            effective_filename = doc_id_or_filename
+            effective_file_path = doc_id_or_filename
+    elif not effective_filename:
+        if doc_id_or_filename and filename_or_path:
+            effective_doc_id = effective_doc_id or doc_id_or_filename
+            effective_filename = filename_or_path
+        elif doc_id_or_filename:
+            effective_filename = doc_id_or_filename
+
+    if not effective_file_path:
+        effective_file_path = filename_or_path or effective_filename or "document"
+
+    effective_filename = (effective_filename or "").strip()
+    if not effective_filename and effective_file_path:
+        effective_filename = Path(effective_file_path).name.strip()
+    if not effective_filename:
+        effective_filename = f"document_{effective_doc_id or uuid.uuid4().hex[:8]}.pdf"
 
     effective_status = kwargs.get("status", status)
     effective_page_count = kwargs.get("page_count", page_count)
 
     d_id = to_uuid(effective_doc_id, namespace_suffix=str(session_id)) if effective_doc_id else str(uuid.uuid4())
-    doc_hash = "".join(c for c in f"{session_id}_{effective_filename}" if c.isalnum())[:32]
+    doc_hash = hashlib.sha256(f"{session_id}:{effective_filename}".encode("utf-8")).hexdigest()[:32]
 
     # Resolve user_id if omitted
     if not user_id:
@@ -433,46 +466,140 @@ def save_session_document(
             user_id = "default_user"
 
     if _is_postgres():
-        sql = sql_text("""
-            INSERT INTO session_documents (
-                id, session_id, doc_hash, user_id, filename, file_path, status, page_count, created_at
-            )
-            VALUES (
-                CAST(:id AS UUID), :session_id, :doc_hash, :user_id, :filename, :file_path,
-                :status, :page_count, now()
-            )
-            ON CONFLICT (id) DO UPDATE SET
-                filename = EXCLUDED.filename,
-                file_path = EXCLUDED.file_path,
-                status = EXCLUDED.status,
-                page_count = EXCLUDED.page_count
-            RETURNING id::text;
-        """)
-    else:
-        sql = sql_text("""
-            INSERT INTO session_documents (
-                id, session_id, doc_hash, user_id, filename, file_path, status, page_count, created_at
-            )
-            VALUES (
-                :id, :session_id, :doc_hash, :user_id, :filename, :file_path,
-                :status, :page_count, CURRENT_TIMESTAMP
-            )
-            RETURNING id;
-        """)
+        with engine.begin() as conn:
+            # 1. Check if record already exists for this session
+            check_sql = sql_text("""
+                SELECT id::text FROM session_documents
+                WHERE session_id = :session_id
+                  AND (id = CAST(:id AS UUID) OR doc_hash = :doc_hash OR filename = :filename)
+                LIMIT 1;
+            """)
+            existing = conn.execute(check_sql, {
+                "session_id": str(session_id),
+                "id": d_id,
+                "doc_hash": doc_hash,
+                "filename": effective_filename,
+            }).fetchone()
 
-    with engine.begin() as conn:
-        res = conn.execute(sql, {
-            "id": d_id,
-            "session_id": str(session_id),
-            "doc_hash": doc_hash,
-            "user_id": user_id,
-            "filename": effective_filename,
-            "file_path": effective_file_path,
-            "status": effective_status,
-            "page_count": effective_page_count,
-        })
-        row = res.fetchone()
-        return str(row[0]) if row else d_id
+            if existing:
+                existing_id = str(existing[0])
+                update_sql = sql_text("""
+                    UPDATE session_documents
+                    SET filename = :filename,
+                        file_path = :file_path,
+                        status = :status,
+                        page_count = :page_count,
+                        doc_hash = :doc_hash
+                    WHERE id = CAST(:id AS UUID) OR (session_id = :session_id AND doc_hash = :doc_hash);
+                """)
+                conn.execute(update_sql, {
+                    "id": existing_id,
+                    "session_id": str(session_id),
+                    "doc_hash": doc_hash,
+                    "filename": effective_filename,
+                    "file_path": effective_file_path,
+                    "status": effective_status,
+                    "page_count": effective_page_count,
+                })
+                return existing_id
+
+            # 2. Insert new record
+            insert_sql = sql_text("""
+                INSERT INTO session_documents (
+                    id, session_id, doc_hash, user_id, filename, file_path, status, page_count, created_at
+                )
+                VALUES (
+                    CAST(:id AS UUID), :session_id, :doc_hash, :user_id, :filename, :file_path,
+                    :status, :page_count, now()
+                )
+                RETURNING id::text;
+            """)
+            try:
+                res = conn.execute(insert_sql, {
+                    "id": d_id,
+                    "session_id": str(session_id),
+                    "doc_hash": doc_hash,
+                    "user_id": user_id,
+                    "filename": effective_filename,
+                    "file_path": effective_file_path,
+                    "status": effective_status,
+                    "page_count": effective_page_count,
+                })
+                row = res.fetchone()
+                return str(row[0]) if row else d_id
+            except Exception:
+                # Concurrent race or existing key fallback
+                conn.execute(sql_text("""
+                    UPDATE session_documents
+                    SET filename = :filename,
+                        file_path = :file_path,
+                        status = :status,
+                        page_count = :page_count
+                    WHERE session_id = :session_id AND (doc_hash = :doc_hash OR filename = :filename);
+                """), {
+                    "session_id": str(session_id),
+                    "doc_hash": doc_hash,
+                    "filename": effective_filename,
+                    "file_path": effective_file_path,
+                    "status": effective_status,
+                    "page_count": effective_page_count,
+                })
+                return d_id
+    else:
+        with engine.begin() as conn:
+            check_sql = sql_text("""
+                SELECT id FROM session_documents
+                WHERE session_id = :session_id
+                  AND (id = :id OR doc_hash = :doc_hash OR filename = :filename)
+                LIMIT 1;
+            """)
+            existing = conn.execute(check_sql, {
+                "session_id": str(session_id),
+                "id": d_id,
+                "doc_hash": doc_hash,
+                "filename": effective_filename,
+            }).fetchone()
+
+            if existing:
+                existing_id = str(existing[0])
+                conn.execute(sql_text("""
+                    UPDATE session_documents
+                    SET filename = :filename,
+                        file_path = :file_path,
+                        status = :status,
+                        page_count = :page_count,
+                        doc_hash = :doc_hash
+                    WHERE id = :id OR (session_id = :session_id AND doc_hash = :doc_hash);
+                """), {
+                    "id": existing_id,
+                    "session_id": str(session_id),
+                    "doc_hash": doc_hash,
+                    "filename": effective_filename,
+                    "file_path": effective_file_path,
+                    "status": effective_status,
+                    "page_count": effective_page_count,
+                })
+                return existing_id
+
+            conn.execute(sql_text("""
+                INSERT INTO session_documents (
+                    id, session_id, doc_hash, user_id, filename, file_path, status, page_count, created_at
+                )
+                VALUES (
+                    :id, :session_id, :doc_hash, :user_id, :filename, :file_path,
+                    :status, :page_count, CURRENT_TIMESTAMP
+                );
+            """), {
+                "id": d_id,
+                "session_id": str(session_id),
+                "doc_hash": doc_hash,
+                "user_id": user_id,
+                "filename": effective_filename,
+                "file_path": effective_file_path,
+                "status": effective_status,
+                "page_count": effective_page_count,
+            })
+            return d_id
 
 
 def update_document_status(
@@ -533,7 +660,7 @@ def get_session_documents(
 
 
 def delete_session_document(session_id: str, document_name_or_id: str, user_id: Optional[str] = None) -> bool:
-    """Delete a document and all its indexed chunks from PostgreSQL."""
+    """Delete a document and all its indexed chunks from PostgreSQL and clean up stale hashes."""
     # Delete chunks
     pg_fts_store.delete_session_document(session_id, document_name_or_id)
 
@@ -541,27 +668,24 @@ def delete_session_document(session_id: str, document_name_or_id: str, user_id: 
     statement = sql_text("""
         DELETE FROM session_documents
         WHERE session_id = :session_id
-          AND (id::text = :doc_id OR filename = :doc_id)
+          AND (id::text = :doc_id OR filename = :doc_id OR doc_hash = :doc_id)
     """)
     with engine.begin() as conn:
         res = conn.execute(statement, {"session_id": str(session_id), "doc_id": str(document_name_or_id)})
-        return res.rowcount > 0
+        return (res.rowcount or 0) > 0
 
 
 # ─── Workspace Sessions Registry (workspace_sessions) ─────────────────────────
 
 def list_registry_sessions(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """List study sessions from workspace_sessions table with document counts in a single query."""
+    """List study sessions from workspace_sessions table with document counts and document metadata."""
     filter_clause = "WHERE s.user_id = :user_id OR s.user_id IS NULL" if user_id else ""
 
     statement = sql_text(f"""
         SELECT s.id, s.user_id, s.title, s.subject, s.created_at, s.last_active,
-               s.topics_count AS topic_count, s.messages_count AS message_count,
-               COUNT(d.id) AS document_count
+               s.topics_count AS topic_count, s.messages_count AS message_count
         FROM workspace_sessions s
-        LEFT JOIN session_documents d ON d.session_id = s.id
         {filter_clause}
-        GROUP BY s.id, s.user_id, s.title, s.subject, s.created_at, s.last_active, s.topics_count, s.messages_count
         ORDER BY s.last_active DESC
     """)
 
@@ -572,15 +696,19 @@ def list_registry_sessions(user_id: Optional[str] = None) -> List[Dict[str, Any]
     sessions = []
     for r in rows:
         s = dict(r)
+        sid = s["id"]
+        docs = get_session_documents(sid, user_id=user_id)
+        doc_names = [d["filename"] for d in docs if d.get("filename")]
         s["status"] = "ready"
-        s["document_name"] = ""
-        s["documents"] = []
+        s["document_name"] = doc_names[0] if doc_names else ""
+        s["documents"] = doc_names
+        s["document_count"] = len(doc_names)
         sessions.append(s)
     return sessions
 
 
 def get_registry_session(session_id: str) -> Optional[Dict[str, Any]]:
-    """Fetch session metadata by session_id."""
+    """Fetch session metadata by session_id with accurate document metadata."""
     statement = sql_text("""
         SELECT id, user_id, title, subject, created_at, last_active,
                topics_count AS topic_count, messages_count AS message_count
@@ -592,10 +720,12 @@ def get_registry_session(session_id: str) -> Optional[Dict[str, Any]]:
         if not row:
             return None
         s = dict(row)
+        docs = get_session_documents(session_id)
+        doc_names = [d["filename"] for d in docs if d.get("filename")]
         s["status"] = "ready"
-        s["document_name"] = ""
-        s["documents"] = []
-        s["document_count"] = 0
+        s["document_name"] = doc_names[0] if doc_names else ""
+        s["documents"] = doc_names
+        s["document_count"] = len(doc_names)
         return s
 
 
@@ -711,10 +841,26 @@ def delete_registry_session(session_id: str, user_id: Optional[str] = None) -> b
         DELETE FROM study_session_topics WHERE session_id = :sid;
         DELETE FROM session_documents WHERE session_id = :sid;
         DELETE FROM workspace_sessions WHERE id = :sid;
+        DELETE FROM chat_messages WHERE session_id = :sid;
+        DELETE FROM chat_sessions WHERE id = :sid;
+        DELETE FROM documents WHERE topic_id = :sid;
     """)
     with engine.begin() as conn:
         res = conn.execute(statement, {"sid": str(session_id)})
-        return (res.rowcount or 0) >= 0
+        deleted = (res.rowcount or 0) >= 0
+
+    try:
+        import shutil
+        for p in [
+            DATA_DIR / "uploads" / session_id,
+            SESSIONS_DIR / session_id,
+        ]:
+            if p.exists():
+                shutil.rmtree(p, ignore_errors=True)
+    except Exception:
+        pass
+
+    return deleted
 
 
 # ─── Long-Term Student Episodic Memory (user_memory) ─────────────────────────

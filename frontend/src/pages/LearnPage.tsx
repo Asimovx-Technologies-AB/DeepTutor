@@ -345,7 +345,7 @@ export default function LearnPage() {
 
   // Upload modal & drag drop
   const [isUploading, setIsUploading] = useState(false)
-  const [_uploadingFileMeta, setUploadingFileMeta] = useState<{ name: string; sizeFormatted: string } | null>(null)
+  const [uploadingFileMeta, setUploadingFileMeta] = useState<{ name: string; sizeFormatted: string } | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSubject, setUploadSubject] = useState('')
@@ -3094,11 +3094,12 @@ export default function LearnPage() {
                   </span>
                   <button
                     onClick={() => addMaterialInputRef.current?.click()}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/50 transition cursor-pointer"
+                    disabled={isUploading}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/50 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Add another material to this room"
                   >
-                    <Plus size={11} />
-                    <span>Add</span>
+                    {isUploading ? <RefreshCw size={11} className="animate-spin" /> : <Plus size={11} />}
+                    <span>{isUploading ? 'Adding...' : 'Add'}</span>
                   </button>
                   <input
                     type="file"
@@ -3113,7 +3114,42 @@ export default function LearnPage() {
                   />
                 </div>
 
-                {sessionDocuments.length === 0 ? (
+                {/* In-Panel Uploading Indicator */}
+                {isUploading && (
+                  <div className="mb-2.5 p-2 rounded-xl bg-indigo-50/90 border border-indigo-200/80 text-[11px]">
+                    <div className="flex items-center justify-between font-semibold text-indigo-900 mb-1">
+                      <span className="flex items-center gap-1.5 truncate">
+                        <RefreshCw size={12} className="animate-spin text-indigo-600 shrink-0" />
+                        <span className="truncate">{uploadingFileMeta?.name || 'Uploading material...'}</span>
+                      </span>
+                      <span className="text-[10px] text-indigo-600 font-mono shrink-0 ml-1">{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full bg-indigo-200/60 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-indigo-600 h-full transition-all duration-300 rounded-full"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* In-Panel Upload Error Banner */}
+                {uploadError && (
+                  <div className="mb-2.5 p-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] flex items-start justify-between gap-1.5">
+                    <div className="flex items-start gap-1.5 min-w-0">
+                      <AlertCircle size={13} className="text-rose-600 shrink-0 mt-0.5" />
+                      <span className="font-medium break-words">{uploadError}</span>
+                    </div>
+                    <button
+                      onClick={() => setUploadError(null)}
+                      className="text-rose-400 hover:text-rose-700 shrink-0 p-0.5"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                )}
+
+                {sessionDocuments.length === 0 && !isUploading ? (
                   <p className="text-[11px] text-slate-400 italic">No materials uploaded yet.</p>
                 ) : (
                   <div className="space-y-1 max-h-28 overflow-y-auto pr-0.5">

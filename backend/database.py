@@ -10,7 +10,7 @@ from app.core.models import Base, User, ChatSession, ChatMessage, Document, Quiz
 settings = get_settings()
 
 # Initialize database engine. The legacy/offline profile may fall back to
-# SQLite; canonical local and deployed profiles fail fast on PostgreSQL errors.
+
 db_url = settings.DATABASE_URL.replace("sqlite+aiosqlite://", "sqlite://")
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
@@ -539,9 +539,25 @@ def delete_document(doc_id: str, user_id: str) -> Optional[dict]:
             "topic_id": doc.topic_id,
             "file_name": doc.file_name,
             "file_path": doc.file_path,
+            "doc_hash": getattr(doc, "doc_hash", None),
         }
+        if doc_dict.get("doc_hash"):
+            db.query(SessionDocument).filter(
+                SessionDocument.user_id == user_id,
+                SessionDocument.doc_hash == doc_dict["doc_hash"]
+            ).delete(synchronize_session=False)
         db.delete(doc)
-        return doc_dict
+
+    if doc_dict.get("topic_id"):
+        try:
+            from app.services.study_storage import delete_session_document
+            delete_session_document(doc_dict["topic_id"], doc_dict["file_name"], user_id=user_id)
+            if doc_dict.get("doc_hash"):
+                delete_session_document(doc_dict["topic_id"], doc_dict["doc_hash"], user_id=user_id)
+        except Exception:
+            pass
+
+    return doc_dict
 
 
 def delete_documents_for_section(user_id: str, topic_id: str) -> List[dict]:
@@ -555,9 +571,22 @@ def delete_documents_for_section(user_id: str, topic_id: str) -> List[dict]:
                 "topic_id": d.topic_id,
                 "file_name": d.file_name,
                 "file_path": d.file_path,
+                "doc_hash": getattr(d, "doc_hash", None),
             }
             for d in docs
         ]
+        doc_hashes = [d["doc_hash"] for d in doc_dicts if d.get("doc_hash")]
+        if doc_hashes:
+            db.query(SessionDocument).filter(
+                SessionDocument.user_id == user_id,
+                SessionDocument.doc_hash.in_(doc_hashes)
+            ).delete(synchronize_session=False)
+
+        db.query(SessionDocument).filter(
+            SessionDocument.user_id == user_id,
+            SessionDocument.session_id.in_(targets)
+        ).delete(synchronize_session=False)
+
         for d in docs:
             db.delete(d)
         return doc_dicts
@@ -566,23 +595,36 @@ def delete_documents_for_section(user_id: str, topic_id: str) -> List[dict]:
 def delete_section_all_data(user_id: str, topic_id: str) -> dict:
     """
     Comprehensively delete all database records for a section/topic:
-    - Documents
+    - Documents & SessionDocuments
     - Flashcards
     - Quizzes, QuizQuestions, QuizAttempts
     - StudyPlans
     - ChatSessions & ChatMessages
+    - Workspace sessions & document chunks
     """
     targets = {topic_id, topic_id.lower(), topic_id.upper(), topic_id.strip()}
     with DBContext() as db:
-        # 1. Documents
+        # 1. Documents & SessionDocuments
         docs = db.query(Document).filter(
             Document.user_id == user_id,
             Document.topic_id.in_(targets)
         ).all()
         deleted_docs = [
-            {"id": d.id, "file_name": d.file_name, "file_path": d.file_path, "topic_id": d.topic_id}
+            {"id": d.id, "file_name": d.file_name, "file_path": d.file_path, "topic_id": d.topic_id, "doc_hash": getattr(d, "doc_hash", None)}
             for d in docs
         ]
+        doc_hashes = [d.get("doc_hash") for d in deleted_docs if d.get("doc_hash")]
+        if doc_hashes:
+            db.query(SessionDocument).filter(
+                SessionDocument.user_id == user_id,
+                SessionDocument.doc_hash.in_(doc_hashes)
+            ).delete(synchronize_session=False)
+
+        db.query(SessionDocument).filter(
+            SessionDocument.user_id == user_id,
+            SessionDocument.session_id.in_(targets)
+        ).delete(synchronize_session=False)
+
         for d in docs:
             db.delete(d)
 
@@ -619,18 +661,26 @@ def delete_section_all_data(user_id: str, topic_id: str) -> dict:
             for s in sessions:
                 db.delete(s)
 
-        # 6. Cloud Knowledge Graphs (Neon PostgreSQL)
+        # 6. Cloud Knowledge Graphs
         db.query(KnowledgeGraph).filter(
             KnowledgeGraph.topic_id.in_(targets)
         ).delete(synchronize_session=False)
 
-        return {
-            "deleted_docs": deleted_docs,
-            "deleted_flashcards_count": deleted_flashcards,
-            "deleted_quizzes_count": len(quizzes),
-            "deleted_plans_count": deleted_plans,
-            "deleted_sessions_count": len(sessions),
-        }
+    # Clean up PostgreSQL workspace session & chunks
+    try:
+        from app.services.study_storage import delete_registry_session
+        for target_id in targets:
+            delete_registry_session(target_id, user_id=user_id)
+    except Exception:
+        pass
+
+    return {
+        "deleted_docs": deleted_docs,
+        "deleted_flashcards_count": deleted_flashcards,
+        "deleted_quizzes_count": len(quizzes),
+        "deleted_plans_count": deleted_plans,
+        "deleted_sessions_count": len(sessions),
+    }
 
 
 

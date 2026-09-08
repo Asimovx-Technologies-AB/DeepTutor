@@ -212,3 +212,29 @@ async def delete_plan(
     if not ok:
         raise HTTPException(status_code=404, detail="Study plan not found")
     return {"ok": True}
+
+
+class VerifyQuizRequest(BaseModel):
+    day_number: int
+    score_percentage: float
+
+
+@router.post("/{plan_id}/verify-quiz")
+async def verify_quiz(
+    plan_id: str,
+    body: VerifyQuizRequest,
+    user: dict = Depends(get_current_user),
+):
+    plan = db.get_study_plan(plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Study plan not found")
+    passed = body.score_percentage >= 70.0
+    if passed:
+        db.toggle_study_plan_day(plan_id, body.day_number)
+    return {
+        "ok": True,
+        "plan_id": plan_id,
+        "day_number": body.day_number,
+        "score_percentage": body.score_percentage,
+        "passed": passed,
+    }

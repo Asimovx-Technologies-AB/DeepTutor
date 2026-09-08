@@ -63,35 +63,41 @@ async def list_user_documents(
         existing_topics = {d.get("topic_id") for d in docs if d.get("topic_id")}
 
         for s in sessions:
-            fn = s.get("document_name")
             sid = s.get("id")
-            if not fn or fn.lower() in existing_filenames or sid in existing_topics:
+            if not sid:
                 continue
             if topic_id and sid != topic_id:
                 continue
-            existing_filenames.add(fn.lower())
-            existing_topics.add(sid)
+            doc_names = s.get("documents") or ([s.get("document_name")] if s.get("document_name") else [])
+            if not doc_names:
+                continue
+
             session_topics = get_session_topics(sid)
             topic_titles = [t.get("title", "") for t in session_topics if t.get("title")]
-            clean_title = Path(fn).stem.replace("_", " ").title()
-            subject_name = s.get("subject") or clean_title
-            docs.append({
-                "id": sid,
-                "user_id": s.get("user_id", user["id"]),
-                "topic_id": sid,
-                "file_name": fn,
-                "file_path": str(Path(settings.UPLOAD_DIR) / sid / fn),
-                "file_type": Path(fn).suffix.lower().lstrip(".") or "pdf",
-                "indexed": True,
-                "entity_count": len(topic_titles),
-                "chunk_count": s.get("topic_count", 0),
-                "detected_subject": subject_name,
-                "key_topics": topic_titles,
-                "index_status": "done",
-                "index_progress": 100,
-                "index_stats": {},
-                "created_at": s.get("created_at"),
-            })
+
+            for fn in doc_names:
+                if not fn or fn.lower() in existing_filenames:
+                    continue
+                existing_filenames.add(fn.lower())
+                clean_title = Path(fn).stem.replace("_", " ").title()
+                subject_name = s.get("subject") or clean_title
+                docs.append({
+                    "id": f"{sid}_{fn}",
+                    "user_id": s.get("user_id", user["id"]),
+                    "topic_id": sid,
+                    "file_name": fn,
+                    "file_path": str(Path(settings.UPLOAD_DIR) / sid / fn),
+                    "file_type": Path(fn).suffix.lower().lstrip(".") or "pdf",
+                    "indexed": True,
+                    "entity_count": len(topic_titles),
+                    "chunk_count": s.get("topic_count", 0),
+                    "detected_subject": subject_name,
+                    "key_topics": topic_titles,
+                    "index_status": "done",
+                    "index_progress": 100,
+                    "index_stats": {},
+                    "created_at": s.get("created_at"),
+                })
     except Exception as e:
         print(f"[documents.list] Error merging study session materials: {e}")
 
