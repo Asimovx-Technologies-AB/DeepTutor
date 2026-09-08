@@ -1,5 +1,9 @@
 -- Migration 002: Study sessions, lecture tracking, and student episodic memory schema
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- NOTE: pgcrypto is deliberately NOT created here. Azure Database for
+-- PostgreSQL Flexible Server only permits extensions on its azure.extensions
+-- allow-list (VECTOR, PG_TRGM, UUID-OSSP), so CREATE EXTENSION pgcrypto
+-- aborts the whole migration transaction. PostgreSQL 13+ ships
+-- gen_random_uuid() in core, which is all these tables need.
 
 -- 1. Persisted Conversation Messages
 CREATE TABLE IF NOT EXISTS study_session_messages (

@@ -59,9 +59,7 @@ class OpenAIVLMClient:
 
         from openai import AsyncOpenAI, AsyncAzureOpenAI
 
-        provider = settings.LLM_PROVIDER.lower()
-
-        if provider == "azure_openai" or (settings.AZURE_OPENAI_ENDPOINT and not settings.OPENAI_API_KEY):
+        if self._use_azure():
             endpoint = settings.AZURE_OPENAI_ENDPOINT
             api_key = settings.AZURE_OPENAI_API_KEY
             api_version = settings.AZURE_OPENAI_API_VERSION or "2024-10-21"
@@ -98,14 +96,28 @@ class OpenAIVLMClient:
 
     @property
     def model(self) -> str:
-        provider = settings.LLM_PROVIDER.lower()
-        if provider == "azure_openai":
+        # On Azure this is a deployment name, not a model id.
+        if self._use_azure():
             return settings.AZURE_OPENAI_CHAT_DEPLOYMENT or "gpt-4.1-mini"
         return settings.OPENAI_VLM_MODEL or settings.OPENAI_CHAT_MODEL or "gpt-4o-mini"
 
+    def _use_azure(self) -> bool:
+        """Single source of truth for which provider a call will go to."""
+        return (
+            settings.LLM_PROVIDER.lower() == "azure_openai"
+            or bool(settings.AZURE_OPENAI_ENDPOINT and not settings.OPENAI_API_KEY)
+        )
+
     def is_configured(self) -> bool:
-        provider = settings.LLM_PROVIDER.lower()
-        if provider == "azure_openai":
+        """
+        Whether a vision call can plausibly succeed.
+
+        This gates the transcription methods, so it must branch exactly the way
+        _get_client() does. When they disagree, a working configuration gets
+        skipped — or, worse, a broken one silently builds a client around the
+        placeholder key below and returns empty transcriptions forever.
+        """
+        if self._use_azure():
             return bool(settings.AZURE_OPENAI_ENDPOINT and len(settings.AZURE_OPENAI_ENDPOINT.strip()) > 5)
         key = settings.OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY", "")
         return bool(key and len(key.strip()) > 10 and key != "your_openai_api_key_here")
@@ -136,22 +148,40 @@ class OpenAIVLMClient:
         image_bytes: bytes,
         mime_type: str = "image/png",
         context_hint: str = "",
+        prompt: Optional[str] = None,
     ) -> str:
-        """Transcribes high-accuracy text and equations from an educational image or scanned page."""
+        """
+        Transcribes high-accuracy text and equations from an educational image
+        or scanned page.
+
+        `prompt` replaces the default transcription instruction outright, for
+        callers that want something other than OCR (a diagram description, say).
+        `context_hint` is appended either way.
+        """
         if not image_bytes:
             return ""
 
+<<<<<<< HEAD
         img_bytes_norm, valid_mime = normalize_image_for_vlm(image_bytes, mime_type)
+=======
+        if not self.is_configured():
+            print(
+                "[OpenAIVLM] Skipped: no usable credentials. "
+                "Set OPENAI_API_KEY, or AZURE_OPENAI_ENDPOINT with LLM_PROVIDER=azure_openai."
+            )
+            return ""
+
+>>>>>>> db31f5c33fa7d0222ab185e3dc6893dd08329d8d
         client = self._get_client()
         b64_img = base64.b64encode(img_bytes_norm).decode("utf-8")
         data_uri = f"data:{valid_mime};base64,{b64_img}"
 
-        prompt = (
+        instruction = prompt or (
             "You are an expert academic OCR and document digitization system. "
             "Transcribe all readable educational text, equations, headings, bullet points, and tables "
             "from this image into clean Markdown format. Preserve mathematical formulas in standard LaTeX format ($...$ and $$...$$). "
-            f"{f'Context Hint: {context_hint}' if context_hint else ''}"
         )
+        prompt = f"{instruction}{f' Context Hint: {context_hint}' if context_hint else ''}"
 
         messages = [
             {
@@ -172,7 +202,7 @@ class OpenAIVLMClient:
             )
             return response.choices[0].message.content or ""
         except Exception as e:
-            print(f"[OpenAIVLM] Image transcription error: {e}")
+            print(f"[OpenAIVLM] Image transcription error (model={self.model}): {e}")
             return ""
 
     async def caption_diagram(
@@ -185,7 +215,17 @@ class OpenAIVLMClient:
         if not image_bytes:
             return ""
 
+<<<<<<< HEAD
         img_bytes_norm, valid_mime = normalize_image_for_vlm(image_bytes, mime_type)
+=======
+        if not self.is_configured():
+            print(
+                "[OpenAIVLM] Skipped: no usable credentials. "
+                "Set OPENAI_API_KEY, or AZURE_OPENAI_ENDPOINT with LLM_PROVIDER=azure_openai."
+            )
+            return ""
+
+>>>>>>> db31f5c33fa7d0222ab185e3dc6893dd08329d8d
         client = self._get_client()
         b64_img = base64.b64encode(img_bytes_norm).decode("utf-8")
         data_uri = f"data:{valid_mime};base64,{b64_img}"
@@ -217,7 +257,7 @@ class OpenAIVLMClient:
             )
             return response.choices[0].message.content or ""
         except Exception as e:
-            print(f"[OpenAIVLM] Diagram captioning error: {e}")
+            print(f"[OpenAIVLM] Diagram captioning error (model={self.model}): {e}")
             return ""
 
 

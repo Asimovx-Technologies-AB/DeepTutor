@@ -173,7 +173,21 @@ class Settings(BaseSettings):
     STORAGE_BACKEND: str = "azure_blob"       # "azure_blob" | "local"
     AZURE_STORAGE_ACCOUNT_NAME: str = ""
     AZURE_STORAGE_CONTAINER_NAME: str = "deeptutor-documents"
+    # The deployed environment names the Terraform-managed container in
+    # AZURE_BLOB_DOCUMENTS_CONTAINER. It takes precedence over the setting above
+    # so uploads land in the container the infrastructure actually provisions
+    # rather than one the app creates for itself at runtime.
+    AZURE_BLOB_DOCUMENTS_CONTAINER: str = ""
     AZURE_STORAGE_CONNECTION_STRING: str = ""
+
+    # ── CORS ─────────────────────────────────────────────────────────────────
+    # Comma-separated origin list, supplied by the deployment. Empty means "*".
+    CORS_ALLOWED_ORIGINS: str = ""
+
+    @property
+    def documents_container(self) -> str:
+        """The blob container uploads are written to."""
+        return self.AZURE_BLOB_DOCUMENTS_CONTAINER or self.AZURE_STORAGE_CONTAINER_NAME
 
     # ── Confidence / Grounding ───────────────────────────────────────────────
     MIN_CONFIDENCE_TO_STREAM: float = 0.0
