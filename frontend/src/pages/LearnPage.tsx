@@ -109,6 +109,37 @@ interface ExamEvaluation {
   }>
 }
 
+interface SpeechToken {
+  word: string
+  charStart: number
+  charEnd: number
+}
+
+function cleanTextForSpeech(raw: string): string {
+  return raw
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/\$\$[\s\S]*?\$\$/g, ' ')
+    .replace(/\$[^\$]+?\$/g, ' ')
+    .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+    .replace(/[#*`_~>[\]()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function parseSpeechTokens(cleanText: string): SpeechToken[] {
+  const tokens: SpeechToken[] = []
+  const regex = /\S+/g
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(cleanText)) !== null) {
+    tokens.push({
+      word: match[0],
+      charStart: match.index,
+      charEnd: match.index + match[0].length,
+    })
+  }
+  return tokens
+}
+
 type ActiveTab = 'chat' | 'normal' | 'teacher' | 'exam' | 'artifact'
 
 const getSubjectVisual = (subjectOrTitle: string) => {
@@ -274,8 +305,33 @@ export default function LearnPage() {
   // Voice Tutor & Reading System (Cognitive Minimalist TTS)
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null)
   const [speakingWordIndex, setSpeakingWordIndex] = useState<number | null>(null)
+  const [speakingTokens, setSpeakingTokens] = useState<SpeechToken[]>([])
   const [isListeningVoice, setIsListeningVoice] = useState(false)
   const ttsIntervalRef = useRef<any>(null)
+  const activeWordRef = useRef<HTMLSpanElement | null>(null)
+
+  // Auto-scroll to currently spoken word
+  useEffect(() => {
+    if (speakingWordIndex !== null && activeWordRef.current) {
+      activeWordRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'nearest',
+      })
+    }
+  }, [speakingWordIndex])
+
+  // Cleanup speech synthesis on unmount
+  useEffect(() => {
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel()
+      }
+      if (ttsIntervalRef.current) {
+        clearInterval(ttsIntervalRef.current)
+      }
+    }
+  }, [])
 
   // Floating Input Bar & Attachments
   const [attachedFile, setAttachedFile] = useState<{ name: string; sizeFormatted: string; rawFile?: File } | null>(null)
@@ -737,64 +793,100 @@ export default function LearnPage() {
       if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
       setSpeakingMsgId(null)
       setSpeakingWordIndex(null)
+      setSpeakingTokens([])
       return
     }
 
     window.speechSynthesis.cancel()
     if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
 
-    // Clean text for speech synthesis
-    const cleanText = text
-      .replace(/```[\s\S]*?```/g, 'Code block omitted.')
-      .replace(/[#*`_~>\[\]\(\)]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 1500)
+    // Clean text and parse into synchronized tokens
+    const cleanText = cleanTextForSpeech(text).slice(0, 3000)
+    if (!cleanText) return
 
-    const words = cleanText.split(/\s+/).filter(Boolean)
-    const utterance = new SpeechSynthesisUtterance(cleanText)
-    utterance.rate = 1.0
-    utterance.pitch = 1.0
+    const tokens = parseSpeechTokens(cleanText)
+    if (tokens.length === 0) return
 
-    let currentWordIdx = 0
+    setSpeakingTokens(tokens)
+    setSpeakingMsgId(msgId)
     setSpeakingWordIndex(0)
 
-    // Real-time word boundary synchronization
+    const utterance = new SpeechSynthesisUtterance(cleanText)
+    utterance.rate = 0.95
+    utterance.pitch = 1.0
+
+    // Pick a natural voice if available
+    const voices = window.speechSynthesis.getVoices()
+    const preferredVoice = voices.find(
+      (v) => (v.lang.startsWith('en') || v.lang.startsWith('sv')) && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Neural') || v.name.includes('Samantha'))
+    ) || voices.find((v) => v.lang.startsWith('en'))
+    if (preferredVoice) utterance.voice = preferredVoice
+
+    let hasBoundaryFired = false
+
+    // Real-time word boundary synchronization directly from the audio engine
     utterance.onboundary = (event) => {
-      if (event.name === 'word') {
+      if (event.name === 'word' || !event.name) {
+        hasBoundaryFired = true
         const charIndex = event.charIndex
-        const substr = cleanText.slice(0, charIndex)
-        const wordCount = substr.trim().split(/\s+/).filter(Boolean).length
-        currentWordIdx = Math.min(wordCount, words.length - 1)
-        setSpeakingWordIndex(currentWordIdx)
+        let matchedIdx = 0
+        for (let i = 0; i < tokens.length; i++) {
+          if (charIndex >= tokens[i].charStart && charIndex <= tokens[i].charEnd) {
+            matchedIdx = i
+            break
+          }
+          if (tokens[i].charStart > charIndex) {
+            matchedIdx = Math.max(0, i - 1)
+            break
+          }
+          matchedIdx = i
+        }
+        setSpeakingWordIndex(matchedIdx)
       }
     }
 
-    // Fallback cadence timer if browser synthesis does not fire onboundary
-    const wordsPerMinute = 150
-    const msPerWord = (60 / wordsPerMinute) * 1000
-    ttsIntervalRef.current = setInterval(() => {
-      currentWordIdx++
-      if (currentWordIdx < words.length) {
-        setSpeakingWordIndex((prev) => (prev !== null ? Math.max(prev, currentWordIdx) : currentWordIdx))
+    // Chrome/Chromium pause prevention on long speech
+    const pingInterval = setInterval(() => {
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.pause()
+        window.speechSynthesis.resume()
       } else {
-        if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
+        clearInterval(pingInterval)
       }
-    }, msPerWord)
+    }, 10000)
 
-    utterance.onend = () => {
-      if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
+    // Fallback ONLY if browser does not fire onboundary at all after audio starts
+    const fallbackTimeout = setTimeout(() => {
+      if (!hasBoundaryFired && window.speechSynthesis.speaking) {
+        let fallbackIdx = 0
+        const wordsPerMinute = 145
+        const msPerWord = (60 / wordsPerMinute) * 1000
+        ttsIntervalRef.current = setInterval(() => {
+          fallbackIdx++
+          if (fallbackIdx < tokens.length) {
+            setSpeakingWordIndex(fallbackIdx)
+          } else {
+            if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
+          }
+        }, msPerWord)
+      }
+    }, 1500)
+
+    const cleanup = () => {
+      clearTimeout(fallbackTimeout)
+      clearInterval(pingInterval)
+      if (ttsIntervalRef.current) {
+        clearInterval(ttsIntervalRef.current)
+        ttsIntervalRef.current = null
+      }
       setSpeakingMsgId(null)
       setSpeakingWordIndex(null)
+      setSpeakingTokens([])
     }
 
-    utterance.onerror = () => {
-      if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
-      setSpeakingMsgId(null)
-      setSpeakingWordIndex(null)
-    }
+    utterance.onend = cleanup
+    utterance.onerror = cleanup
 
-    setSpeakingMsgId(msgId)
     window.speechSynthesis.speak(utterance)
   }
 
@@ -2012,31 +2104,27 @@ export default function LearnPage() {
                                 )}
 
                                 {/* Message Content: Word-by-Word Highlight OR Study Notes OR Editorial Markdown */}
-                                {speakingMsgId === msg.id ? (
-                                  /* WORD-BY-WORD HIGHLIGHT MODE */
+                                {speakingMsgId === msg.id && speakingTokens.length > 0 ? (
+                                  /* WORD-BY-WORD HIGHLIGHT MODE (Exact Speech Engine Lockstep) */
                                   <div className="markdown-content text-slate-900 leading-[1.85] flex flex-wrap gap-y-1 items-baseline w-full">
-                                    {msg.text
-                                      .replace(/```[\s\S]*?```/g, '')
-                                      .replace(/[#*`_~>[\]()]/g, ' ')
-                                      .split(/\s+/)
-                                      .filter(Boolean)
-                                      .map((word, wIdx) => {
-                                        const isCurrent = wIdx === speakingWordIndex
-                                        const isPast = speakingWordIndex !== null && wIdx < speakingWordIndex
-                                        return (
-                                          <span
-                                            key={wIdx}
-                                            className={`inline-block mr-1.5 transition-all duration-150 ${isCurrent
-                                              ? 'bg-amber-300 text-slate-950 font-bold px-1.5 py-0.5 rounded-md ring-2 ring-amber-400/60 scale-105 shadow-xs'
-                                              : isPast
-                                                ? 'text-slate-900 font-medium'
-                                                : 'text-slate-400 opacity-75'
-                                              }`}
-                                          >
-                                            {word}
-                                          </span>
-                                        )
-                                      })}
+                                    {speakingTokens.map((token, wIdx) => {
+                                      const isCurrent = wIdx === speakingWordIndex
+                                      const isPast = speakingWordIndex !== null && wIdx < speakingWordIndex
+                                      return (
+                                        <span
+                                          key={wIdx}
+                                          ref={isCurrent ? activeWordRef : undefined}
+                                          className={`inline-block mr-1.5 transition-all duration-150 ${isCurrent
+                                            ? 'bg-amber-300 text-slate-950 font-bold px-1.5 py-0.5 rounded-md ring-2 ring-amber-400/60 scale-105 shadow-xs'
+                                            : isPast
+                                              ? 'text-slate-900 font-medium'
+                                              : 'text-slate-400 opacity-70'
+                                            }`}
+                                        >
+                                          {token.word}
+                                        </span>
+                                      )
+                                    })}
                                   </div>
                                 ) : msg.quiz_data ? (
                                   /* Inline Dual-Mode Flashcard & Quiz Widget Response */
