@@ -215,9 +215,31 @@ jobs:
             -o table || true
 
           echo "--- system log ---"
-          az containerapp logs show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
+          timeout 120 az containerapp logs show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
             --tail 100 --type system || true
 
-          echo "--- console log (only if a replica lived long enough) ---"
-          az containerapp logs show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
-            --tail 200 --type console || true
+          # The container's own stdout, from Log Analytics rather than from the
+          # replica.
+          #
+          # `az containerapp logs --type console` streams from a LIVE replica,
+          # so for the failure we are chasing it answers "Could not find a
+          # replica": the readiness probe has already killed it and KEDA has
+          # scaled the deployment to zero. It can also hang waiting for one,
+          # which is why the step above it now has a timeout.
+          #
+          # The Container App Environment ships console output to the
+          # ContainerAppConsoleLogs_CL table, which outlives the replica. That
+          # is where a Python traceback survives, and it needs no access beyond
+          # the OIDC identity this workflow already uses.
+          ws=$(az monitor log-analytics workspace list -g "$RESOURCE_GROUP" \
+                 --query "[0].customerId" -o tsv 2>/dev/null || true)
+          if [ -n "$ws" ]; then
+            echo "--- console log from Log Analytics (workspace ${ws}) ---"
+            timeout 180 az monitor log-analytics query \
+              --workspace "$ws" \
+              --analytics-query "ContainerAppConsoleLogs_CL | where ContainerAppName_s == '${CONTAINER_APP}' | where TimeGenerated > ago(30m) | project TimeGenerated, RevisionName_s, Log_s | order by TimeGenerated asc | take 300" \
+              -o table \
+              || echo "Log Analytics query failed — the deploy identity may lack Log Analytics Reader on $RESOURCE_GROUP."
+          else
+            echo "No Log Analytics workspace found in $RESOURCE_GROUP."
+          fi
