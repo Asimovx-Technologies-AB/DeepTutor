@@ -206,18 +206,33 @@ async def upload_document(
     clean_title = Path(safe_filename).stem.replace("_", " ").title()
     effective_subject = subject.strip() if (subject and subject.strip() and subject.strip() != "General Study") else clean_title
 
-    # Quick sample text extraction for instant topic reasoning
-    def _quick_sample(fp: str) -> str:
+    # Quick sample text & TOC extraction for instant topic reasoning
+    def _quick_sample_and_toc(fp: str):
         try:
             import pymupdf
             d = pymupdf.open(fp)
+            toc = d.get_toc()
             pages = [d[i].get_text() for i in range(min(len(d), 5))]
             d.close()
-            return "\n\n".join(p for p in pages if p)
+            sample_txt = "\n\n".join(p for p in pages if p)
+            toc_topics = []
+            if toc:
+                for idx, item in enumerate(toc[:10]):
+                    t_title = str(item[1]).strip()
+                    if t_title and len(t_title) > 2:
+                        toc_topics.append({
+                            "id": f"topic_{idx+1}",
+                            "title": t_title,
+                            "summary": f"Key concept in {t_title}",
+                            "difficulty": "Intermediate",
+                            "estimated_study_time": "15 mins",
+                            "key_concepts": [t_title]
+                        })
+            return sample_txt, toc_topics
         except Exception:
-            return ""
+            return "", []
 
-    sample_text = await asyncio.to_thread(_quick_sample, file_path)
+    sample_text, fast_toc_topics = await asyncio.to_thread(_quick_sample_and_toc, file_path)
     if not sample_text:
         sample_text = f"Subject: {effective_subject}. Topic: {clean_title}."
 
@@ -234,10 +249,14 @@ async def upload_document(
         session_id=study_id,
         user_id=user["id"] if user else None,
     )
-    topics_task = extract_topics_and_validate(sample_text, subject=effective_subject, filename=file.filename)
 
-    ingest_result, topics_tuple = await asyncio.gather(ingest_task, topics_task)
-    is_study_material, message, topics = topics_tuple
+    if fast_toc_topics and len(fast_toc_topics) >= 2:
+        ingest_result = await ingest_task
+        is_study_material, message, topics = True, "Academic PDF verified via native TOC", fast_toc_topics
+    else:
+        topics_task = extract_topics_and_validate(sample_text, subject=effective_subject, filename=file.filename)
+        ingest_result, topics_tuple = await asyncio.gather(ingest_task, topics_task)
+        is_study_material, message, topics = topics_tuple
 
     if not is_study_material:
         raise HTTPException(

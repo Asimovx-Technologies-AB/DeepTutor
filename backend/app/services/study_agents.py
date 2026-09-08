@@ -1813,10 +1813,27 @@ class DecisionAgent:
                 "- Then, immediately conclude with an interactive 1-question practice quiz question directly testing the material explained.\n"
             )
 
-        # ELI5 comparison guidance
-        eli5_comparison_guidance = ""
-        if plan.get("response_format") == "comparison" and plan.get("explanation_level") in ("eli5", "simple"):
-            eli5_comparison_guidance = (
+        # Comparison & Difference Table Guidance
+        comparison_guidance = ""
+        is_difference_or_comparison = (
+            plan.get("response_format") == "comparison"
+            or any(k in user_query.lower() for k in ("difference", "differ", "compare", "comparison", " vs ", "versus", "distinguish", "distinction"))
+        )
+        if is_difference_or_comparison and plan.get("explanation_level") not in ("eli5", "simple"):
+            comparison_guidance = (
+                "\n12. MANDATORY Comparison & Difference Table Protocol:\n"
+                "- The student's query asks for differences, distinctions, or a comparison between concepts, algorithms, models, or methods.\n"
+                "- You MUST present the differences in a clean, comprehensive Markdown Comparison Table.\n"
+                "- Table Columns MUST follow this structure:\n"
+                "  | Parameter / Feature | [Concept 1] | [Concept 2] |\n"
+                "  |---|---|---|\n"
+                "- Populate the table with 6 to 10 key comparison dimensions (such as: Definition & Core Principle, Decision Boundary / Architecture, Handling Non-Linearity, Computational Complexity (Training vs Prediction), Sensitivity to Outliers / Noise, Hyperparameters, Memory Footprint, Primary Strengths, Limitations, and Typical Real-World Applications).\n"
+                "- Provide a brief 1-2 sentence introduction before the table.\n"
+                "- After the table, provide a concise summary highlighting when to choose each option and practical takeaways.\n"
+                "- Strictly do NOT output plain bullet points without a Markdown comparison table.\n"
+            )
+        elif is_difference_or_comparison and plan.get("explanation_level") in ("eli5", "simple"):
+            comparison_guidance = (
                 "\n12. ELI5 Comparison Protocol:\n"
                 "- The student requested an ELI5 / simple comparison. Do NOT use a complex Markdown comparison table or technical jargon.\n"
                 "- Instead, explain the comparison using two paired, simple, conversational paragraphs using everyday analogies suited for a beginner.\n"
@@ -1864,19 +1881,25 @@ STRICT RULES:
    - Stage 3: Row-by-Row Independent Computation: Compute EVERY single row, sequence, or test case individually from first principles.
    - Stage 4: Sanity & Verification Check: Verify dimensional consistency, IUPAC validity, or algebraic balance before finalizing the table.
    - Stage 5: Complete Solved Markdown Table: Output the 100% complete Markdown table with EVERY row, position, value, and name fully populated. Strictly do NOT use ellipses (...) or placeholders ('TBD', 'N/A'). Show clear step-by-step reasoning for each row above or below the table.
-6. Mathematics: Format ALL formulas in standalone block KaTeX:
+6. MANDATORY Comparison & Difference Table Rule:
+   Whenever the student asks for differences, comparisons, distinctions, trade-offs, or 'X vs Y' (e.g., 'difference between SVM and KNN'):
+   - You MUST format the core differences in a structured, clean Markdown Table with columns:
+     | Feature / Comparison Aspect | [Concept 1] | [Concept 2] |
+   - Cover all essential parameters (e.g., Model Type & Paradigm, Decision Boundary, Handling Non-Linearity, Computational Complexity, Hyperparameters, When to Choose).
+   - Strictly do NOT output differences merely as bold bullet points or plain prose without a Markdown table.
+7. Mathematics: Format ALL formulas in standalone block KaTeX:
    $$
    formula
    $$
    or inline $...$. Ensure all LaTeX curly braces are strictly balanced!
-7. Tone: Articulate, authoritative, engaging academic tone. Strictly ZERO emojis.
-8. Chain-of-Thought: Provide a dedicated thought process detailing your reasoning and verification before the answer.
-9. Interactive Follow-up Question (Conversational Closing):
+8. Tone: Articulate, authoritative, engaging academic tone. Strictly ZERO emojis.
+9. Chain-of-Thought: Provide a dedicated thought process detailing your reasoning and verification before the answer.
+10. Interactive Follow-up Question (Conversational Closing):
    ALWAYS end your response with a natural, conversational follow-up question in bold (e.g., "**Would you like to solve another problem from this section?**" or "**Shall we see how this applies to negative differences, or test this with a quick 1-question practice?**") that the student can easily answer with a simple 'Yes' or 'No'.
-10. Textbook Correctness Inquiry:
+11. Textbook Correctness Inquiry:
     - If the student asks whether the textbook, author, or uploaded material is wrong about a concept ('is this textbook wrong about X'):
       1. First, objectively explain what the uploaded material specifically states.
-      2. If the material's claim is inconsistent with well-established academic facts, flag this as an objective caveat/note of caution (e.g., "Note: While your text states X, standard literature notes Y because..."), rather than an aggressive contradiction. Always explain what the course material states first.{compound_guidance}{eli5_comparison_guidance}
+      2. If the material's claim is inconsistent with well-established academic facts, flag this as an objective caveat/note of caution (e.g., "Note: While your text states X, standard literature notes Y because..."), rather than an aggressive contradiction. Always explain what the course material states first.{compound_guidance}{comparison_guidance}
 
 Return ONLY valid JSON in this exact structure:
 {{

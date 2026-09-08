@@ -393,21 +393,21 @@ def save_session_document(
     **kwargs: Any,
 ) -> str:
     """Save document metadata to PostgreSQL session_documents."""
-    # Determine positional ordering
-    if file_path is not None:
-        effective_doc_id = doc_id or doc_id_or_filename
-        effective_filename = filename_or_path
-        effective_file_path = file_path
-    else:
-        effective_doc_id = doc_id or kwargs.get("doc_id")
-        effective_filename = doc_id_or_filename
-        effective_file_path = filename_or_path
+    # Robust resolution for both positional and keyword parameters
+    actual_filename = (
+        kwargs.get("filename")
+        or (filename_or_path if file_path is not None else doc_id_or_filename)
+        or "document"
+    )
+    actual_filepath = kwargs.get("file_path") or file_path or (filename_or_path if file_path is None else "") or ""
+    actual_doc_id = doc_id or kwargs.get("doc_id") or (doc_id_or_filename if file_path is not None else None) or actual_filename
 
     effective_status = kwargs.get("status", status)
     effective_page_count = kwargs.get("page_count", page_count)
 
-    d_id = to_uuid(effective_doc_id, namespace_suffix=str(session_id)) if effective_doc_id else str(uuid.uuid4())
-    doc_hash = "".join(c for c in f"{session_id}_{effective_filename}" if c.isalnum())[:32]
+    d_id = to_uuid(actual_doc_id, namespace_suffix=str(session_id)) if actual_doc_id else str(uuid.uuid4())
+    raw_seed = f"{session_id}_{actual_filename}_{actual_doc_id}"
+    doc_hash = "".join(c for c in raw_seed if c.isalnum())[:32]
 
     # Resolve user_id if omitted
     if not user_id:
@@ -430,7 +430,7 @@ def save_session_document(
                 CAST(:id AS UUID), :session_id, :doc_hash, :user_id, :filename, :file_path,
                 :status, :page_count, now()
             )
-            ON CONFLICT (id) DO UPDATE SET
+            ON CONFLICT (session_id, doc_hash) DO UPDATE SET
                 filename = EXCLUDED.filename,
                 file_path = EXCLUDED.file_path,
                 status = EXCLUDED.status,
@@ -446,6 +446,11 @@ def save_session_document(
                 :id, :session_id, :doc_hash, :user_id, :filename, :file_path,
                 :status, :page_count, CURRENT_TIMESTAMP
             )
+            ON CONFLICT (session_id, doc_hash) DO UPDATE SET
+                filename = EXCLUDED.filename,
+                file_path = EXCLUDED.file_path,
+                status = EXCLUDED.status,
+                page_count = EXCLUDED.page_count
             RETURNING id;
         """)
 
@@ -455,8 +460,8 @@ def save_session_document(
             "session_id": str(session_id),
             "doc_hash": doc_hash,
             "user_id": user_id,
-            "filename": effective_filename,
-            "file_path": effective_file_path,
+            "filename": actual_filename,
+            "file_path": actual_filepath,
             "status": effective_status,
             "page_count": effective_page_count,
         })

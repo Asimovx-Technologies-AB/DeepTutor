@@ -16,13 +16,38 @@ from app.core.config import get_settings
 settings = get_settings()
 
 
+def normalize_image_for_vlm(image_bytes: bytes, mime_type: str = "image/jpeg") -> tuple[bytes, str]:
+    """Ensure image format and mime_type match OpenAI Vision requirements ('jpeg', 'png', 'webp', 'gif')."""
+    if not image_bytes:
+        return image_bytes, "image/jpeg"
+    
+    m = (mime_type or "").lower().strip()
+    if m in {"image/jpeg", "image/png", "image/webp", "image/gif"}:
+        return image_bytes, m
+    if "jpg" in m or "pjpeg" in m:
+        return image_bytes, "image/jpeg"
+    
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(image_bytes))
+        if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+            out = io.BytesIO()
+            img.save(out, format="PNG")
+            return out.getvalue(), "image/png"
+        else:
+            out = io.BytesIO()
+            img.convert("RGB").save(out, format="JPEG")
+            return out.getvalue(), "image/jpeg"
+    except Exception as e:
+        print(f"[OpenAIVLM] Image format conversion notice: {e}")
+        return image_bytes, "image/jpeg"
+
+
 class OpenAIVLMClient:
     """
-    Vision-Language client using OpenAI GPT-4o / GPT-4o-mini Multimodal API.
-    Supports multimodal inputs (image + prompt) for:
-    1. Full OCR and academic text extraction
-    2. Topic tree & curriculum extraction
-    3. Diagram / figure factual captioning
+    Unified VLM (Vision Language Model) Client using OpenAI GPT-4o / GPT-4o-mini
+    for page OCR, document transcription, and diagram captioning.
     """
 
     def __init__(self):
@@ -116,9 +141,10 @@ class OpenAIVLMClient:
         if not image_bytes:
             return ""
 
+        img_bytes_norm, valid_mime = normalize_image_for_vlm(image_bytes, mime_type)
         client = self._get_client()
-        b64_img = base64.b64encode(image_bytes).decode("utf-8")
-        data_uri = f"data:{mime_type};base64,{b64_img}"
+        b64_img = base64.b64encode(img_bytes_norm).decode("utf-8")
+        data_uri = f"data:{valid_mime};base64,{b64_img}"
 
         prompt = (
             "You are an expert academic OCR and document digitization system. "
@@ -159,9 +185,10 @@ class OpenAIVLMClient:
         if not image_bytes:
             return ""
 
+        img_bytes_norm, valid_mime = normalize_image_for_vlm(image_bytes, mime_type)
         client = self._get_client()
-        b64_img = base64.b64encode(image_bytes).decode("utf-8")
-        data_uri = f"data:{mime_type};base64,{b64_img}"
+        b64_img = base64.b64encode(img_bytes_norm).decode("utf-8")
+        data_uri = f"data:{valid_mime};base64,{b64_img}"
 
         prompt = (
             "Analyze and describe this educational figure, diagram, or chart in detail.\n"

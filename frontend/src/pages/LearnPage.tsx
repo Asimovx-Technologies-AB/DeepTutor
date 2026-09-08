@@ -157,6 +157,7 @@ export default function LearnPage() {
   const [isMaterialsPopoverOpen, setIsMaterialsPopoverOpen] = useState(false)
   const materialsPopoverRef = useRef<HTMLDivElement | null>(null)
   const addMaterialInputRef = useRef<HTMLInputElement | null>(null)
+  const skipLoadingAnimationRef = useRef<boolean>(false)
 
   // Option A & B Navigation & Search states
   const [courseDropdownOpen, setCourseDropdownOpen] = useState(false)
@@ -404,6 +405,11 @@ export default function LearnPage() {
   // ─── 2. Load Session Details & SQLite Data ───
   const loadSessionDetails = useCallback(async (sid: string) => {
     if (!sid) return
+    if (skipLoadingAnimationRef.current) {
+      skipLoadingAnimationRef.current = false
+      setIsSessionLoading(false)
+      return
+    }
     setIsSessionLoading(true)
     try {
       const res = await studyApi.getSession(sid)
@@ -437,7 +443,6 @@ export default function LearnPage() {
           setCurrentArtifactMarkdown(latestNotes.text)
           setArtifactDockSide('right')
         }
-        // No popup initially on session load; only pops up when clicking the note box
         setArtifactViewerOpen(false)
       } else {
         setArtifactViewerOpen(false)
@@ -1093,13 +1098,17 @@ export default function LearnPage() {
 
   const handleCreateNewSession = async () => {
     try {
+      skipLoadingAnimationRef.current = true
+      setIsSessionLoading(false)
       const res = await studyApi.createSession({
         subject: 'General Study',
         title: 'New Study Workspace'
       })
       const newSid = res.data.id
       setActiveSessionId(newSid)
-      fetchSessions()
+      setActiveSubject('General Study')
+      setDocumentName('')
+      setDocStatus('ready')
       setSessionDocuments([])
       setSelectedMaterialFilter('all')
       setMessages([])
@@ -1107,7 +1116,9 @@ export default function LearnPage() {
       setActiveTopic(null)
       setWorkspaceOpen(false)
       setCourseDropdownOpen(false)
+      fetchSessions()
     } catch (err) {
+      skipLoadingAnimationRef.current = false
       console.error('Create session failed:', err)
     }
   }

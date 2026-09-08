@@ -110,29 +110,32 @@ class DocumentProcessor:
         except Exception as e:
             print(f"[DocProcessor] FTS indexing error: {e}")
 
-        # 2. PgVector hybrid store
+        # 2. PgVector hybrid store (non-blocking background task)
         global _pgvector_store
         if _pgvector_store is not None:
-            try:
-                topic_key = session_id or doc_id or "general"
-                chunk_texts = [c.content for c in chunks]
-                embeddings = await llm_client.get_embeddings(chunk_texts)
-                formatted_chunks = [
-                    {
-                        "text": c.content,
-                        "metadata": {
-                            "chunk_id": c.chunk_id,
-                            "doc_id": c.doc_id,
-                            "page": c.page,
-                            "source_type": c.source_type,
+            async def _bg_vector_index():
+                try:
+                    topic_key = session_id or doc_id or "general"
+                    chunk_texts = [c.content for c in chunks]
+                    embeddings = await llm_client.get_embeddings(chunk_texts)
+                    formatted_chunks = [
+                        {
+                            "text": c.content,
+                            "metadata": {
+                                "chunk_id": c.chunk_id,
+                                "doc_id": c.doc_id,
+                                "page": c.page,
+                                "source_type": c.source_type,
+                            }
                         }
-                    }
-                    for c in chunks
-                ]
-                await asyncio.to_thread(_pgvector_store.add_chunks, topic_key, formatted_chunks, embeddings)
-                print(f"[DocProcessor] Successfully indexed {len(chunks)} chunks into PgVectorStore (topic: {topic_key}).")
-            except Exception as ex:
-                print(f"[DocProcessor] PgVector indexing notice: {ex}")
+                        for c in chunks
+                    ]
+                    await asyncio.to_thread(_pgvector_store.add_chunks, topic_key, formatted_chunks, embeddings)
+                    print(f"[DocProcessor] Background indexed {len(chunks)} chunks into PgVectorStore (topic: {topic_key}).")
+                except Exception as ex:
+                    print(f"[DocProcessor] PgVector indexing notice: {ex}")
+
+            asyncio.create_task(_bg_vector_index())
 
     # ─── STAGE 1: INGESTION (Fast Text + VLM OCR for Scanned/Images) ─────
     async def ingest_document(
