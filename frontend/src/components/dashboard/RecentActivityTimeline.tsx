@@ -94,23 +94,40 @@ export default function RecentActivityTimeline({ activities, isLoading }: Recent
         {uiLanguage === 'sv' ? 'Senaste aktivitet' : 'Recent Activity'}
       </h3>
       
-      <div className="relative pl-3 space-y-6 flex-1 border-l-2 border-border ml-2">
-        {activities.map((act) => (
-          <div key={act.id} className="relative flex items-center">
-            {/* Timeline dot */}
-            <div className="absolute -left-[22px] w-6 h-6 rounded-full bg-white border-2 border-border flex items-center justify-center shadow-sm">
-              {getIcon(act.activity_type)}
+      <div className="relative pl-3 space-y-4 flex-1 border-l-2 border-border ml-2">
+        {activities.map((act) => {
+          const targetSessionId = act.subject_id || act.topic_id
+          return (
+            <div key={act.id} className="relative flex items-center">
+              {/* Timeline dot */}
+              <div className="absolute -left-[22px] w-6 h-6 rounded-full bg-white border-2 border-border flex items-center justify-center shadow-xs">
+                {getIcon(act.activity_type)}
+              </div>
+              
+              <div 
+                className="ml-4 p-3.5 rounded-2xl bg-black/5 hover:bg-indigo-50/60 border border-border/60 hover:border-indigo-200 flex-1 hover:shadow-xs transition-all cursor-pointer group flex items-center justify-between gap-3"
+                onClick={() => {
+                  if (targetSessionId) {
+                    navigate(`/chat/${targetSessionId}`)
+                  } else {
+                    navigate('/chat')
+                  }
+                }}
+                title="Open in AI Study Room"
+              >
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-[13px] font-bold text-slate-900 group-hover:text-indigo-900 transition-colors truncate">
+                    {getLocalizedTitle(act.title)}
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5 font-medium">{getRelativeTime(act.timestamp)}</p>
+                </div>
+                <span className="text-[11px] font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  Open →
+                </span>
+              </div>
             </div>
-            
-            <div 
-              className={`ml-4 p-3 rounded-xl bg-black/5 border border-border/50 flex-1 hover:shadow-sm transition-shadow cursor-pointer ${act.subject_id ? 'hover:border-border' : ''}`}
-              onClick={() => act.subject_id && navigate(`/subjects/${act.subject_id}`)}
-            >
-              <h4 className="text-[13px] font-medium text-text-primary">{getLocalizedTitle(act.title)}</h4>
-              <p className="text-[11px] text-text-secondary mt-0.5">{getRelativeTime(act.timestamp)}</p>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
