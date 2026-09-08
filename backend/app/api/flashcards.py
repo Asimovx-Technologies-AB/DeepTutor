@@ -49,8 +49,14 @@ async def generate_flashcards(
             context = "\n".join([h.get("content", "") for h in hits])
 
     # 2. Generate flashcards via LLM
+    #
+    # Built before the f-string, not inside it. A nested f-string whose
+    # expression part contains a backslash is only legal from Python 3.12
+    # (PEP 701). The runtime image is python:3.11-slim, where the inline form
+    # is a SyntaxError that kills every Gunicorn worker at import.
+    material_context = f"MATERIAL CONTEXT:\n{context}\n" if context else ""
     prompt = f"""You are an expert academic tutor. Create 5 high-yield revision flashcards for the topic: "{effective_focus}".
-{f"MATERIAL CONTEXT:\n{context}\n" if context else ""}
+{material_context}
 Return ONLY a valid JSON list of flashcard objects matching this exact schema:
 [
   {{

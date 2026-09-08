@@ -2,6 +2,7 @@
 FastAPI main application — DeepTutor v2 (4-Stage RAG Pipeline).
 """
 import asyncio
+import os
 import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,26 +16,49 @@ from app.services.study_storage import ensure_data_directories, check_and_restor
 settings = get_settings()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Apply SQL schema migrations before anything serves traffic.
-    #
-    # importing app.core.database has already run Base.metadata.create_all(),
-    # which covers the ORM models only. The study/lecture/task-queue tables and
-    # the canonical document_chunks shape live in backend/migrations/*.sql, and
-    # nothing else in the deployment runs them: the Container App starts the
-    # image directly, with no init container or release step. Doing it here is
-    # what makes a plain `containerapp update` a complete deploy.
+def _run_schema_setup_in_background():
+    """Create ORM tables and apply backend/migrations/*.sql off the startup path."""
     try:
         # backend/ is the image's WORKDIR, but add it explicitly so the runner
         # is importable however the process was launched.
         backend_dir = str(Path(__file__).resolve().parent.parent)
         if backend_dir not in sys.path:
             sys.path.insert(0, backend_dir)
+        # ORM tables first: create_all reflects the existing schema, which is a
+        # database round trip and therefore no longer done at import.
+        from app.core.database import create_all_tables
+        create_all_tables()
+
         from migrations.run_migrations import safe_run_migrations
-        await asyncio.to_thread(safe_run_migrations)
+        safe_run_migrations()
     except Exception as e:
-        print(f"[MIGRATION] Warning: migration runner unavailable: {e}")
+        print(f"[MIGRATION] Warning: schema setup unavailable: {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Schema migrations run ALONGSIDE serving, never ahead of it.
+    #
+    # create_all covers the ORM models; the study/lecture/task-queue tables and
+    # the canonical document_chunks shape live in backend/migrations/*.sql. The
+    # Container App starts the image directly, with no init container or release
+    # step, so nothing else in the deployment would run either of them.
+    #
+    # Awaiting them here is what broke every deploy after 775fe08. Gunicorn's
+    # master binds :8000 immediately, so the Container Apps readiness probe
+    # connects and then waits on GET / for a response no worker can give while
+    # it is still blocked in startup. The probe runs every 15s with a
+    # 3-failure threshold, so a boot slower than ~45s is killed and back-off
+    # looped — "Readiness probe failed: context deadline exceeded ... awaiting
+    # headers", then ContainerBackOff, then ActivationFailed, with traffic
+    # stranded on the previous revision. On 0.5 vCPU, psycopg2.connect() and
+    # pg_advisory_lock() with no timeouts never stood a chance.
+    #
+    # safe_run_migrations() already swallows and logs its own failures, so
+    # nothing here depends on the result.
+    app.state.migration_task = asyncio.create_task(
+        asyncio.to_thread(_run_schema_setup_in_background)
+    )
 
     # Startup: create all required directories
     ensure_data_directories()
@@ -178,6 +202,10 @@ async def health():
     return {
         "api": "ok",
         "version": settings.APP_VERSION,
+        # The commit this image was built from, injected by the deploy workflow.
+        # Without it the pipeline can only prove that *something* answered, not
+        # that the build it just shipped is the one serving.
+        "build": os.getenv("GIT_SHA", "unknown"),
         "database": pool_metrics,
         "pipeline": {
             "status": "active",
