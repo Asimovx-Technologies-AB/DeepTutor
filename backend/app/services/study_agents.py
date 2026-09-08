@@ -1737,6 +1737,20 @@ class DecisionAgent:
                 f"You can flip cards in 3D to review key definitions and formulas, or switch to **Quiz Mode** for interactive self-testing below!"
             )
 
+            # Persist flashcard deck items to global database flashcards table
+            try:
+                from app.core import database as db_core
+                topic_key = clean_title.lower().replace(" ", "_")
+                for q in deck.get("questions", []):
+                    front_t = q.get("prompt") or q.get("question") or q.get("front") or ""
+                    back_t = q.get("explanation") or q.get("correct_answer") or q.get("back") or ""
+                    if front_t and back_t:
+                        db_core.add_flashcard(topic_id=topic_key, front=front_t, back=back_t)
+                        if session_id:
+                            db_core.add_flashcard(topic_id=session_id, front=front_t, back=back_t)
+            except Exception as fe:
+                print(f"[StudyAgent] Global flashcard persistence notice: {fe}")
+
             return {
                 "thought_process": f"Detected flashcard/quiz request '{user_query}' for topic '{clean_title}'. Generated grounded {len(deck.get('questions', []))}-card dual-mode JSON deck with explanation level '{explanation_level}'.",
                 "response": resp_text,

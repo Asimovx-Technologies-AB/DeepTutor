@@ -254,6 +254,17 @@ def get_session_messages(
                     pass
         if isinstance(msg.get("created_at"), datetime):
             msg["created_at"] = msg["created_at"].isoformat()
+
+        # Map database column names to JS frontend ChatMessage model properties
+        msg["quiz_data"] = msg.get("quiz_data_json")
+        msg["topics"] = msg.get("topics_json")
+        msg["attachment"] = msg.get("attachment_json")
+
+        if msg.get("quiz_data") and isinstance(msg["quiz_data"], dict):
+            initial_m = msg["quiz_data"].get("initial_mode") or "flashcards"
+            msg["format"] = "flashcard" if initial_m == "flashcards" else "quiz"
+            msg["response_format"] = msg["format"]
+
         messages.append(msg)
     return messages
 
