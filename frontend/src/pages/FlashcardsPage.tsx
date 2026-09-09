@@ -85,7 +85,7 @@ function CardBackView({ rawContent }: { rawContent: string }) {
 
   return (
     <div className="text-sm sm:text-[15px] text-slate-800 leading-relaxed font-medium markdown-content space-y-3 px-2 sm:px-4 py-2 w-full text-left">
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+      <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
         {formatMarkdownBullets(rawContent)}
       </ReactMarkdown>
     </div>

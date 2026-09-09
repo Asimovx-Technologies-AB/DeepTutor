@@ -1113,7 +1113,7 @@ export default function StudyPlanPage() {
                 ) : (
                   <div className="prose prose-sm max-w-none text-slate-800 space-y-3">
                     <ReactMarkdown
-                      remarkPlugins={[remarkGfm, remarkMath]}
+                      remarkPlugins={[remarkMath, remarkGfm]}
                       rehypePlugins={[rehypeKatex]}
                       components={{
                         h1: ({ children }) => (
@@ -1196,11 +1196,16 @@ export default function StudyPlanPage() {
                     >
                       {(() => {
                         const raw = activeNotesModal.notes || ''
-                        // Inline math delimiter normalization
-                        let cleaned = raw.replace(/(?<!\$)\$\$\s*([^\$\n]+?)\s*\$\$(?!\$)/g, (_m: string, p1: string) => `$${p1.trim()}$`)
+                        let cleaned = raw
+                        // 1. Convert standalone single-line formulas wrapped in $...$ into display math $$\n...\n$$
+                        cleaned = cleaned.replace(/^\s*\$(?!\$)([^\$\n]{5,})\$\s*$/gm, '$$\n$1\n$$')
+                        // 2. Inline math delimiter normalization: $$ var $$ on same line -> $var$
+                        cleaned = cleaned.replace(/(?<!\$)\$\$\s*([^\$\n]+?)\s*\$\$(?!\$)/g, (_m: string, p1: string) => `$${p1.trim()}$`)
+                        // 3. Ensure display math blocks have newlines around them
                         cleaned = cleaned.replace(/([^\n])\s*\$\$\s*\n/g, '$1\n\n$$\n')
                         cleaned = cleaned.replace(/\n\s*\$\$\s*([^\n])/g, '\n$$\n\n$1')
-                        cleaned = cleaned.replace(/\n(Supervised Learning|Unsupervised Learning|Reinforcement Learning|Semi-Supervised Learning):\s*/g, '\n- **$1**: ')
+                        // 4. Bullet un-bulleted paradigm lists like "Reinforcement Learning (RL): ..." -> "- **Reinforcement Learning (RL)**: ..."
+                        cleaned = cleaned.replace(/^(?!(?:[-*#>]|\d+\.))\s*([A-Za-z0-9\s()/\-]{3,45}):\s+([A-Z])/gm, '- **$1**: $2')
                         return cleaned
                       })()}
                     </ReactMarkdown>

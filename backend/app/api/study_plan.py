@@ -36,25 +36,48 @@ def clean_study_notes_markdown(text: str) -> str:
     if not text:
         return ""
 
-    cleaned = text
+    import re
+    cleaned = text.strip()
 
-    # Convert inline double dollars ($$ var $$) on the same line to single dollars ($var$)
-    # while preserving multi-line display math blocks ($$\n...\n$$)
+    # 1. Strip outer markdown code block wrap if wrapped in ```markdown ... ```
+    if cleaned.startswith("```markdown") and cleaned.endswith("```"):
+        cleaned = cleaned[len("```markdown"): -3].strip()
+    elif cleaned.startswith("```") and cleaned.endswith("```") and cleaned.count("```") == 2:
+        lines = cleaned.splitlines()
+        if len(lines) > 2 and lines[0].strip() in ("```", "```md", "```text"):
+            cleaned = "\n".join(lines[1:-1]).strip()
+
+    # 2. Convert standalone single-line formulas wrapped in $...$ into display math $$\n...\n$$
+    cleaned = re.sub(
+        r'^\s*\$(?!\$)([^\$\n]{5,})\$\s*$',
+        r'$$\n\1\n$$',
+        cleaned,
+        flags=re.MULTILINE
+    )
+
+    # 3. Convert inline double dollars ($$ var $$) on the same line to single dollars ($var$)
     def _replace_inline_double_dollars(match):
         content = match.group(1).strip()
-        # If it's short and on a single line, it's inline math
         if "\n" not in content:
             return f"${content}$"
         return f"\n$$\n{content}\n$$\n"
 
     cleaned = re.sub(r'(?<!\$)\$\$\s*([^\$\n]+?)\s*\$\$(?!\$)', _replace_inline_double_dollars, cleaned)
 
-    # Ensure display math blocks have newlines around them
+    # 4. Ensure display math blocks have newlines around them
     cleaned = re.sub(r'([^\n])\s*\$\$\s*\n', r'\1\n\n$$\n', cleaned)
     cleaned = re.sub(r'\n\s*\$\$\s*([^\n])', r'\n$$\n\n\1', cleaned)
 
-    # Clean up un-bulleted paradigm lists like "Supervised Learning: ..." into "- **Supervised Learning**: ..."
-    cleaned = re.sub(r'\n(Supervised Learning|Unsupervised Learning|Reinforcement Learning|Semi-Supervised Learning):\s*', r'\n- **\1**: ', cleaned)
+    # 5. Clean up un-bulleted paradigm lists like "Supervised Learning: ..." or "Reinforcement Learning (RL): ..." into "- **...**: ..."
+    cleaned = re.sub(
+        r'^(?!(?:[-*#>]|\d+\.))\s*([A-Za-z0-9\s()/\-]{3,45}):\s+([A-Z])',
+        r'- **\1**: \2',
+        cleaned,
+        flags=re.MULTILINE
+    )
+
+    # 6. Consolidate excessive blank lines
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
 
     return cleaned.strip()
 

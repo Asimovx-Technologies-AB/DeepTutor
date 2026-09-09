@@ -340,7 +340,7 @@ export default function FlashcardsOverlay({ sessionId, isOpen, onClose }: Props)
                     </div>
                     
                     <div className="text-sm sm:text-[15px] text-slate-800 leading-relaxed font-medium markdown-content space-y-3.5 px-2 sm:px-4 py-2">
-                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
                         {formatMarkdownBullets(currentCard?.back || '')}
                       </ReactMarkdown>
                     </div>

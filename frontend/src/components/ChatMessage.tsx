@@ -88,7 +88,7 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding, 
                 </div>
               )}
               <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkMath]}
+                remarkPlugins={[remarkMath, remarkGfm]}
                 rehypePlugins={[rehypeKatex]}
                 components={{
                   pre({ node, children, ...props }: any) {

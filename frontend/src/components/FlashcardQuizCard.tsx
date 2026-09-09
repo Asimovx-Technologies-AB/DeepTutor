@@ -50,7 +50,7 @@ export const MarkdownText: React.FC<{ content: string; className?: string; inlin
   return (
     <div className={`markdown-content ${inline ? 'inline-block' : ''} ${className}`}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
+        remarkPlugins={[remarkMath, remarkGfm]}
         rehypePlugins={[rehypeKatex]}
         components={{
           p: ({ children }) => <span className={inline ? 'inline' : 'block leading-snug'}>{children}</span>,
