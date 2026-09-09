@@ -116,3 +116,36 @@ def test_register_or_update_session_with_null_subject():
     # Cleanup
     delete_registry_session(sid, user_id=user_test)
 
+
+def test_clean_llm_response_noise_removal():
+    """Verify that clean_llm_response sanitizes noisy conversational preambles, wrapper fences, and misplaced math delimiters."""
+    from app.rag.llm_client import clean_llm_response
+
+    # Test 1: Preamble and outer markdown wrap
+    raw_1 = "```markdown\nCertainly! Here are the study notes:\n# Machine Learning\nThis is the content.\n```"
+    cleaned_1 = clean_llm_response(raw_1)
+    assert not cleaned_1.startswith("```")
+    assert not cleaned_1.endswith("```")
+    assert "Certainly" not in cleaned_1
+    assert cleaned_1.startswith("# Machine Learning")
+
+    # Test 2: Inline double dollars ($$) to single dollars ($)
+    raw_2 = "Formally, given a dataset $$ \\mathcal{D} $$ where $$ x_i $$ represents input and $$ y_i $$ represents output:"
+    cleaned_2 = clean_llm_response(raw_2)
+    assert "$$ \\mathcal{D} $$" not in cleaned_2
+    assert "$\\mathcal{D}$" in cleaned_2
+    assert "$x_i$" in cleaned_2
+    assert "$y_i$" in cleaned_2
+
+    # Test 3: Display math block preservation
+    raw_3 = "The optimal model is:\n$$\nf^* = \\arg\\min L(y, f(x))\n$$\nwhere $L$ is loss."
+    cleaned_3 = clean_llm_response(raw_3)
+    assert "$$\nf^* = \\arg\\min L(y, f(x))\n$$" in cleaned_3
+
+    # Test 4: Unbulleted paradigm lists
+    raw_4 = "\nSupervised Learning: Learn from labeled data.\nUnsupervised Learning: Learn from unlabeled data."
+    cleaned_4 = clean_llm_response(raw_4)
+    assert "- **Supervised Learning**: Learn from labeled data." in cleaned_4
+    assert "- **Unsupervised Learning**: Learn from unlabeled data." in cleaned_4
+
+

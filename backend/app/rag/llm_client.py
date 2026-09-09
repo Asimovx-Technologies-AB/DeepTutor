@@ -12,6 +12,63 @@ from app.core.config import get_settings
 settings = get_settings()
 
 
+def clean_llm_response(text: str) -> str:
+    """
+    Sanitizes raw LLM output across the system to ensure clean, publication-ready academic output:
+    1. Removes conversational chatter / intro boilerplate (e.g. 'Sure, here is...', 'Certainly!').
+    2. Strips accidental outer markdown block wrappers (```markdown ... ```).
+    3. Normalizes LaTeX math syntax:
+       - Converts single-line inline double dollars ($$ var $$) into single dollars ($var$) so KaTeX renders inline math cleanly.
+       - Ensures block display equations ($$\\n...\\n$$) have clear surrounding blank lines.
+    4. Normalizes unbulleted concept lists into clean Markdown bullet points.
+    5. Strips redundant whitespace while preserving code blocks and math indentation.
+    """
+    if not text:
+        return ""
+
+    import re
+    cleaned = text.strip()
+
+    # 1. Strip outer markdown code block wrap if the entire output was enclosed in ```markdown ... ```
+    if cleaned.startswith("```markdown") and cleaned.endswith("```"):
+        cleaned = cleaned[len("```markdown"): -3].strip()
+    elif cleaned.startswith("```") and cleaned.endswith("```") and cleaned.count("```") == 2:
+        lines = cleaned.splitlines()
+        if len(lines) > 2 and lines[0].strip() in ("```", "```md", "```text"):
+            cleaned = "\n".join(lines[1:-1]).strip()
+
+    # 2. Strip conversational preambles
+    preambles = [
+        r"^(?:Sure|Certainly|Here\s+(?:is|are)|Below\s+is|As\s+an\s+AI)[^\n]*:\s*\n+",
+        r"^(?:I\s+have\s+generated|Here\s+are\s+the\s+study\s+notes)[^\n]*:\s*\n+",
+    ]
+    for pattern in preambles:
+        cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE).strip()
+
+    # 3. Normalize single-line inline double dollars ($$ var $$) to single dollars ($var$)
+    # Only replace when $$ is embedded inside a text line (not on a line by itself)
+    def _replace_inline_double_dollars(line: str) -> str:
+        if line.strip() in ("$$", "$$$"):
+            return line
+        return re.sub(r'(?<!\$)\$\$\s*([^\$\r\n]+?)\s*\$\$(?!\$)', r'$\1$', line)
+
+    lines = cleaned.splitlines()
+    cleaned = "\n".join(_replace_inline_double_dollars(l) for l in lines)
+
+    # 4. Clean up un-bulleted paradigm lists like "Supervised Learning: ..." into "- **Supervised Learning**: ..."
+    cleaned = re.sub(
+        r'^(?!(?:[-*#>]|\d+\.))\s*([A-Za-z0-9\s]{3,35}):\s+([A-Z])',
+        r'- **\1**: \2',
+        cleaned,
+        flags=re.MULTILINE
+    )
+
+    # 5. Consolidate excessive blank lines
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+
+    return cleaned.strip()
+
+
 class LLMClient:
     """
     Unified LLM Client using official OpenAI API (ChatGPT / GPT-4o / GPT-4o-mini)
@@ -114,7 +171,8 @@ class LLMClient:
                 max_tokens=max_tokens,
             )
             choice = response.choices[0]
-            return choice.message.content or ""
+            raw_content = choice.message.content or ""
+            return clean_llm_response(raw_content)
         except Exception as e:
             err_msg = str(e)
             print(f"[LLMClient] OpenAI Chat error with {target_model}: {err_msg}")

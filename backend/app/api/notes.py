@@ -14,7 +14,7 @@ from app.api.auth import get_current_user
 from app.core import database as db
 from app.core.config import get_settings
 from app.rag.curriculum_catalog import is_curriculum_topic, extract_textbook_chunks, get_chapter_title
-from app.rag.llm_client import llm_client
+from app.rag.llm_client import llm_client, clean_llm_response
 
 def process_document(file_path: str):
     import pypdf
@@ -1100,7 +1100,7 @@ flowchart TD
         note_type=note_type,
         material_doc_name=material_name,
         pyq_doc_names=pyq_names,
-        content_markdown=parsed_data.get("content_markdown", ""),
+        content_markdown=clean_llm_response(parsed_data.get("content_markdown", "")),
         high_yield_topics=parsed_data.get("high_yield_topics", []),
         pyq_patterns=parsed_data.get("pyq_patterns", []),
         key_formulas=parsed_data.get("key_formulas", []),
