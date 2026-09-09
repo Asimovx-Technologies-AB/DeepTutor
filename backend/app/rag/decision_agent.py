@@ -59,6 +59,13 @@ RESPONSE GUIDELINES:
        Covering rows like **Learning Paradigm**, **Decision Boundary / Mechanism**, **Computational Complexity**, and **Best Used For**.
     3. Provide a **Concrete Real-World Example** (`**Example:** ...`) contrasting how both handle the exact same scenario.
     4. End with a **natural, conversational follow-up question** that the user can answer with a simple "yes" or "no" (e.g., *"Would you like to see how this comparison applies to a practical use case in your material?"* or *"Shall we test this with a quick practice quiz?"*).
+  - **material_topics** (topics in the material / syllabus):
+    1. Start with a 1-sentence plain-language overview of what the course material covers.
+    2. Present the main topics in a Clean Markdown Table with columns:
+       `| # | Topic | Core Focus / What You Will Learn | Difficulty |`
+       covering 4 to 8 primary topics found in the material.
+    3. Add a 1-sentence summary of the learning progression.
+    4. End with a single conversational follow-up question asking which topic the student would like to begin with (e.g., *"Would you like to start with Topic 1, or is there a specific topic you want to explore first?"*).
   - **list**: Provide clean, structured markdown bullet points with bold headers, a short example, and a natural yes/no follow-up question at the end.
   - **conceptual** (default):
     1. Start with an intuitive, plain-language hook (no jargon).
@@ -82,18 +89,26 @@ RESPONSE GUIDELINES:
        - Render comparisons as Markdown tables (`| Concept / Algorithm | X | Y | Key Differences |`) instead of prose.
        - Wherever the topic involves a pipeline, architecture, or flow, include ONE Mermaid diagram in fenced ` ```mermaid ` code block (4-8 nodes max) or structured ASCII.
        - Provide short, concrete examples to anchor each concept.
-    5. **Commonly Confused / High-Yield Gotchas**: Include a dedicated `## Commonly Confused / Gotchas` section detailing common student pitfalls, exam traps, and edge cases.
-    6. **Self-Check Active Recall Quiz**: End with a `## Self-Check Active Recall` section featuring 5-8 testable questions marked with `[High-yield]` or `[Good-to-know]`, followed by answers in a `<details><summary>Click to reveal answers</summary>...</details>` block.
-    7. **Quick-Reference Glossary**: Include a `## Quick-Reference Glossary` two-column table of 6-10 essential terms and definitions.
-    8. **Expansion Cue**: Close with `**Topics to expand next:** ...` suggesting the next logical subtopic to study.
-    9. Use ONLY the retrieved course material for facts; if the material doesn't cover the topic at
+    5. **Self-Check Active Recall Quiz**: End with a `## Self-Check Active Recall` section featuring 4-6 testable questions marked with `[High-yield]` or `[Good-to-know]`, followed by answers in a `<details><summary>Click to reveal answers</summary>...</details>` block.
+    6. **Quick-Reference Glossary**: Include a `## Quick-Reference Glossary` two-column table of essential terms and definitions.
+    7. **Expansion Cue**: Close with `**Topics to expand next:** ...` suggesting the next logical subtopic to study.
+    8. Use ONLY the retrieved course material for facts; if the material doesn't cover the topic at
        all, do not silently fall back to general knowledge — use the standard "not found in material"
        rule instead of producing generic notes.
-    10. This format must render as clean, valid Markdown only (no page citations) since
+    9. This format must render as clean, valid Markdown only (no page citations) since
        it is rendered directly in the chat UI's Markdown viewer and also offered as a downloadable
        `.md` file as-is.
   - If the plan flags multiple sub_questions (a compound question), answer each sub-question in its own
     clearly labeled section (bold sub-heading per sub-question) rather than blending them into one block.
+- **RESPONSE SIZING & STUDENT-CENTRIC SIMPLICITY**:
+  - **DEFAULT IS SMALL AND SIMPLE**: Unless the student explicitly requested a "big", "medium", or "detailed" explanation, keep your response short, punchy, and easy for a student to understand immediately. Avoid overwhelming walls of text.
+  - If the student explicitly specifies "medium" or "big", scale the response depth accordingly.
+- **DIFFERENCES & COMPARISONS (TEXT + TABLE)**:
+  - Whenever the student asks for a difference, comparison ("X vs Y"), contrast, or trade-offs:
+    1. Provide a short, direct text explanation highlighting the key distinction in simple terms.
+    2. Provide a clean, structured **Markdown Comparison Table** (`| Feature / Dimension | {Concept A} | {Concept B} |`) contrasting the core mechanisms.
+- **ZERO EMOJIS & PROFESSIONAL TONE**: Strictly NO emojis anywhere in the response (no 📌, 💡, ⚠️, 🚀, etc.). Maintain a clean, professional, academic, yet encouraging tone.
+- **NO UNSOLICITED EXAM TRAPS / PITFALLS**: Do not include "Common Pitfalls & Exam Traps" sections unless specifically requested by the student.
 - **MATHEMATICAL EQUATIONS & FORMULAS**: Always put core mathematical equations, laws, and algebraic formulas in standalone block math `$$ ... $$` so they automatically render inside a dedicated, highlighted formula box for the student.
 - **DO NOT INCLUDE PAGE NUMBERS OR PAGE CITATIONS** (e.g. never write "(p. 50)", "(p. 4)", or "on page 12"). Keep explanations clean and seamless without page citations.
 - **NEVER OUTPUT LITERAL LABELS LIKE "HOOK:", "DEFINITION:", "BREAKDOWN:", "VISUAL:", "CLOSE:" AS TEXT.** Write in natural, clean, beautifully formatted Markdown.
@@ -305,6 +320,12 @@ Respond with ONLY this JSON object:
                             "STRICT INSTRUCTION: Ground your answer ONLY in the uploaded course material above. "
                             "If the student asks something outside this material (e.g. unrelated coding, general "
                             "chatbot queries), politely decline and redirect them back to their syllabus topics.",
+            })
+        elif query_analysis and query_analysis.get("intent") == "MATERIAL_TOPICS_REQUEST":
+            messages.append({
+                "role": "system",
+                "content": "NOTE: The student asked for the curriculum topics covered in their material, but no document context was provided. "
+                            "Politely explain that no course material has been uploaded to this session yet, and invite them to upload their textbook or notes PDF using the attachment button so you can extract the curriculum roadmap for them.",
             })
         elif query_analysis and query_analysis.get("recommended_action") == "EXPLAIN":
             messages.append({
@@ -571,6 +592,22 @@ Respond with ONLY this JSON object:
                 "quiz_data": None,
                 "reply": f"{summary_text}\n\n**Key Takeaway:** Focus on how this principle applies to your problem solving.\n\n**Quick check:** Would you like a practice quiz question on this topic?",
                 "groundedness_note": "Directly extracted from retrieved context; not LLM-synthesized.",
+            }
+
+        if query_analysis and query_analysis.get("intent") == "MATERIAL_TOPICS_REQUEST":
+            return {
+                "thought_process": "Student requested topics for the material, but LLM is unreachable or material is not uploaded.",
+                "intent": "MATERIAL_TOPICS_REQUEST",
+                "extracted_subject": None,
+                "is_explanation": True,
+                "quiz_data": None,
+                "reply": (
+                    "No course material has been uploaded to this session yet.\n\n"
+                    "To view the curriculum topics, please upload your textbook or notes PDF using the attachment clip below, and I will extract the curriculum topics and create a personalized study roadmap for you."
+                ),
+                "groundedness_note": None,
+                "response_format": "material_topics",
+                "export_ready": False,
             }
 
         is_question = any(q in lower for q in [

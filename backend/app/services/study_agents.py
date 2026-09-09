@@ -110,6 +110,11 @@ def is_meta_referential_query(query: str) -> bool:
     if not query:
         return False
     q = query.lower().strip()
+    # Check for direct affirmative continuations
+    if q in ("yes", "y", "yeah", "yup", "sure", "ok", "okay", "continue", "go ahead", "please do", "solve that", "do that", "show me", "tell me more"):
+        return True
+    if q.startswith(("yes ", "yeah ", "sure ", "ok ", "yes,", "yeah,", "sure,", "ok,")):
+        return True
     patterns = [
         r"\b(above|previous|last|prior|preceding)\s+(module|response|answer|explanation|topic|turn|content|lecture|lesson|section|material|chapter|discussion)\b",
         r"\b(what|that)\s+(you|we)\s+(gave|explained|discussed|covered|provided|wrote|taught|generated)\b",
@@ -209,8 +214,47 @@ GENERIC_NON_SUBJECT_TERMS = {
     "the topic", "topic", "a topic", "this topic", "current topic", "topics",
     "the subject", "subject", "a subject", "this subject", "current subject", "subjects",
     "anything", "something", "whatever", "nothing", "everything", "general", "study",
-    "this", "that", "it", "here", "there", "question", "help", "info", "overview"
+    "this", "that", "it", "here", "there", "question", "help", "info", "overview",
+    "topic for the material", "topics for the material", "topic of the material", "topics of the material",
+    "topic for material", "topics for material", "topic of material", "topics of material",
+    "topic for the meterial", "topics for the meterial", "topic of the meterial", "topics of the meterial",
+    "topics in the material", "topics in this material", "material topics", "material topic"
 }
+
+
+def is_material_topics_query(query: str) -> bool:
+    """Detects if query is asking for the topics, chapters, syllabus, or content overview of the uploaded material."""
+    if not query:
+        return False
+    q = query.lower().strip().rstrip("?.!,")
+    exact_phrases = (
+        "topic for the material", "topics for the material", "topic of the material", "topics of the material",
+        "topic for material", "topics for material", "topic of material", "topics of material",
+        "topics in the material", "topics in this material", "topics in material", "topics in pdf",
+        "topic in the material", "topic in this material", "what is the topic for the material",
+        "what are the topics for the material", "what are the topics in this material",
+        "what is the topic of the material", "what are the topics of the material",
+        "what are the topics", "what is the topic", "list topics", "show topics", "give topics",
+        "material topics", "syllabus of this material", "syllabus of the material", "curriculum of the material",
+        "topic for the meterial", "topics for the meterial", "what is the topic for the meterial",
+        "what are the topics for the meterial", "topic for meterial", "topics for meterial",
+        "what is the topic in the material", "what is the topic in this material",
+        "what are the topics in the material", "what are topics in this material"
+    )
+    if any(p in q for p in exact_phrases):
+        return True
+    patterns = [
+        r"\b(?:what (?:is|are) (?:the )?(?:topics?|chapters?|curriculum|syllabus))\b",
+        r"\b(?:topics?|chapters?|syllabus|curriculum)\s+(?:for|of|in|from)\s+(?:the|this|my)?\s*(?:material|meterial|materiel|document|pdf|notes?|book|textbook|course|session)\b",
+        r"\b(?:list|show|give|tell|display|see|find)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?(?:topics?|chapters?|syllabus|curriculum)\b",
+        r"\bwhat\s+(?:does\s+)?(?:this|the)\s+(?:material|meterial|materiel|document|pdf|notes?|book)\s+(?:cover|contain|have|include)\b",
+        r"\bwhat\s+(?:can\s+i\s+learn|can\s+we\s+learn|topics?\s+are\s+there)\s+(?:from|in)\s+(?:this|the)\s+(?:material|meterial|materiel|document|pdf|notes?)\b",
+        r"\bwhat\s+is\s+(?:inside|in)\s+(?:this|the)\s+(?:material|meterial|materiel|document|pdf)\b",
+    ]
+    for pat in patterns:
+        if re.search(pat, q):
+            return True
+    return False
 
 
 def is_academic_question_or_query(query: str) -> bool:
@@ -963,6 +1007,48 @@ class QueryAnalyzerAgent:
     async def plan(self, user_query: str, subject: str = "General Study", history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         q_lower = user_query.lower().strip()
 
+        # 0. Check if this query is an affirmative continuation to a previous assistant offer ("yes", "sure", etc.)
+        bool_yes_pattern = r"^(yes|y|yeah|yup|sure|ok|okay|true|tell me more|explain that|go ahead|please do|solve that|continue)\b[,\s]*(.*)$"
+        m_yes = re.match(bool_yes_pattern, q_lower)
+        is_affirmative = bool(m_yes) or q_lower in (
+            "yes", "y", "yeah", "yup", "sure", "ok", "okay", "continue", "go ahead", "please do", "solve that", "do that", "show me"
+        )
+        continuation_format = None
+        continuation_keyword = ""
+        continuation_topic = ""
+
+        if is_affirmative and history:
+            prev_asst_text = extract_previous_assistant_response(history) or ""
+            if prev_asst_text:
+                # Extract the offered question from previous assistant turn
+                offered_q = ""
+                for line in reversed(prev_asst_text.split("\n")):
+                    l_clean = line.strip()
+                    if "?" in l_clean:
+                        offered_q = l_clean.lower()
+                        break
+                if not offered_q:
+                    offered_q = prev_asst_text[-200:].lower()
+
+                # Extract topic from previous turn
+                topic_m = re.search(r"^#+\s*(.+)$", prev_asst_text, re.MULTILINE)
+                if topic_m:
+                    continuation_topic = re.sub(r"[\*#_`~?]", "", topic_m.group(1)).replace("What is", "").replace("What are", "").strip()
+                if not continuation_topic:
+                    bold_m = re.search(r"\*\*([A-Za-z0-9\s\-_–—:,]+)\*\*", prev_asst_text)
+                    if bold_m:
+                        continuation_topic = re.sub(r"[\*#_`~?]", "", bold_m.group(1)).strip()
+
+                if any(w in offered_q for w in ("numerical", "example", "step-by-step", "calculate", "math", "solve")):
+                    continuation_format = "solve"
+                    continuation_keyword = "numerical example step by step"
+                elif any(w in offered_q for w in ("compare", "comparison", "difference", "versus", "vs")):
+                    continuation_format = "comparison"
+                    continuation_keyword = "comparison table"
+                elif any(w in offered_q for w in ("quiz", "test", "practice question", "question")):
+                    continuation_format = "quiz"
+                    continuation_keyword = "practice quiz"
+
         # 1. Format & Sub-intent classification
         is_quiz = any(k in q_lower for k in ("quiz", "test me", "ask me a question", "pop quiz", "mcq"))
         is_study_notes = bool(re.search(
@@ -988,7 +1074,12 @@ class QueryAnalyzerAgent:
             explanation_level = "standard"
 
         # Primary format
-        if is_quiz:
+        is_material_topics = is_material_topics_query(user_query)
+        if continuation_format:
+            resp_format = continuation_format
+        elif is_material_topics:
+            resp_format = "material_topics"
+        elif is_quiz:
             resp_format = "quiz"
         elif is_study_notes:
             resp_format = "study_notes"
@@ -1034,13 +1125,18 @@ class QueryAnalyzerAgent:
         # 3. Clean search keywords with acronym & symbol preservation
         stopwords = {
             "what", "how", "why", "when", "where", "who", "which", "does", "the", "and", "for", 
-            "with", "from", "help", "solve", "please", "about", "tell", "explain", "give", "show", "is", "are", "was", "were"
+            "with", "from", "help", "solve", "please", "about", "tell", "explain", "give", "show", "is", "are", "was", "were",
+            "yes", "yeah", "sure", "ok", "okay", "yup", "continue"
         }
         raw_words = re.findall(r"[a-z0-9_]+", q_lower)
         filtered_words = [w for w in raw_words if w not in stopwords]
         clean_noun_phrase = " ".join(filtered_words[:5]) or user_query
 
-        bm25_queries = [clean_noun_phrase, user_query]
+        if is_affirmative and continuation_topic:
+            target_phrase = f"{continuation_topic} {continuation_keyword}".strip()
+            bm25_queries = [target_phrase, continuation_topic]
+        else:
+            bm25_queries = [clean_noun_phrase, user_query]
 
         # Cross-reference concept extraction for "how does X relate to Y", "X vs Y", etc.
         cross_ref_concepts = []
@@ -1122,6 +1218,7 @@ class QueryAnalyzerAgent:
             "is_compound": len(sub_intents) > 1,
             "cross_ref_concepts": cross_ref_concepts,
             "is_meta_referential": is_meta_ref,
+            "is_material_topics_query": is_material_topics,
             "resolved_topic": resolved_topic,
             "prev_assistant_text": prev_assistant_text,
             "confidence": 0.95,
@@ -1314,32 +1411,32 @@ def format_advanced_out_of_material_response(
             seen_titles.add(str(t_title).strip().lower())
             if t_sum and len(str(t_sum)) > 10:
                 short_sum = str(t_sum)[:90].strip() + "..." if len(str(t_sum)) > 90 else str(t_sum).strip()
-                suggested_items.append(f"- 📌 **{t_title}** — *{short_sum}*")
+                suggested_items.append(f"- **{t_title}** — *{short_sum}*")
             else:
-                suggested_items.append(f"- 📌 **{t_title}**")
+                suggested_items.append(f"- **{t_title}**")
                 
     if suggested_items:
         suggested_block = "\n".join(suggested_items)
     else:
-        suggested_block = "- 📌 *Topics listed in your syllabus or uploaded document chapters.*"
+        suggested_block = "- *Topics listed in your syllabus or uploaded document chapters.*"
         
     reason_note = f"\n> *Detail*: {reason}\n" if reason else ""
 
     response_md = (
-        f"> ⚠️ **Out of Material Scope**\n"
+        f"> **Out of Material Scope**\n"
         f">\n"
         f"> The query or topic **\"{clean_topic}\"** is not covered in your uploaded course materials for {subject_display}.\n"
         f"{reason_note}\n"
-        f"### 🔍 Grounding & Scope Analysis\n"
+        f"### Grounding & Scope Analysis\n"
         f"- **Target Query / Concept**: `{clean_topic}`\n"
         f"- **Uploaded Document(s)**: {docs_formatted}\n"
         f"- **Subject Context**: {subject_display}\n"
         f"- **Status**: **Out of Material Scope** — DeepTutor scanned your indexed course content, but no matching definitions, formulas, or text chunks were found.\n\n"
-        f"### 📚 Suggested Topics Covered in Your Materials\n"
+        f"### Available Topics in Your Materials\n"
         f"You can ask questions, generate flashcards, or practice quizzes on any of these topics covered in your uploaded materials:\n"
         f"{suggested_block}\n\n"
         f"---\n"
-        f"💡 **Tip**: *If you would like to study **\"{clean_topic}\"**, please upload the relevant lecture notes, slides, or textbook PDF using the **+** button in the sidebar.*"
+        f"**Tip**: *If you would like to study **\"{clean_topic}\"**, please upload the relevant lecture notes, slides, or textbook PDF using the attachment button in the sidebar.*"
     )
 
     return response_md
@@ -1442,6 +1539,88 @@ class DecisionAgent:
                 "response": greeting_response,
                 "sources": [],
                 "format": "conceptual"
+            }
+
+        # 1.6 Dedicated Material Topics / Syllabus Inquiry Handler
+        if is_material_topics_query(user_query) or plan.get("is_material_topics_query"):
+            session_docs = get_session_documents(session_id)
+            session_topics = get_session_topics(session_id)
+            all_doc_chunks = get_all_chunks(session_id, limit=8)
+            has_uploaded_docs = bool(session_docs or all_doc_chunks)
+
+            if not has_uploaded_docs:
+                return {
+                    "thought_process": "Student inquired about material topics, but no documents have been uploaded to this session yet.",
+                    "response": (
+                        "No course material has been uploaded to this session yet.\n\n"
+                        "To see the curriculum topics, please upload your textbook, lecture notes, or syllabus PDF using the attachment button below. "
+                        "Once uploaded, I will extract all the key topics and organize them into a structured study roadmap for you.\n\n"
+                        "**Would you like to upload a document now, or shall we explore a general topic first?**"
+                    ),
+                    "sources": [],
+                    "format": "material_topics"
+                }
+
+            doc_names = [d.get("filename") for d in session_docs if isinstance(d, dict) and d.get("filename")]
+            doc_label = f"**{', '.join(doc_names[:2])}**" if doc_names else "your uploaded material"
+            subject_display = f" for **{subject}**" if subject and subject not in ("General Study", "New Course Workspace", "Default Study Room", "") else ""
+
+            if session_topics:
+                rows = []
+                first_topic_name = ""
+                for idx, top in enumerate(session_topics[:8], 1):
+                    raw_title = top.get("title") or f"Topic {idx}"
+                    clean_title = re.sub(r"^\d+[\.\:\-]\s*", "", raw_title).strip()
+                    if idx == 1:
+                        first_topic_name = clean_title
+                    summary = top.get("summary") or ""
+                    key_c = top.get("key_concepts") or []
+                    if isinstance(key_c, list) and key_c:
+                        key_str = ", ".join(str(k) for k in key_c[:3])
+                        focus = f"{summary} (Concepts: {key_str})" if summary else key_str
+                    else:
+                        focus = summary or "Foundational theory and core applications"
+                    if len(focus) > 110:
+                        focus = focus[:107].rsplit(" ", 1)[0] + "..."
+                    diff = (top.get("difficulty") or "Standard").capitalize()
+                    rows.append(f"| {idx} | **{clean_title}** | {focus} | {diff} |")
+
+                table_md = "| # | Topic | Key Focus & Concepts | Difficulty |\n|---|---|---|---|\n" + "\n".join(rows)
+                first_ref = f"Topic 1 ({first_topic_name})" if first_topic_name else "Topic 1"
+
+                resp_text = (
+                    f"Here are the primary topics covered in {doc_label}{subject_display}:\n\n"
+                    f"{table_md}\n\n"
+                    f"These topics provide a structured progression through your course material.\n\n"
+                    f"**Would you like to start with {first_ref}, or is there a specific topic you want to explore first?**"
+                )
+                return {
+                    "thought_process": f"Retrieved {len(session_topics)} curriculum topics for {doc_label}. Formatted structured table with difficulty levels and key focus.",
+                    "response": resp_text,
+                    "sources": [{"chunk_id": c["chunk_id"], "page": c["page"]} for c in all_doc_chunks[:2]],
+                    "format": "material_topics"
+                }
+
+            # If documents exist but session_topics is empty, synthesize topics from chunks
+            chunks_context = "\n\n".join(c["content"] for c in all_doc_chunks[:6])
+            synth_prompt = (
+                f"The student asked: \"{user_query}\"\n\n"
+                f"Extract and summarize the curriculum topics from their uploaded course material ({doc_label}).\n"
+                f"MATERIAL TEXT EXCERPTS:\n{chunks_context}\n\n"
+                f"INSTRUCTIONS:\n"
+                f"1. Start with a 1-sentence overview introducing the topics covered in {doc_label}.\n"
+                f"2. Present a clean Markdown table with 4 to 6 main topics:\n"
+                f"   | # | Topic | Key Focus & Concepts | Difficulty |\n"
+                f"3. Add a 1-sentence note summarizing the learning progression.\n"
+                f"4. End with a single bold conversational follow-up question (e.g. \"**Would you like to start with Topic 1, or is there a specific topic you want to explore first?**\").\n"
+                f"STRICT RULES: Zero emojis. Clean, professional, student-friendly tone."
+            )
+            synth_resp = await call_llm(synth_prompt, system_instruction="You are DeepTutor, an elite academic AI mentor. Zero emojis. Clean Markdown table.")
+            return {
+                "thought_process": f"Extracted curriculum topics on the fly from {len(all_doc_chunks)} chunks of {doc_label}.",
+                "response": synth_resp or f"Your uploaded material {doc_label} covers the core syllabus for {subject}. Please ask any specific question from your material to begin.",
+                "sources": [{"chunk_id": c["chunk_id"], "page": c["page"]} for c in all_doc_chunks[:2]],
+                "format": "material_topics"
             }
 
         # 2. Check if student query is a Boolean confirmation / refusal (with trailing clause support)
@@ -1670,8 +1849,9 @@ Provide a clear, helpful, expert academic response to the user's query."""
 
         # If user query is a boolean follow-up ("yes", "sure", etc.), extract keywords from the offered assistant question
         search_terms = list(plan.get("bm25_queries", [user_query]))
+        offer_turn = ""
+        offered_question = ""
         if is_boolean_yes and history:
-            offer_turn = ""
             # Walk backward up to 5 turns to find an assistant message that actually offered a follow-up
             for m in reversed(history[-5:]):
                 if m.get("role") == "assistant" and m.get("text"):
@@ -1684,6 +1864,15 @@ Provide a clear, helpful, expert academic response to the user's query."""
                     if m.get("role") == "assistant" and m.get("text"):
                         offer_turn = m.get("text", "")
                         break
+
+            if offer_turn:
+                for line in reversed(offer_turn.split("\n")):
+                    l_clean = line.strip()
+                    if "?" in l_clean:
+                        offered_question = l_clean
+                        break
+                if not offered_question:
+                    offered_question = offer_turn.strip()
 
             prev_words = [w for w in re.findall(r"[a-z0-9]+", offer_turn.lower()) if len(w) > 3 and w not in (
                 "would", "like", "shall", "with", "this", "that", "have", "from", "step", "example", "question", "could", "find", "answer", "please"
@@ -1976,6 +2165,21 @@ Provide a clear, helpful, expert academic response to the user's query."""
                 "- Instead, explain the comparison using two paired, simple, conversational paragraphs using everyday analogies suited for a beginner.\n"
             )
 
+        continuation_directive = ""
+        if is_boolean_yes and offered_question:
+            continuation_directive = (
+                f"\nCRITICAL CONTINUATION DIRECTIVE (ANSWER ONLY WHAT WAS OFFERED):\n"
+                f"- The student replied '{user_query}' to your previous closing offer: \"{offered_question}\"\n"
+                f"- YOUR MANDATORY TASK: Fulfill ONLY what was offered in that question.\n"
+                f"  * If you offered a numerical example, calculation, or step-by-step walkthrough: Jump STRAIGHT into the concrete step-by-step numerical example with real numbers and formulas.\n"
+                f"  * If you offered to compare concepts: Provide the direct comparison text and Markdown table.\n"
+                f"  * If you offered a practice quiz or question: Provide the practice problem immediately.\n"
+                f"- STRICTLY FORBIDDEN: DO NOT REPEAT YOUR PREVIOUS ANSWER.\n"
+                f"  * Do NOT output 'What is {subject}?' or general high-level definitions that you already gave.\n"
+                f"  * Do NOT replay your previous explanation or give an overview.\n"
+                f"- Start directly with the fulfillment of the offered step!\n"
+            )
+
         trailing_constraint_str = f"Specific Focus / Constraint: '{trailing_clause}'\n" if trailing_clause else ""
 
         # 7. Prompt LLM with Strict Academic Grounding, Conversational Follow-up, & KaTeX Math
@@ -1993,7 +2197,7 @@ Student Goals: {goals_str}
 
 Student Message:
 "{user_query}"
-{trailing_constraint_str}
+{trailing_constraint_str}{continuation_directive}
 STRICT RULES:
 1. Grounding & Missing Information Protocol (3 Modes):
    - Mode 1 (Sufficient Material): Answer strictly and objectively from the retrieved chunks and conversation history.
@@ -2008,14 +2212,18 @@ STRICT RULES:
      You MUST explicitly surface the disagreement to the student (e.g., "Your Chapter 2 notes state X, but the uploaded lecture slides state Y — here is how they differ and why") rather than silently picking one source.
 3. Greetings & Salutations:
    - If the student message is a greeting, greet them warmly as DeepTutor for **{subject}**, explain your capabilities, and ask what concept from their course materials they'd like to study today. Do NOT output a refusal for greetings.
-4. Boolean Continuations & Follow-up Acceptance:
-   - If the student answers 'Yes', 'Sure', 'Explain that', or 'Continue' (including with a trailing constraint like 'yes, but only part 2'):
-     You MUST directly fulfill the follow-up step-by-step honoring any trailing constraint. Do NOT output a refusal message for follow-ups that you offered.
-   - If the student answers 'No' / 'Nope', acknowledge politely and ask what other concept from their uploaded material they would like to study.
+4. Boolean Continuations & Follow-up Fulfillment:
+   - When the student answers 'Yes', 'Sure', 'Explain that', 'Go ahead', 'Please do', or 'Continue' (including with a trailing constraint like 'yes, but only part 2'):
+     YOU MUST DELIVER ONLY THE SPECIFIC FOLLOW-UP ITEM OFFERED (e.g. the step-by-step numerical example, practice problem, or comparison table).
+     CRITICAL: ABSOLUTELY DO NOT REPEAT YOUR PREVIOUS ANSWER.
+     - Never start with "What is {subject}?" or re-explain definitions from the beginning.
+     - Never replay or summarize what you already explained in the previous turn.
+     - Jump STRAIGHT into fulfilling the requested example, solution, or comparison!
+   - If the student answers 'No' / 'Nope', acknowledge politely and ask what other concept from their uploaded material they would like to explore.
 5. Universal STEM Problem Solving & Table Completion Protocol:
    When solving, calculating, or filling any table, exercise, or problem across ANY subject:
    - Stage 1: First-Principles Governing Laws: Identify the fundamental laws, governing formulas, or naming conventions.
-   - Stage 2: Structural Inspection & Trap Elimination: Inspect every sub-component for classic textbook traps (e.g., in Chemistry: check if a bent substituent branch is longer than the horizontal chain; in Physics: verify coordinate directions and units; in Math: check $n=0$ or negative bounds).
+   - Stage 2: Structural Inspection & Trap Elimination: Inspect every sub-component for classic textbook traps.
    - Stage 3: Row-by-Row Independent Computation: Compute EVERY single row, sequence, or test case individually from first principles.
    - Stage 4: Sanity & Verification Check: Verify dimensional consistency, IUPAC validity, or algebraic balance before finalizing the table.
    - Stage 5: Complete Solved Markdown Table: Output the 100% complete Markdown table with EVERY row, position, value, and name fully populated. Strictly do NOT use ellipses (...) or placeholders ('TBD', 'N/A'). Show clear step-by-step reasoning for each row above or below the table.
@@ -2025,25 +2233,27 @@ STRICT RULES:
    $$
    or inline $...$. Ensure all LaTeX curly braces are strictly balanced!
 7. Tone & Zero Emojis: Articulate, authoritative, clean, engaging academic tone. Strictly ZERO emojis (do NOT use 📌, 💡, ⚠️, 🔍, 📚, 🚀, or any emoji characters).
-8. Response Sizing & Student-Centric Structure:
-   - DEFAULT IS SMALL AND SIMPLE: Unless the student explicitly requested a "big" or "medium" explanation, keep your response SHORT, SIMPLE, and DIRECT so a student can read and digest it in seconds.
-   - Sizing Guidelines:
-     * If Requested Response Size is SMALL (Default):
-       1. Start with 1 clear, punchy sentence explaining the core idea or intuition.
-       2. Give 2 to 4 concise bullet points with bold sub-headers (`- **Key Concept**: Simple explanation...`).
-       3. Strictly avoid long history, redundant definitions, or multi-paragraph walls of text.
-     * If Requested Response Size is MEDIUM:
-       Provide a balanced explanation with definitions, core mechanisms, formulas, and a short summary table if applicable.
-     * If Requested Response Size is LARGE:
-       Provide an exhaustive, in-depth breakdown covering theory, formulas, step-by-step mechanisms, and comprehensive tables.
-   - Differences & Comparisons Requirement:
-     Whenever the student asks for a difference, comparison, "X vs Y", contrast, trade-offs, or pros/cons (e.g., "what is the difference between SVM and Logistic Regression", "compare X and Y", "X vs Y"):
-     You MUST provide BOTH:
-     1. Concise conceptual bullet points highlighting the main distinctions.
-     2. A clean, structured Markdown Comparison Table (`| Aspect / Feature | Concept A | Concept B |`) contrasting core parameters, objectives, math/loss functions, pros/cons, and primary use cases.
+8. Response Sizing & Pedagogical Excellence (SMART, STUDENT-CENTRIC EXPLANATIONS):
+   - TEACH FOR DEEP INTUITION: Do not write like a boring dictionary or output rigid generic templates (never literally output "Key Concept:", "Applications:", "SVM evolved from..."). Instead, teach like an exceptional mentor using the 3-part pedagogical structure:
+     1. **The Core Intuition (Mental Model First)**: Begin with an intuitive, plain-English "Aha!" analogy or visual picture that anchors the concept before technical formulas (e.g. for SVM, explain how it creates the widest possible street or buffer zone between two groups).
+     2. **How It Works (Core Mechanism)**: Break down 2 to 3 essential pillars using bold descriptive headers (e.g. `- **Maximum-Margin Boundary**: ...`, `- **Support Vectors**: ...`, `- **Kernel Trick**: ...`). Keep them clear, crisp, and high-impact.
+     3. **When to Use It / Practical Takeaway**: 1 punchy takeaway of where this is applied in practice or tested on exams.
+   - SIZING GUIDELINES:
+     * SMALL (Default): Keep the response concise, clear, and direct (under 180 words) so a student grasps the whole idea in 30 seconds without cognitive overload. Zero unnecessary filler.
+     * MEDIUM: Provide a balanced explanation with definitions, core mechanisms, formulas, and a short summary table if applicable.
+     * LARGE: Deliver an exhaustive, in-depth breakdown covering theory, formulas, step-by-step mechanisms, and comprehensive tables.
+   - DIFFERENCES & COMPARISONS:
+     Whenever comparing concepts (or asking "difference between X and Y", "compare X and Y", "X vs Y"):
+     1. Give a crisp 1-2 sentence paragraph contrasting their fundamental philosophies.
+     2. Present a clean, structured Markdown Comparison Table:
+        `| Aspect / Feature | Concept A | Concept B |`
+        contrasting core parameters, objectives, math/loss functions, pros/cons, and primary use cases.
+     3. A 1-sentence bottom-line student takeaway.
+   - ZERO EMOJIS: Strictly zero emojis (no 📌, 💡, ⚠️, 🚀, etc.). Clean, academic, encouraging tone.
+   - NO UNSOLICITED EXAM TRAPS / PITFALLS: Do not include "Common Pitfalls & Exam Traps" sections.
 9. Chain-of-Thought: Provide a dedicated thought process detailing your reasoning and verification before the answer.
 10. Interactive Follow-up Question (Conversational Closing):
-    ALWAYS end your response with a natural, conversational follow-up question in bold offering a concrete next step (e.g., "**Would you like a step-by-step numerical example, or to compare this with another concept?**") that the student can easily answer with a simple 'Yes' or 'No'.
+    ALWAYS end your response with a single, clear, relevant next-step question in bold offering a concrete next step (e.g., "**Would you like a step-by-step numerical example of how the margin is calculated?**" or "**Would you like a quick practice question to test your understanding on this?**") that the student can easily answer with a simple 'Yes' or 'No'. Never ask compound "A or B" questions like "example, or compare?" where "yes" becomes ambiguous.
 11. Textbook Correctness Inquiry:
     - If the student asks whether the textbook, author, or uploaded material is wrong about a concept ('is this textbook wrong about X'):
       1. First, objectively explain what the uploaded material specifically states.
