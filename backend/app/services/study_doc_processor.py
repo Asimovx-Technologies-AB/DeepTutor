@@ -88,6 +88,7 @@ class StudyDocumentProcessor:
         subject: str = "General Study",
         session_id: str = "",
         user_id: Optional[str] = None,
+        doc_hash: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Stage 0 & Stage 1: Fast-path extraction, chunking, and FTS5 indexing.
@@ -104,6 +105,7 @@ class StudyDocumentProcessor:
             file_path=file_path,
             status="indexing",
             user_id=user_id,
+            doc_hash=doc_hash,
         )
 
         # Trigger Azure Blob cloud backup and ensure local availability

@@ -121,24 +121,44 @@ class PgFTSStore:
         if not records:
             return 0
 
-        statement = text("""
-            INSERT INTO document_chunks (
-                id, session_id, topic_id, doc_id, chunk_id, page, source_type,
-                chunk_text, metadata, embedding, created_at, updated_at
-            )
-            VALUES (
-                CAST(:id AS UUID), :session_id, :topic_id, :doc_id, :chunk_id, :page, :source_type,
-                :chunk_text, CAST(:metadata AS jsonb), CAST(:embedding AS vector), now(), now()
-            )
-            ON CONFLICT (id) DO UPDATE SET
-                chunk_text = EXCLUDED.chunk_text,
-                metadata = EXCLUDED.metadata,
-                embedding = EXCLUDED.embedding,
-                updated_at = now();
-        """)
+        if self.engine.dialect.name == "sqlite":
+            statement = text("""
+                INSERT INTO document_chunks (
+                    id, session_id, topic_id, doc_id, chunk_id, page, source_type,
+                    chunk_text, metadata, embedding, created_at, updated_at
+                )
+                VALUES (
+                    :id, :session_id, :topic_id, :doc_id, :chunk_id, :page, :source_type,
+                    :chunk_text, :metadata, :embedding, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                ON CONFLICT (id) DO UPDATE SET
+                    chunk_text = excluded.chunk_text,
+                    metadata = excluded.metadata,
+                    embedding = excluded.embedding,
+                    updated_at = CURRENT_TIMESTAMP;
+            """)
+        else:
+            statement = text("""
+                INSERT INTO document_chunks (
+                    id, session_id, topic_id, doc_id, chunk_id, page, source_type,
+                    chunk_text, metadata, embedding, created_at, updated_at
+                )
+                VALUES (
+                    CAST(:id AS UUID), :session_id, :topic_id, :doc_id, :chunk_id, :page, :source_type,
+                    :chunk_text, CAST(:metadata AS jsonb), CAST(:embedding AS vector), now(), now()
+                )
+                ON CONFLICT (id) DO UPDATE SET
+                    chunk_text = EXCLUDED.chunk_text,
+                    metadata = EXCLUDED.metadata,
+                    embedding = EXCLUDED.embedding,
+                    updated_at = now();
+            """)
 
-        with self.engine.begin() as conn:
-            conn.execute(statement, records)
+        try:
+            with self.engine.begin() as conn:
+                conn.execute(statement, records)
+        except Exception as e:
+            logger.warning(f"[PgFTSStore] index_chunks notice: {e}")
 
         return len(records)
 
@@ -155,6 +175,31 @@ class PgFTSStore:
             return []
 
         type_filter = "AND source_type = :source_type" if source_type else ""
+
+        if self.engine.dialect.name == "sqlite":
+            type_filter = "AND source_type = :source_type" if source_type else ""
+            statement = text(f"""
+                SELECT id, chunk_id, doc_id, page, source_type, chunk_text AS content,
+                       1.0 AS score
+                FROM document_chunks
+                WHERE session_id = :session_id
+                  {type_filter}
+                  AND chunk_text LIKE :query_like
+                ORDER BY id ASC
+                LIMIT :limit
+            """)
+            params = {
+                "session_id": str(session_id),
+                "query_like": f"%{clean_q}%",
+                "limit": limit,
+            }
+            if source_type:
+                params["source_type"] = source_type
+
+            with self.engine.connect() as conn:
+                rows = conn.execute(statement, params).mappings().fetchall()
+
+            return [dict(r) for r in rows]
 
         statement = text(f"""
             SELECT id, chunk_id, doc_id, page, source_type, chunk_text AS content,
@@ -263,9 +308,12 @@ class PgFTSStore:
             WHERE session_id = :session_id AND page = ANY(:pages)
             ORDER BY page, chunk_id
         """)
-        with self.engine.connect() as conn:
-            rows = conn.execute(statement, {"session_id": str(session_id), "pages": [int(p) for p in pages]}).mappings().fetchall()
-        return [dict(r) for r in rows]
+        try:
+            with self.engine.connect() as conn:
+                rows = conn.execute(statement, {"session_id": str(session_id), "pages": [int(p) for p in pages]}).mappings().fetchall()
+            return [dict(r) for r in rows]
+        except Exception:
+            return []
 
     def get_all_chunks(self, session_id: str, limit: int = 50) -> List[Dict[str, Any]]:
         """Retrieves all indexed chunks for a session up to limit."""
@@ -276,9 +324,12 @@ class PgFTSStore:
             ORDER BY page, chunk_id
             LIMIT :limit
         """)
-        with self.engine.connect() as conn:
-            rows = conn.execute(statement, {"session_id": str(session_id), "limit": int(limit)}).mappings().fetchall()
-        return [dict(r) for r in rows]
+        try:
+            with self.engine.connect() as conn:
+                rows = conn.execute(statement, {"session_id": str(session_id), "limit": int(limit)}).mappings().fetchall()
+            return [dict(r) for r in rows]
+        except Exception:
+            return []
 
     def delete_session_document(self, session_id: str, doc_id: str) -> int:
         """Deletes all chunks for a document within a session."""
@@ -286,21 +337,30 @@ class PgFTSStore:
             DELETE FROM document_chunks
             WHERE session_id = :session_id AND (doc_id = :doc_id OR topic_id = :doc_id)
         """)
-        with self.engine.begin() as conn:
-            res = conn.execute(statement, {"session_id": str(session_id), "doc_id": str(doc_id)})
-            return res.rowcount
+        try:
+            with self.engine.begin() as conn:
+                res = conn.execute(statement, {"session_id": str(session_id), "doc_id": str(doc_id)})
+                return res.rowcount or 0
+        except Exception:
+            return 0
 
     def delete_session_chunks(self, session_id: str) -> int:
         """Deletes all chunks belonging to a session."""
         statement = text("DELETE FROM document_chunks WHERE session_id = :session_id")
-        with self.engine.begin() as conn:
-            res = conn.execute(statement, {"session_id": str(session_id)})
-            return res.rowcount
+        try:
+            with self.engine.begin() as conn:
+                res = conn.execute(statement, {"session_id": str(session_id)})
+                return res.rowcount or 0
+        except Exception:
+            return 0
 
     def count(self, session_id: str) -> int:
         statement = text("SELECT count(*) FROM document_chunks WHERE session_id = :session_id")
-        with self.engine.connect() as conn:
-            return int(conn.execute(statement, {"session_id": str(session_id)}).scalar() or 0)
+        try:
+            with self.engine.connect() as conn:
+                return int(conn.execute(statement, {"session_id": str(session_id)}).scalar() or 0)
+        except Exception:
+            return 0
 
 
 # Global singleton instance

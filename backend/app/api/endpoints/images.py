@@ -1,11 +1,15 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
+from app.api.auth import get_current_user
 from app.services.image_search import image_search_service, VerifiedImage
 
 router = APIRouter()
 
 @router.get("/verified", response_model=List[VerifiedImage])
-async def get_verified_images(topic: str):
+async def get_verified_images(
+    topic: str,
+    user: dict = Depends(get_current_user)
+):
     """
     Search for topic-relevant educational images via Serper API (Google Images),
     then use OpenAI Vision VLM to validate accuracy, relevance, and visual quality.

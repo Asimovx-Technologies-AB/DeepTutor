@@ -14,11 +14,11 @@ import {
   Trash2, Plus, FileText, UploadCloud, RefreshCw, PanelLeft,
   PanelRight, Maximize2, Minimize2, Split, HelpCircle, Award,
   Brain, FileSpreadsheet, Eye, Play, Pause, X, ArrowUp,
-  ThumbsUp, ThumbsDown, Search, FolderPlus,
+  ThumbsUp, ThumbsDown, Search, FolderPlus, CheckSquare, Square,
   Calculator, Globe, Cpu, Dna, FlaskConical, Zap, Landmark
 } from 'lucide-react'
 
-import { studyApi, streamTeacherLecture, teacherApi } from '../services/api'
+import { studyApi, documentsApi, streamTeacherLecture, teacherApi } from '../services/api'
 import { exportNotesToPdf } from '../utils/pdfExport'
 import { useAuthStore } from '../stores/authStore'
 import confetti from 'canvas-confetti'
@@ -109,6 +109,37 @@ interface ExamEvaluation {
   }>
 }
 
+interface SpeechToken {
+  word: string
+  charStart: number
+  charEnd: number
+}
+
+function cleanTextForSpeech(raw: string): string {
+  return raw
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/\$\$[\s\S]*?\$\$/g, ' ')
+    .replace(/\$[^\$]+?\$/g, ' ')
+    .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+    .replace(/[#*`_~>[\]()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function parseSpeechTokens(cleanText: string): SpeechToken[] {
+  const tokens: SpeechToken[] = []
+  const regex = /\S+/g
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(cleanText)) !== null) {
+    tokens.push({
+      word: match[0],
+      charStart: match.index,
+      charEnd: match.index + match[0].length,
+    })
+  }
+  return tokens
+}
+
 type ActiveTab = 'chat' | 'normal' | 'teacher' | 'exam' | 'artifact'
 
 const getSubjectVisual = (subjectOrTitle: string) => {
@@ -157,6 +188,14 @@ export default function LearnPage() {
   const [isMaterialsPopoverOpen, setIsMaterialsPopoverOpen] = useState(false)
   const materialsPopoverRef = useRef<HTMLDivElement | null>(null)
   const addMaterialInputRef = useRef<HTMLInputElement | null>(null)
+
+  // Previous materials library selection modal & attach menu
+  const [isSelectLibraryModalOpen, setIsSelectLibraryModalOpen] = useState(false)
+  const [libraryDocuments, setLibraryDocuments] = useState<any[]>([])
+  const [isLibraryLoading, setIsLibraryLoading] = useState(false)
+  const [librarySearchQuery, setLibrarySearchQuery] = useState('')
+  const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false)
+  const attachMenuRef = useRef<HTMLDivElement | null>(null)
 
   // Option A & B Navigation & Search states
   const [courseDropdownOpen, setCourseDropdownOpen] = useState(false)
@@ -266,8 +305,34 @@ export default function LearnPage() {
   // Voice Tutor & Reading System (Cognitive Minimalist TTS)
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null)
   const [speakingWordIndex, setSpeakingWordIndex] = useState<number | null>(null)
+  const [speakingTokens, setSpeakingTokens] = useState<SpeechToken[]>([])
   const [isListeningVoice, setIsListeningVoice] = useState(false)
   const ttsIntervalRef = useRef<any>(null)
+  const speakingMsgIdRef = useRef<string | null>(null)
+  const activeWordRef = useRef<HTMLSpanElement | null>(null)
+
+  // Auto-scroll to currently spoken word
+  useEffect(() => {
+    if (speakingWordIndex !== null && activeWordRef.current) {
+      activeWordRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'nearest',
+      })
+    }
+  }, [speakingWordIndex])
+
+  // Cleanup speech synthesis on unmount
+  useEffect(() => {
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel()
+      }
+      if (ttsIntervalRef.current) {
+        clearInterval(ttsIntervalRef.current)
+      }
+    }
+  }, [])
 
   // Floating Input Bar & Attachments
   const [attachedFile, setAttachedFile] = useState<{ name: string; sizeFormatted: string; rawFile?: File } | null>(null)
@@ -345,7 +410,7 @@ export default function LearnPage() {
 
   // Upload modal & drag drop
   const [isUploading, setIsUploading] = useState(false)
-  const [_uploadingFileMeta, setUploadingFileMeta] = useState<{ name: string; sizeFormatted: string } | null>(null)
+  const [uploadingFileMeta, setUploadingFileMeta] = useState<{ name: string; sizeFormatted: string } | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSubject, setUploadSubject] = useState('')
@@ -380,10 +445,10 @@ export default function LearnPage() {
       const list = res.data || []
       setSessions(list)
       if (list.length > 0 && !activeSessionIdRef.current) {
-        const first = list[0]
-        setActiveSessionId(first.id)
-        setActiveSubject(first.subject || 'General Study')
-        setDocumentName(first.document_name || '')
+        const target = routeSessionId ? (list.find((s: any) => s.id === routeSessionId) || list[0]) : list[0]
+        setActiveSessionId(target.id)
+        setActiveSubject(target.subject || 'General Study')
+        setDocumentName(target.document_name || '')
       } else if (list.length === 0 && !activeSessionIdRef.current) {
         studyApi.createSession({ subject: 'General Study', title: 'Default Study Room' }).then((r) => {
           if (r.data && r.data.id) {
@@ -395,16 +460,72 @@ export default function LearnPage() {
     } catch (err) {
       console.error('Failed to load study sessions:', err)
     }
-  }, [])
+  }, [routeSessionId])
 
   useEffect(() => {
     fetchSessions()
   }, [fetchSessions])
 
+  // Sync activeSessionId whenever route URL parameter changes
+  useEffect(() => {
+    if (routeSessionId && routeSessionId !== activeSessionId) {
+      setActiveSessionId(routeSessionId)
+      fetchSessions()
+    }
+  }, [routeSessionId, activeSessionId, fetchSessions])
+
+  // Reset Mode-Specific States (Normal, Teacher, Exam Mode, TTS)
+  const resetModeStates = useCallback(() => {
+    setCoreIdeaData(null)
+    setCoreIdeaStep(0)
+    setIsLoadingCoreIdea(false)
+    setCustomNormalTopic('')
+    setTopicDoubtInput('')
+    setTopicDoubtAnswer(null)
+    setIsLoadingDoubt(false)
+
+    setTeacherLectureText('')
+    setCurrentLecturePhase('Introduction')
+    setIsTeacherStreaming(false)
+    if (teacherAbortControllerRef.current) {
+      teacherAbortControllerRef.current.abort()
+    }
+    setCustomTeacherTopic('')
+    setOutOfSyllabusAlert(null)
+    setActiveLectureId(null)
+    setDiagnosticData(null)
+    setDiagnosticSelectedOption(null)
+    setDiagnosticResult(null)
+    setIsLoadingDiagnostic(false)
+    setIsEvaluatingDiagnostic(false)
+    setIsPaused(false)
+    setPauseQuestion('')
+    setPauseAnswer(null)
+    setIsLoadingPause(false)
+    setTeachBackPromptData(null)
+    setTeachBackInput('')
+    setTeachBackResult(null)
+    setIsEvaluatingTeachBack(false)
+
+    setExamQuestions([])
+    setExamAnswers({})
+    setIsLoadingExam(false)
+    setExamEvaluation(null)
+    setIsSubmittingExam(false)
+
+    setSpeakingMsgId(null)
+    setSpeakingWordIndex(null)
+    setSpeakingTokens([])
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+    }
+  }, [])
+
   // ─── 2. Load Session Details & SQLite Data ───
   const loadSessionDetails = useCallback(async (sid: string) => {
     if (!sid) return
     setIsSessionLoading(true)
+    resetModeStates()
     try {
       const res = await studyApi.getSession(sid)
       const data = res.data
@@ -419,6 +540,8 @@ export default function LearnPage() {
       setTopics(data.topics || [])
       if (data.topics && data.topics.length > 0) {
         setActiveTopic(data.topics[0])
+      } else {
+        setActiveTopic(null)
       }
 
       // Prepare study notes in state, but do NOT auto-open viewer initially
@@ -447,7 +570,7 @@ export default function LearnPage() {
     } finally {
       setIsSessionLoading(false)
     }
-  }, [])
+  }, [resetModeStates])
 
   useEffect(() => {
     if (activeSessionId) {
@@ -544,6 +667,62 @@ export default function LearnPage() {
       setUploadingFileMeta(null)
       const msg = err.response?.data?.detail || err.message || 'Upload failed'
       setUploadError(msg)
+    }
+  }
+
+  // ─── 4.1 Browse and Link Previously Uploaded Material ───
+  const handleOpenLibraryModal = async () => {
+    setIsSelectLibraryModalOpen(true)
+    setIsLibraryLoading(true)
+    try {
+      const res = await documentsApi.list()
+      setLibraryDocuments(res.data || [])
+    } catch (err) {
+      console.error('Failed to load library materials:', err)
+    } finally {
+      setIsLibraryLoading(false)
+    }
+  }
+
+  const handleLinkMaterialToActiveSession = async (doc: any) => {
+    if (!activeSessionId) {
+      console.warn('No active session id')
+      return
+    }
+    try {
+      const res = await documentsApi.linkToSession({
+        session_id: activeSessionId,
+        doc_id: doc.id,
+        filename: doc.file_name,
+        doc_hash: doc.doc_hash,
+        file_path: doc.file_path,
+      })
+
+      if (res.data?.documents) {
+        setSessionDocuments(res.data.documents)
+      } else {
+        const r = await studyApi.getSession(activeSessionId)
+        if (r.data?.documents) setSessionDocuments(r.data.documents)
+      }
+
+      setIsSelectLibraryModalOpen(false)
+
+      // Add student-friendly notice in chat
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `sys-${Date.now()}`,
+          role: 'assistant',
+          text: `Attached previously uploaded material **${doc.file_name}** to this study room.\n\nYou can now ask doubts, explore concepts, or generate study notes from it.`,
+          thought_process: `Linked existing material ${doc.file_name} to session ${activeSessionId}.`,
+          format: 'conceptual',
+        },
+      ])
+
+      fetchSessions()
+    } catch (err: any) {
+      console.error('Failed to link material:', err)
+      alert(err?.response?.data?.detail || 'Failed to attach previous material')
     }
   }
 
@@ -670,67 +849,122 @@ export default function LearnPage() {
 
     if (speakingMsgId === msgId) {
       window.speechSynthesis.cancel()
+      speakingMsgIdRef.current = null
       if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
       setSpeakingMsgId(null)
       setSpeakingWordIndex(null)
+      setSpeakingTokens([])
       return
     }
 
     window.speechSynthesis.cancel()
     if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
 
-    // Clean text for speech synthesis
-    const cleanText = text
-      .replace(/```[\s\S]*?```/g, 'Code block omitted.')
-      .replace(/[#*`_~>\[\]\(\)]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 1500)
+    // Clean text and parse into synchronized tokens
+    const cleanText = cleanTextForSpeech(text).slice(0, 3000)
+    if (!cleanText) return
 
-    const words = cleanText.split(/\s+/).filter(Boolean)
-    const utterance = new SpeechSynthesisUtterance(cleanText)
-    utterance.rate = 1.0
-    utterance.pitch = 1.0
+    const tokens = parseSpeechTokens(cleanText)
+    if (tokens.length === 0) return
 
-    let currentWordIdx = 0
+    speakingMsgIdRef.current = msgId
+    setSpeakingTokens(tokens)
+    setSpeakingMsgId(msgId)
     setSpeakingWordIndex(0)
 
-    // Real-time word boundary synchronization
+    const utterance = new SpeechSynthesisUtterance(cleanText)
+    utterance.rate = 0.95
+    utterance.pitch = 1.0
+
+    // Pick a natural voice if available
+    const voices = window.speechSynthesis.getVoices()
+    const preferredVoice = voices.find(
+      (v) => (v.lang.startsWith('en') || v.lang.startsWith('sv')) && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Neural') || v.name.includes('Samantha'))
+    ) || voices.find((v) => v.lang.startsWith('en'))
+    if (preferredVoice) utterance.voice = preferredVoice
+
+    let hasBoundaryFired = false
+
+    // Real-time word boundary synchronization directly from the audio engine
     utterance.onboundary = (event) => {
-      if (event.name === 'word') {
+      if (speakingMsgIdRef.current !== msgId) return
+      if (event.name === 'word' || !event.name) {
+        hasBoundaryFired = true
         const charIndex = event.charIndex
-        const substr = cleanText.slice(0, charIndex)
-        const wordCount = substr.trim().split(/\s+/).filter(Boolean).length
-        currentWordIdx = Math.min(wordCount, words.length - 1)
-        setSpeakingWordIndex(currentWordIdx)
+        let matchedIdx = 0
+        for (let i = 0; i < tokens.length; i++) {
+          if (charIndex >= tokens[i].charStart && charIndex <= tokens[i].charEnd) {
+            matchedIdx = i
+            break
+          }
+          if (tokens[i].charStart > charIndex) {
+            matchedIdx = Math.max(0, i - 1)
+            break
+          }
+          matchedIdx = i
+        }
+        setSpeakingWordIndex(matchedIdx)
       }
     }
 
-    // Fallback cadence timer if browser synthesis does not fire onboundary
-    const wordsPerMinute = 150
-    const msPerWord = (60 / wordsPerMinute) * 1000
-    ttsIntervalRef.current = setInterval(() => {
-      currentWordIdx++
-      if (currentWordIdx < words.length) {
-        setSpeakingWordIndex((prev) => (prev !== null ? Math.max(prev, currentWordIdx) : currentWordIdx))
+    // Chrome/Chromium pause prevention on long speech
+    const pingInterval = setInterval(() => {
+      if (speakingMsgIdRef.current !== msgId) {
+        clearInterval(pingInterval)
+        return
+      }
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.pause()
+        window.speechSynthesis.resume()
       } else {
-        if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
+        clearInterval(pingInterval)
       }
-    }, msPerWord)
+    }, 10000)
 
-    utterance.onend = () => {
-      if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
+    // Fallback ONLY if browser does not fire onboundary at all after audio starts
+    const fallbackTimeout = setTimeout(() => {
+      if (speakingMsgIdRef.current !== msgId) return
+      if (!hasBoundaryFired && window.speechSynthesis.speaking) {
+        let fallbackIdx = 0
+        const wordsPerMinute = 145
+        const msPerWord = (60 / wordsPerMinute) * 1000
+        ttsIntervalRef.current = setInterval(() => {
+          if (speakingMsgIdRef.current !== msgId) {
+            if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
+            return
+          }
+          fallbackIdx++
+          if (fallbackIdx < tokens.length) {
+            setSpeakingWordIndex(fallbackIdx)
+          } else {
+            if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
+          }
+        }, msPerWord)
+      }
+    }, 1500)
+
+    const cleanup = () => {
+      clearTimeout(fallbackTimeout)
+      clearInterval(pingInterval)
+      if (ttsIntervalRef.current) {
+        clearInterval(ttsIntervalRef.current)
+        ttsIntervalRef.current = null
+      }
       setSpeakingMsgId(null)
       setSpeakingWordIndex(null)
+      setSpeakingTokens([])
     }
 
-    utterance.onerror = () => {
-      if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
-      setSpeakingMsgId(null)
-      setSpeakingWordIndex(null)
+    const finish = () => {
+      if (speakingMsgIdRef.current === msgId) {
+        speakingMsgIdRef.current = null
+        cleanup()
+      }
     }
 
-    setSpeakingMsgId(msgId)
+    utterance.onend = finish
+    utterance.onerror = finish
+
     window.speechSynthesis.speak(utterance)
   }
 
@@ -1093,6 +1327,7 @@ export default function LearnPage() {
 
   const handleCreateNewSession = async () => {
     try {
+      resetModeStates()
       const res = await studyApi.createSession({
         subject: 'General Study',
         title: 'New Study Workspace'
@@ -1133,8 +1368,10 @@ export default function LearnPage() {
           handleSelectSession(remaining[0].id)
         } else {
           setActiveSessionId('')
+          resetModeStates()
           setMessages([])
           setTopics([])
+          setActiveTopic(null)
         }
       }
       setSessionToDelete(null)
@@ -1142,6 +1379,56 @@ export default function LearnPage() {
       console.error('Delete session failed:', err)
     } finally {
       setIsDeletingSession(false)
+    }
+  }
+
+  // Batch session selection & deletion state
+  const [isMultiDeleteMode, setIsMultiDeleteMode] = useState(false)
+  const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([])
+  const [isConfirmBatchDeleteOpen, setIsConfirmBatchDeleteOpen] = useState(false)
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false)
+
+  const toggleSelectSession = (sid: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    setSelectedSessionIds((prev) =>
+      prev.includes(sid) ? prev.filter((id) => id !== sid) : [...prev, sid]
+    )
+  }
+
+  const handleSelectAllSessions = () => {
+    if (selectedSessionIds.length === sessions.length) {
+      setSelectedSessionIds([])
+    } else {
+      setSelectedSessionIds(sessions.map((s) => s.id))
+    }
+  }
+
+  const confirmBatchDeleteSessions = async () => {
+    if (selectedSessionIds.length === 0) return
+    setIsBatchDeleting(true)
+    try {
+      await studyApi.deleteSessionsBatch(selectedSessionIds)
+      const deletedSet = new Set(selectedSessionIds)
+      const remaining = sessions.filter((s) => !deletedSet.has(s.id))
+      setSessions(remaining)
+
+      if (activeSessionId && deletedSet.has(activeSessionId)) {
+        if (remaining.length > 0) {
+          handleSelectSession(remaining[0].id)
+        } else {
+          setActiveSessionId('')
+          setMessages([])
+          setTopics([])
+        }
+      }
+
+      setSelectedSessionIds([])
+      setIsMultiDeleteMode(false)
+      setIsConfirmBatchDeleteOpen(false)
+    } catch (err) {
+      console.error('Batch delete sessions failed:', err)
+    } finally {
+      setIsBatchDeleting(false)
     }
   }
 
@@ -1363,13 +1650,47 @@ export default function LearnPage() {
                 <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0">
                   <div className="flex items-center justify-between px-1 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
                     <span>Your Notebooks ({filteredDrawerSessions.length})</span>
-                    <button
-                      onClick={() => navigate('/subjects')}
-                      className="hover:text-indigo-600 lowercase font-medium transition text-[11px]"
-                    >
-                      all library →
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setIsMultiDeleteMode((prev) => !prev)
+                          setSelectedSessionIds([])
+                        }}
+                        className={`hover:text-indigo-600 font-medium transition text-[11px] flex items-center gap-1 ${
+                          isMultiDeleteMode ? 'text-red-600 font-bold' : 'text-slate-500'
+                        }`}
+                      >
+                        <CheckSquare size={12} />
+                        <span>{isMultiDeleteMode ? 'Done' : 'Select Multiple'}</span>
+                      </button>
+                      <button
+                        onClick={() => navigate('/subjects')}
+                        className="hover:text-indigo-600 lowercase font-medium transition text-[11px]"
+                      >
+                        all library →
+                      </button>
+                    </div>
                   </div>
+
+                  {isMultiDeleteMode && (
+                    <div className="p-2 rounded-xl bg-slate-100 border border-slate-200/80 flex items-center justify-between my-2">
+                      <button
+                        onClick={handleSelectAllSessions}
+                        className="text-xs font-semibold text-slate-700 hover:text-indigo-600 flex items-center gap-1.5 transition"
+                      >
+                        {selectedSessionIds.length === sessions.length ? <CheckSquare size={14} className="text-indigo-600" /> : <Square size={14} />}
+                        <span>Select All ({sessions.length})</span>
+                      </button>
+                      <button
+                        disabled={selectedSessionIds.length === 0}
+                        onClick={() => setIsConfirmBatchDeleteOpen(true)}
+                        className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white text-xs font-bold flex items-center gap-1 transition shadow-xs cursor-pointer"
+                      >
+                        <Trash2 size={12} />
+                        <span>Delete ({selectedSessionIds.length})</span>
+                      </button>
+                    </div>
+                  )}
 
                   {filteredDrawerSessions.length === 0 ? (
                     <div className="py-8 text-center text-xs text-slate-400">
@@ -1383,15 +1704,35 @@ export default function LearnPage() {
                       return (
                         <div
                           key={s.id}
-                          onClick={() => handleSelectSession(s.id)}
+                          onClick={() => {
+                            if (isMultiDeleteMode) {
+                              toggleSelectSession(s.id)
+                            } else {
+                              handleSelectSession(s.id)
+                            }
+                          }}
                           className={`group relative p-3 rounded-2xl cursor-pointer transition border ${
-                            isActive
+                            selectedSessionIds.includes(s.id)
+                              ? 'bg-red-50/80 border-red-200 shadow-sm'
+                              : isActive
                               ? 'bg-indigo-50 border-indigo-200/90 shadow-sm'
                               : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80 shadow-2xs hover:border-slate-300'
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2.5">
                             <div className="flex items-start gap-2.5 min-w-0">
+                              {isMultiDeleteMode && (
+                                <div
+                                  onClick={(e) => toggleSelectSession(s.id, e)}
+                                  className="mt-1 cursor-pointer shrink-0"
+                                >
+                                  {selectedSessionIds.includes(s.id) ? (
+                                    <CheckSquare size={18} className="text-red-600 fill-red-50" />
+                                  ) : (
+                                    <Square size={18} className="text-slate-300 hover:text-slate-500" />
+                                  )}
+                                </div>
+                              )}
                               <div
                                 className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border shadow-2xs ${
                                   isActive ? 'bg-white border-indigo-200 text-indigo-600 shadow-sm' : visual.bg
@@ -1592,16 +1933,28 @@ export default function LearnPage() {
                               ))}
                             </div>
 
-                            <button
-                              onClick={() => {
-                                setIsMaterialsPopoverOpen(false)
-                                addMaterialInputRef.current?.click()
-                              }}
-                              className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-xs transition cursor-pointer"
-                            >
-                              <Plus size={13} />
-                              <span>Add Another Material</span>
-                            </button>
+                            <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setIsMaterialsPopoverOpen(false)
+                                  addMaterialInputRef.current?.click()
+                                }}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-xs transition cursor-pointer"
+                              >
+                                <UploadCloud size={12} />
+                                <span>Upload New</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setIsMaterialsPopoverOpen(false)
+                                  handleOpenLibraryModal()
+                                }}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs border border-slate-200/80 shadow-xs transition cursor-pointer"
+                              >
+                                <Layers size={12} className="text-indigo-600" />
+                                <span>From Library</span>
+                              </button>
+                            </div>
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -1628,18 +1981,54 @@ export default function LearnPage() {
                             {sessions.length}
                           </span>
                         </div>
-                        <button
-                          onClick={() => {
-                            setCourseDropdownOpen(false)
-                            setWorkspaceOpen(true)
-                            setIsUploadDrawerOpen(true)
-                          }}
-                          className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition cursor-pointer"
-                        >
-                          <Plus size={12} />
-                          <span>Upload Material</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setIsMultiDeleteMode((prev) => !prev)
+                              setSelectedSessionIds([])
+                            }}
+                            className={`text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer ${
+                              isMultiDeleteMode ? 'text-red-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                            title="Select multiple courses to delete"
+                          >
+                            <Trash2 size={12} />
+                            <span>{isMultiDeleteMode ? 'Done' : 'Select Multiple'}</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setCourseDropdownOpen(false)
+                              setWorkspaceOpen(true)
+                              setIsUploadDrawerOpen(true)
+                            }}
+                            className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition cursor-pointer"
+                          >
+                            <Plus size={12} />
+                            <span>Upload</span>
+                          </button>
+                        </div>
                       </div>
+
+                      {/* Multi-Delete Control Bar */}
+                      {isMultiDeleteMode && (
+                        <div className="my-2 p-2 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-between">
+                          <button
+                            onClick={handleSelectAllSessions}
+                            className="text-xs font-semibold text-slate-700 hover:text-indigo-600 flex items-center gap-1.5 transition"
+                          >
+                            {selectedSessionIds.length === sessions.length ? <CheckSquare size={14} className="text-indigo-600" /> : <Square size={14} />}
+                            <span>All ({sessions.length})</span>
+                          </button>
+                          <button
+                            disabled={selectedSessionIds.length === 0}
+                            onClick={() => setIsConfirmBatchDeleteOpen(true)}
+                            className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white text-xs font-bold flex items-center gap-1 transition shadow-xs cursor-pointer"
+                          >
+                            <Trash2 size={12} />
+                            <span>Delete ({selectedSessionIds.length})</span>
+                          </button>
+                        </div>
+                      )}
 
                       {/* Dropdown Quick Search (shown if > 2 courses) */}
                       {sessions.length > 2 && (
@@ -1670,14 +2059,34 @@ export default function LearnPage() {
                             return (
                               <div
                                 key={s.id}
-                                onClick={() => handleSelectSession(s.id)}
+                                onClick={() => {
+                                  if (isMultiDeleteMode) {
+                                    toggleSelectSession(s.id)
+                                  } else {
+                                    handleSelectSession(s.id)
+                                  }
+                                }}
                                 className={`group flex items-center justify-between p-2 rounded-xl cursor-pointer transition ${
-                                  isActive
+                                  selectedSessionIds.includes(s.id)
+                                    ? 'bg-red-50 border border-red-200'
+                                    : isActive
                                     ? 'bg-indigo-50 border border-indigo-100 shadow-sm'
                                     : 'hover:bg-slate-100 text-slate-800 border border-transparent'
                                 }`}
                               >
                                 <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                  {isMultiDeleteMode && (
+                                    <div
+                                      onClick={(e) => toggleSelectSession(s.id, e)}
+                                      className="cursor-pointer shrink-0"
+                                    >
+                                      {selectedSessionIds.includes(s.id) ? (
+                                        <CheckSquare size={16} className="text-red-600 fill-red-50" />
+                                      ) : (
+                                        <Square size={16} className="text-slate-300 hover:text-slate-500" />
+                                      )}
+                                    </div>
+                                  )}
                                   <div
                                     className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
                                       isActive ? 'bg-white border-indigo-200 text-indigo-600 shadow-sm' : visual.bg
@@ -1936,31 +2345,27 @@ export default function LearnPage() {
                                 )}
 
                                 {/* Message Content: Word-by-Word Highlight OR Study Notes OR Editorial Markdown */}
-                                {speakingMsgId === msg.id ? (
-                                  /* WORD-BY-WORD HIGHLIGHT MODE */
+                                {speakingMsgId === msg.id && speakingTokens.length > 0 ? (
+                                  /* WORD-BY-WORD HIGHLIGHT MODE (Exact Speech Engine Lockstep) */
                                   <div className="markdown-content text-slate-900 leading-[1.85] flex flex-wrap gap-y-1 items-baseline w-full">
-                                    {msg.text
-                                      .replace(/```[\s\S]*?```/g, '')
-                                      .replace(/[#*`_~>[\]()]/g, ' ')
-                                      .split(/\s+/)
-                                      .filter(Boolean)
-                                      .map((word, wIdx) => {
-                                        const isCurrent = wIdx === speakingWordIndex
-                                        const isPast = speakingWordIndex !== null && wIdx < speakingWordIndex
-                                        return (
-                                          <span
-                                            key={wIdx}
-                                            className={`inline-block mr-1.5 transition-all duration-150 ${isCurrent
-                                              ? 'bg-amber-300 text-slate-950 font-bold px-1.5 py-0.5 rounded-md ring-2 ring-amber-400/60 scale-105 shadow-xs'
-                                              : isPast
-                                                ? 'text-slate-900 font-medium'
-                                                : 'text-slate-400 opacity-75'
-                                              }`}
-                                          >
-                                            {word}
-                                          </span>
-                                        )
-                                      })}
+                                    {speakingTokens.map((token, wIdx) => {
+                                      const isCurrent = wIdx === speakingWordIndex
+                                      const isPast = speakingWordIndex !== null && wIdx < speakingWordIndex
+                                      return (
+                                        <span
+                                          key={wIdx}
+                                          ref={isCurrent ? activeWordRef : undefined}
+                                          className={`inline-block mr-1.5 transition-all duration-150 ${isCurrent
+                                            ? 'bg-amber-300 text-slate-950 font-bold px-1.5 py-0.5 rounded-md ring-2 ring-amber-400/60 scale-105 shadow-xs'
+                                            : isPast
+                                              ? 'text-slate-900 font-medium'
+                                              : 'text-slate-400 opacity-70'
+                                            }`}
+                                        >
+                                          {token.word}
+                                        </span>
+                                      )
+                                    })}
                                   </div>
                                 ) : msg.quiz_data ? (
                                   /* Inline Dual-Mode Flashcard & Quiz Widget Response */
@@ -2184,14 +2589,68 @@ export default function LearnPage() {
 
                     {/* ChatInputForm Pill */}
                     <div className="rounded-full bg-white border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.07)] focus-within:ring-2 focus-within:ring-slate-800/10 focus-within:border-slate-800 transition-all px-2.5 py-1.5 sm:px-3.5 sm:py-2 flex items-center gap-2">
-                      {/* ① [+] Attach Button */}
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition shrink-0 cursor-pointer"
-                        title="Attach notes or document"
-                      >
-                        <Plus size={15} />
-                      </button>
+                      {/* ① [+] Attach Button & Popover */}
+                      <div className="relative shrink-0" ref={attachMenuRef}>
+                        <button
+                          type="button"
+                          onClick={() => setIsAttachMenuOpen(!isAttachMenuOpen)}
+                          className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition shrink-0 cursor-pointer"
+                          title="Attach document or select from library"
+                        >
+                          <Plus size={15} className={`transition-transform duration-200 ${isAttachMenuOpen ? 'rotate-45 text-slate-900' : ''}`} />
+                        </button>
+
+                        <AnimatePresence>
+                          {isAttachMenuOpen && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 6, scale: 0.95 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute bottom-full left-0 mb-3 w-64 bg-white/98 backdrop-blur-xl border border-slate-200/90 rounded-2xl shadow-xl p-2 z-50 font-sans"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                Add Study Material
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsAttachMenuOpen(false)
+                                  fileInputRef.current?.click()
+                                }}
+                                className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-50 text-left transition cursor-pointer"
+                              >
+                                <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
+                                  <UploadCloud size={14} />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-slate-800">Upload from Device</p>
+                                  <p className="text-[10px] text-slate-400">PDF, Word, or Markdown</p>
+                                </div>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsAttachMenuOpen(false)
+                                  handleOpenLibraryModal()
+                                }}
+                                className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-50 text-left transition cursor-pointer"
+                              >
+                                <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
+                                  <Layers size={14} />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-slate-800">Select Previous Material</p>
+                                  <p className="text-[10px] text-slate-400">Attach from your library</p>
+                                </div>
+                              </button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
                       <input
                         type="file"
                         ref={fileInputRef}
@@ -3092,14 +3551,26 @@ export default function LearnPage() {
                     <Layers size={13} className="text-indigo-600" />
                     Materials ({sessionDocuments.length})
                   </span>
-                  <button
-                    onClick={() => addMaterialInputRef.current?.click()}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/50 transition cursor-pointer"
-                    title="Add another material to this room"
-                  >
-                    <Plus size={11} />
-                    <span>Add</span>
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleOpenLibraryModal()}
+                      disabled={isUploading}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 transition cursor-pointer disabled:opacity-50"
+                      title="Select previously uploaded material from library"
+                    >
+                      <Layers size={11} className="text-indigo-600" />
+                      <span>Library</span>
+                    </button>
+                    <button
+                      onClick={() => addMaterialInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/50 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Upload new file"
+                    >
+                      {isUploading ? <RefreshCw size={11} className="animate-spin" /> : <Plus size={11} />}
+                      <span>{isUploading ? 'Adding...' : 'Upload'}</span>
+                    </button>
+                  </div>
                   <input
                     type="file"
                     ref={addMaterialInputRef}
@@ -3113,7 +3584,42 @@ export default function LearnPage() {
                   />
                 </div>
 
-                {sessionDocuments.length === 0 ? (
+                {/* In-Panel Uploading Indicator */}
+                {isUploading && (
+                  <div className="mb-2.5 p-2 rounded-xl bg-indigo-50/90 border border-indigo-200/80 text-[11px]">
+                    <div className="flex items-center justify-between font-semibold text-indigo-900 mb-1">
+                      <span className="flex items-center gap-1.5 truncate">
+                        <RefreshCw size={12} className="animate-spin text-indigo-600 shrink-0" />
+                        <span className="truncate">{uploadingFileMeta?.name || 'Uploading material...'}</span>
+                      </span>
+                      <span className="text-[10px] text-indigo-600 font-mono shrink-0 ml-1">{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full bg-indigo-200/60 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-indigo-600 h-full transition-all duration-300 rounded-full"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* In-Panel Upload Error Banner */}
+                {uploadError && (
+                  <div className="mb-2.5 p-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] flex items-start justify-between gap-1.5">
+                    <div className="flex items-start gap-1.5 min-w-0">
+                      <AlertCircle size={13} className="text-rose-600 shrink-0 mt-0.5" />
+                      <span className="font-medium break-words">{uploadError}</span>
+                    </div>
+                    <button
+                      onClick={() => setUploadError(null)}
+                      className="text-rose-400 hover:text-rose-700 shrink-0 p-0.5"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                )}
+
+                {sessionDocuments.length === 0 && !isUploading ? (
                   <p className="text-[11px] text-slate-400 italic">No materials uploaded yet.</p>
                 ) : (
                   <div className="space-y-1 max-h-28 overflow-y-auto pr-0.5">
@@ -3256,6 +3762,169 @@ export default function LearnPage() {
         onConfirm={confirmDeleteSession}
         onCancel={() => setSessionToDelete(null)}
       />
+
+      {/* Batch Delete Workspaces Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isConfirmBatchDeleteOpen}
+        title={`Delete ${selectedSessionIds.length} Selected Workspace${selectedSessionIds.length > 1 ? 's' : ''}?`}
+        warningNote={`Permanent Data Removal: All chat messages, generated notes, and database records for ${selectedSessionIds.length} selected workspace${selectedSessionIds.length > 1 ? 's' : ''} will be permanently deleted from the database.`}
+        isLoading={isBatchDeleting}
+        onConfirm={confirmBatchDeleteSessions}
+        onCancel={() => setIsConfirmBatchDeleteOpen(false)}
+      />
+
+      {/* ─── MODAL: SELECT PREVIOUSLY UPLOADED MATERIAL ─── */}
+      <AnimatePresence>
+        {isSelectLibraryModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 font-sans"
+            onClick={() => setIsSelectLibraryModalOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col max-h-[85vh]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-2xs">
+                    <Layers size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 font-sans">Previously Uploaded Materials</h3>
+                    <p className="text-xs text-slate-500 font-sans">Select any material from your library to attach to this room</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsSelectLibraryModalOpen(false)}
+                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="my-3.5 relative shrink-0">
+                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={librarySearchQuery}
+                  onChange={(e) => setLibrarySearchQuery(e.target.value)}
+                  placeholder="Search materials by title or subject..."
+                  className="w-full pl-9 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-indigo-400 focus:bg-white font-sans"
+                />
+              </div>
+
+              {/* Document List */}
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[200px]">
+                {isLibraryLoading ? (
+                  <div className="py-16 text-center">
+                    <RefreshCw size={24} className="animate-spin text-indigo-600 mx-auto mb-2.5" />
+                    <p className="text-xs text-slate-500 font-sans">Loading your materials...</p>
+                  </div>
+                ) : (() => {
+                  const filtered = libraryDocuments.filter((doc: any) => {
+                    if (!librarySearchQuery.trim()) return true
+                    const q = librarySearchQuery.toLowerCase()
+                    return (
+                      (doc.file_name && doc.file_name.toLowerCase().includes(q)) ||
+                      (doc.detected_subject && doc.detected_subject.toLowerCase().includes(q)) ||
+                      (doc.key_topics && doc.key_topics.some((kt: string) => String(kt).toLowerCase().includes(q)))
+                    )
+                  })
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="py-12 text-center text-xs text-slate-400 font-sans">
+                        {libraryDocuments.length === 0
+                          ? 'No previously uploaded materials found in your account.'
+                          : 'No materials matched your search.'}
+                      </div>
+                    )
+                  }
+
+                  return filtered.map((doc: any) => {
+                    const isAlreadyAttached = sessionDocuments.some(
+                      (sd: any) => (sd.filename && sd.filename.toLowerCase() === doc.file_name?.toLowerCase()) || sd.id === doc.id
+                    )
+                    return (
+                      <div
+                        key={doc.id}
+                        className={`p-3 rounded-2xl border transition flex items-center justify-between gap-3 ${
+                          isAlreadyAttached
+                            ? 'bg-emerald-50/60 border-emerald-200/80 text-emerald-950'
+                            : 'bg-slate-50/70 hover:bg-indigo-50/50 border-slate-200/80 hover:border-indigo-200 text-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
+                            isAlreadyAttached ? 'bg-emerald-100 border-emerald-200 text-emerald-700' : 'bg-white border-slate-200 text-indigo-600 shadow-2xs'
+                          }`}>
+                            <FileText size={16} />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="text-xs font-bold truncate text-slate-900">{doc.file_name}</h4>
+                            <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
+                              <span className="font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md border border-indigo-100/60">
+                                {doc.detected_subject || 'General Study'}
+                              </span>
+                              {doc.key_topics && doc.key_topics.length > 0 && (
+                                <span>{doc.key_topics.length} topics</span>
+                              )}
+                              {doc.created_at && (
+                                <span>• {new Date(doc.created_at).toLocaleDateString()}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {isAlreadyAttached ? (
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold shrink-0 flex items-center gap-1 border border-emerald-200/60">
+                            <Check size={12} />
+                            <span>Attached</span>
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleLinkMaterialToActiveSession(doc)}
+                            className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5"
+                          >
+                            <Plus size={13} />
+                            <span>Attach</span>
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })
+                })()}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="pt-3 border-t border-slate-100 mt-2 flex items-center justify-between shrink-0">
+                <span className="text-[11px] text-slate-400 font-sans">
+                  {libraryDocuments.length} material{libraryDocuments.length !== 1 ? 's' : ''} available
+                </span>
+                <button
+                  onClick={() => {
+                    setIsSelectLibraryModalOpen(false)
+                    addMaterialInputRef.current?.click()
+                  }}
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer font-sans"
+                >
+                  <UploadCloud size={13} />
+                  <span>Upload new file instead</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 

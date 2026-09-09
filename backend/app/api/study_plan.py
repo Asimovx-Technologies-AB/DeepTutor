@@ -31,14 +31,26 @@ class DayNotesRequest(BaseModel):
     force_regenerate: Optional[bool] = False
 
 
-async def _generate_day_study_notes(day_topic: str, key_concepts: List[str]) -> str:
+async def _generate_day_study_notes(day_topic: str, key_concepts: List[str], topic_id: Optional[str] = "general") -> str:
+    material_context = ""
+    if topic_id and topic_id != "general":
+        try:
+            from app.rag.pg_fts_store import pg_fts_store
+            chunks = pg_fts_store.search_chunks(topic_id, day_topic, limit=3)
+            if chunks:
+                material_context = "\n\nEXCERPTS FROM UPLOADED MATERIAL:\n" + "\n---\n".join([c.get("content", "") for c in chunks])
+        except Exception:
+            pass
+
     prompt = f"""You are DeepTutor, an elite academic AI tutor.
 Write comprehensive, authoritative master study notes for the topic: "{day_topic}".
 Key concepts to cover: {", ".join(key_concepts) if key_concepts else "Core principles"}.
+{material_context}
 
 FORMAT REQUIREMENTS:
 - Use clean Markdown (# and ## headings).
 - Zero emojis. Maintain an articulate, authoritative academic tone.
+- Base explanations directly on the governing principles in the student's uploaded material.
 - Follow this exact structure:
   1. # {day_topic} — Study Notes
   2. > **TL;DR / Summary**: 3-5 line essence box.
@@ -63,16 +75,64 @@ async def _generate_study_plan(user_id: str, topic_id: str, target_date: str, ho
     except Exception:
         total_days = 7
 
+    # Gather all uploaded materials and extracted topics for this user & topic/session
+    material_names: List[str] = []
+    syllabus_topics: List[str] = []
+
+    # 1. From Study Storage (session_documents & session_topics)
+    try:
+        from app.services.study_storage import get_session_documents, get_session_topics
+        s_docs = get_session_documents(topic_id, user_id=user_id)
+        material_names.extend([d["filename"] for d in s_docs if d.get("filename")])
+        s_topics = get_session_topics(topic_id)
+        for t in s_topics:
+            if t.get("title"):
+                kc = ", ".join(t.get("key_concepts", []))
+                syllabus_topics.append(f"- {t.get('title')}: {t.get('summary', '')} (Key concepts: {kc})")
+    except Exception:
+        pass
+
+    # 2. From core database Documents
+    try:
+        core_docs = db.get_documents_for_user_and_topic(user_id, topic_id)
+        if not core_docs and topic_id.startswith("plan_"):
+            core_docs = db.get_documents_for_user(user_id)
+        for cd in core_docs:
+            fn = cd.get("file_name")
+            if fn and fn not in material_names:
+                material_names.append(fn)
+            for kt in cd.get("key_topics", []):
+                if kt and not str(kt).startswith("__subject__:") and kt not in syllabus_topics:
+                    syllabus_topics.append(f"- {kt}")
+    except Exception:
+        pass
+
+    materials_context = ""
+    if material_names or syllabus_topics:
+        materials_context = f"""
+STUDENT'S UPLOADED STUDY MATERIALS & SYLLABUS OUTLINE:
+- Uploaded Document(s): {', '.join(material_names) if material_names else 'Course Material PDF'}
+- Extracted Syllabus Chapters & Modules:
+{chr(10).join(syllabus_topics[:12]) if syllabus_topics else '- Comprehensive coverage of ' + topic_id}
+"""
+
     prompt = f"""You are an elite academic curriculum planner.
-Create a structured {total_days}-day study roadmap for the subject/topic: "{topic_id}".
+Create a structured, highly actionable {total_days}-day study roadmap for: "{topic_id}".
 Student can study {hours_per_day} hours per day.
+
+{materials_context}
+
+CRITICAL REQUIREMENTS:
+- Map and distribute the uploaded materials and chapters logically across the {total_days} days.
+- Ensure every day focuses on clear, concrete subtopics and chapters from the material.
+- Provide 2-4 key concepts for each day.
 
 Return ONLY a valid JSON list of day objects with this exact structure:
 [
   {{
     "day": 1,
-    "topic": "Foundational Principles of ...",
-    "key_concepts": ["Concept 1", "Concept 2"],
+    "topic": "Module 1: Foundational Principles of ...",
+    "key_concepts": ["Concept 1", "Concept 2", "Concept 3"],
     "estimated_hours": {hours_per_day}
   }}
 ]
@@ -102,10 +162,13 @@ JSON OUTPUT:"""
             "study_notes": "",
         })
 
+    title_source = material_names[0] if material_names else topic_id.replace('_', ' ').title()
+    clean_title = f"{title_source} {len(schedule)}-Day Study Plan"
+
     plan = db.create_study_plan(
         user_id=user_id,
         topic_id=topic_id,
-        title=f"{topic_id.title()} {total_days}-Day Study Roadmap",
+        title=clean_title,
         target_date=target_date,
         total_days=len(schedule),
         hours_per_day=hours_per_day,
@@ -131,7 +194,7 @@ async def get_day_notes(
         except Exception:
             pass
 
-    notes = await _generate_day_study_notes(body.day_topic, body.key_concepts or [])
+    notes = await _generate_day_study_notes(body.day_topic, body.key_concepts or [], topic_id=body.topic_id)
     if body.plan_id and body.day_number is not None:
         try:
             db.save_study_plan_day_notes(body.plan_id, body.day_number, notes)
@@ -208,7 +271,40 @@ async def delete_plan(
     plan_id: str,
     user: dict = Depends(get_current_user),
 ):
-    ok = db.delete_study_plan(plan_id)
+    plan = db.get_study_plan(plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Study plan not found")
+    if plan.get("user_id") and plan.get("user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this study plan")
+    ok = db.delete_study_plan(plan_id, user_id=user["id"])
     if not ok:
         raise HTTPException(status_code=404, detail="Study plan not found")
     return {"ok": True}
+
+
+class VerifyQuizRequest(BaseModel):
+    day_number: int
+    score_percentage: float
+
+
+@router.post("/{plan_id}/verify-quiz")
+async def verify_quiz(
+    plan_id: str,
+    body: VerifyQuizRequest,
+    user: dict = Depends(get_current_user),
+):
+    plan = db.get_study_plan(plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Study plan not found")
+    if plan.get("user_id") and plan.get("user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized to verify quiz for this study plan")
+    passed = body.score_percentage >= 70.0
+    if passed:
+        db.set_study_plan_day_completed(plan_id, body.day_number, True)
+    return {
+        "ok": True,
+        "plan_id": plan_id,
+        "day_number": body.day_number,
+        "score_percentage": body.score_percentage,
+        "passed": passed,
+    }

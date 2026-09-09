@@ -1,4 +1,5 @@
 import json
+import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import declarative_base, relationship
@@ -145,8 +146,15 @@ class SessionDocument(Base):
 
     session_id = Column(String, primary_key=True)
     doc_hash = Column(String(64), primary_key=True, index=True)
+    id = Column(String, nullable=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String, nullable=True, index=True, default="default_user")
+    filename = Column(String, default="")
+    file_path = Column(String, default="")
+    status = Column(String, default="completed")
+    page_count = Column(Integer, default=0)
     uploaded_at = Column(String, default=lambda: datetime.utcnow().isoformat())
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
 
 
 class Quiz(Base):

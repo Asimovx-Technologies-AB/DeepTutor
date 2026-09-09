@@ -31,7 +31,11 @@ export default function LearningStatsRow({ stats }: LearningStatsRowProps) {
     },
     { 
       label: uiLanguage === 'sv' ? 'Studiestimmar' : 'Learning Hours', 
-      value: (stats.total_learning_hours || 0).toFixed(1), 
+      value: (stats.total_learning_hours || 0) <= 0 
+        ? '0.0 hrs'
+        : (stats.total_learning_hours || 0) < 0.1 
+          ? `${Math.max(1, Math.round((stats.total_learning_hours || 0) * 60))} min`
+          : `${(stats.total_learning_hours || 0).toFixed(1)} hrs`, 
       icon: <Clock size={18} className="text-brand-primary" />,
       color: 'bg-brand-primary-soft text-brand-primary'
     },

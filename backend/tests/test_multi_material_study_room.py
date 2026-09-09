@@ -89,6 +89,26 @@ async def test_multi_material_session_flow():
         assert docs[0]["filename"] == "Chemistry_Textbook.pdf"
         assert docs[1]["filename"] == "Teacher_Notes.pdf"
 
+        # 4.1 Check get_registry_session returns updated document_count and document list
+        reg_fetched = get_registry_session(test_sid)
+        assert reg_fetched is not None
+        assert reg_fetched["document_count"] == 2
+        assert "Chemistry_Textbook.pdf" in reg_fetched["documents"]
+        assert "Teacher_Notes.pdf" in reg_fetched["documents"]
+
+        # 4.2 Test keyword-based save_session_document invocation as used in StudyDocumentProcessor
+        save_session_document(
+            session_id=test_sid,
+            doc_id="doc_3",
+            filename="Lab_Manual.pdf",
+            file_path="/tmp/lab.pdf",
+            status="indexing",
+            user_id="test_user"
+        )
+        docs_after_kw = get_session_documents(test_sid)
+        assert len(docs_after_kw) == 3
+        assert any(d["filename"] == "Lab_Manual.pdf" for d in docs_after_kw)
+
         # 5. Search across ALL materials in that session
         results = search_fts_chunks(test_sid, "equilibrium")
         assert len(results) >= 2

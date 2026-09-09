@@ -5,7 +5,7 @@ import os
 import asyncio
 import json
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, BackgroundTasks
 from pydantic import BaseModel
 from app.api.auth import get_current_user
@@ -34,6 +34,8 @@ async def list_user_documents(
     topic_id: Optional[str] = None,
     user: dict = Depends(get_current_user),
 ):
+    from app.services.study_storage import list_registry_sessions, get_session_topics
+    
     docs = []
     try:
         docs = (
@@ -45,6 +47,18 @@ async def list_user_documents(
         print(f"[documents.list] DB fetch error: {e}")
         docs = []
 
+    # Fetch all user sessions from registry to compute session links
+    sessions_by_id = {}
+    try:
+        user_sessions = list_registry_sessions(user_id=user["id"])
+        for s in user_sessions:
+            if s.get("id"):
+                sessions_by_id[s["id"]] = s
+    except Exception as e:
+        print(f"[documents.list] Session registry error: {e}")
+        user_sessions = []
+
+    # Map each document with indexing status and subjects
     for doc in docs:
         topics = doc.get("key_topics") or []
         subject_marker = next((topic for topic in topics if str(topic).startswith("__subject__:")), "")
@@ -55,28 +69,27 @@ async def list_user_documents(
         doc["index_progress"] = status.get("progress", 0) if status else (100 if doc.get("indexed") else 0)
         doc["index_stats"] = status.get("stats", {}) if status else {}
 
-    # Merge materials uploaded through Study Room / Learn Page sessions
-    try:
-        from app.services.study_storage import list_registry_sessions, get_session_topics
-        sessions = list_registry_sessions(user_id=user["id"])
-        existing_filenames = {d["file_name"].lower() for d in docs if d.get("file_name")}
-        existing_topics = {d.get("topic_id") for d in docs if d.get("topic_id")}
+    # Merge session materials not yet captured in documents table
+    existing_filenames = {d["file_name"].lower() for d in docs if d.get("file_name")}
+    for s in user_sessions:
+        sid = s.get("id")
+        if not sid:
+            continue
+        doc_names = s.get("documents") or ([s.get("document_name")] if s.get("document_name") else [])
+        if not doc_names:
+            continue
 
-        for s in sessions:
-            fn = s.get("document_name")
-            sid = s.get("id")
-            if not fn or fn.lower() in existing_filenames or sid in existing_topics:
-                continue
-            if topic_id and sid != topic_id:
+        session_topics = get_session_topics(sid)
+        topic_titles = [t.get("title", "") for t in session_topics if t.get("title")]
+
+        for fn in doc_names:
+            if not fn or fn.lower() in existing_filenames:
                 continue
             existing_filenames.add(fn.lower())
-            existing_topics.add(sid)
-            session_topics = get_session_topics(sid)
-            topic_titles = [t.get("title", "") for t in session_topics if t.get("title")]
             clean_title = Path(fn).stem.replace("_", " ").title()
             subject_name = s.get("subject") or clean_title
             docs.append({
-                "id": sid,
+                "id": f"{sid}_{fn}",
                 "user_id": s.get("user_id", user["id"]),
                 "topic_id": sid,
                 "file_name": fn,
@@ -92,10 +105,51 @@ async def list_user_documents(
                 "index_stats": {},
                 "created_at": s.get("created_at"),
             })
-    except Exception as e:
-        print(f"[documents.list] Error merging study session materials: {e}")
 
-    return docs
+    # Deduplication & Session Linking: Group by doc_hash or normalized file_name
+    deduped_map: Dict[str, Dict[str, Any]] = {}
+    for doc in docs:
+        key = str(doc.get("doc_hash") or "").strip().lower()
+        if not key or len(key) < 16:
+            key = f"fn_{str(doc.get('file_name', '')).strip().lower()}"
+
+        if key not in deduped_map:
+            doc_copy = dict(doc)
+            doc_copy["linked_sessions"] = []
+            deduped_map[key] = doc_copy
+        else:
+            # Merge key_topics if current doc has more details
+            existing = deduped_map[key]
+            if not existing.get("key_topics") and doc.get("key_topics"):
+                existing["key_topics"] = doc.get("key_topics")
+            if not existing.get("detected_subject") and doc.get("detected_subject"):
+                existing["detected_subject"] = doc.get("detected_subject")
+
+    # Match linked sessions for each deduplicated document
+    for key, doc in deduped_map.items():
+        doc_fn = str(doc.get("file_name", "")).strip().lower()
+        matched_sessions = []
+        for sid, s in sessions_by_id.items():
+            s_docs = [str(name).strip().lower() for name in (s.get("documents") or ([s.get("document_name")] if s.get("document_name") else []))]
+            if doc_fn in s_docs or sid == doc.get("topic_id"):
+                matched_sessions.append({
+                    "id": sid,
+                    "title": s.get("title") or f"{doc.get('detected_subject') or 'Study'} Room",
+                    "subject": s.get("subject") or doc.get("detected_subject"),
+                    "created_at": s.get("created_at"),
+                })
+        doc["linked_sessions"] = matched_sessions
+        doc["session_count"] = len(matched_sessions)
+        if matched_sessions and not doc.get("topic_id"):
+            doc["topic_id"] = matched_sessions[0]["id"]
+
+    results = list(deduped_map.values())
+    if topic_id:
+        results = [
+            d for d in results
+            if d.get("topic_id") == topic_id or any(s["id"] == topic_id for s in d.get("linked_sessions", []))
+        ]
+    return results
 
 
 async def _run_indexing(doc_id: str, section_id: str, file_path: str, user_id: str, file_name: str):
@@ -169,8 +223,19 @@ async def upload_document(
             detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(list(allowed_exts)))}"
         )
 
+    safe_filename = os.path.basename(file.filename).strip()
+    if not safe_filename or safe_filename.startswith("."):
+        safe_filename = f"upload_{db.new_id()[:8]}{ext}"
+
     content = await file.read()
     size_mb = len(content) / (1024 * 1024)
+    max_allowed_mb = user.get("max_upload_size_mb", 100 if user.get("is_premium") else 10)
+    if size_mb > max_allowed_mb:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File size ({size_mb:.1f} MB) exceeds maximum permitted limit of {max_allowed_mb} MB."
+        )
+
     section_id = (section_id or topic_id or "general").strip() or "general"
 
     # Fast Content Hash Deduplication
@@ -182,8 +247,8 @@ async def upload_document(
             "status": "already_processed",
             "id": existing_doc.get("id") if existing_doc else None,
             "doc_hash": doc_hash,
-            "file_name": file.filename,
-            "filename": file.filename,
+            "file_name": safe_filename,
+            "filename": safe_filename,
             "file_type": ext.lstrip("."),
             "chunks_created": 0,
             "size_mb": round(size_mb, 2),
@@ -191,16 +256,20 @@ async def upload_document(
             "message": "Document already exists, linked to this session instantly",
         }
 
-    upload_dir = Path(settings.UPLOAD_DIR) / user["id"] / section_id
+    upload_dir = (Path(settings.UPLOAD_DIR) / user["id"] / section_id).resolve()
     upload_dir.mkdir(parents=True, exist_ok=True)
-    file_path = str(upload_dir / file.filename)
+    dest_path = (upload_dir / safe_filename).resolve()
+    if not str(dest_path).startswith(str(upload_dir)):
+        raise HTTPException(status_code=400, detail="Invalid filename path traversal attempt.")
+    file_path = str(dest_path)
+
     with open(file_path, "wb") as f:
         f.write(content)
 
     doc = db.create_document(
         user_id=user["id"],
         topic_id=section_id,
-        file_name=file.filename,
+        file_name=safe_filename,
         file_path=file_path,
         file_type=ext.lstrip("."),
         doc_hash=doc_hash,
@@ -209,19 +278,19 @@ async def upload_document(
     link_document_to_session(doc_hash, section_id, user["id"], db=db)
 
     db.delete_flashcards_for_topic(section_id)
-    background_tasks.add_task(_run_indexing, doc["id"], section_id, file_path, user["id"], file.filename)
+    background_tasks.add_task(_run_indexing, doc["id"], section_id, file_path, user["id"], safe_filename)
 
     return {
         "status": "processed",
         "id": doc["id"],
         "doc_hash": doc_hash,
-        "file_name": file.filename,
-        "filename": file.filename,
+        "file_name": safe_filename,
+        "filename": safe_filename,
         "file_type": ext.lstrip("."),
         "size_mb": round(size_mb, 2),
         "topic_id": topic_id,
         "chunks_created": 0,
-        "message": f"✅ {file.filename} uploaded and indexing started.",
+        "message": f"✅ {safe_filename} uploaded and indexing started.",
     }
 
 
@@ -393,32 +462,42 @@ async def delete_section_documents(section_id: str, user: dict = Depends(get_cur
 @router.delete("/{doc_id}")
 async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
     user_id = user["id"]
-    if doc_id.startswith("session_"):
-        from app.services.study_storage import delete_registry_session
-        delete_registry_session(doc_id)
-        return {"ok": True, "doc_id": doc_id, "file_name": doc_id, "message": f"Deleted session material '{doc_id}'."}
+    from app.services.study_storage import delete_registry_session, delete_session_document, get_registry_session
 
+    # 1. Try deleting standard user Document record
     doc = db.delete_document(doc_id=doc_id, user_id=user_id)
-    if not doc:
-        # Check if it was a session ID
-        from app.services.study_storage import delete_registry_session
-        delete_registry_session(doc_id)
-        return {"ok": True, "doc_id": doc_id, "file_name": doc_id, "message": f"Deleted session material '{doc_id}'."}
+    if doc:
+        file_path = doc.get("file_path")
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+        _indexing_status.pop(doc_id, None)
+        return {
+            "ok": True,
+            "doc_id": doc_id,
+            "file_name": doc.get("file_name", doc_id),
+            "message": f"Deleted document '{doc.get('file_name', doc_id)}'."
+        }
 
-    file_path = doc.get("file_path")
-    if file_path and os.path.exists(file_path):
-        try:
-            os.remove(file_path)
-        except Exception:
-            pass
+    # 2. Check if doc_id is a composite session-material key "{sid}_{filename}"
+    if "_" in doc_id:
+        for candidate_sid in [doc_id.split("_", 1)[0], "_".join(doc_id.split("_")[:2])]:
+            s_meta = get_registry_session(candidate_sid)
+            if s_meta:
+                candidate_fn = doc_id[len(candidate_sid) + 1:]
+                if delete_session_document(candidate_sid, candidate_fn, user_id=user_id):
+                    return {
+                        "ok": True,
+                        "doc_id": doc_id,
+                        "file_name": candidate_fn,
+                        "message": f"Deleted session material '{candidate_fn}'."
+                    }
 
-    _indexing_status.pop(doc_id, None)
-    return {
-        "ok": True,
-        "doc_id": doc_id,
-        "file_name": doc["file_name"],
-        "message": f"Deleted document '{doc['file_name']}'."
-    }
+    # 3. Check if doc_id is a session ID or directly referenced session document
+    delete_registry_session(doc_id, user_id=user_id)
+    return {"ok": True, "doc_id": doc_id, "file_name": doc_id, "message": f"Deleted session material '{doc_id}'."}
 
 
 @router.get("/session/{session_id}/status")
@@ -431,3 +510,129 @@ async def session_documents_status(session_id: str, user: dict = Depends(get_cur
 async def session_documents_list(session_id: str, user: dict = Depends(get_current_user)):
     """Returns all documents linked to the specified session."""
     return db.get_session_documents(session_id, user["id"])
+
+
+class LinkDocumentToSessionRequest(BaseModel):
+    session_id: str
+    doc_id: Optional[str] = None
+    doc_hash: Optional[str] = None
+    filename: Optional[str] = None
+    file_path: Optional[str] = None
+
+
+@router.post("/link-to-session")
+async def link_document_to_session_endpoint(
+    req: LinkDocumentToSessionRequest,
+    user: dict = Depends(get_current_user),
+):
+    """Link a previously uploaded material to a specific study session."""
+    user_id = user["id"]
+    session_id = (req.session_id or "").strip()
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+
+    from app.services.study_storage import (
+        save_session_document,
+        get_session_documents,
+        save_session_topics,
+        get_session_topics,
+        register_or_update_session,
+        list_registry_sessions,
+    )
+    from app.rag.document_dedup import link_document_to_session
+
+    doc_id = req.doc_id
+    doc_hash = req.doc_hash
+    filename = req.filename
+    file_path = req.file_path
+    doc = None
+
+    # If doc_id was passed, attempt to look it up in the Document database
+    if doc_id:
+        doc = db.get_document(doc_id, user_id=user_id)
+        if doc:
+            doc_hash = doc_hash or doc.get("doc_hash")
+            filename = filename or doc.get("file_name")
+            file_path = file_path or doc.get("file_path")
+
+    if not filename and not doc_id and not doc_hash:
+        raise HTTPException(status_code=400, detail="Must provide at least doc_id, filename, or doc_hash")
+
+    effective_filename = filename or f"doc_{doc_id or 'unknown'}"
+    effective_file_path = file_path or effective_filename
+
+    # If doc_hash available, record cross-session deduplication link
+    if doc_hash:
+        try:
+            link_document_to_session(doc_hash, session_id, user_id, db=db)
+        except Exception as e:
+            print(f"[link_document_to_session] Warning: {e}")
+
+    # Register in session_documents table
+    save_session_document(
+        session_id=session_id,
+        doc_id=doc_id,
+        filename=effective_filename,
+        file_path=effective_file_path,
+        status="completed",
+        user_id=user_id,
+        doc_hash=doc_hash or "",
+    )
+
+    # Populate curriculum topics in new session if not yet present
+    current_session_topics = get_session_topics(session_id, user_id=user_id)
+    if not current_session_topics:
+        prior_topics = []
+        if doc_id:
+            try:
+                prior_topics = db.get_topics_for_document(doc_id) or []
+            except Exception:
+                prior_topics = []
+
+        if not prior_topics and effective_filename:
+            try:
+                user_sessions = list_registry_sessions(user_id=user_id)
+                for s in user_sessions:
+                    if s["id"] != session_id and effective_filename.lower() in [str(n).lower() for n in s.get("documents", [])]:
+                        prior_topics = get_session_topics(s["id"], user_id=user_id)
+                        if prior_topics:
+                            break
+            except Exception as e:
+                print(f"[link_document_to_session] Warning retrieving prior topics: {e}")
+
+        if not prior_topics and doc and doc.get("key_topics"):
+            for t_title in doc["key_topics"]:
+                if str(t_title).startswith("__subject__:"):
+                    continue
+                prior_topics.append({
+                    "title": str(t_title),
+                    "summary": f"Core study topic from {effective_filename}",
+                    "difficulty": "Intermediate",
+                    "key_concepts": [],
+                    "document_name": effective_filename,
+                })
+
+        if prior_topics:
+            try:
+                save_session_topics(session_id, prior_topics, user_id=user_id)
+            except Exception as e:
+                print(f"[link_document_to_session] Warning saving topics: {e}")
+
+    # Update session registry entry so it displays properly on the page
+    clean_title = Path(effective_filename).stem.replace("_", " ").title()
+    register_or_update_session(
+        session_id=session_id,
+        subject=doc.get("detected_subject") if doc else "General Study",
+        title=f"{clean_title} Study Room",
+        document_name=effective_filename,
+        user_id=user_id,
+    )
+
+    # Return the refreshed document list for this session
+    updated_docs = get_session_documents(session_id, user_id)
+    return {
+        "ok": True,
+        "message": f"Successfully linked '{effective_filename}' to session.",
+        "documents": updated_docs,
+    }
+

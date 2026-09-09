@@ -135,14 +135,98 @@ def create_all_tables() -> None:
 if engine.dialect.name == "sqlite":
     create_all_tables()
 
-# Auto-migrate missing columns for existing SQLite database (only when running against SQLite)
 if engine.dialect.name == "sqlite":
     with engine.connect() as conn:
         for sql in [
+            """
+            CREATE TABLE IF NOT EXISTS workspace_sessions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT,
+                title TEXT,
+                subject TEXT,
+                created_at TEXT,
+                last_active TEXT,
+                topics_count INTEGER DEFAULT 0,
+                messages_count INTEGER DEFAULT 0
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS study_session_topics (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                user_id TEXT,
+                title TEXT,
+                summary TEXT,
+                difficulty TEXT,
+                key_concepts_json TEXT,
+                estimated_study_time TEXT,
+                document_name TEXT,
+                created_at TEXT
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS study_session_messages (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                user_id TEXT,
+                role TEXT,
+                text TEXT,
+                thought_process TEXT,
+                quiz_data_json TEXT,
+                topics_json TEXT,
+                attachment_json TEXT,
+                is_explanation INTEGER DEFAULT 0,
+                created_at TEXT
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS lecture_sessions (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                topic_id TEXT,
+                topic_title TEXT,
+                status TEXT DEFAULT 'diagnostic',
+                diagnostic_question TEXT,
+                diagnostic_answer TEXT,
+                diagnostic_level TEXT DEFAULT 'Class 10 (Standard)',
+                current_phase TEXT DEFAULT 'hook',
+                current_segment_index INTEGER DEFAULT 0,
+                accumulated_notes_markdown TEXT DEFAULT '',
+                teach_back_prompt TEXT DEFAULT '',
+                teach_back_submission TEXT,
+                teach_back_grade_json TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS document_chunks (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                topic_id TEXT,
+                doc_id TEXT,
+                chunk_id TEXT,
+                page INTEGER DEFAULT 1,
+                source_type TEXT DEFAULT 'text',
+                chunk_text TEXT,
+                metadata TEXT DEFAULT '{}',
+                embedding TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            );
+            """,
             "ALTER TABLE documents ADD COLUMN key_topics TEXT DEFAULT '[]'",
             "ALTER TABLE documents ADD COLUMN doc_hash VARCHAR(64)",
             "ALTER TABLE documents ADD COLUMN status VARCHAR(20) DEFAULT 'pending'",
             "ALTER TABLE documents ADD COLUMN error_message TEXT",
+            "ALTER TABLE session_documents ADD COLUMN id TEXT",
+            "ALTER TABLE session_documents ADD COLUMN user_id TEXT",
+            "ALTER TABLE session_documents ADD COLUMN filename TEXT DEFAULT ''",
+            "ALTER TABLE session_documents ADD COLUMN file_path TEXT DEFAULT ''",
+            "ALTER TABLE session_documents ADD COLUMN status TEXT DEFAULT 'completed'",
+            "ALTER TABLE session_documents ADD COLUMN page_count INTEGER DEFAULT 0",
+            "ALTER TABLE session_documents ADD COLUMN uploaded_at TEXT DEFAULT ''",
+            "ALTER TABLE session_documents ADD COLUMN created_at TIMESTAMP",
             "ALTER TABLE users ADD COLUMN is_premium BOOLEAN DEFAULT 0",
             "ALTER TABLE users ADD COLUMN plan VARCHAR DEFAULT 'free'",
             "ALTER TABLE users ADD COLUMN current_streak INTEGER DEFAULT 0",
@@ -375,14 +459,50 @@ def delete_session(session_id: str, user_id: Optional[str] = None) -> dict:
         doc_links = db.query(SessionDocument).filter(SessionDocument.session_id == session_id).all()
         deleted_docs = []
         for dl in doc_links:
-            d = db.query(Document).filter(Document.doc_hash == dl.doc_hash).first()
+            d = db.query(Document).filter(Document.doc_hash == dl.doc_hash, Document.user_id == s.user_id).first()
             if d:
-                deleted_docs.append({"id": d.id, "file_path": d.file_path})
+                deleted_docs.append({"id": d.id, "file_path": d.file_path, "doc_hash": d.doc_hash})
+                other_links = db.query(SessionDocument).filter(
+                    SessionDocument.doc_hash == dl.doc_hash,
+                    SessionDocument.session_id != session_id,
+                    SessionDocument.user_id == s.user_id
+                ).count()
+                if other_links == 0:
+                    db.delete(d)
             db.delete(dl)
+
+        session_docs = db.query(Document).filter(Document.topic_id == session_id, Document.user_id == s.user_id).all()
+        for sd in session_docs:
+            if sd.doc_hash:
+                db.query(SessionDocument).filter(
+                    SessionDocument.doc_hash == sd.doc_hash,
+                    SessionDocument.session_id == session_id,
+                    SessionDocument.user_id == s.user_id
+                ).delete(synchronize_session=False)
+            deleted_docs.append({"id": sd.id, "file_path": sd.file_path, "doc_hash": sd.doc_hash})
+            db.delete(sd)
+
+        db.query(Flashcard).filter(Flashcard.topic_id == session_id).delete(synchronize_session=False)
+        quizzes = db.query(Quiz).filter(Quiz.topic_id == session_id).all()
+        quiz_ids = [q.id for q in quizzes]
+        if quiz_ids:
+            db.query(QuizAttempt).filter(QuizAttempt.quiz_id.in_(quiz_ids)).delete(synchronize_session=False)
+            db.query(QuizQuestion).filter(QuizQuestion.quiz_id.in_(quiz_ids)).delete(synchronize_session=False)
+            for q in quizzes:
+                db.delete(q)
+        db.query(StudyPlan).filter(StudyPlan.topic_id == session_id).delete(synchronize_session=False)
+        db.query(KnowledgeGraph).filter(KnowledgeGraph.topic_id == session_id).delete(synchronize_session=False)
 
         db.query(ChatMessage).filter(ChatMessage.session_id == session_id).delete(synchronize_session=False)
         db.delete(s)
-        return {"deleted": True, "deleted_docs": deleted_docs}
+
+    try:
+        from app.services.study_storage import delete_registry_session
+        delete_registry_session(session_id, user_id=user_id)
+    except Exception:
+        pass
+
+    return {"deleted": True, "deleted_docs": deleted_docs}
 
 
 
@@ -533,6 +653,7 @@ def get_documents_for_user_and_topic(user_id: str, topic_id: str) -> List[dict]:
                 "file_name": d.file_name,
                 "file_path": d.file_path,
                 "file_type": d.file_type,
+                "doc_hash": getattr(d, "doc_hash", None),
                 "indexed": d.indexed,
                 "entity_count": d.entity_count,
                 "chunk_count": d.chunk_count,
@@ -541,6 +662,30 @@ def get_documents_for_user_and_topic(user_id: str, topic_id: str) -> List[dict]:
             }
             for d in docs
         ]
+
+
+def get_document(doc_id: str, user_id: Optional[str] = None) -> Optional[dict]:
+    with DBContext() as db:
+        query = db.query(Document).filter(Document.id == doc_id)
+        if user_id:
+            query = query.filter(Document.user_id == user_id)
+        d = query.first()
+        if not d:
+            return None
+        return {
+            "id": d.id,
+            "user_id": d.user_id,
+            "topic_id": d.topic_id,
+            "file_name": d.file_name,
+            "file_path": d.file_path,
+            "file_type": d.file_type,
+            "doc_hash": getattr(d, "doc_hash", None),
+            "indexed": d.indexed,
+            "entity_count": d.entity_count,
+            "chunk_count": d.chunk_count,
+            "key_topics": getattr(d, "key_topics", []),
+            "created_at": d.created_at,
+        }
 
 
 def get_documents_for_user(user_id: str) -> List[dict]:
@@ -554,6 +699,7 @@ def get_documents_for_user(user_id: str) -> List[dict]:
                 "file_name": d.file_name,
                 "file_path": d.file_path,
                 "file_type": d.file_type,
+                "doc_hash": getattr(d, "doc_hash", None),
                 "indexed": d.indexed,
                 "entity_count": d.entity_count,
                 "chunk_count": d.chunk_count,
@@ -619,14 +765,28 @@ def link_document_to_session(doc_hash: str, session_id: str, user_id: str) -> bo
             SessionDocument.session_id == session_id,
             SessionDocument.doc_hash == doc_hash
         ).first()
+        doc = db.query(Document).filter(
+            Document.doc_hash == doc_hash,
+            Document.user_id == user_id
+        ).first()
+
         if not existing:
             link = SessionDocument(
                 session_id=session_id,
                 doc_hash=doc_hash,
                 user_id=user_id,
+                filename=doc.file_name if doc else "",
+                file_path=doc.file_path if doc else "",
+                status=getattr(doc, "status", "completed") if doc else "completed",
+                page_count=getattr(doc, "chunk_count", 0) if doc else 0,
                 uploaded_at=now_iso(),
             )
             db.add(link)
+        elif not existing.filename and doc and doc.file_name:
+            existing.filename = doc.file_name
+            existing.file_path = doc.file_path
+            existing.status = getattr(doc, "status", "completed")
+            existing.page_count = getattr(doc, "chunk_count", 0)
     return True
 
 
@@ -697,9 +857,25 @@ def delete_document(doc_id: str, user_id: str) -> Optional[dict]:
             "topic_id": doc.topic_id,
             "file_name": doc.file_name,
             "file_path": doc.file_path,
+            "doc_hash": getattr(doc, "doc_hash", None),
         }
+        if doc_dict.get("doc_hash"):
+            db.query(SessionDocument).filter(
+                SessionDocument.user_id == user_id,
+                SessionDocument.doc_hash == doc_dict["doc_hash"]
+            ).delete(synchronize_session=False)
         db.delete(doc)
-        return doc_dict
+
+    if doc_dict.get("topic_id"):
+        try:
+            from app.services.study_storage import delete_session_document
+            delete_session_document(doc_dict["topic_id"], doc_dict["file_name"], user_id=user_id)
+            if doc_dict.get("doc_hash"):
+                delete_session_document(doc_dict["topic_id"], doc_dict["doc_hash"], user_id=user_id)
+        except Exception:
+            pass
+
+    return doc_dict
 
 
 def delete_documents_for_section(user_id: str, topic_id: str) -> List[dict]:
@@ -713,9 +889,22 @@ def delete_documents_for_section(user_id: str, topic_id: str) -> List[dict]:
                 "topic_id": d.topic_id,
                 "file_name": d.file_name,
                 "file_path": d.file_path,
+                "doc_hash": getattr(d, "doc_hash", None),
             }
             for d in docs
         ]
+        doc_hashes = [d["doc_hash"] for d in doc_dicts if d.get("doc_hash")]
+        if doc_hashes:
+            db.query(SessionDocument).filter(
+                SessionDocument.user_id == user_id,
+                SessionDocument.doc_hash.in_(doc_hashes)
+            ).delete(synchronize_session=False)
+
+        db.query(SessionDocument).filter(
+            SessionDocument.user_id == user_id,
+            SessionDocument.session_id.in_(targets)
+        ).delete(synchronize_session=False)
+
         for d in docs:
             db.delete(d)
         return doc_dicts
@@ -724,23 +913,36 @@ def delete_documents_for_section(user_id: str, topic_id: str) -> List[dict]:
 def delete_section_all_data(user_id: str, topic_id: str) -> dict:
     """
     Comprehensively delete all database records for a section/topic:
-    - Documents
+    - Documents & SessionDocuments
     - Flashcards
     - Quizzes, QuizQuestions, QuizAttempts
     - StudyPlans
     - ChatSessions & ChatMessages
+    - Workspace sessions & document chunks
     """
     targets = {topic_id, topic_id.lower(), topic_id.upper(), topic_id.strip()}
     with DBContext() as db:
-        # 1. Documents
+        # 1. Documents & SessionDocuments
         docs = db.query(Document).filter(
             Document.user_id == user_id,
             Document.topic_id.in_(targets)
         ).all()
         deleted_docs = [
-            {"id": d.id, "file_name": d.file_name, "file_path": d.file_path, "topic_id": d.topic_id}
+            {"id": d.id, "file_name": d.file_name, "file_path": d.file_path, "topic_id": d.topic_id, "doc_hash": getattr(d, "doc_hash", None)}
             for d in docs
         ]
+        doc_hashes = [d.get("doc_hash") for d in deleted_docs if d.get("doc_hash")]
+        if doc_hashes:
+            db.query(SessionDocument).filter(
+                SessionDocument.user_id == user_id,
+                SessionDocument.doc_hash.in_(doc_hashes)
+            ).delete(synchronize_session=False)
+
+        db.query(SessionDocument).filter(
+            SessionDocument.user_id == user_id,
+            SessionDocument.session_id.in_(targets)
+        ).delete(synchronize_session=False)
+
         for d in docs:
             db.delete(d)
 
@@ -777,18 +979,26 @@ def delete_section_all_data(user_id: str, topic_id: str) -> dict:
             for s in sessions:
                 db.delete(s)
 
-        # 6. Cloud Knowledge Graphs (Neon PostgreSQL)
+        # 6. Cloud Knowledge Graphs
         db.query(KnowledgeGraph).filter(
             KnowledgeGraph.topic_id.in_(targets)
         ).delete(synchronize_session=False)
 
-        return {
-            "deleted_docs": deleted_docs,
-            "deleted_flashcards_count": deleted_flashcards,
-            "deleted_quizzes_count": len(quizzes),
-            "deleted_plans_count": deleted_plans,
-            "deleted_sessions_count": len(sessions),
-        }
+    # Clean up PostgreSQL workspace session & chunks
+    try:
+        from app.services.study_storage import delete_registry_session
+        for target_id in targets:
+            delete_registry_session(target_id, user_id=user_id)
+    except Exception:
+        pass
+
+    return {
+        "deleted_docs": deleted_docs,
+        "deleted_flashcards_count": deleted_flashcards,
+        "deleted_quizzes_count": len(quizzes),
+        "deleted_plans_count": deleted_plans,
+        "deleted_sessions_count": len(sessions),
+    }
 
 
 
@@ -1085,6 +1295,19 @@ def toggle_study_plan_day(plan_id: str, day_number: int) -> Optional[dict]:
     return get_study_plan(plan_id)
 
 
+def set_study_plan_day_completed(plan_id: str, day_number: int, completed: bool = True) -> Optional[dict]:
+    with DBContext() as db:
+        p = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
+        if p:
+            current = list(p.completed_days)
+            if completed and day_number not in current:
+                current.append(day_number)
+            elif not completed and day_number in current:
+                current.remove(day_number)
+            p.completed_days = current
+    return get_study_plan(plan_id)
+
+
 def save_study_plan_day_notes(plan_id: str, day_number: int, notes: str) -> Optional[dict]:
     """
     Persists AI study notes for a specific day directly via the app's own DB session.
@@ -1141,24 +1364,49 @@ def save_study_plan_day_notes(plan_id: str, day_number: int, notes: str) -> Opti
     return get_study_plan(plan_id)
 
 
-def delete_study_plan(plan_id: str) -> bool:
+def delete_study_plan(plan_id: str, user_id: Optional[str] = None) -> bool:
     with DBContext() as db:
-        p = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
+        query = db.query(StudyPlan).filter(StudyPlan.id == plan_id)
+        if user_id:
+            query = query.filter(StudyPlan.user_id == user_id)
+        p = query.first()
         if p:
             db.delete(p)
             return True
     return False
 
 
-# ─── Leaderboard Helper ────────────────────────────────────────────────────────
+def _mask_email(email: str) -> str:
+    if not email or "@" not in email:
+        return ""
+    parts = email.split("@", 1)
+    username, domain = parts[0], parts[1]
+    if len(username) <= 2:
+        masked_user = username[0] + "*"
+    else:
+        masked_user = username[0] + "*" * min(len(username) - 2, 4) + username[-1]
+    return f"{masked_user}@{domain}"
+
+
 def get_leaderboard_rankings(current_user_id: str) -> dict:
+    from collections import defaultdict
     with DBContext() as db:
         users = db.query(User).all()
-        rankings = []
+        all_attempts = db.query(QuizAttempt).all()
+        all_docs = db.query(Document).all()
 
+        attempts_by_user = defaultdict(list)
+        for a in all_attempts:
+            attempts_by_user[a.user_id].append(a)
+
+        docs_by_user = defaultdict(list)
+        for d in all_docs:
+            docs_by_user[d.user_id].append(d)
+
+        rankings = []
         for user in users:
-            attempts = db.query(QuizAttempt).filter(QuizAttempt.user_id == user.id).all()
-            docs = db.query(Document).filter(Document.user_id == user.id).all()
+            attempts = attempts_by_user.get(user.id, [])
+            docs = docs_by_user.get(user.id, [])
 
             quizzes_taken = len(attempts)
             total_correct = sum(a.score for a in attempts)
@@ -1183,19 +1431,22 @@ def get_leaderboard_rankings(current_user_id: str) -> dict:
             if docs_count >= 2:
                 badges.append("PDF Pioneer")
 
+            is_current = (user.id == current_user_id)
+            display_email = user.email if is_current else _mask_email(user.email)
+
             rankings.append({
                 "user_id": user.id,
                 "username": user.username,
-                "email": user.email,
+                "email": display_email,
                 "total_xp": total_xp,
                 "quizzes_taken": quizzes_taken,
                 "avg_accuracy": avg_accuracy,
                 "docs_uploaded": docs_count,
                 "badges": badges,
-                "is_current_user": (user.id == current_user_id)
+                "is_current_user": is_current,
             })
 
-        # Sort by XP descending
+        # Sort by XP descending, then accuracy descending
         rankings.sort(key=lambda x: (x["total_xp"], x["avg_accuracy"]), reverse=True)
 
         # Assign rank numbers

@@ -74,6 +74,8 @@ export const chatApi = {
     api.get(`/chat/sessions/${sessionId}/messages`),
   deleteSession: (sessionId: string) =>
     api.delete(`/chat/sessions/${sessionId}`),
+  deleteSessionsBatch: (sessionIds: string[]) =>
+    api.post('/study/sessions/batch-delete', { session_ids: sessionIds }),
 }
 
 // SSE streaming — using fetch + ReadableStream for reliable header auth & proxy support
@@ -294,6 +296,8 @@ export const dashboardApi = {
   continue: () => api.get('/dashboard/continue'),
   recordActivity: (data: { activity_type: string; title: string; subject_id?: string; topic_id?: string }) =>
     api.post('/dashboard/activity/record', data),
+  sendHeartbeat: (activeSeconds: number = 30) =>
+    api.post('/dashboard/heartbeat', { active_seconds: activeSeconds }),
   updateProgress: (data: { subject_id: string; topic_id: string; progress_percentage: number }) =>
     api.post('/dashboard/progress/update', data),
   goals: () => api.get('/dashboard/goals'),
@@ -318,6 +322,9 @@ export const documentsApi = {
     api.post('/documents/concept-explain', { concept, topic_id: topicId }),
   delete: (docId: string) => api.delete(`/documents/${docId}`),
   deleteSection: (sectionId: string) => api.delete(`/documents/section/${sectionId}`),
+  linkToSession: (payload: { session_id: string; doc_id?: string; filename?: string; doc_hash?: string; file_path?: string }) =>
+    api.post('/documents/link-to-session', payload),
+  getSessionDocuments: (sessionId: string) => api.get(`/documents/session/${sessionId}`),
 }
 
 
@@ -401,6 +408,8 @@ export const studyApi = {
     api.post('/study/sessions/new', payload || {}),
   getSession: (sessionId: string) => api.get(`/study/sessions/${sessionId}`),
   deleteSession: (sessionId: string) => api.delete(`/study/sessions/${sessionId}`),
+  deleteSessionsBatch: (sessionIds: string[]) =>
+    api.post('/study/sessions/batch-delete', { session_ids: sessionIds }),
   deleteDocument: (sessionId: string, docNameOrId: string) =>
     api.delete(`/study/sessions/${sessionId}/documents/${encodeURIComponent(docNameOrId)}`),
   getMemory: (userId: string) => api.get(`/study/memory/${userId}`),

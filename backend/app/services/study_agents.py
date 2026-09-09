@@ -205,12 +205,37 @@ COMMON_SUBJECT_EXPANSIONS = {
 }
 
 
+GENERIC_NON_SUBJECT_TERMS = {
+    "the topic", "topic", "a topic", "this topic", "current topic", "topics",
+    "the subject", "subject", "a subject", "this subject", "current subject", "subjects",
+    "anything", "something", "whatever", "nothing", "everything", "general", "study",
+    "this", "that", "it", "here", "there", "question", "help", "info", "overview"
+}
+
+
+def is_academic_question_or_query(query: str) -> bool:
+    """Detects if query is a question or inquiry rather than a subject declaration."""
+    if not query:
+        return False
+    q = query.strip().lower()
+    if "?" in q:
+        return True
+    question_starters = (
+        "what", "why", "how", "when", "where", "who", "which", "can ", "could ", "would ",
+        "is ", "are ", "do ", "does ", "did ", "tell ", "explain ", "describe ", "show ",
+        "solve ", "define ", "list ", "give ", "help ", "understand ", "meaning "
+    )
+    return any(q.startswith(starter) for starter in question_starters)
+
+
 def normalize_subject_title(raw_subject: str) -> str:
     """Standardizes subject names and maps common acronyms (e.g. 'ml' -> 'Machine Learning')."""
     if not raw_subject:
         return "General Study"
     cleaned = raw_subject.strip()
     low = cleaned.lower().rstrip(".!?,")
+    if low in GENERIC_NON_SUBJECT_TERMS:
+        return "General Study"
     if low in COMMON_SUBJECT_EXPANSIONS:
         return COMMON_SUBJECT_EXPANSIONS[low]
     if len(low.split()) <= 4:
@@ -224,6 +249,8 @@ def normalize_subject_title(raw_subject: str) -> str:
     ).strip().rstrip("?.!,")
     if cleaned and 2 <= len(cleaned) <= 60:
         c_low = cleaned.lower()
+        if c_low in GENERIC_NON_SUBJECT_TERMS:
+            return "General Study"
         if c_low in COMMON_SUBJECT_EXPANSIONS:
             return COMMON_SUBJECT_EXPANSIONS[c_low]
         return cleaned.title()
@@ -235,7 +262,7 @@ def extract_subject_from_query(query: str, default_subject: str = "General Study
     sub = normalize_subject_title(query)
     if sub != "General Study":
         return sub
-    if default_subject and default_subject not in ("General Study", "New Course Workspace", "Default Study Room", ""):
+    if default_subject and default_subject not in ("General Study", "New Course Workspace", "Default Study Room", "", "The Topic", "Topic"):
         return normalize_subject_title(default_subject)
     return "General Study"
 
@@ -1247,6 +1274,77 @@ def detect_expected_row_count(query: str, chunks: List[Dict[str, Any]]) -> Optio
     return None
 
 
+
+def format_advanced_out_of_material_response(
+    query_or_topic: str,
+    subject: str,
+    session_docs: List[Dict[str, Any]],
+    session_topics: Any,
+    reason: Optional[str] = None
+) -> str:
+    """
+    Format a clean, structured, advanced Markdown response when a user query
+    is out of scope / absent from their uploaded course materials.
+    """
+    raw_topic = query_or_topic.strip() if query_or_topic else "this topic"
+    clean_topic = re.sub(r"[^\w\s\-\?\.\'\"]", "", raw_topic).strip() or raw_topic
+    
+    doc_names = [d.get("filename") for d in session_docs if isinstance(d, dict) and d.get("filename") and d.get("filename") != "Unknown Document"]
+    
+    if doc_names:
+        docs_formatted = ", ".join(f"`{d}`" for d in doc_names[:3])
+    else:
+        docs_formatted = "*Uploaded course materials*"
+        
+    subject_display = f"**{subject}**" if subject and subject not in ("General Study", "New Course Workspace", "Default Study Room", "") else "your current session"
+    
+    # Format suggested topics from session_topics or default suggestions
+    suggested_items = []
+    seen_titles = set()
+    topics_list = session_topics if isinstance(session_topics, list) else []
+    for top in topics_list[:6]:
+        if isinstance(top, dict):
+            t_title = top.get("title") or top.get("topic_title") or top.get("name")
+            t_sum = top.get("summary") or ""
+        else:
+            t_title = str(top)
+            t_sum = ""
+            
+        if t_title and str(t_title).strip().lower() not in seen_titles:
+            seen_titles.add(str(t_title).strip().lower())
+            if t_sum and len(str(t_sum)) > 10:
+                short_sum = str(t_sum)[:90].strip() + "..." if len(str(t_sum)) > 90 else str(t_sum).strip()
+                suggested_items.append(f"- 📌 **{t_title}** — *{short_sum}*")
+            else:
+                suggested_items.append(f"- 📌 **{t_title}**")
+                
+    if suggested_items:
+        suggested_block = "\n".join(suggested_items)
+    else:
+        suggested_block = "- 📌 *Topics listed in your syllabus or uploaded document chapters.*"
+        
+    reason_note = f"\n> *Detail*: {reason}\n" if reason else ""
+
+    response_md = (
+        f"> ⚠️ **Out of Material Scope**\n"
+        f">\n"
+        f"> The query or topic **\"{clean_topic}\"** is not covered in your uploaded course materials for {subject_display}.\n"
+        f"{reason_note}\n"
+        f"### 🔍 Grounding & Scope Analysis\n"
+        f"- **Target Query / Concept**: `{clean_topic}`\n"
+        f"- **Uploaded Document(s)**: {docs_formatted}\n"
+        f"- **Subject Context**: {subject_display}\n"
+        f"- **Status**: **Out of Material Scope** — DeepTutor scanned your indexed course content, but no matching definitions, formulas, or text chunks were found.\n\n"
+        f"### 📚 Suggested Topics Covered in Your Materials\n"
+        f"You can ask questions, generate flashcards, or practice quizzes on any of these topics covered in your uploaded materials:\n"
+        f"{suggested_block}\n\n"
+        f"---\n"
+        f"💡 **Tip**: *If you would like to study **\"{clean_topic}\"**, please upload the relevant lecture notes, slides, or textbook PDF using the **+** button in the sidebar.*"
+    )
+
+    return response_md
+
+
 # ─── 2. Executor Agent (DecisionAgent) ──────────────────────────────────────
 
 class DecisionAgent:
@@ -1503,35 +1601,69 @@ class DecisionAgent:
                     "format": "conceptual"
                 }
 
-            # 2.1.3 Meta query about DeepTutor's identity
-            is_meta_question = q_clean in (
-                "who are you", "what are you", "what can you do", "help", "who created you", "what is deeptutor"
-            )
-            if is_meta_question:
-                meta_resp = (
-                    "Hello! I am **DeepTutor**, your AI academic tutor.\n\n"
-                    "I help you master academic subjects, solve technical problems from first principles, and prepare for exams.\n\n"
-                    "To get started, tell me what subject or topic you would like to study (for example: **Machine Learning**, **Physics**, **Linear Algebra**), or upload your course notes using the **+** button!"
+            # 2.1.3 Questions, inquiries, or meta queries -> Dynamic LLM Reasoning Pass (ZERO Hallucination)
+            if is_academic_question_or_query(user_query) or q_clean in ("who are you", "what are you", "what can you do", "help", "who created you", "what is deeptutor", "what is the topic", "what are we studying"):
+                reasoning_prompt = f"""User Query: "{user_query}"
+Current Workspace Context: No document uploaded yet to this workspace. Active Workspace Subject: "{subject or 'General Study'}"
+
+Instructions for your response:
+1. THINK STEP-BY-STEP in your reasoning about what the user is asking.
+2. If the user asks about the current topic, workspace, or what to study (e.g. 'what is the topic', 'what are we studying', 'what is this session'):
+   Explain clearly that no study material or specific document has been attached to this workspace yet. Inform them they can upload a PDF using the '+' button or specify any topic they want to explore.
+3. If the user asks an academic question (e.g. 'what is physics', 'explain calculus', 'how does gravity work', 'what is machine learning'):
+   Provide a clear, expert, first-principles academic response. Use KaTeX for math if applicable ($...$ inline, $$...$$ blocks).
+4. Do NOT hallucinate false course materials or pretend a document exists when it does not.
+5. Do NOT output hardcoded template text like "Welcome to The Topic!"."""
+
+                llm_response = await call_llm(
+                    reasoning_prompt,
+                    "You are DeepTutor, an elite AI academic tutor. Always think through user queries carefully and provide clear, accurate, unhallucinated responses.",
+                    temperature=0.2
                 )
+
+                thought_proc = f"Reasoned dynamically about query '{user_query}' in empty workspace."
+                if "Thought Process:" in llm_response:
+                    parts = llm_response.split("Thought Process:", 1)[1].split("\n\n", 1)
+                    thought_proc = parts[0].strip()
+                    llm_response = parts[1].strip() if len(parts) > 1 else llm_response
+
                 return {
-                    "thought_process": "Answered general meta query about DeepTutor's identity and capabilities.",
-                    "response": meta_resp,
+                    "thought_process": thought_proc,
+                    "response": llm_response,
                     "sources": [],
                     "format": "conceptual"
                 }
 
-            # 2.1.4 Student specified a subject or topic in an empty workspace
+            # 2.1.4 Only if student explicitly declared a valid subject (e.g., "Quantum Physics", "Machine Learning")
             target_subject = extract_subject_from_query(user_query, default_subject=subject)
-            material_prompt = (
-                f"### Welcome to **{target_subject}**!\n\n"
-                f"To give you the best study experience:\n\n"
-                f"**Do you have study material (notes, slides, or a syllabus PDF) for {target_subject}?**\n\n"
-                f"- **Yes**: Reply **Yes** or click the **+** (Attach) button below to upload your file. DeepTutor will align all lessons, study maps, and quizzes strictly to your course.\n"
-                f"- **No**: Reply **No**, and I will calibrate and generate a comprehensive, structured textbook and curriculum roadmap for **{target_subject}** so we can begin studying right away!"
+            if target_subject and target_subject not in ("General Study", "The Topic", "Topic", "A Topic", "This Topic"):
+                material_prompt = (
+                    f"### Welcome to **{target_subject}**!\n\n"
+                    f"To give you the best study experience:\n\n"
+                    f"**Do you have study material (notes, slides, or a syllabus PDF) for {target_subject}?**\n\n"
+                    f"- **Yes**: Reply **Yes** or click the **+** (Attach) button below to upload your file. DeepTutor will align all lessons, study maps, and quizzes strictly to your course.\n"
+                    f"- **No**: Reply **No**, and I will calibrate and generate a comprehensive, structured textbook and curriculum roadmap for **{target_subject}** so we can begin studying right away!"
+                )
+                return {
+                    "thought_process": f"No materials uploaded yet for subject '{target_subject}'. Inquired if student has course materials or wants a generated synthetic textbook.",
+                    "response": material_prompt,
+                    "sources": [],
+                    "format": "conceptual"
+                }
+
+            # 2.1.5 Fallback for any other general input in empty workspace: LLM Reasoning Pass
+            reasoning_prompt = f"""User Query: "{user_query}"
+Current Workspace Context: No document uploaded yet. Active Workspace Subject: "{subject or 'General Study'}"
+
+Provide a clear, helpful, expert academic response to the user's query."""
+            llm_response = await call_llm(
+                reasoning_prompt,
+                "You are DeepTutor, an elite AI academic tutor. Always think through user queries carefully and provide clear, accurate, unhallucinated responses.",
+                temperature=0.2
             )
             return {
-                "thought_process": f"No materials uploaded yet for subject '{target_subject}'. Inquired if student has course materials or wants a generated synthetic textbook.",
-                "response": material_prompt,
+                "thought_process": f"Generated direct LLM response for query '{user_query}'.",
+                "response": llm_response,
                 "sources": [],
                 "format": "conceptual"
             }
@@ -1706,25 +1838,22 @@ class DecisionAgent:
             )
 
             if deck.get("out_of_topic"):
-                suggested_topics = deck.get("suggested_topics") or []
-                suggested_str = "\n".join(f"- **{t}**" for t in suggested_topics[:6] if t)
-                reason = deck.get("reason", f"The topic '{clean_title}' is not covered in your uploaded course materials.")
-                
-                refusal_response = (
-                    f"The topic **\"{clean_title}\"** is out of the scope of your uploaded course materials for **{subject}**.\n\n"
-                    f"{reason}\n\n"
+                session_docs_objs = get_session_documents(session_id)
+                session_topics_objs = get_session_topics(session_id)
+                reason = deck.get("reason")
+                deck_suggested = deck.get("suggested_topics") or []
+                all_suggested = list(deck_suggested) + [t.get("title") for t in session_topics_objs if isinstance(t, dict) and t.get("title")]
+
+                refusal_response = format_advanced_out_of_material_response(
+                    query_or_topic=clean_title,
+                    subject=subject,
+                    session_docs=session_docs_objs,
+                    session_topics=all_suggested or session_topics_objs,
+                    reason=reason
                 )
-                if suggested_str:
-                    refusal_response += (
-                        f"To ensure accurate and grounded practice, you can generate flashcards and quizzes for topics covered in your syllabus:\n"
-                        f"{suggested_str}\n\n"
-                        f"**Would you like to practice one of these topics instead?**"
-                    )
-                else:
-                    refusal_response += "Please ask for flashcards on a topic from your uploaded course materials."
 
                 return {
-                    "thought_process": f"Requested topic '{clean_title}' is out of syllabus/scope for '{subject}'. Refused ungrounded deck generation.",
+                    "thought_process": f"Requested topic '{clean_title}' is out of syllabus/scope for '{subject}'. Refused ungrounded deck generation with advanced out-of-material format.",
                     "response": refusal_response,
                     "sources": [],
                     "quiz_data": None,
@@ -1736,6 +1865,18 @@ class DecisionAgent:
                 f"({len(deck.get('questions', []))} cards directly covering the concepts and mechanisms discussed above).\n\n"
                 f"You can flip cards in 3D to review key definitions and formulas, or switch to **Quiz Mode** for interactive self-testing below!"
             )
+
+            # Persist flashcard deck items to database flashcards table
+            try:
+                from app.core import database as db_core
+                persist_key = session_id or clean_title.lower().replace(" ", "_")
+                for q in deck.get("questions", []):
+                    front_t = q.get("prompt") or q.get("question") or q.get("front") or ""
+                    back_t = q.get("explanation") or q.get("correct_answer") or q.get("back") or ""
+                    if front_t and back_t:
+                        db_core.add_flashcard(topic_id=persist_key, front=front_t, back=back_t)
+            except Exception as fe:
+                print(f"[StudyAgent] Flashcard persistence notice: {fe}")
 
             return {
                 "thought_process": f"Detected flashcard/quiz request '{user_query}' for topic '{clean_title}'. Generated grounded {len(deck.get('questions', []))}-card dual-mode JSON deck with explanation level '{explanation_level}'.",
@@ -1756,15 +1897,15 @@ class DecisionAgent:
         has_uploaded_docs = bool(session_docs or all_doc_chunks)
 
         if has_uploaded_docs and not retrieved_chunks and not is_boolean_yes:
-            doc_names = [d.get("filename") for d in session_docs if d.get("filename")]
-            doc_str = f" in your uploaded materials ({', '.join(doc_names[:3])})" if doc_names else " in your uploaded materials"
-            subject_str = f" for **{subject}**" if subject and subject != "General Study" else ""
-            decline_msg = (
-                f"I could not find information on this{doc_str}{subject_str}.\n\n"
-                f"Please ask questions related to the concepts in your uploaded course materials, or upload additional materials using the **+** button."
+            session_topics_objs = get_session_topics(session_id)
+            decline_msg = format_advanced_out_of_material_response(
+                query_or_topic=user_query,
+                subject=subject,
+                session_docs=session_docs,
+                session_topics=session_topics_objs
             )
             return {
-                "thought_process": "Checked session FTS5 SQLite index. Matching chunks absent in uploaded materials. Declining per grounding policy.",
+                "thought_process": f"Checked session FTS index for query '{user_query}'. Matching chunks absent in uploaded materials. Returned advanced out-of-material format.",
                 "response": decline_msg,
                 "sources": [],
                 "format": plan.get("response_format", "conceptual")
@@ -1848,7 +1989,7 @@ STRICT RULES:
    - Mode 2 (Insufficient / Partial Inputs): If the retrieved context provides SOME but NOT ALL values or variables needed to solve a problem (e.g., mass and force given, angle missing):
      You MUST explicitly state which specific parameter or value is missing, explain the governing formula that requires it, and ask the student for that specific value or guide them to where in the course materials it might be found. Do NOT invent, assume, or hallucinate a plausible numerical value, and do NOT decline completely.
    - Mode 3 (Source Contradiction / Typos): If a formula, constant, or unit in the retrieved text looks internally contradictory or contains a clear source typo (e.g., units do not reconcile across equations), you MUST explicitly flag the inconsistency to the student rather than silently 'fixing' it or blindly calculating.
-   - Mode 4 (Out-of-Topic / Absent from Materials): If course materials ARE uploaded for this session and the student's question topic is NOT present in the uploaded course materials, you MUST STRICTLY decline to answer or explain the out-of-topic concept. State clearly that the concept is not covered in their uploaded materials for {subject}, suggest topics that ARE in their uploaded materials, and invite them to ask questions on those topics or upload notes for the new topic. Strictly do NOT provide general academic overviews, definitions, or explanations for out-of-topic concepts when materials are uploaded. If NO materials are uploaded yet, answer the student's query clearly and academically from first principles, and conclude with a tip to upload course materials.
+   - Mode 4 (Out-of-Topic / Absent from Materials): If course materials ARE uploaded for this session and the student's question topic is NOT present in the uploaded course materials, you MUST STRICTLY decline to answer or explain the out-of-topic concept. Format your refusal strictly using the structured Advanced Markdown Out-of-Material format (starting with `> ⚠️ **Out of Material Scope**`, `###  Grounding & Scope Analysis`, `###  Suggested Topics Covered in Your Materials`, and a tip callout). Strictly do NOT provide general academic overviews, definitions, or explanations for out-of-topic concepts when materials are uploaded. If NO materials are uploaded yet, answer the student's query clearly and academically from first principles, and conclude with a tip to upload course materials.
 2. Multi-Material & Cross-Chunk Disagreement Rule:
    - If retrieved chunks come from multiple uploaded materials (or if the student asks to compare or explain both materials):
      You MUST explicitly analyze and present the content from EACH material under clear section headings (e.g. '### Material: [Document Name]').
