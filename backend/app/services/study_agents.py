@@ -214,8 +214,47 @@ GENERIC_NON_SUBJECT_TERMS = {
     "the topic", "topic", "a topic", "this topic", "current topic", "topics",
     "the subject", "subject", "a subject", "this subject", "current subject", "subjects",
     "anything", "something", "whatever", "nothing", "everything", "general", "study",
-    "this", "that", "it", "here", "there", "question", "help", "info", "overview"
+    "this", "that", "it", "here", "there", "question", "help", "info", "overview",
+    "topic for the material", "topics for the material", "topic of the material", "topics of the material",
+    "topic for material", "topics for material", "topic of material", "topics of material",
+    "topic for the meterial", "topics for the meterial", "topic of the meterial", "topics of the meterial",
+    "topics in the material", "topics in this material", "material topics", "material topic"
 }
+
+
+def is_material_topics_query(query: str) -> bool:
+    """Detects if query is asking for the topics, chapters, syllabus, or content overview of the uploaded material."""
+    if not query:
+        return False
+    q = query.lower().strip().rstrip("?.!,")
+    exact_phrases = (
+        "topic for the material", "topics for the material", "topic of the material", "topics of the material",
+        "topic for material", "topics for material", "topic of material", "topics of material",
+        "topics in the material", "topics in this material", "topics in material", "topics in pdf",
+        "topic in the material", "topic in this material", "what is the topic for the material",
+        "what are the topics for the material", "what are the topics in this material",
+        "what is the topic of the material", "what are the topics of the material",
+        "what are the topics", "what is the topic", "list topics", "show topics", "give topics",
+        "material topics", "syllabus of this material", "syllabus of the material", "curriculum of the material",
+        "topic for the meterial", "topics for the meterial", "what is the topic for the meterial",
+        "what are the topics for the meterial", "topic for meterial", "topics for meterial",
+        "what is the topic in the material", "what is the topic in this material",
+        "what are the topics in the material", "what are topics in this material"
+    )
+    if any(p in q for p in exact_phrases):
+        return True
+    patterns = [
+        r"\b(?:what (?:is|are) (?:the )?(?:topics?|chapters?|curriculum|syllabus))\b",
+        r"\b(?:topics?|chapters?|syllabus|curriculum)\s+(?:for|of|in|from)\s+(?:the|this|my)?\s*(?:material|meterial|materiel|document|pdf|notes?|book|textbook|course|session)\b",
+        r"\b(?:list|show|give|tell|display|see|find)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?(?:topics?|chapters?|syllabus|curriculum)\b",
+        r"\bwhat\s+(?:does\s+)?(?:this|the)\s+(?:material|meterial|materiel|document|pdf|notes?|book)\s+(?:cover|contain|have|include)\b",
+        r"\bwhat\s+(?:can\s+i\s+learn|can\s+we\s+learn|topics?\s+are\s+there)\s+(?:from|in)\s+(?:this|the)\s+(?:material|meterial|materiel|document|pdf|notes?)\b",
+        r"\bwhat\s+is\s+(?:inside|in)\s+(?:this|the)\s+(?:material|meterial|materiel|document|pdf)\b",
+    ]
+    for pat in patterns:
+        if re.search(pat, q):
+            return True
+    return False
 
 
 def is_academic_question_or_query(query: str) -> bool:
@@ -1035,8 +1074,11 @@ class QueryAnalyzerAgent:
             explanation_level = "standard"
 
         # Primary format
+        is_material_topics = is_material_topics_query(user_query)
         if continuation_format:
             resp_format = continuation_format
+        elif is_material_topics:
+            resp_format = "material_topics"
         elif is_quiz:
             resp_format = "quiz"
         elif is_study_notes:
@@ -1176,6 +1218,7 @@ class QueryAnalyzerAgent:
             "is_compound": len(sub_intents) > 1,
             "cross_ref_concepts": cross_ref_concepts,
             "is_meta_referential": is_meta_ref,
+            "is_material_topics_query": is_material_topics,
             "resolved_topic": resolved_topic,
             "prev_assistant_text": prev_assistant_text,
             "confidence": 0.95,
@@ -1368,32 +1411,32 @@ def format_advanced_out_of_material_response(
             seen_titles.add(str(t_title).strip().lower())
             if t_sum and len(str(t_sum)) > 10:
                 short_sum = str(t_sum)[:90].strip() + "..." if len(str(t_sum)) > 90 else str(t_sum).strip()
-                suggested_items.append(f"- 📌 **{t_title}** — *{short_sum}*")
+                suggested_items.append(f"- **{t_title}** — *{short_sum}*")
             else:
-                suggested_items.append(f"- 📌 **{t_title}**")
+                suggested_items.append(f"- **{t_title}**")
                 
     if suggested_items:
         suggested_block = "\n".join(suggested_items)
     else:
-        suggested_block = "- 📌 *Topics listed in your syllabus or uploaded document chapters.*"
+        suggested_block = "- *Topics listed in your syllabus or uploaded document chapters.*"
         
     reason_note = f"\n> *Detail*: {reason}\n" if reason else ""
 
     response_md = (
-        f"> ⚠️ **Out of Material Scope**\n"
+        f"> **Out of Material Scope**\n"
         f">\n"
         f"> The query or topic **\"{clean_topic}\"** is not covered in your uploaded course materials for {subject_display}.\n"
         f"{reason_note}\n"
-        f"### 🔍 Grounding & Scope Analysis\n"
+        f"### Grounding & Scope Analysis\n"
         f"- **Target Query / Concept**: `{clean_topic}`\n"
         f"- **Uploaded Document(s)**: {docs_formatted}\n"
         f"- **Subject Context**: {subject_display}\n"
         f"- **Status**: **Out of Material Scope** — DeepTutor scanned your indexed course content, but no matching definitions, formulas, or text chunks were found.\n\n"
-        f"### 📚 Suggested Topics Covered in Your Materials\n"
+        f"### Available Topics in Your Materials\n"
         f"You can ask questions, generate flashcards, or practice quizzes on any of these topics covered in your uploaded materials:\n"
         f"{suggested_block}\n\n"
         f"---\n"
-        f"💡 **Tip**: *If you would like to study **\"{clean_topic}\"**, please upload the relevant lecture notes, slides, or textbook PDF using the **+** button in the sidebar.*"
+        f"**Tip**: *If you would like to study **\"{clean_topic}\"**, please upload the relevant lecture notes, slides, or textbook PDF using the attachment button in the sidebar.*"
     )
 
     return response_md
@@ -1496,6 +1539,88 @@ class DecisionAgent:
                 "response": greeting_response,
                 "sources": [],
                 "format": "conceptual"
+            }
+
+        # 1.6 Dedicated Material Topics / Syllabus Inquiry Handler
+        if is_material_topics_query(user_query) or plan.get("is_material_topics_query"):
+            session_docs = get_session_documents(session_id)
+            session_topics = get_session_topics(session_id)
+            all_doc_chunks = get_all_chunks(session_id, limit=8)
+            has_uploaded_docs = bool(session_docs or all_doc_chunks)
+
+            if not has_uploaded_docs:
+                return {
+                    "thought_process": "Student inquired about material topics, but no documents have been uploaded to this session yet.",
+                    "response": (
+                        "No course material has been uploaded to this session yet.\n\n"
+                        "To see the curriculum topics, please upload your textbook, lecture notes, or syllabus PDF using the attachment button below. "
+                        "Once uploaded, I will extract all the key topics and organize them into a structured study roadmap for you.\n\n"
+                        "**Would you like to upload a document now, or shall we explore a general topic first?**"
+                    ),
+                    "sources": [],
+                    "format": "material_topics"
+                }
+
+            doc_names = [d.get("filename") for d in session_docs if isinstance(d, dict) and d.get("filename")]
+            doc_label = f"**{', '.join(doc_names[:2])}**" if doc_names else "your uploaded material"
+            subject_display = f" for **{subject}**" if subject and subject not in ("General Study", "New Course Workspace", "Default Study Room", "") else ""
+
+            if session_topics:
+                rows = []
+                first_topic_name = ""
+                for idx, top in enumerate(session_topics[:8], 1):
+                    raw_title = top.get("title") or f"Topic {idx}"
+                    clean_title = re.sub(r"^\d+[\.\:\-]\s*", "", raw_title).strip()
+                    if idx == 1:
+                        first_topic_name = clean_title
+                    summary = top.get("summary") or ""
+                    key_c = top.get("key_concepts") or []
+                    if isinstance(key_c, list) and key_c:
+                        key_str = ", ".join(str(k) for k in key_c[:3])
+                        focus = f"{summary} (Concepts: {key_str})" if summary else key_str
+                    else:
+                        focus = summary or "Foundational theory and core applications"
+                    if len(focus) > 110:
+                        focus = focus[:107].rsplit(" ", 1)[0] + "..."
+                    diff = (top.get("difficulty") or "Standard").capitalize()
+                    rows.append(f"| {idx} | **{clean_title}** | {focus} | {diff} |")
+
+                table_md = "| # | Topic | Key Focus & Concepts | Difficulty |\n|---|---|---|---|\n" + "\n".join(rows)
+                first_ref = f"Topic 1 ({first_topic_name})" if first_topic_name else "Topic 1"
+
+                resp_text = (
+                    f"Here are the primary topics covered in {doc_label}{subject_display}:\n\n"
+                    f"{table_md}\n\n"
+                    f"These topics provide a structured progression through your course material.\n\n"
+                    f"**Would you like to start with {first_ref}, or is there a specific topic you want to explore first?**"
+                )
+                return {
+                    "thought_process": f"Retrieved {len(session_topics)} curriculum topics for {doc_label}. Formatted structured table with difficulty levels and key focus.",
+                    "response": resp_text,
+                    "sources": [{"chunk_id": c["chunk_id"], "page": c["page"]} for c in all_doc_chunks[:2]],
+                    "format": "material_topics"
+                }
+
+            # If documents exist but session_topics is empty, synthesize topics from chunks
+            chunks_context = "\n\n".join(c["content"] for c in all_doc_chunks[:6])
+            synth_prompt = (
+                f"The student asked: \"{user_query}\"\n\n"
+                f"Extract and summarize the curriculum topics from their uploaded course material ({doc_label}).\n"
+                f"MATERIAL TEXT EXCERPTS:\n{chunks_context}\n\n"
+                f"INSTRUCTIONS:\n"
+                f"1. Start with a 1-sentence overview introducing the topics covered in {doc_label}.\n"
+                f"2. Present a clean Markdown table with 4 to 6 main topics:\n"
+                f"   | # | Topic | Key Focus & Concepts | Difficulty |\n"
+                f"3. Add a 1-sentence note summarizing the learning progression.\n"
+                f"4. End with a single bold conversational follow-up question (e.g. \"**Would you like to start with Topic 1, or is there a specific topic you want to explore first?**\").\n"
+                f"STRICT RULES: Zero emojis. Clean, professional, student-friendly tone."
+            )
+            synth_resp = await call_llm(synth_prompt, system_instruction="You are DeepTutor, an elite academic AI mentor. Zero emojis. Clean Markdown table.")
+            return {
+                "thought_process": f"Extracted curriculum topics on the fly from {len(all_doc_chunks)} chunks of {doc_label}.",
+                "response": synth_resp or f"Your uploaded material {doc_label} covers the core syllabus for {subject}. Please ask any specific question from your material to begin.",
+                "sources": [{"chunk_id": c["chunk_id"], "page": c["page"]} for c in all_doc_chunks[:2]],
+                "format": "material_topics"
             }
 
         # 2. Check if student query is a Boolean confirmation / refusal (with trailing clause support)

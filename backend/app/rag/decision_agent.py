@@ -59,6 +59,13 @@ RESPONSE GUIDELINES:
        Covering rows like **Learning Paradigm**, **Decision Boundary / Mechanism**, **Computational Complexity**, and **Best Used For**.
     3. Provide a **Concrete Real-World Example** (`**Example:** ...`) contrasting how both handle the exact same scenario.
     4. End with a **natural, conversational follow-up question** that the user can answer with a simple "yes" or "no" (e.g., *"Would you like to see how this comparison applies to a practical use case in your material?"* or *"Shall we test this with a quick practice quiz?"*).
+  - **material_topics** (topics in the material / syllabus):
+    1. Start with a 1-sentence plain-language overview of what the course material covers.
+    2. Present the main topics in a Clean Markdown Table with columns:
+       `| # | Topic | Core Focus / What You Will Learn | Difficulty |`
+       covering 4 to 8 primary topics found in the material.
+    3. Add a 1-sentence summary of the learning progression.
+    4. End with a single conversational follow-up question asking which topic the student would like to begin with (e.g., *"Would you like to start with Topic 1, or is there a specific topic you want to explore first?"*).
   - **list**: Provide clean, structured markdown bullet points with bold headers, a short example, and a natural yes/no follow-up question at the end.
   - **conceptual** (default):
     1. Start with an intuitive, plain-language hook (no jargon).
@@ -313,6 +320,12 @@ Respond with ONLY this JSON object:
                             "STRICT INSTRUCTION: Ground your answer ONLY in the uploaded course material above. "
                             "If the student asks something outside this material (e.g. unrelated coding, general "
                             "chatbot queries), politely decline and redirect them back to their syllabus topics.",
+            })
+        elif query_analysis and query_analysis.get("intent") == "MATERIAL_TOPICS_REQUEST":
+            messages.append({
+                "role": "system",
+                "content": "NOTE: The student asked for the curriculum topics covered in their material, but no document context was provided. "
+                            "Politely explain that no course material has been uploaded to this session yet, and invite them to upload their textbook or notes PDF using the attachment button so you can extract the curriculum roadmap for them.",
             })
         elif query_analysis and query_analysis.get("recommended_action") == "EXPLAIN":
             messages.append({
@@ -579,6 +592,22 @@ Respond with ONLY this JSON object:
                 "quiz_data": None,
                 "reply": f"{summary_text}\n\n**Key Takeaway:** Focus on how this principle applies to your problem solving.\n\n**Quick check:** Would you like a practice quiz question on this topic?",
                 "groundedness_note": "Directly extracted from retrieved context; not LLM-synthesized.",
+            }
+
+        if query_analysis and query_analysis.get("intent") == "MATERIAL_TOPICS_REQUEST":
+            return {
+                "thought_process": "Student requested topics for the material, but LLM is unreachable or material is not uploaded.",
+                "intent": "MATERIAL_TOPICS_REQUEST",
+                "extracted_subject": None,
+                "is_explanation": True,
+                "quiz_data": None,
+                "reply": (
+                    "No course material has been uploaded to this session yet.\n\n"
+                    "To view the curriculum topics, please upload your textbook or notes PDF using the attachment clip below, and I will extract the curriculum topics and create a personalized study roadmap for you."
+                ),
+                "groundedness_note": None,
+                "response_format": "material_topics",
+                "export_ready": False,
             }
 
         is_question = any(q in lower for q in [

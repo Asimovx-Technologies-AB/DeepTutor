@@ -222,6 +222,20 @@ class QueryAnalyzerAgent:
                 recommended_action="QUIZ",
             ).as_dict()
 
+        # 6. Material Topics / Curriculum Inquiry
+        if re.search(
+            r"\b(?:what (?:is|are) (?:the )?topics?|topics? (?:for|of|in|from)|list (?:all )?(?:the )?topics?|show (?:all )?(?:the )?topics?|syllabus|curriculum|what does (?:this|the) (?:mat[ea]r[ia]l|pdf|document) cover|what is (?:in|inside) (?:this|the) (?:mat[ea]r[ia]l|pdf|document))\b",
+            lower
+        ):
+            return QueryPlan(
+                intent="MATERIAL_TOPICS_REQUEST",
+                reasoning="Student requested the curriculum topics covered in the uploaded course material.",
+                target_topic=current_subject,
+                response_format="material_topics",
+                confidence=0.98,
+                recommended_action="LIST_TOPICS",
+            ).as_dict()
+
         plan = await self._plan_with_retries(raw_msg, current_subject, history)
         return plan.as_dict()
 
