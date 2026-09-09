@@ -190,6 +190,18 @@ async def _run_indexing(doc_id: str, section_id: str, file_path: str, user_id: s
             status="completed",
         )
 
+        try:
+            from app.services.study_storage import update_document_status
+            update_document_status(section_id, doc_id, "completed")
+        except Exception as err:
+            logger.debug(f"[documents._run_indexing] update_document_status completed: {err}")
+
+        # Invalidate existing flashcards only after successful re-indexing
+        try:
+            db.delete_flashcards_for_topic(section_id)
+        except Exception as err:
+            logger.debug(f"[documents._run_indexing] delete_flashcards_for_topic: {err}")
+
         # Dispatch Background Path: Stage 2 (Table) & Stage 3 (Image/VLM) Enrichment
         asyncio.create_task(doc_processor.run_background_enrichment(doc_id))
     except Exception as e:
@@ -203,6 +215,11 @@ async def _run_indexing(doc_id: str, section_id: str, file_path: str, user_id: s
             status="failed",
             error_message=str(e),
         )
+        try:
+            from app.services.study_storage import update_document_status
+            update_document_status(section_id, doc_id, "failed")
+        except Exception as err:
+            logger.debug(f"[documents._run_indexing] update_document_status failed: {err}")
 
 
 @router.post("/upload")
@@ -266,7 +283,8 @@ async def upload_document(
             "file_type": ext.lstrip("."),
             "chunks_created": 0,
             "size_mb": round(size_mb, 2),
-            "topic_id": topic_id,
+            "topic_id": section_id,
+            "section_id": section_id,
             "message": "Document already exists, linked to this session instantly",
         }
 
@@ -277,8 +295,7 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="Invalid filename path traversal attempt.")
     file_path = str(dest_path)
 
-    with open(file_path, "wb") as f:
-        f.write(content)
+    await asyncio.to_thread(dest_path.write_bytes, content)
 
     doc = db.create_document(
         user_id=user["id"],
@@ -290,8 +307,20 @@ async def upload_document(
         status="processing",
     )
     link_document_to_session(doc_hash, section_id, user["id"], db=db)
+    try:
+        from app.services.study_storage import save_session_document
+        save_session_document(
+            session_id=section_id,
+            doc_id=doc["id"],
+            filename=safe_filename,
+            file_path=file_path,
+            status="processing",
+            user_id=user["id"],
+            doc_hash=doc_hash,
+        )
+    except Exception as e:
+        logger.warning(f"[documents.upload] save_session_document warning: {e}")
 
-    db.delete_flashcards_for_topic(section_id)
     background_tasks.add_task(_run_indexing, doc["id"], section_id, file_path, user["id"], safe_filename)
 
     return {
@@ -302,7 +331,8 @@ async def upload_document(
         "filename": safe_filename,
         "file_type": ext.lstrip("."),
         "size_mb": round(size_mb, 2),
-        "topic_id": topic_id,
+        "topic_id": section_id,
+        "section_id": section_id,
         "chunks_created": 0,
         "message": f"✅ {safe_filename} uploaded and indexing started.",
     }
