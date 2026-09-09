@@ -91,3 +91,28 @@ async def test_sympy_code_injection_blocked():
         res = await mcp_client_manager.execute_tool("solve_math_expression", {"expression": expr})
         assert res["status"] == "error"
         assert "Notice" in res["output"] or "Forbidden" in res["output"] or "Notice" in res["output"]
+
+
+def test_register_or_update_session_with_null_subject():
+    """Verify that register_or_update_session handles null and empty subjects without violating NOT NULL constraints."""
+    user_test = "user_null_subj_test"
+    sid = "session_null_subj_123"
+
+    # 1. Test with subject=None
+    res1 = register_or_update_session(session_id=sid, user_id=user_test, subject=None, title="Null Subject Test")
+    assert res1 is not None
+    assert res1["subject"] == "General Study"
+
+    # 2. Test with subject=""
+    res2 = register_or_update_session(session_id=sid, user_id=user_test, subject="", title="Empty Subject Test")
+    assert res2 is not None
+    assert res2["subject"] == "General Study"
+
+    # 3. Test with subject="   "
+    res3 = register_or_update_session(session_id=sid, user_id=user_test, subject="   ", title="Whitespace Subject Test")
+    assert res3 is not None
+    assert res3["subject"] == "General Study"
+
+    # Cleanup
+    delete_registry_session(sid, user_id=user_test)
+

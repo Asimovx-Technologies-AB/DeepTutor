@@ -819,7 +819,7 @@ def get_registry_session(session_id: str) -> Optional[Dict[str, Any]]:
 
 def register_or_update_session(
     session_id: str,
-    subject: str = "General Study",
+    subject: Optional[str] = "General Study",
     title: Optional[str] = None,
     document_name: Optional[str] = None,
     status: str = "ready",
@@ -829,7 +829,8 @@ def register_or_update_session(
 ) -> Dict[str, Any]:
     """Idempotently register or update a workspace session in PostgreSQL in a single atomic UPSERT."""
     now_str = datetime.now(timezone.utc).isoformat()
-    clean_title = title or f"{subject} Study Session"
+    clean_subject = (str(subject).strip() if subject is not None else "") or "General Study"
+    clean_title = title or f"{clean_subject} Study Session"
 
     # Single-query atomic insert or update preserving non-generic titles
     statement = sql_text("""
@@ -848,7 +849,7 @@ def register_or_update_session(
                 THEN workspace_sessions.title
                 ELSE COALESCE(:title, workspace_sessions.title)
             END,
-            subject = COALESCE(:subject, workspace_sessions.subject),
+            subject = COALESCE(:subject, workspace_sessions.subject, 'General Study'),
             last_active = :now,
             topics_count = COALESCE(:topic_count, workspace_sessions.topics_count),
             messages_count = COALESCE(:message_count, workspace_sessions.messages_count)
@@ -860,7 +861,7 @@ def register_or_update_session(
             "id": str(session_id),
             "user_id": str(user_id) if user_id else None,
             "title": clean_title,
-            "subject": subject,
+            "subject": clean_subject,
             "now": now_str,
             "topic_count": topic_count,
             "message_count": message_count,
@@ -877,7 +878,7 @@ def register_or_update_session(
         "id": str(session_id),
         "user_id": final_uid,
         "title": final_title,
-        "subject": subject,
+        "subject": clean_subject,
         "status": status,
         "document_name": document_name or (docs[0]["filename"] if docs else ""),
         "document_count": doc_count,
