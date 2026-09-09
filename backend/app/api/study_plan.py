@@ -1,5 +1,6 @@
 import json
 import re
+import logging
 from datetime import datetime, date
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends
@@ -7,6 +8,8 @@ from pydantic import BaseModel
 from app.api.auth import get_current_user
 from app.core import database as db
 from app.rag.llm_client import llm_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/study-plan", tags=["study-plan"])
 
@@ -90,8 +93,11 @@ async def _generate_day_study_notes(day_topic: str, key_concepts: List[str], top
             chunks = pg_fts_store.search_chunks(topic_id, day_topic, limit=3)
             if chunks:
                 material_context = "\n\nEXCERPTS FROM UPLOADED MATERIAL:\n" + "\n---\n".join([c.get("content", "") for c in chunks])
-        except Exception:
-            pass
+                logger.info(f"[_generate_day_study_notes] Retrieved {len(chunks)} contextual chunks for topic '{day_topic}'.")
+            else:
+                logger.info(f"[_generate_day_study_notes] No chunks found for topic '{day_topic}' in session '{topic_id}'.")
+        except Exception as e:
+            logger.warning(f"[_generate_day_study_notes] search_chunks failed for topic_id={topic_id}: {e}")
 
     prompt = f"""You are DeepTutor, an elite academic AI tutor.
 Write comprehensive, authoritative, beautifully structured master study notes for the topic: "{day_topic}".

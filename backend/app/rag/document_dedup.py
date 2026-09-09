@@ -72,7 +72,17 @@ def link_document_to_session(doc_hash: str, session_id: str, user_id: str, db=No
         True if linked successfully.
     """
     db_mod = db or db_core
-    return db_mod.link_document_to_session(doc_hash=doc_hash, session_id=session_id, user_id=user_id)
+    res = db_mod.link_document_to_session(doc_hash=doc_hash, session_id=session_id, user_id=user_id)
+    try:
+        from app.rag.pg_fts_store import pg_fts_store
+        pg_fts_store.clone_document_chunks_to_session(
+            target_session_id=session_id,
+            doc_hash=doc_hash,
+            user_id=user_id,
+        )
+    except Exception:
+        pass
+    return res
 
 
 def handle_upload(
