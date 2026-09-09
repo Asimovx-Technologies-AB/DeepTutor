@@ -308,6 +308,7 @@ export default function LearnPage() {
   const [speakingTokens, setSpeakingTokens] = useState<SpeechToken[]>([])
   const [isListeningVoice, setIsListeningVoice] = useState(false)
   const ttsIntervalRef = useRef<any>(null)
+  const speakingMsgIdRef = useRef<string | null>(null)
   const activeWordRef = useRef<HTMLSpanElement | null>(null)
 
   // Auto-scroll to currently spoken word
@@ -798,6 +799,7 @@ export default function LearnPage() {
 
     if (speakingMsgId === msgId) {
       window.speechSynthesis.cancel()
+      speakingMsgIdRef.current = null
       if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
       setSpeakingMsgId(null)
       setSpeakingWordIndex(null)
@@ -815,6 +817,7 @@ export default function LearnPage() {
     const tokens = parseSpeechTokens(cleanText)
     if (tokens.length === 0) return
 
+    speakingMsgIdRef.current = msgId
     setSpeakingTokens(tokens)
     setSpeakingMsgId(msgId)
     setSpeakingWordIndex(0)
@@ -834,6 +837,7 @@ export default function LearnPage() {
 
     // Real-time word boundary synchronization directly from the audio engine
     utterance.onboundary = (event) => {
+      if (speakingMsgIdRef.current !== msgId) return
       if (event.name === 'word' || !event.name) {
         hasBoundaryFired = true
         const charIndex = event.charIndex
@@ -855,6 +859,10 @@ export default function LearnPage() {
 
     // Chrome/Chromium pause prevention on long speech
     const pingInterval = setInterval(() => {
+      if (speakingMsgIdRef.current !== msgId) {
+        clearInterval(pingInterval)
+        return
+      }
       if (window.speechSynthesis.speaking) {
         window.speechSynthesis.pause()
         window.speechSynthesis.resume()
@@ -865,11 +873,16 @@ export default function LearnPage() {
 
     // Fallback ONLY if browser does not fire onboundary at all after audio starts
     const fallbackTimeout = setTimeout(() => {
+      if (speakingMsgIdRef.current !== msgId) return
       if (!hasBoundaryFired && window.speechSynthesis.speaking) {
         let fallbackIdx = 0
         const wordsPerMinute = 145
         const msPerWord = (60 / wordsPerMinute) * 1000
         ttsIntervalRef.current = setInterval(() => {
+          if (speakingMsgIdRef.current !== msgId) {
+            if (ttsIntervalRef.current) clearInterval(ttsIntervalRef.current)
+            return
+          }
           fallbackIdx++
           if (fallbackIdx < tokens.length) {
             setSpeakingWordIndex(fallbackIdx)
@@ -892,8 +905,15 @@ export default function LearnPage() {
       setSpeakingTokens([])
     }
 
-    utterance.onend = cleanup
-    utterance.onerror = cleanup
+    const finish = () => {
+      if (speakingMsgIdRef.current === msgId) {
+        speakingMsgIdRef.current = null
+        cleanup()
+      }
+    }
+
+    utterance.onend = finish
+    utterance.onerror = finish
 
     window.speechSynthesis.speak(utterance)
   }

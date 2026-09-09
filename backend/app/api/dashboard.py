@@ -265,8 +265,6 @@ async def get_continue_learning(user: dict = Depends(get_current_user)):
             return {
                 "subject_id": latest_doc.topic_id or "social-science",
                 "topic_id": latest_doc.topic_id or "history",
-                "continue_path": f"/chat/{latest_doc.topic_id}" if latest_doc.topic_id else "/chat",
-                "topic_title": latest_doc.file_name,
                 "progress_percentage": 100 if latest_doc.indexed else 0,
                 "last_studied_at": latest_doc.created_at
             }
@@ -280,8 +278,6 @@ async def get_continue_learning(user: dict = Depends(get_current_user)):
             return {
                 "subject_id": latest_session.topic_id or "general",
                 "topic_id": latest_session.topic_id or "general",
-                "continue_path": f"/chat/{latest_session.id}",
-                "topic_title": latest_session.session_title,
                 "progress_percentage": 50,
                 "last_studied_at": latest_session.started_at
             }
@@ -289,14 +285,29 @@ async def get_continue_learning(user: dict = Depends(get_current_user)):
         return None
 
 
-@router.post("/activity/record")
+@router.get("/progress")
+async def get_user_progress(user: dict = Depends(get_current_user)):
+    with DBContext() as db:
+        progresses = db.query(UserProgress).filter(UserProgress.user_id == user["id"]).all()
+        return [
+            {
+                "subject_id": p.subject_id,
+                "topic_id": p.topic_id,
+                "progress_percentage": p.progress_percentage,
+                "status": p.status,
+                "last_studied_at": p.last_studied_at
+            }
+            for p in progresses
+        ]
+
+
+@router.post("/activity")
 async def record_activity(req: ActivityRequest, user: dict = Depends(get_current_user)):
+    now = now_iso()
     with DBContext() as db:
         user_record = db.query(User).filter(User.id == user["id"]).first()
         if not user_record:
             raise HTTPException(status_code=404, detail="User not found")
-            
-        now = now_iso()
         
         activity = UserActivity(
             id=new_id(),
@@ -313,8 +324,15 @@ async def record_activity(req: ActivityRequest, user: dict = Depends(get_current
         if user_record.last_active_date:
             last_date = user_record.last_active_date.split('T')[0]
             if last_date != today_date:
-                user_record.current_streak = (user_record.current_streak or 0) + 1
-                if user_record.current_streak > (user_record.longest_streak or 0):
+                try:
+                    gap = (date.fromisoformat(today_date) - date.fromisoformat(last_date)).days
+                except Exception:
+                    gap = 1
+                if gap == 1:
+                    user_record.current_streak = (user_record.current_streak or 0) + 1
+                elif gap > 1:
+                    user_record.current_streak = 1
+                if (user_record.current_streak or 0) > (user_record.longest_streak or 0):
                     user_record.longest_streak = user_record.current_streak
         else:
             user_record.current_streak = 1
@@ -344,8 +362,15 @@ async def record_heartbeat(req: HeartbeatRequest, user: dict = Depends(get_curre
         if user_record.last_active_date:
             last_date = user_record.last_active_date.split('T')[0]
             if last_date != today_date:
-                user_record.current_streak = (user_record.current_streak or 0) + 1
-                if user_record.current_streak > (user_record.longest_streak or 0):
+                try:
+                    gap = (date.fromisoformat(today_date) - date.fromisoformat(last_date)).days
+                except Exception:
+                    gap = 1
+                if gap == 1:
+                    user_record.current_streak = (user_record.current_streak or 0) + 1
+                elif gap > 1:
+                    user_record.current_streak = 1
+                if (user_record.current_streak or 0) > (user_record.longest_streak or 0):
                     user_record.longest_streak = user_record.current_streak
         else:
             user_record.current_streak = 1

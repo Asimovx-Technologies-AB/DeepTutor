@@ -271,7 +271,12 @@ async def delete_plan(
     plan_id: str,
     user: dict = Depends(get_current_user),
 ):
-    ok = db.delete_study_plan(plan_id)
+    plan = db.get_study_plan(plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Study plan not found")
+    if plan.get("user_id") and plan.get("user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this study plan")
+    ok = db.delete_study_plan(plan_id, user_id=user["id"])
     if not ok:
         raise HTTPException(status_code=404, detail="Study plan not found")
     return {"ok": True}
@@ -291,9 +296,11 @@ async def verify_quiz(
     plan = db.get_study_plan(plan_id)
     if not plan:
         raise HTTPException(status_code=404, detail="Study plan not found")
+    if plan.get("user_id") and plan.get("user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized to verify quiz for this study plan")
     passed = body.score_percentage >= 70.0
     if passed:
-        db.toggle_study_plan_day(plan_id, body.day_number)
+        db.set_study_plan_day_completed(plan_id, body.day_number, True)
     return {
         "ok": True,
         "plan_id": plan_id,

@@ -447,32 +447,42 @@ async def delete_section_documents(section_id: str, user: dict = Depends(get_cur
 @router.delete("/{doc_id}")
 async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
     user_id = user["id"]
-    if doc_id.startswith("session_"):
-        from app.services.study_storage import delete_registry_session
-        delete_registry_session(doc_id)
-        return {"ok": True, "doc_id": doc_id, "file_name": doc_id, "message": f"Deleted session material '{doc_id}'."}
+    from app.services.study_storage import delete_registry_session, delete_session_document, get_registry_session
 
+    # 1. Try deleting standard user Document record
     doc = db.delete_document(doc_id=doc_id, user_id=user_id)
-    if not doc:
-        # Check if it was a session ID
-        from app.services.study_storage import delete_registry_session
-        delete_registry_session(doc_id)
-        return {"ok": True, "doc_id": doc_id, "file_name": doc_id, "message": f"Deleted session material '{doc_id}'."}
+    if doc:
+        file_path = doc.get("file_path")
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+        _indexing_status.pop(doc_id, None)
+        return {
+            "ok": True,
+            "doc_id": doc_id,
+            "file_name": doc.get("file_name", doc_id),
+            "message": f"Deleted document '{doc.get('file_name', doc_id)}'."
+        }
 
-    file_path = doc.get("file_path")
-    if file_path and os.path.exists(file_path):
-        try:
-            os.remove(file_path)
-        except Exception:
-            pass
+    # 2. Check if doc_id is a composite session-material key "{sid}_{filename}"
+    if "_" in doc_id:
+        for candidate_sid in [doc_id.split("_", 1)[0], "_".join(doc_id.split("_")[:2])]:
+            s_meta = get_registry_session(candidate_sid)
+            if s_meta:
+                candidate_fn = doc_id[len(candidate_sid) + 1:]
+                if delete_session_document(candidate_sid, candidate_fn, user_id=user_id):
+                    return {
+                        "ok": True,
+                        "doc_id": doc_id,
+                        "file_name": candidate_fn,
+                        "message": f"Deleted session material '{candidate_fn}'."
+                    }
 
-    _indexing_status.pop(doc_id, None)
-    return {
-        "ok": True,
-        "doc_id": doc_id,
-        "file_name": doc["file_name"],
-        "message": f"Deleted document '{doc['file_name']}'."
-    }
+    # 3. Check if doc_id is a session ID or directly referenced session document
+    delete_registry_session(doc_id, user_id=user_id)
+    return {"ok": True, "doc_id": doc_id, "file_name": doc_id, "message": f"Deleted session material '{doc_id}'."}
 
 
 @router.get("/session/{session_id}/status")
@@ -524,7 +534,7 @@ async def link_document_to_session_endpoint(
 
     # If doc_id was passed, attempt to look it up in the Document database
     if doc_id:
-        doc = db.get_document(doc_id)
+        doc = db.get_document(doc_id, user_id=user_id)
         if doc:
             doc_hash = doc_hash or doc.get("doc_hash")
             filename = filename or doc.get("file_name")

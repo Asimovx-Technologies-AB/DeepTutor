@@ -75,7 +75,7 @@ export const chatApi = {
   deleteSession: (sessionId: string) =>
     api.delete(`/chat/sessions/${sessionId}`),
   deleteSessionsBatch: (sessionIds: string[]) =>
-    api.post('/chat/sessions/batch-delete', { session_ids: sessionIds }),
+    api.post('/study/sessions/batch-delete', { session_ids: sessionIds }),
 }
 
 // SSE streaming — using fetch + ReadableStream for reliable header auth & proxy support

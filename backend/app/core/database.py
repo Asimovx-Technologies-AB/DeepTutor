@@ -135,14 +135,98 @@ def create_all_tables() -> None:
 if engine.dialect.name == "sqlite":
     create_all_tables()
 
-# Auto-migrate missing columns for existing SQLite database (only when running against SQLite)
 if engine.dialect.name == "sqlite":
     with engine.connect() as conn:
         for sql in [
+            """
+            CREATE TABLE IF NOT EXISTS workspace_sessions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT,
+                title TEXT,
+                subject TEXT,
+                created_at TEXT,
+                last_active TEXT,
+                topics_count INTEGER DEFAULT 0,
+                messages_count INTEGER DEFAULT 0
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS study_session_topics (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                user_id TEXT,
+                title TEXT,
+                summary TEXT,
+                difficulty TEXT,
+                key_concepts_json TEXT,
+                estimated_study_time TEXT,
+                document_name TEXT,
+                created_at TEXT
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS study_session_messages (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                user_id TEXT,
+                role TEXT,
+                text TEXT,
+                thought_process TEXT,
+                quiz_data_json TEXT,
+                topics_json TEXT,
+                attachment_json TEXT,
+                is_explanation INTEGER DEFAULT 0,
+                created_at TEXT
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS lecture_sessions (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                topic_id TEXT,
+                topic_title TEXT,
+                status TEXT DEFAULT 'diagnostic',
+                diagnostic_question TEXT,
+                diagnostic_answer TEXT,
+                diagnostic_level TEXT DEFAULT 'Class 10 (Standard)',
+                current_phase TEXT DEFAULT 'hook',
+                current_segment_index INTEGER DEFAULT 0,
+                accumulated_notes_markdown TEXT DEFAULT '',
+                teach_back_prompt TEXT DEFAULT '',
+                teach_back_submission TEXT,
+                teach_back_grade_json TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS document_chunks (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                topic_id TEXT,
+                doc_id TEXT,
+                chunk_id TEXT,
+                page INTEGER DEFAULT 1,
+                source_type TEXT DEFAULT 'text',
+                chunk_text TEXT,
+                metadata TEXT DEFAULT '{}',
+                embedding TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            );
+            """,
             "ALTER TABLE documents ADD COLUMN key_topics TEXT DEFAULT '[]'",
             "ALTER TABLE documents ADD COLUMN doc_hash VARCHAR(64)",
             "ALTER TABLE documents ADD COLUMN status VARCHAR(20) DEFAULT 'pending'",
             "ALTER TABLE documents ADD COLUMN error_message TEXT",
+            "ALTER TABLE session_documents ADD COLUMN id TEXT",
+            "ALTER TABLE session_documents ADD COLUMN user_id TEXT",
+            "ALTER TABLE session_documents ADD COLUMN filename TEXT DEFAULT ''",
+            "ALTER TABLE session_documents ADD COLUMN file_path TEXT DEFAULT ''",
+            "ALTER TABLE session_documents ADD COLUMN status TEXT DEFAULT 'completed'",
+            "ALTER TABLE session_documents ADD COLUMN page_count INTEGER DEFAULT 0",
+            "ALTER TABLE session_documents ADD COLUMN uploaded_at TEXT DEFAULT ''",
+            "ALTER TABLE session_documents ADD COLUMN created_at TIMESTAMP",
             "ALTER TABLE users ADD COLUMN is_premium BOOLEAN DEFAULT 0",
             "ALTER TABLE users ADD COLUMN plan VARCHAR DEFAULT 'free'",
             "ALTER TABLE users ADD COLUMN current_streak INTEGER DEFAULT 0",
@@ -375,21 +459,26 @@ def delete_session(session_id: str, user_id: Optional[str] = None) -> dict:
         doc_links = db.query(SessionDocument).filter(SessionDocument.session_id == session_id).all()
         deleted_docs = []
         for dl in doc_links:
-            d = db.query(Document).filter(Document.doc_hash == dl.doc_hash).first()
+            d = db.query(Document).filter(Document.doc_hash == dl.doc_hash, Document.user_id == s.user_id).first()
             if d:
                 deleted_docs.append({"id": d.id, "file_path": d.file_path, "doc_hash": d.doc_hash})
                 other_links = db.query(SessionDocument).filter(
                     SessionDocument.doc_hash == dl.doc_hash,
-                    SessionDocument.session_id != session_id
+                    SessionDocument.session_id != session_id,
+                    SessionDocument.user_id == s.user_id
                 ).count()
                 if other_links == 0:
                     db.delete(d)
             db.delete(dl)
 
-        session_docs = db.query(Document).filter(Document.topic_id == session_id).all()
+        session_docs = db.query(Document).filter(Document.topic_id == session_id, Document.user_id == s.user_id).all()
         for sd in session_docs:
             if sd.doc_hash:
-                db.query(SessionDocument).filter(SessionDocument.doc_hash == sd.doc_hash).delete(synchronize_session=False)
+                db.query(SessionDocument).filter(
+                    SessionDocument.doc_hash == sd.doc_hash,
+                    SessionDocument.session_id == session_id,
+                    SessionDocument.user_id == s.user_id
+                ).delete(synchronize_session=False)
             deleted_docs.append({"id": sd.id, "file_path": sd.file_path, "doc_hash": sd.doc_hash})
             db.delete(sd)
 
@@ -573,6 +662,30 @@ def get_documents_for_user_and_topic(user_id: str, topic_id: str) -> List[dict]:
             }
             for d in docs
         ]
+
+
+def get_document(doc_id: str, user_id: Optional[str] = None) -> Optional[dict]:
+    with DBContext() as db:
+        query = db.query(Document).filter(Document.id == doc_id)
+        if user_id:
+            query = query.filter(Document.user_id == user_id)
+        d = query.first()
+        if not d:
+            return None
+        return {
+            "id": d.id,
+            "user_id": d.user_id,
+            "topic_id": d.topic_id,
+            "file_name": d.file_name,
+            "file_path": d.file_path,
+            "file_type": d.file_type,
+            "doc_hash": getattr(d, "doc_hash", None),
+            "indexed": d.indexed,
+            "entity_count": d.entity_count,
+            "chunk_count": d.chunk_count,
+            "key_topics": getattr(d, "key_topics", []),
+            "created_at": d.created_at,
+        }
 
 
 def get_documents_for_user(user_id: str) -> List[dict]:
@@ -1182,6 +1295,19 @@ def toggle_study_plan_day(plan_id: str, day_number: int) -> Optional[dict]:
     return get_study_plan(plan_id)
 
 
+def set_study_plan_day_completed(plan_id: str, day_number: int, completed: bool = True) -> Optional[dict]:
+    with DBContext() as db:
+        p = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
+        if p:
+            current = list(p.completed_days)
+            if completed and day_number not in current:
+                current.append(day_number)
+            elif not completed and day_number in current:
+                current.remove(day_number)
+            p.completed_days = current
+    return get_study_plan(plan_id)
+
+
 def save_study_plan_day_notes(plan_id: str, day_number: int, notes: str) -> Optional[dict]:
     """
     Persists AI study notes for a specific day directly via the app's own DB session.
@@ -1238,9 +1364,12 @@ def save_study_plan_day_notes(plan_id: str, day_number: int, notes: str) -> Opti
     return get_study_plan(plan_id)
 
 
-def delete_study_plan(plan_id: str) -> bool:
+def delete_study_plan(plan_id: str, user_id: Optional[str] = None) -> bool:
     with DBContext() as db:
-        p = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
+        query = db.query(StudyPlan).filter(StudyPlan.id == plan_id)
+        if user_id:
+            query = query.filter(StudyPlan.user_id == user_id)
+        p = query.first()
         if p:
             db.delete(p)
             return True

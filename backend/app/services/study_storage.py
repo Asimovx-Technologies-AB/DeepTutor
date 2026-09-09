@@ -231,7 +231,7 @@ def get_session_messages(
     lim_clause = f"LIMIT {int(limit)}" if limit else ""
 
     statement = sql_text(f"""
-        SELECT id::text AS id, session_id, user_id, role, text, thought_process,
+        SELECT id, session_id, user_id, role, text, thought_process,
                quiz_data_json, topics_json, attachment_json, is_explanation,
                created_at
         FROM study_session_messages
@@ -362,7 +362,7 @@ def get_session_topics(
 ) -> List[Dict[str, Any]]:
     """Retrieve all curriculum topics for a session."""
     statement = sql_text("""
-        SELECT id::text AS id, session_id, user_id, title, summary, difficulty,
+        SELECT id, session_id, user_id, title, summary, difficulty,
                key_concepts_json, estimated_study_time, document_name, created_at
         FROM study_session_topics
         WHERE session_id = :session_id
@@ -530,20 +530,21 @@ def save_session_document(
                 RETURNING id::text;
             """)
             try:
-                res = conn.execute(insert_sql, {
-                    "id": d_id,
-                    "session_id": str(session_id),
-                    "doc_hash": doc_hash,
-                    "user_id": user_id,
-                    "filename": effective_filename,
-                    "file_path": effective_file_path,
-                    "status": effective_status,
-                    "page_count": effective_page_count,
-                })
-                row = res.fetchone()
-                return str(row[0]) if row else d_id
+                with conn.begin_nested():
+                    res = conn.execute(insert_sql, {
+                        "id": d_id,
+                        "session_id": str(session_id),
+                        "doc_hash": doc_hash,
+                        "user_id": user_id,
+                        "filename": effective_filename,
+                        "file_path": effective_file_path,
+                        "status": effective_status,
+                        "page_count": effective_page_count,
+                    })
+                    row = res.fetchone()
+                    return str(row[0]) if row else d_id
             except Exception:
-                # Concurrent race or existing key fallback
+                # Concurrent race or existing key fallback - savepoint rolled back cleanly
                 conn.execute(sql_text("""
                     UPDATE session_documents
                     SET filename = :filename,
@@ -630,7 +631,7 @@ def update_document_status(
         UPDATE session_documents
         SET status = :status {pc_clause}
         WHERE session_id = :session_id
-          AND (id::text = :doc_id OR filename = :doc_id)
+          AND (id = :doc_id OR filename = :doc_id)
     """)
 
     params: Dict[str, Any] = {
@@ -651,12 +652,13 @@ def get_session_documents(
     user_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Retrieve all document metadata records for a session, filtering out empty or duplicate records."""
-    statement = sql_text("""
-        SELECT id::text AS id, session_id, doc_hash, filename, file_path, status, page_count, created_at
+    order_clause = "ORDER BY created_at ASC" if _is_postgres() else "ORDER BY created_at ASC, rowid ASC"
+    statement = sql_text(f"""
+        SELECT id, session_id, doc_hash, filename, file_path, status, page_count, created_at
         FROM session_documents
         WHERE session_id = :session_id
           AND filename IS NOT NULL AND filename != ''
-        ORDER BY created_at ASC
+        {order_clause}
     """)
     with engine.connect() as conn:
         rows = conn.execute(statement, {"session_id": str(session_id)}).mappings().fetchall()
@@ -685,10 +687,15 @@ def delete_session_document(session_id: str, document_name_or_id: str, user_id: 
     statement = sql_text("""
         DELETE FROM session_documents
         WHERE session_id = :session_id
-          AND (id::text = :doc_id OR filename = :doc_id OR doc_hash = :doc_id)
+          AND (id = :doc_id OR filename = :doc_id OR doc_hash = :doc_id)
+          AND (:user_id IS NULL OR user_id = :user_id OR user_id IS NULL)
     """)
     with engine.begin() as conn:
-        res = conn.execute(statement, {"session_id": str(session_id), "doc_id": str(document_name_or_id)})
+        res = conn.execute(statement, {
+            "session_id": str(session_id),
+            "doc_id": str(document_name_or_id),
+            "user_id": str(user_id) if user_id else None,
+        })
         return (res.rowcount or 0) > 0
 
 
@@ -710,12 +717,44 @@ def list_registry_sessions(user_id: Optional[str] = None) -> List[Dict[str, Any]
     with engine.connect() as conn:
         rows = conn.execute(statement, params).mappings().fetchall()
 
+    if not rows:
+        return []
+
+    session_ids = [str(r["id"]) for r in rows if r.get("id")]
+    docs_by_session: Dict[str, List[str]] = {sid: [] for sid in session_ids}
+    if session_ids:
+        try:
+            with engine.connect() as conn:
+                if IS_POSTGRES:
+                    doc_stmt = sql_text("""
+                        SELECT session_id, filename
+                        FROM session_documents
+                        WHERE session_id = ANY(:sids)
+                        ORDER BY created_at ASC
+                    """)
+                    doc_rows = conn.execute(doc_stmt, {"sids": session_ids}).fetchall()
+                else:
+                    placeholders = ",".join([f":s{i}" for i in range(len(session_ids))])
+                    doc_stmt = sql_text(f"""
+                        SELECT session_id, filename
+                        FROM session_documents
+                        WHERE session_id IN ({placeholders})
+                        ORDER BY created_at ASC
+                    """)
+                    sqlite_params = {f"s{i}": sid for i, sid in enumerate(session_ids)}
+                    doc_rows = conn.execute(doc_stmt, sqlite_params).fetchall()
+
+                for d_sid, d_fn in doc_rows:
+                    if d_fn and str(d_sid) in docs_by_session:
+                        docs_by_session[str(d_sid)].append(d_fn)
+        except Exception as e:
+            print(f"[list_registry_sessions] Batch document fetch notice: {e}")
+
     sessions = []
     for r in rows:
         s = dict(r)
-        sid = s["id"]
-        docs = get_session_documents(sid, user_id=user_id)
-        doc_names = [d["filename"] for d in docs if d.get("filename")]
+        sid = str(s["id"])
+        doc_names = docs_by_session.get(sid, [])
         s["status"] = "ready"
         s["document_name"] = doc_names[0] if doc_names else ""
         s["documents"] = doc_names
@@ -850,30 +889,52 @@ def update_session_topic_count(session_id: str, count: int):
 
 def delete_registry_session(session_id: str, user_id: Optional[str] = None) -> bool:
     """Delete a workspace session and all linked data in a single batch round-trip."""
-    statement = sql_text("""
-        DELETE FROM document_chunks WHERE session_id = :sid;
-        DELETE FROM workspace_messages WHERE session_id = :sid;
-        DELETE FROM workspace_topics WHERE session_id = :sid;
-        DELETE FROM study_session_messages WHERE session_id = :sid;
-        DELETE FROM study_session_topics WHERE session_id = :sid;
-        DELETE FROM session_documents WHERE session_id = :sid;
-        DELETE FROM workspace_sessions WHERE id = :sid;
-        DELETE FROM chat_messages WHERE session_id = :sid;
-        DELETE FROM chat_sessions WHERE id = :sid;
-        DELETE FROM documents WHERE topic_id = :sid;
-    """)
+    # Sanitize session_id to prevent path traversal
+    if not session_id or not re.match(r"^[a-zA-Z0-9_\-\.]+$", str(session_id)) or ".." in str(session_id):
+        return False
+
+    sid_str = str(session_id)
+
+    # Ownership verification: if user_id is provided, ensure session belongs to user
+    if user_id:
+        with engine.connect() as conn:
+            owner_row = conn.execute(
+                sql_text("SELECT user_id FROM workspace_sessions WHERE id = :sid"),
+                {"sid": sid_str}
+            ).fetchone()
+            if owner_row and owner_row[0] and str(owner_row[0]) != str(user_id):
+                return False
+
+    delete_targets = [
+        ("document_chunks", "session_id"),
+        ("workspace_messages", "session_id"),
+        ("workspace_topics", "session_id"),
+        ("study_session_messages", "session_id"),
+        ("study_session_topics", "session_id"),
+        ("session_documents", "session_id"),
+        ("workspace_sessions", "id"),
+        ("chat_messages", "session_id"),
+        ("chat_sessions", "id"),
+        ("documents", "topic_id"),
+    ]
+    deleted = False
     with engine.begin() as conn:
-        res = conn.execute(statement, {"sid": str(session_id)})
-        deleted = (res.rowcount or 0) >= 0
+        for tbl, col in delete_targets:
+            try:
+                with conn.begin_nested():
+                    res = conn.execute(sql_text(f"DELETE FROM {tbl} WHERE {col} = :sid"), {"sid": sid_str})
+                    if (res.rowcount or 0) > 0:
+                        deleted = True
+            except Exception:
+                pass
 
     try:
         import shutil
-        for p in [
-            DATA_DIR / "uploads" / session_id,
-            SESSIONS_DIR / session_id,
-        ]:
-            if p.exists():
-                shutil.rmtree(p, ignore_errors=True)
+        safe_sid = os.path.basename(sid_str)
+        for base_dir in [DATA_DIR / "uploads", SESSIONS_DIR]:
+            target_path = (base_dir / safe_sid).resolve()
+            if str(target_path).startswith(str(base_dir.resolve())) and target_path.exists():
+                shutil.rmtree(target_path, ignore_errors=True)
     except Exception:
         pass
 
@@ -1074,12 +1135,12 @@ def get_lecture_session(
 ) -> Optional[Dict[str, Any]]:
     """Retrieve full state of a teacher lecture session."""
     statement = sql_text("""
-        SELECT id::text AS id, session_id, topic_id, topic_title, status, diagnostic_question,
+        SELECT id, session_id, topic_id, topic_title, status, diagnostic_question,
                diagnostic_answer, diagnostic_level, current_phase, current_segment_index,
                accumulated_notes_markdown, teach_back_prompt, teach_back_submission,
                teach_back_grade_json, created_at, updated_at
         FROM lecture_sessions
-        WHERE session_id = :session_id AND (id::text = :lecture_id OR topic_id = :lecture_id)
+        WHERE session_id = :session_id AND (id = :lecture_id OR topic_id = :lecture_id)
     """)
     with engine.connect() as conn:
         row = conn.execute(statement, {
@@ -1131,7 +1192,7 @@ def update_lecture_session(
     sql = sql_text(f"""
         UPDATE lecture_sessions
         SET {', '.join(set_clauses)}
-        WHERE session_id = :session_id AND (id::text = :lecture_id OR topic_id = :lecture_id)
+        WHERE session_id = :session_id AND (id = :lecture_id OR topic_id = :lecture_id)
     """)
 
     with engine.begin() as conn:

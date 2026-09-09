@@ -58,6 +58,14 @@ with engine.connect() as conn:
         "ALTER TABLE documents ADD COLUMN doc_hash VARCHAR(64)",
         "ALTER TABLE documents ADD COLUMN status VARCHAR(20) DEFAULT 'pending'",
         "ALTER TABLE documents ADD COLUMN error_message TEXT",
+        "ALTER TABLE session_documents ADD COLUMN id TEXT",
+        "ALTER TABLE session_documents ADD COLUMN user_id TEXT",
+        "ALTER TABLE session_documents ADD COLUMN filename TEXT DEFAULT ''",
+        "ALTER TABLE session_documents ADD COLUMN file_path TEXT DEFAULT ''",
+        "ALTER TABLE session_documents ADD COLUMN status TEXT DEFAULT 'completed'",
+        "ALTER TABLE session_documents ADD COLUMN page_count INTEGER DEFAULT 0",
+        "ALTER TABLE session_documents ADD COLUMN uploaded_at TEXT DEFAULT ''",
+        "ALTER TABLE session_documents ADD COLUMN created_at TIMESTAMP",
         "ALTER TABLE users ADD COLUMN is_premium BOOLEAN DEFAULT 0",
         "ALTER TABLE users ADD COLUMN plan VARCHAR DEFAULT 'free'",
         "ALTER TABLE users ADD COLUMN current_streak INTEGER DEFAULT 0",
@@ -384,6 +392,30 @@ def get_documents_for_user_and_topic(user_id: str, topic_id: str) -> List[dict]:
             }
             for d in docs
         ]
+
+
+def get_document(doc_id: str, user_id: Optional[str] = None) -> Optional[dict]:
+    with DBContext() as db:
+        query = db.query(Document).filter(Document.id == doc_id)
+        if user_id:
+            query = query.filter(Document.user_id == user_id)
+        d = query.first()
+        if not d:
+            return None
+        return {
+            "id": d.id,
+            "user_id": d.user_id,
+            "topic_id": d.topic_id,
+            "file_name": d.file_name,
+            "file_path": d.file_path,
+            "file_type": d.file_type,
+            "doc_hash": getattr(d, "doc_hash", None),
+            "indexed": d.indexed,
+            "entity_count": d.entity_count,
+            "chunk_count": d.chunk_count,
+            "key_topics": getattr(d, "key_topics", []),
+            "created_at": d.created_at,
+        }
 
 
 def get_documents_for_user(user_id: str) -> List[dict]:
@@ -993,6 +1025,19 @@ def toggle_study_plan_day(plan_id: str, day_number: int) -> Optional[dict]:
     return get_study_plan(plan_id)
 
 
+def set_study_plan_day_completed(plan_id: str, day_number: int, completed: bool = True) -> Optional[dict]:
+    with DBContext() as db:
+        p = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
+        if p:
+            current = list(p.completed_days)
+            if completed and day_number not in current:
+                current.append(day_number)
+            elif not completed and day_number in current:
+                current.remove(day_number)
+            p.completed_days = current
+    return get_study_plan(plan_id)
+
+
 def save_study_plan_day_notes(plan_id: str, day_number: int, notes: str) -> Optional[dict]:
     """
     Persists AI study notes for a specific day directly via the app's own DB session.
@@ -1049,9 +1094,12 @@ def save_study_plan_day_notes(plan_id: str, day_number: int, notes: str) -> Opti
     return get_study_plan(plan_id)
 
 
-def delete_study_plan(plan_id: str) -> bool:
+def delete_study_plan(plan_id: str, user_id: Optional[str] = None) -> bool:
     with DBContext() as db:
-        p = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
+        query = db.query(StudyPlan).filter(StudyPlan.id == plan_id)
+        if user_id:
+            query = query.filter(StudyPlan.user_id == user_id)
+        p = query.first()
         if p:
             db.delete(p)
             return True

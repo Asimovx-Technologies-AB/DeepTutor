@@ -795,7 +795,7 @@ export default function StudyPlanPage() {
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
                           {filteredModalDocuments.map((doc: any) => {
-                            const isSelected = selectedDocumentId === doc.id || (!selectedDocumentId && uniqueUserDocuments[0]?.id === doc.id)
+                            const isSelected = selectedDocumentId === doc.id
                             return (
                               <div
                                 key={doc.id}
@@ -971,7 +971,11 @@ export default function StudyPlanPage() {
 
                   <button
                     type="submit"
-                    disabled={generating}
+                    disabled={
+                      generating ||
+                      (materialSourceMode === 'library' && !selectedDocumentId && uniqueUserDocuments.length > 0) ||
+                      (materialSourceMode === 'upload' && !selectedFile)
+                    }
                     className="py-3 px-7 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/25 transition-all cursor-pointer disabled:opacity-50"
                   >
                     {generating ? (

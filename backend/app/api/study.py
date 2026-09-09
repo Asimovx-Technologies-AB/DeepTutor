@@ -940,28 +940,6 @@ async def get_session_details(session_id: str, user: dict = Depends(get_current_
     }
 
 
-@router.delete("/sessions/{session_id}")
-async def delete_study_session(
-    session_id: str,
-    user: dict = Depends(get_current_user)
-):
-    """Permanently deletes session and all linked data."""
-    meta = get_registry_session(session_id)
-    if meta:
-        if meta.get("user_id") and meta.get("user_id") != user["id"]:
-            raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
-    else:
-        from app.core import database as db
-        s = db.get_session(session_id)
-        if not s:
-            raise HTTPException(status_code=404, detail="Session not found")
-        if s.get("user_id") and s.get("user_id") != user["id"]:
-            raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
-
-    ok = await asyncio.to_thread(delete_registry_session, session_id, user["id"])
-    return {"success": ok, "session_id": session_id}
-
-
 class BatchDeleteStudySessionsRequest(BaseModel):
     session_ids: List[str]
 
@@ -988,6 +966,28 @@ async def delete_study_sessions_batch(
         except Exception:
             failed_ids.append(sid)
     return {"success": True, "deleted_count": len(deleted_ids), "deleted_session_ids": deleted_ids, "failed_session_ids": failed_ids}
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_study_session(
+    session_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Permanently deletes session and all linked data."""
+    meta = get_registry_session(session_id)
+    if meta:
+        if meta.get("user_id") and meta.get("user_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
+    else:
+        from app.core import database as db
+        s = db.get_session(session_id)
+        if not s:
+            raise HTTPException(status_code=404, detail="Session not found")
+        if s.get("user_id") and s.get("user_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied: session belongs to another user")
+
+    ok = await asyncio.to_thread(delete_registry_session, session_id, user["id"])
+    return {"success": ok, "session_id": session_id}
 
 
 
