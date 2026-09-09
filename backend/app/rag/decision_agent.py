@@ -206,15 +206,6 @@ Respond with ONLY this JSON object:
         # Trigger non-blocking background memory extraction as early as possible.
         asyncio.create_task(user_memory_store.auto_extract_and_update(user_id, message, history))
 
-        # Deterministic short-circuit: the planner's fast-path heuristic already
-        # confirmed this is a bare greeting without spending an LLM call (see
-        # query_analyzer.py). Trust that instead of re-deriving it here — if we
-        # still send this through generation, a coincidentally-retrieved context
-        # chunk can push the model toward the "not found in material" branch
-        # even though the message contains no question at all.
-        if query_analysis and query_analysis.get("intent") == "GREETING":
-            return self._greeting_response()
-
         base_messages = self._build_base_messages(
             current_subject, doc_status_note, context, file_name,
             difficulty, user_id, query_analysis, history,
@@ -345,19 +336,35 @@ Respond with ONLY this JSON object:
         parts = [f"- intent: {plan.get('intent')}"]
         if plan.get("target_topic"):
             parts.append(f"- target_topic: {plan.get('target_topic')}")
+        topics = plan.get("topics") or []
+        if topics:
+            parts.append(f"- topics: {json.dumps(topics)}")
+        entities = plan.get("entities") or []
+        if entities:
+            parts.append(f"- technical entities: {json.dumps(entities)}")
         sub_qs = plan.get("sub_questions") or []
         if len(sub_qs) > 1:
             parts.append(f"- decomposed sub-questions: {json.dumps(sub_qs)}")
         if plan.get("response_format"):
             parts.append(f"- recommended response_format: {plan.get('response_format')}")
+        retrieval_plan = plan.get("retrieval_plan")
+        if retrieval_plan:
+            parts.append(f"- retrieval plan: {json.dumps(retrieval_plan)}")
         if plan.get("requires_table_data"):
             parts.append("- likely needs table/numeric data")
         if plan.get("requires_image_data"):
             parts.append("- likely needs diagram/figure explanation")
         if plan.get("confidence") is not None:
             parts.append(f"- planner confidence: {plan.get('confidence')}")
-        if plan.get("needs_clarification"):
-            parts.append("- planner flagged low confidence: if the question is genuinely ambiguous, ask a brief clarifying question instead of guessing")
+        status = plan.get("status")
+        if status and status != "clear":
+            parts.append(f"- query status: {status}")
+        if plan.get("needs_clarification") or status in ("ambiguous", "needs_clarification"):
+            clarification = plan.get("clarification_prompt")
+            if clarification:
+                parts.append(f"- clarification suggestion: {clarification}")
+            else:
+                parts.append("- planner flagged low confidence: if the question is genuinely ambiguous, ask a brief clarifying question instead of guessing")
         if plan.get("reasoning"):
             parts.append(f"- planner reasoning: {plan.get('reasoning')}")
         return "\n".join(parts)

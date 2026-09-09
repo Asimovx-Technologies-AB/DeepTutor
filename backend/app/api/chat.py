@@ -151,11 +151,10 @@ async def send_message(
         )
         return await asyncio.to_thread(db.add_message, session_id, "assistant", msg)
 
-    # ── SPECULATIVE CONCURRENCY: Run DB history, Hybrid Retrieval, and Query Analysis in Parallel ──
+    # ── Fetch history first to supply conversation context to query planner ──
     subject_title = session.get("title") or session.get("topic_id")
-
-    async def _fetch_history():
-        return await asyncio.to_thread(db.get_messages, session_id, last_n=10)
+    history = await asyncio.to_thread(db.get_messages, session_id, last_n=10)
+    hist_messages = [{"role": m.get("role", ""), "content": m.get("content", "")} for m in (history[:-1] if history else [])]
 
     async def _fetch_context():
         ctx, status_note, meta = await asyncio.to_thread(doc_processor.retrieve_context, doc_id=session_id, query=body.content)
@@ -170,11 +169,10 @@ async def send_message(
         return await query_analyzer.analyze_query(
             message=body.content,
             current_subject=subject_title,
-            history=[],
+            history=hist_messages,
         )
 
-    history, (context, status_note, meta), plan = await asyncio.gather(
-        _fetch_history(),
+    (context, status_note, meta), plan = await asyncio.gather(
         _fetch_context(),
         _fetch_plan(),
     )
@@ -240,11 +238,10 @@ async def stream_message(
     user_id = str(session.get("user_id", user["id"]))
     await asyncio.to_thread(db.add_message, session_id, "user", content)
 
-    # ── SPECULATIVE CONCURRENCY: Fetch history, context, and plan concurrently ──
+    # ── Fetch history first to supply conversation context to query planner ──
     subject_title = session.get("title") or session.get("topic_id")
-
-    async def _fetch_history():
-        return await asyncio.to_thread(db.get_messages, session_id, last_n=10)
+    history = await asyncio.to_thread(db.get_messages, session_id, last_n=10)
+    hist_messages = [{"role": m.get("role", ""), "content": m.get("content", "")} for m in (history[:-1] if history else [])]
 
     async def _fetch_context():
         ctx, status_note, meta = await asyncio.to_thread(doc_processor.retrieve_context, doc_id=session_id, query=content)
@@ -259,11 +256,10 @@ async def stream_message(
         return await query_analyzer.analyze_query(
             message=content,
             current_subject=subject_title,
-            history=[],
+            history=hist_messages,
         )
 
-    history, (context, status_note, meta), plan = await asyncio.gather(
-        _fetch_history(),
+    (context, status_note, meta), plan = await asyncio.gather(
         _fetch_context(),
         _fetch_plan(),
     )
