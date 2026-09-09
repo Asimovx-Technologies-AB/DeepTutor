@@ -1,5 +1,6 @@
 import json
 import re
+import logging
 from datetime import datetime, date
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends
@@ -7,6 +8,8 @@ from pydantic import BaseModel
 from app.api.auth import get_current_user
 from app.core import database as db
 from app.rag.llm_client import llm_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/study-plan", tags=["study-plan"])
 
@@ -36,25 +39,48 @@ def clean_study_notes_markdown(text: str) -> str:
     if not text:
         return ""
 
-    cleaned = text
+    import re
+    cleaned = text.strip()
 
-    # Convert inline double dollars ($$ var $$) on the same line to single dollars ($var$)
-    # while preserving multi-line display math blocks ($$\n...\n$$)
+    # 1. Strip outer markdown code block wrap if wrapped in ```markdown ... ```
+    if cleaned.startswith("```markdown") and cleaned.endswith("```"):
+        cleaned = cleaned[len("```markdown"): -3].strip()
+    elif cleaned.startswith("```") and cleaned.endswith("```") and cleaned.count("```") == 2:
+        lines = cleaned.splitlines()
+        if len(lines) > 2 and lines[0].strip() in ("```", "```md", "```text"):
+            cleaned = "\n".join(lines[1:-1]).strip()
+
+    # 2. Convert standalone single-line formulas wrapped in $...$ into display math $$\n...\n$$
+    cleaned = re.sub(
+        r'^\s*\$(?!\$)([^\$\n]{5,})\$\s*$',
+        r'$$\n\1\n$$',
+        cleaned,
+        flags=re.MULTILINE
+    )
+
+    # 3. Convert inline double dollars ($$ var $$) on the same line to single dollars ($var$)
     def _replace_inline_double_dollars(match):
         content = match.group(1).strip()
-        # If it's short and on a single line, it's inline math
         if "\n" not in content:
             return f"${content}$"
         return f"\n$$\n{content}\n$$\n"
 
     cleaned = re.sub(r'(?<!\$)\$\$\s*([^\$\n]+?)\s*\$\$(?!\$)', _replace_inline_double_dollars, cleaned)
 
-    # Ensure display math blocks have newlines around them
+    # 4. Ensure display math blocks have newlines around them
     cleaned = re.sub(r'([^\n])\s*\$\$\s*\n', r'\1\n\n$$\n', cleaned)
     cleaned = re.sub(r'\n\s*\$\$\s*([^\n])', r'\n$$\n\n\1', cleaned)
 
-    # Clean up un-bulleted paradigm lists like "Supervised Learning: ..." into "- **Supervised Learning**: ..."
-    cleaned = re.sub(r'\n(Supervised Learning|Unsupervised Learning|Reinforcement Learning|Semi-Supervised Learning):\s*', r'\n- **\1**: ', cleaned)
+    # 5. Clean up un-bulleted paradigm lists like "Supervised Learning: ..." or "Reinforcement Learning (RL): ..." into "- **...**: ..."
+    cleaned = re.sub(
+        r'^(?!(?:[-*#>]|\d+\.))\s*([A-Za-z0-9\s()/\-]{3,45}):\s+([A-Z])',
+        r'- **\1**: \2',
+        cleaned,
+        flags=re.MULTILINE
+    )
+
+    # 6. Consolidate excessive blank lines
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
 
     return cleaned.strip()
 
@@ -67,8 +93,11 @@ async def _generate_day_study_notes(day_topic: str, key_concepts: List[str], top
             chunks = pg_fts_store.search_chunks(topic_id, day_topic, limit=3)
             if chunks:
                 material_context = "\n\nEXCERPTS FROM UPLOADED MATERIAL:\n" + "\n---\n".join([c.get("content", "") for c in chunks])
-        except Exception:
-            pass
+                logger.info(f"[_generate_day_study_notes] Retrieved {len(chunks)} contextual chunks for topic '{day_topic}'.")
+            else:
+                logger.info(f"[_generate_day_study_notes] No chunks found for topic '{day_topic}' in session '{topic_id}'.")
+        except Exception as e:
+            logger.warning(f"[_generate_day_study_notes] search_chunks failed for topic_id={topic_id}: {e}")
 
     prompt = f"""You are DeepTutor, an elite academic AI tutor.
 Write comprehensive, authoritative, beautifully structured master study notes for the topic: "{day_topic}".

@@ -162,6 +162,182 @@ class PgFTSStore:
 
         return len(records)
 
+    def clone_document_chunks_to_session(
+        self,
+        target_session_id: str,
+        source_doc_id: Optional[str] = None,
+        source_session_id: Optional[str] = None,
+        doc_hash: Optional[str] = None,
+        user_id: Optional[str] = None,
+    ) -> int:
+        """Clones all document chunks from a source doc/session into the target session.
+        Uses a bulk INSERT ... SELECT statement in PostgreSQL with deterministic UUIDv5
+        keys to guarantee idempotency via ON CONFLICT (id) DO NOTHING.
+        """
+        if not target_session_id:
+            return 0
+
+        target_sid = str(target_session_id)
+        conditions = []
+        params: Dict[str, Any] = {
+            "target_session_id": target_sid,
+            "dns_ns": str(uuid.NAMESPACE_DNS),
+        }
+
+        if source_doc_id:
+            conditions.append("doc_id = :source_doc_id OR topic_id = :source_doc_id OR session_id = :source_doc_id")
+            params["source_doc_id"] = str(source_doc_id)
+        if source_session_id and source_session_id != target_sid:
+            conditions.append("session_id = :source_session_id")
+            params["source_session_id"] = str(source_session_id)
+        if doc_hash:
+            if self.engine.dialect.name == "sqlite":
+                conditions.append("doc_id IN (SELECT id FROM documents WHERE doc_hash = :doc_hash)")
+                conditions.append("session_id IN (SELECT session_id FROM session_documents WHERE doc_hash = :doc_hash)")
+            else:
+                conditions.append("doc_id IN (SELECT id::text FROM documents WHERE doc_hash = :doc_hash)")
+                conditions.append("session_id IN (SELECT session_id FROM session_documents WHERE doc_hash = :doc_hash)")
+            params["doc_hash"] = str(doc_hash)
+
+        if not conditions:
+            return 0
+
+        where_clause = " OR ".join(f"({c})" for c in conditions)
+
+        if self.engine.dialect.name != "sqlite":
+            # PostgreSQL: Execute single bulk SQL statement
+            bulk_stmt = text(f"""
+                INSERT INTO document_chunks (
+                    id, session_id, topic_id, doc_id, chunk_id, page, source_type,
+                    chunk_text, metadata, embedding, created_at, updated_at
+                )
+                SELECT
+                    uuid_generate_v5(CAST(:dns_ns AS uuid), :target_session_id || '_' || chunk_id || '_' || doc_id),
+                    :target_session_id,
+                    topic_id,
+                    doc_id,
+                    chunk_id,
+                    page,
+                    source_type,
+                    chunk_text,
+                    metadata || jsonb_build_object('session_id', :target_session_id),
+                    embedding,
+                    now(),
+                    now()
+                FROM document_chunks
+                WHERE ({where_clause})
+                  AND session_id != :target_session_id
+                ON CONFLICT (id) DO NOTHING;
+            """)
+            try:
+                with self.engine.begin() as conn:
+                    conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'))
+                    res = conn.execute(bulk_stmt, params)
+                    return res.rowcount if res.rowcount is not None and res.rowcount >= 0 else 0
+            except Exception as pg_err:
+                logger.warning(f"[PgFTSStore] Bulk SQL clone error, falling back to python batch: {pg_err}")
+
+        # Fallback / SQLite path
+        fetch_stmt = text(f"""
+            SELECT DISTINCT doc_id, chunk_id, page, source_type, chunk_text, metadata, embedding
+            FROM document_chunks
+            WHERE ({where_clause})
+              AND session_id != :target_session_id
+        """)
+
+        try:
+            with self.engine.connect() as conn:
+                rows = conn.execute(fetch_stmt, params).mappings().fetchall()
+
+            if not rows:
+                return 0
+
+            records = []
+            zero_vec = self._vector_literal([0.0] * self.dimensions)
+
+            for r in rows:
+                doc_id_val = str(r.get("doc_id") or source_doc_id or "")
+                chunk_id_val = str(r.get("chunk_id") or "")
+                page_val = int(r.get("page") or 1)
+                source_type_val = str(r.get("source_type") or "text")
+                chunk_text_val = str(r.get("chunk_text") or "")
+
+                pk_seed = f"{target_sid}_{chunk_id_val}_{doc_id_val}"
+                pk = str(uuid.uuid5(uuid.NAMESPACE_DNS, pk_seed))
+
+                meta = {}
+                try:
+                    meta_raw = r.get("metadata")
+                    meta = json.loads(meta_raw) if isinstance(meta_raw, str) else dict(meta_raw or {})
+                except Exception:
+                    meta = {}
+                meta["session_id"] = target_sid
+                if user_id:
+                    meta["user_id"] = user_id
+
+                emb_val = r.get("embedding")
+                if not emb_val:
+                    emb_val = zero_vec
+                elif not isinstance(emb_val, str):
+                    emb_val = str(emb_val)
+
+                records.append({
+                    "id": pk,
+                    "session_id": target_sid,
+                    "topic_id": doc_id_val,
+                    "doc_id": doc_id_val,
+                    "chunk_id": chunk_id_val,
+                    "page": page_val,
+                    "source_type": source_type_val,
+                    "chunk_text": chunk_text_val,
+                    "metadata": json.dumps(meta),
+                    "embedding": emb_val,
+                })
+
+            if not records:
+                return 0
+
+            if self.engine.dialect.name == "sqlite":
+                insert_stmt = text("""
+                    INSERT OR IGNORE INTO document_chunks (
+                        id, session_id, topic_id, doc_id, chunk_id, page, source_type,
+                        chunk_text, metadata, embedding, created_at, updated_at
+                    )
+                    VALUES (
+                        :id, :session_id, :topic_id, :doc_id, :chunk_id, :page, :source_type,
+                        :chunk_text, :metadata, :embedding, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    );
+                """)
+            else:
+                insert_stmt = text("""
+                    INSERT INTO document_chunks (
+                        id, session_id, topic_id, doc_id, chunk_id, page, source_type,
+                        chunk_text, metadata, embedding, created_at, updated_at
+                    )
+                    VALUES (
+                        CAST(:id AS UUID), :session_id, :topic_id, :doc_id, :chunk_id, :page, :source_type,
+                        :chunk_text, CAST(:metadata AS jsonb), CAST(:embedding AS vector), now(), now()
+                    )
+                    ON CONFLICT (id) DO NOTHING;
+                """)
+
+            with self.engine.begin() as conn:
+                res = conn.execute(insert_stmt, records)
+                return res.rowcount if res.rowcount is not None and res.rowcount >= 0 else len(records)
+        except Exception as e:
+            logger.warning(f"[PgFTSStore] clone_document_chunks_to_session notice: {e}")
+            return 0
+
+    def search_chunks(
+        self,
+        session_id: str,
+        query: str,
+        limit: int = 5,
+        source_type: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Alias for search_bm25 for backward-compatibility with study plan & generator services."""
+        return self.search_bm25(session_id=session_id, query=query, limit=limit, source_type=source_type)
+
     def search_bm25(
         self,
         session_id: str,
@@ -177,37 +353,73 @@ class PgFTSStore:
         type_filter = "AND source_type = :source_type" if source_type else ""
 
         if self.engine.dialect.name == "sqlite":
-            type_filter = "AND source_type = :source_type" if source_type else ""
-            statement = text(f"""
-                SELECT id, chunk_id, doc_id, page, source_type, chunk_text AS content,
-                       1.0 AS score
-                FROM document_chunks
-                WHERE session_id = :session_id
-                  {type_filter}
-                  AND chunk_text LIKE :query_like
-                ORDER BY id ASC
-                LIMIT :limit
-            """)
-            params = {
+            terms = [clean_q]
+            words = [w for w in re.findall(r"[a-zA-Z0-9]+", clean_q) if len(w) > 2]
+            for w in words:
+                if w.lower() not in terms:
+                    terms.append(w)
+
+            term_clauses = []
+            params: Dict[str, Any] = {
                 "session_id": str(session_id),
-                "query_like": f"%{clean_q}%",
                 "limit": limit,
             }
             if source_type:
                 params["source_type"] = source_type
 
-            with self.engine.connect() as conn:
-                rows = conn.execute(statement, params).mappings().fetchall()
+            for i, t in enumerate(terms):
+                p_key = f"term_{i}"
+                term_clauses.append(f"chunk_text LIKE :{p_key}")
+                params[p_key] = f"%{t}%"
 
-            return [dict(r) for r in rows]
+            like_filter = f"AND ({' OR '.join(term_clauses)})" if term_clauses else ""
+
+            statement = text(f"""
+                SELECT id, chunk_id, doc_id, page, source_type, chunk_text AS content,
+                       1.0 AS score
+                FROM document_chunks
+                WHERE (
+                    session_id = :session_id
+                    OR topic_id = :session_id
+                    OR doc_id = :session_id
+                    OR session_id IN (SELECT session_id FROM session_documents WHERE session_id != :session_id AND doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))
+                    OR doc_id IN (SELECT id FROM documents WHERE doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))
+                )
+                  {type_filter}
+                  {like_filter}
+                ORDER BY id ASC
+                LIMIT :limit
+            """)
+
+            try:
+                with self.engine.connect() as conn:
+                    rows = conn.execute(statement, params).mappings().fetchall()
+            except Exception as ex:
+                logger.warning(f"[PgFTSStore] SQLite search_bm25 error: {ex}")
+                return []
+
+            seen_c = set()
+            dedup_results = []
+            for r in rows:
+                k = (r.get("doc_id"), r.get("chunk_id"), r.get("content"))
+                if k not in seen_c:
+                    seen_c.add(k)
+                    dedup_results.append(dict(r))
+            return dedup_results
 
         statement = text(f"""
             SELECT id, chunk_id, doc_id, page, source_type, chunk_text AS content,
                    ts_rank_cd(search_vector, plainto_tsquery('english', :query)) AS score
             FROM document_chunks
-            WHERE session_id = :session_id
+            WHERE (
+                session_id = :session_id
+                OR topic_id = :session_id
+            )
               {type_filter}
-              AND search_vector @@ plainto_tsquery('english', :query)
+              AND (
+                  search_vector @@ plainto_tsquery('english', :query)
+                  OR chunk_text ILIKE :query_like
+              )
             ORDER BY score DESC
             LIMIT :limit
         """)
@@ -215,15 +427,46 @@ class PgFTSStore:
         params = {
             "session_id": str(session_id),
             "query": clean_q,
+            "query_like": f"%{clean_q}%",
             "limit": limit,
         }
         if source_type:
             params["source_type"] = source_type
 
-        with self.engine.connect() as conn:
-            rows = conn.execute(statement, params).mappings().fetchall()
+        try:
+            with self.engine.connect() as conn:
+                rows = conn.execute(statement, params).mappings().fetchall()
+                if not rows:
+                    # Narrow safety net fallback for un-cloned legacy sessions
+                    fallback_stmt = text(f"""
+                        SELECT id, chunk_id, doc_id, page, source_type, chunk_text AS content,
+                               ts_rank_cd(search_vector, plainto_tsquery('english', :query)) AS score
+                        FROM document_chunks
+                        WHERE (
+                            session_id IN (SELECT session_id FROM session_documents WHERE session_id != :session_id AND doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))
+                            OR doc_id IN (SELECT id::text FROM documents WHERE doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))
+                        )
+                          {type_filter}
+                          AND (
+                              search_vector @@ plainto_tsquery('english', :query)
+                              OR chunk_text ILIKE :query_like
+                          )
+                        ORDER BY score DESC
+                        LIMIT :limit
+                    """)
+                    rows = conn.execute(fallback_stmt, params).mappings().fetchall()
+        except Exception as ex:
+            logger.warning(f"[PgFTSStore] search_bm25 error: {ex}")
+            return []
 
-        return [dict(r) for r in rows]
+        seen_c = set()
+        dedup_results = []
+        for r in rows:
+            k = (r.get("doc_id"), r.get("chunk_id"), r.get("content"))
+            if k not in seen_c:
+                seen_c.add(k)
+                dedup_results.append(dict(r))
+        return dedup_results
 
     def search_dense(
         self,
@@ -241,26 +484,60 @@ class PgFTSStore:
             SELECT id, chunk_id, doc_id, page, source_type, chunk_text AS content,
                    1 - (embedding <=> CAST(:embedding AS vector)) AS score
             FROM document_chunks
-            WHERE session_id = :session_id
+            WHERE (
+                session_id = :session_id
+                OR topic_id = :session_id
+            )
               AND 1 - (embedding <=> CAST(:embedding AS vector)) >= :min_score
             ORDER BY embedding <=> CAST(:embedding AS vector)
             LIMIT :limit
         """)
 
-        with self.engine.connect() as conn:
-            # Set HNSW search ef parameter if applicable
-            try:
-                conn.execute(text(f"SET LOCAL hnsw.ef_search = {int(self.settings.PGVECTOR_HNSW_EF_SEARCH)}"))
-            except Exception:
-                pass
-            rows = conn.execute(statement, {
-                "session_id": str(session_id),
-                "embedding": vec_str,
-                "min_score": min_score,
-                "limit": limit,
-            }).mappings().fetchall()
+        try:
+            with self.engine.connect() as conn:
+                # Set HNSW search ef parameter if applicable
+                try:
+                    conn.execute(text(f"SET LOCAL hnsw.ef_search = {int(self.settings.PGVECTOR_HNSW_EF_SEARCH)}"))
+                except Exception:
+                    pass
+                rows = conn.execute(statement, {
+                    "session_id": str(session_id),
+                    "embedding": vec_str,
+                    "min_score": min_score,
+                    "limit": limit,
+                }).mappings().fetchall()
 
-        return [dict(r) for r in rows]
+                if not rows:
+                    fallback_stmt = text("""
+                        SELECT id, chunk_id, doc_id, page, source_type, chunk_text AS content,
+                               1 - (embedding <=> CAST(:embedding AS vector)) AS score
+                        FROM document_chunks
+                        WHERE (
+                            session_id IN (SELECT session_id FROM session_documents WHERE session_id != :session_id AND doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))
+                            OR doc_id IN (SELECT id::text FROM documents WHERE doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))
+                        )
+                          AND 1 - (embedding <=> CAST(:embedding AS vector)) >= :min_score
+                        ORDER BY embedding <=> CAST(:embedding AS vector)
+                        LIMIT :limit
+                    """)
+                    rows = conn.execute(fallback_stmt, {
+                        "session_id": str(session_id),
+                        "embedding": vec_str,
+                        "min_score": min_score,
+                        "limit": limit,
+                    }).mappings().fetchall()
+        except Exception as ex:
+            logger.warning(f"[PgFTSStore] search_dense error: {ex}")
+            return []
+
+        seen_c = set()
+        dedup_results = []
+        for r in rows:
+            k = (r.get("doc_id"), r.get("chunk_id"), r.get("content"))
+            if k not in seen_c:
+                seen_c.add(k)
+                dedup_results.append(dict(r))
+        return dedup_results
 
     def search_hybrid(
         self,
@@ -288,30 +565,70 @@ class PgFTSStore:
 
     def get_chunks_by_page(self, session_id: str, page: int) -> List[Dict[str, Any]]:
         """Retrieves all chunks on a given page within a session."""
-        statement = text("""
+        scope_doc_query = (
+            "OR doc_id IN (SELECT id FROM documents WHERE doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))"
+            if self.engine.dialect.name == "sqlite"
+            else "OR doc_id IN (SELECT id::text FROM documents WHERE doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))"
+        )
+        statement = text(f"""
             SELECT id, chunk_id, doc_id, page, source_type, chunk_text AS content
             FROM document_chunks
-            WHERE session_id = :session_id AND page = :page
+            WHERE (
+                session_id = :session_id
+                OR topic_id = :session_id
+                OR doc_id = :session_id
+                OR session_id IN (SELECT session_id FROM session_documents WHERE session_id != :session_id AND doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))
+                {scope_doc_query}
+            ) AND page = :page
             ORDER BY chunk_id
         """)
-        with self.engine.connect() as conn:
-            rows = conn.execute(statement, {"session_id": str(session_id), "page": int(page)}).mappings().fetchall()
-        return [dict(r) for r in rows]
+        try:
+            with self.engine.connect() as conn:
+                rows = conn.execute(statement, {"session_id": str(session_id), "page": int(page)}).mappings().fetchall()
+        except Exception:
+            return []
+        
+        seen_c = set()
+        dedup_results = []
+        for r in rows:
+            k = (r.get("doc_id"), r.get("chunk_id"), r.get("content"))
+            if k not in seen_c:
+                seen_c.add(k)
+                dedup_results.append(dict(r))
+        return dedup_results
 
     def get_chunks_by_pages(self, session_id: str, pages: List[int]) -> List[Dict[str, Any]]:
         """Retrieves all chunks matching any of the given page numbers."""
         if not pages:
             return []
-        statement = text("""
+        scope_doc_query = (
+            "OR doc_id IN (SELECT id FROM documents WHERE doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))"
+            if self.engine.dialect.name == "sqlite"
+            else "OR doc_id IN (SELECT id::text FROM documents WHERE doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))"
+        )
+        statement = text(f"""
             SELECT id, chunk_id, doc_id, page, source_type, chunk_text AS content
             FROM document_chunks
-            WHERE session_id = :session_id AND page = ANY(:pages)
+            WHERE (
+                session_id = :session_id
+                OR topic_id = :session_id
+                OR doc_id = :session_id
+                OR session_id IN (SELECT session_id FROM session_documents WHERE session_id != :session_id AND doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))
+                {scope_doc_query}
+            ) AND page = ANY(:pages)
             ORDER BY page, chunk_id
         """)
         try:
             with self.engine.connect() as conn:
                 rows = conn.execute(statement, {"session_id": str(session_id), "pages": [int(p) for p in pages]}).mappings().fetchall()
-            return [dict(r) for r in rows]
+            seen_c = set()
+            dedup_results = []
+            for r in rows:
+                k = (r.get("doc_id"), r.get("chunk_id"), r.get("content"))
+                if k not in seen_c:
+                    seen_c.add(k)
+                    dedup_results.append(dict(r))
+            return dedup_results
         except Exception:
             return []
 
@@ -320,14 +637,41 @@ class PgFTSStore:
         statement = text("""
             SELECT id, chunk_id, doc_id, page, source_type, chunk_text AS content
             FROM document_chunks
-            WHERE session_id = :session_id
+            WHERE (
+                session_id = :session_id
+                OR topic_id = :session_id
+            )
             ORDER BY page, chunk_id
             LIMIT :limit
         """)
         try:
             with self.engine.connect() as conn:
                 rows = conn.execute(statement, {"session_id": str(session_id), "limit": int(limit)}).mappings().fetchall()
-            return [dict(r) for r in rows]
+                if not rows:
+                    scope_doc_query = (
+                        "OR doc_id IN (SELECT id FROM documents WHERE doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))"
+                        if self.engine.dialect.name == "sqlite"
+                        else "OR doc_id IN (SELECT id::text FROM documents WHERE doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))"
+                    )
+                    fallback_stmt = text(f"""
+                        SELECT id, chunk_id, doc_id, page, source_type, chunk_text AS content
+                        FROM document_chunks
+                        WHERE (
+                            session_id IN (SELECT session_id FROM session_documents WHERE session_id != :session_id AND doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))
+                            {scope_doc_query}
+                        )
+                        ORDER BY page, chunk_id
+                        LIMIT :limit
+                    """)
+                    rows = conn.execute(fallback_stmt, {"session_id": str(session_id), "limit": int(limit)}).mappings().fetchall()
+            seen_c = set()
+            dedup_results = []
+            for r in rows:
+                k = (r.get("doc_id"), r.get("chunk_id"), r.get("content"))
+                if k not in seen_c:
+                    seen_c.add(k)
+                    dedup_results.append(dict(r))
+            return dedup_results
         except Exception:
             return []
 
@@ -355,7 +699,21 @@ class PgFTSStore:
             return 0
 
     def count(self, session_id: str) -> int:
-        statement = text("SELECT count(*) FROM document_chunks WHERE session_id = :session_id")
+        scope_doc_query = (
+            "OR doc_id IN (SELECT id FROM documents WHERE doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))"
+            if self.engine.dialect.name == "sqlite"
+            else "OR doc_id IN (SELECT id::text FROM documents WHERE doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))"
+        )
+        statement = text(f"""
+            SELECT count(DISTINCT chunk_text) FROM document_chunks 
+            WHERE (
+                session_id = :session_id 
+                OR topic_id = :session_id 
+                OR doc_id = :session_id
+                OR session_id IN (SELECT session_id FROM session_documents WHERE session_id != :session_id AND doc_hash IN (SELECT doc_hash FROM session_documents WHERE session_id = :session_id AND doc_hash IS NOT NULL AND doc_hash != ''))
+                {scope_doc_query}
+            )
+        """)
         try:
             with self.engine.connect() as conn:
                 return int(conn.execute(statement, {"session_id": str(session_id)}).scalar() or 0)

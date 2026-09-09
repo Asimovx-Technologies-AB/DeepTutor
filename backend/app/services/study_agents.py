@@ -1704,13 +1704,23 @@ Provide a clear, helpful, expert academic response to the user's query."""
                 if c_term and c_term not in search_terms:
                     search_terms.append(c_term)
 
-        # Detect if student asks for a large response, detailed explanation, big answer, or related questions
-        is_large_request = any(k in user_query.lower() for k in (
+        # Detect requested response length/depth: small (default), medium, or large
+        user_q_lower = user_query.lower()
+        if any(k in user_q_lower for k in (
             "large", "big", "detailed", "detail", "comprehensive", "deep dive", "in-depth", "in depth", 
             "full breakdown", "everything", "complete", "long response", "explain fully", "all about", 
-            "related questions", "big response", "large response", "more details", "thorough", "exhaustive",
-            "explain more", "tell me more", "elaborate", "expand on", "break down further"
-        ))
+            "related questions", "big response", "large response", "thorough", "exhaustive"
+        )):
+            response_depth = "large"
+            is_large_request = True
+        elif any(k in user_q_lower for k in (
+            "medium", "more detail", "more details", "moderate", "explain more", "tell me more", "elaborate", "expand on", "break down further"
+        )):
+            response_depth = "medium"
+            is_large_request = False
+        else:
+            response_depth = "small"
+            is_large_request = False
 
         # Detect if student specifically asks to explain more about the PREVIOUS response / answer
         is_prev_explain_req = (
@@ -1972,6 +1982,7 @@ Provide a clear, helpful, expert academic response to the user's query."""
         prompt = f"""
 You are DeepTutor's Execution Agent (DecisionAgent).
 Subject: {subject}
+Requested Response Size: {response_depth.upper()}
 Response Contract: {plan.get('response_format', 'conceptual')}
 Explanation Level: {plan.get('explanation_level', 'standard')}
 Student Weakness Profile: {weaknesses_str}
@@ -2013,11 +2024,27 @@ STRICT RULES:
    formula
    $$
    or inline $...$. Ensure all LaTeX curly braces are strictly balanced!
-7. Tone: Articulate, authoritative, engaging academic tone. Strictly ZERO emojis.
-8. Chain-of-Thought: Provide a dedicated thought process detailing your reasoning and verification before the answer.
-9. Interactive Follow-up Question (Conversational Closing):
-   ALWAYS end your response with a natural, conversational follow-up question in bold (e.g., "**Would you like to solve another problem from this section?**" or "**Shall we see how this applies to negative differences, or test this with a quick 1-question practice?**") that the student can easily answer with a simple 'Yes' or 'No'.
-10. Textbook Correctness Inquiry:
+7. Tone & Zero Emojis: Articulate, authoritative, clean, engaging academic tone. Strictly ZERO emojis (do NOT use 📌, 💡, ⚠️, 🔍, 📚, 🚀, or any emoji characters).
+8. Response Sizing & Student-Centric Structure:
+   - DEFAULT IS SMALL AND SIMPLE: Unless the student explicitly requested a "big" or "medium" explanation, keep your response SHORT, SIMPLE, and DIRECT so a student can read and digest it in seconds.
+   - Sizing Guidelines:
+     * If Requested Response Size is SMALL (Default):
+       1. Start with 1 clear, punchy sentence explaining the core idea or intuition.
+       2. Give 2 to 4 concise bullet points with bold sub-headers (`- **Key Concept**: Simple explanation...`).
+       3. Strictly avoid long history, redundant definitions, or multi-paragraph walls of text.
+     * If Requested Response Size is MEDIUM:
+       Provide a balanced explanation with definitions, core mechanisms, formulas, and a short summary table if applicable.
+     * If Requested Response Size is LARGE:
+       Provide an exhaustive, in-depth breakdown covering theory, formulas, step-by-step mechanisms, and comprehensive tables.
+   - Differences & Comparisons Requirement:
+     Whenever the student asks for a difference, comparison, "X vs Y", contrast, trade-offs, or pros/cons (e.g., "what is the difference between SVM and Logistic Regression", "compare X and Y", "X vs Y"):
+     You MUST provide BOTH:
+     1. Concise conceptual bullet points highlighting the main distinctions.
+     2. A clean, structured Markdown Comparison Table (`| Aspect / Feature | Concept A | Concept B |`) contrasting core parameters, objectives, math/loss functions, pros/cons, and primary use cases.
+9. Chain-of-Thought: Provide a dedicated thought process detailing your reasoning and verification before the answer.
+10. Interactive Follow-up Question (Conversational Closing):
+    ALWAYS end your response with a natural, conversational follow-up question in bold offering a concrete next step (e.g., "**Would you like a step-by-step numerical example, or to compare this with another concept?**") that the student can easily answer with a simple 'Yes' or 'No'.
+11. Textbook Correctness Inquiry:
     - If the student asks whether the textbook, author, or uploaded material is wrong about a concept ('is this textbook wrong about X'):
       1. First, objectively explain what the uploaded material specifically states.
       2. If the material's claim is inconsistent with well-established academic facts, flag this as an objective caveat/note of caution (e.g., "Note: While your text states X, standard literature notes Y because..."), rather than an aggressive contradiction. Always explain what the course material states first.{compound_guidance}{eli5_comparison_guidance}
@@ -2025,7 +2052,7 @@ STRICT RULES:
 Return ONLY valid JSON in this exact structure:
 {{
   "thought_process": "Step-by-step reasoning on how retrieved chunks support this answer...",
-  "response": "The complete, detailed academic response formatted in Markdown...",
+  "response": "The complete, beautifully structured academic response formatted in Markdown...",
   "quiz_data": null
 }}
 """
@@ -2057,7 +2084,11 @@ Return ONLY valid JSON in this exact structure:
             except Exception as e:
                 print(f"[Vision Grounding] Note: {e}")
 
-        sys_inst = "You are a distinguished university professor. Output clean JSON only. Strictly no emojis."
+        sys_inst = (
+            "You are an elite academic tutor. Output clean JSON only. "
+            f"Make your explanation {response_depth.upper()}: by default, keep it small, simple, and concise unless a big or medium answer was explicitly requested. "
+            "Use bolded bullet points, include a comparison table for differences, and use strictly zero emojis."
+        )
         raw = await call_llm(prompt, sys_inst, temperature=0.2, image_bytes=page_image_bytes)
 
         thought, answer, quiz_data = parse_llm_json_response(raw)

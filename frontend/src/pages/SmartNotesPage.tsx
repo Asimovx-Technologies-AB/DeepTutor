@@ -603,7 +603,7 @@ export default function SmartNotesPage() {
               {/* Complete Markdown Document Render */}
               <div className="prose prose-sm max-w-none text-text-primary space-y-4 pt-2 border-t border-border/60">
                 <ReactMarkdown
-                  remarkPlugins={[remarkGfm, remarkMath]}
+                  remarkPlugins={[remarkMath, remarkGfm]}
                   rehypePlugins={[rehypeKatex]}
                   components={{
                     code({ className, children, ...props }: any) {
@@ -699,7 +699,7 @@ export default function SmartNotesPage() {
 
           <div className="prose prose-sm max-w-none">
             <ReactMarkdown
-              remarkPlugins={[remarkGfm, remarkMath]}
+              remarkPlugins={[remarkMath, remarkGfm]}
               rehypePlugins={[rehypeKatex]}
             >
               {activeNote.content_markdown}

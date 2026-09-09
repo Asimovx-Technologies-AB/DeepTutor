@@ -4,6 +4,7 @@ Documents API — file upload + SQLite FTS indexing + Topic Extraction.
 import os
 import asyncio
 import json
+import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, BackgroundTasks
@@ -18,6 +19,7 @@ from app.rag.sqlite_fts_store import get_session_store
 from app.rag.document_dedup import get_file_hash, is_already_processed, link_document_to_session
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 _indexing_status: dict = {}
@@ -188,6 +190,18 @@ async def _run_indexing(doc_id: str, section_id: str, file_path: str, user_id: s
             status="completed",
         )
 
+        try:
+            from app.services.study_storage import update_document_status
+            update_document_status(section_id, doc_id, "completed")
+        except Exception as err:
+            logger.debug(f"[documents._run_indexing] update_document_status completed: {err}")
+
+        # Invalidate existing flashcards only after successful re-indexing
+        try:
+            db.delete_flashcards_for_topic(section_id)
+        except Exception as err:
+            logger.debug(f"[documents._run_indexing] delete_flashcards_for_topic: {err}")
+
         # Dispatch Background Path: Stage 2 (Table) & Stage 3 (Image/VLM) Enrichment
         asyncio.create_task(doc_processor.run_background_enrichment(doc_id))
     except Exception as e:
@@ -201,6 +215,11 @@ async def _run_indexing(doc_id: str, section_id: str, file_path: str, user_id: s
             status="failed",
             error_message=str(e),
         )
+        try:
+            from app.services.study_storage import update_document_status
+            update_document_status(section_id, doc_id, "failed")
+        except Exception as err:
+            logger.debug(f"[documents._run_indexing] update_document_status failed: {err}")
 
 
 @router.post("/upload")
@@ -243,6 +262,18 @@ async def upload_document(
     if is_already_processed(doc_hash, user["id"], db=db):
         link_document_to_session(doc_hash, section_id, user["id"], db=db)
         existing_doc = db.get_document_by_hash(doc_hash, user["id"])
+        if existing_doc:
+            try:
+                from app.rag.pg_fts_store import pg_fts_store
+                pg_fts_store.clone_document_chunks_to_session(
+                    target_session_id=section_id,
+                    source_doc_id=existing_doc.get("id"),
+                    doc_hash=doc_hash,
+                    user_id=user["id"],
+                )
+            except Exception as e:
+                logger.error(f"[documents.upload] Failed to clone document chunks: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to clone document chunks to session: {e}")
         return {
             "status": "already_processed",
             "id": existing_doc.get("id") if existing_doc else None,
@@ -252,7 +283,8 @@ async def upload_document(
             "file_type": ext.lstrip("."),
             "chunks_created": 0,
             "size_mb": round(size_mb, 2),
-            "topic_id": topic_id,
+            "topic_id": section_id,
+            "section_id": section_id,
             "message": "Document already exists, linked to this session instantly",
         }
 
@@ -263,8 +295,7 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="Invalid filename path traversal attempt.")
     file_path = str(dest_path)
 
-    with open(file_path, "wb") as f:
-        f.write(content)
+    await asyncio.to_thread(dest_path.write_bytes, content)
 
     doc = db.create_document(
         user_id=user["id"],
@@ -276,8 +307,20 @@ async def upload_document(
         status="processing",
     )
     link_document_to_session(doc_hash, section_id, user["id"], db=db)
+    try:
+        from app.services.study_storage import save_session_document
+        save_session_document(
+            session_id=section_id,
+            doc_id=doc["id"],
+            filename=safe_filename,
+            file_path=file_path,
+            status="processing",
+            user_id=user["id"],
+            doc_hash=doc_hash,
+        )
+    except Exception as e:
+        logger.warning(f"[documents.upload] save_session_document warning: {e}")
 
-    db.delete_flashcards_for_topic(section_id)
     background_tasks.add_task(_run_indexing, doc["id"], section_id, file_path, user["id"], safe_filename)
 
     return {
@@ -288,7 +331,8 @@ async def upload_document(
         "filename": safe_filename,
         "file_type": ext.lstrip("."),
         "size_mb": round(size_mb, 2),
-        "topic_id": topic_id,
+        "topic_id": section_id,
+        "section_id": section_id,
         "chunks_created": 0,
         "message": f"✅ {safe_filename} uploaded and indexing started.",
     }
@@ -554,6 +598,12 @@ async def link_document_to_session_endpoint(
             doc_hash = doc_hash or doc.get("doc_hash")
             filename = filename or doc.get("file_name")
             file_path = file_path or doc.get("file_path")
+    elif doc_hash:
+        doc = db.get_document_by_hash(doc_hash, user_id=user_id)
+        if doc:
+            doc_id = doc.get("id")
+            filename = filename or doc.get("file_name")
+            file_path = file_path or doc.get("file_path")
 
     if not filename and not doc_id and not doc_hash:
         raise HTTPException(status_code=400, detail="Must provide at least doc_id, filename, or doc_hash")
@@ -578,6 +628,19 @@ async def link_document_to_session_endpoint(
         user_id=user_id,
         doc_hash=doc_hash or "",
     )
+
+    # Clone document chunks and embeddings into the new session
+    try:
+        from app.rag.pg_fts_store import pg_fts_store
+        pg_fts_store.clone_document_chunks_to_session(
+            target_session_id=session_id,
+            source_doc_id=doc_id,
+            doc_hash=doc_hash,
+            user_id=user_id,
+        )
+    except Exception as e:
+        logger.error(f"[link_document_to_session] Error cloning chunks: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to clone document chunks to session: {e}")
 
     # Populate curriculum topics in new session if not yet present
     current_session_topics = get_session_topics(session_id, user_id=user_id)

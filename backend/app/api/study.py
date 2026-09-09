@@ -320,6 +320,18 @@ async def upload_document(
                 page_count=existing_doc.get("chunk_count", 0),
             )
 
+            try:
+                from app.rag.pg_fts_store import pg_fts_store
+                pg_fts_store.clone_document_chunks_to_session(
+                    target_session_id=study_id,
+                    source_doc_id=existing_doc["id"],
+                    doc_hash=content_hash,
+                    user_id=user["id"],
+                )
+            except Exception as e:
+                print(f"[study.upload] Failed to clone document chunks: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to clone document chunks to study session: {e}")
+
             existing_docs = get_session_documents(study_id)
             is_existing_session = bool(existing_docs and len(existing_docs) > 1)
             save_session_topics(study_id, cached_topics, append=is_existing_session, document_name=file.filename)

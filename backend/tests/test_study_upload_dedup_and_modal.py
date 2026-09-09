@@ -10,7 +10,7 @@ Tests for:
 import uuid
 import pytest
 import pymupdf
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 from app.core import database as db
 from tests.conftest import get_auth_headers
 
@@ -48,7 +48,10 @@ def test_study_upload_dedup_fast_path(sync_client):
     )
 
     # 1. First upload in session_1 (with mocked topic extractor)
-    with patch("app.api.study.extract_topics_and_validate", new=AsyncMock(return_value=mock_topics)):
+    with patch("app.api.study.extract_topics_and_validate", new=AsyncMock(return_value=mock_topics)), \
+         patch("app.api.study._vlm_sample", new=AsyncMock(return_value="")), \
+         patch("app.rag.storage.azure_blob_store.azure_blob_store.upload_file", new=MagicMock()), \
+         patch("app.services.study_doc_processor.azure_blob_store.upload_file", new=MagicMock()):
         resp1 = sync_client.post(
             f"/api/study/upload?subject=Physics&session_id={session_1}",
             files=files_1,
@@ -113,8 +116,12 @@ def test_link_existing_material_to_new_session(sync_client):
         [{"id": "t1", "title": "Alkanes and Alkenes", "document_name": f"Organic_Chem_{run_id}.pdf"}],
     )
 
+    from unittest.mock import MagicMock
     # Upload first
-    with patch("app.api.study.extract_topics_and_validate", new=AsyncMock(return_value=mock_topics)):
+    with patch("app.api.study.extract_topics_and_validate", new=AsyncMock(return_value=mock_topics)), \
+         patch("app.api.study._vlm_sample", new=AsyncMock(return_value="")), \
+         patch("app.rag.storage.azure_blob_store.azure_blob_store.upload_file", new=MagicMock()), \
+         patch("app.services.study_doc_processor.azure_blob_store.upload_file", new=MagicMock()):
         resp = sync_client.post(
             f"/api/study/upload?subject=Chemistry&session_id={session_orig}",
             files=files,
@@ -140,3 +147,11 @@ def test_link_existing_material_to_new_session(sync_client):
         d.get("doc_hash") == doc_hash or d.get("filename") == f"Organic_Chem_{run_id}.pdf"
         for d in link_data["documents"]
     )
+
+    # 4. Verify that chunks and full-text search are fully connected to the new session
+    from app.rag.pg_fts_store import pg_fts_store
+    all_chunks = pg_fts_store.get_all_chunks(session_new)
+    assert len(all_chunks) > 0, "Expected chunks to be queryable in the new session"
+
+    search_res = pg_fts_store.search_bm25(session_new, "carbon")
+    assert len(search_res) > 0, "Expected BM25 search to return matching chunks in the linked session"

@@ -45,7 +45,15 @@ def clean_llm_response(text: str) -> str:
     for pattern in preambles:
         cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE).strip()
 
-    # 3. Normalize single-line inline double dollars ($$ var $$) to single dollars ($var$)
+    # 3. Convert standalone single-line formulas wrapped in $...$ into display math $$\n...\n$$
+    cleaned = re.sub(
+        r'^\s*\$(?!\$)([^\$\n]{5,})\$\s*$',
+        r'$$\n\1\n$$',
+        cleaned,
+        flags=re.MULTILINE
+    )
+
+    # 4. Normalize single-line inline double dollars ($$ var $$) to single dollars ($var$)
     # Only replace when $$ is embedded inside a text line (not on a line by itself)
     def _replace_inline_double_dollars(line: str) -> str:
         if line.strip() in ("$$", "$$$"):
@@ -55,15 +63,15 @@ def clean_llm_response(text: str) -> str:
     lines = cleaned.splitlines()
     cleaned = "\n".join(_replace_inline_double_dollars(l) for l in lines)
 
-    # 4. Clean up un-bulleted paradigm lists like "Supervised Learning: ..." into "- **Supervised Learning**: ..."
+    # 5. Clean up un-bulleted paradigm lists like "Supervised Learning: ..." into "- **Supervised Learning**: ..."
     cleaned = re.sub(
-        r'^(?!(?:[-*#>]|\d+\.))\s*([A-Za-z0-9\s]{3,35}):\s+([A-Z])',
+        r'^(?!(?:[-*#>]|\d+\.))\s*([A-Za-z0-9\s()/\-]{3,45}):\s+([A-Z])',
         r'- **\1**: \2',
         cleaned,
         flags=re.MULTILINE
     )
 
-    # 5. Consolidate excessive blank lines
+    # 6. Consolidate excessive blank lines
     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
 
     return cleaned.strip()
