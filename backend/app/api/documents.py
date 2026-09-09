@@ -620,9 +620,10 @@ async def link_document_to_session_endpoint(
 
     # Update session registry entry so it displays properly on the page
     clean_title = Path(effective_filename).stem.replace("_", " ").title()
+    effective_subject = (doc.get("detected_subject") if doc else None) or "General Study"
     register_or_update_session(
         session_id=session_id,
-        subject=doc.get("detected_subject") if doc else "General Study",
+        subject=effective_subject,
         title=f"{clean_title} Study Room",
         document_name=effective_filename,
         user_id=user_id,

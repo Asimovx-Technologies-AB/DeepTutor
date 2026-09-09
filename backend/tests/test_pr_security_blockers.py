@@ -91,3 +91,61 @@ async def test_sympy_code_injection_blocked():
         res = await mcp_client_manager.execute_tool("solve_math_expression", {"expression": expr})
         assert res["status"] == "error"
         assert "Notice" in res["output"] or "Forbidden" in res["output"] or "Notice" in res["output"]
+
+
+def test_register_or_update_session_with_null_subject():
+    """Verify that register_or_update_session handles null and empty subjects without violating NOT NULL constraints."""
+    user_test = "user_null_subj_test"
+    sid = "session_null_subj_123"
+
+    # 1. Test with subject=None
+    res1 = register_or_update_session(session_id=sid, user_id=user_test, subject=None, title="Null Subject Test")
+    assert res1 is not None
+    assert res1["subject"] == "General Study"
+
+    # 2. Test with subject=""
+    res2 = register_or_update_session(session_id=sid, user_id=user_test, subject="", title="Empty Subject Test")
+    assert res2 is not None
+    assert res2["subject"] == "General Study"
+
+    # 3. Test with subject="   "
+    res3 = register_or_update_session(session_id=sid, user_id=user_test, subject="   ", title="Whitespace Subject Test")
+    assert res3 is not None
+    assert res3["subject"] == "General Study"
+
+    # Cleanup
+    delete_registry_session(sid, user_id=user_test)
+
+
+def test_clean_llm_response_noise_removal():
+    """Verify that clean_llm_response sanitizes noisy conversational preambles, wrapper fences, and misplaced math delimiters."""
+    from app.rag.llm_client import clean_llm_response
+
+    # Test 1: Preamble and outer markdown wrap
+    raw_1 = "```markdown\nCertainly! Here are the study notes:\n# Machine Learning\nThis is the content.\n```"
+    cleaned_1 = clean_llm_response(raw_1)
+    assert not cleaned_1.startswith("```")
+    assert not cleaned_1.endswith("```")
+    assert "Certainly" not in cleaned_1
+    assert cleaned_1.startswith("# Machine Learning")
+
+    # Test 2: Inline double dollars ($$) to single dollars ($)
+    raw_2 = "Formally, given a dataset $$ \\mathcal{D} $$ where $$ x_i $$ represents input and $$ y_i $$ represents output:"
+    cleaned_2 = clean_llm_response(raw_2)
+    assert "$$ \\mathcal{D} $$" not in cleaned_2
+    assert "$\\mathcal{D}$" in cleaned_2
+    assert "$x_i$" in cleaned_2
+    assert "$y_i$" in cleaned_2
+
+    # Test 3: Display math block preservation
+    raw_3 = "The optimal model is:\n$$\nf^* = \\arg\\min L(y, f(x))\n$$\nwhere $L$ is loss."
+    cleaned_3 = clean_llm_response(raw_3)
+    assert "$$\nf^* = \\arg\\min L(y, f(x))\n$$" in cleaned_3
+
+    # Test 4: Unbulleted paradigm lists
+    raw_4 = "\nSupervised Learning: Learn from labeled data.\nUnsupervised Learning: Learn from unlabeled data."
+    cleaned_4 = clean_llm_response(raw_4)
+    assert "- **Supervised Learning**: Learn from labeled data." in cleaned_4
+    assert "- **Unsupervised Learning**: Learn from unlabeled data." in cleaned_4
+
+

@@ -31,6 +31,34 @@ class DayNotesRequest(BaseModel):
     force_regenerate: Optional[bool] = False
 
 
+def clean_study_notes_markdown(text: str) -> str:
+    """Cleans LaTeX math syntax, converts misplaced inline double-dollars to single dollars, and normalizes bullet lists."""
+    if not text:
+        return ""
+
+    cleaned = text
+
+    # Convert inline double dollars ($$ var $$) on the same line to single dollars ($var$)
+    # while preserving multi-line display math blocks ($$\n...\n$$)
+    def _replace_inline_double_dollars(match):
+        content = match.group(1).strip()
+        # If it's short and on a single line, it's inline math
+        if "\n" not in content:
+            return f"${content}$"
+        return f"\n$$\n{content}\n$$\n"
+
+    cleaned = re.sub(r'(?<!\$)\$\$\s*([^\$\n]+?)\s*\$\$(?!\$)', _replace_inline_double_dollars, cleaned)
+
+    # Ensure display math blocks have newlines around them
+    cleaned = re.sub(r'([^\n])\s*\$\$\s*\n', r'\1\n\n$$\n', cleaned)
+    cleaned = re.sub(r'\n\s*\$\$\s*([^\n])', r'\n$$\n\n\1', cleaned)
+
+    # Clean up un-bulleted paradigm lists like "Supervised Learning: ..." into "- **Supervised Learning**: ..."
+    cleaned = re.sub(r'\n(Supervised Learning|Unsupervised Learning|Reinforcement Learning|Semi-Supervised Learning):\s*', r'\n- **\1**: ', cleaned)
+
+    return cleaned.strip()
+
+
 async def _generate_day_study_notes(day_topic: str, key_concepts: List[str], topic_id: Optional[str] = "general") -> str:
     material_context = ""
     if topic_id and topic_id != "general":
@@ -43,27 +71,34 @@ async def _generate_day_study_notes(day_topic: str, key_concepts: List[str], top
             pass
 
     prompt = f"""You are DeepTutor, an elite academic AI tutor.
-Write comprehensive, authoritative master study notes for the topic: "{day_topic}".
+Write comprehensive, authoritative, beautifully structured master study notes for the topic: "{day_topic}".
 Key concepts to cover: {", ".join(key_concepts) if key_concepts else "Core principles"}.
 {material_context}
 
-FORMAT REQUIREMENTS:
-- Use clean Markdown (# and ## headings).
-- Zero emojis. Maintain an articulate, authoritative academic tone.
-- Base explanations directly on the governing principles in the student's uploaded material.
-- Follow this exact structure:
-  1. # {day_topic} — Study Notes
-  2. > **TL;DR / Summary**: 3-5 line essence box.
-  3. ## Core Governing Principles & Mathematical Framework (Highlight all formulas in $$ ... $$ or formatted blocks).
-  4. ## Step-by-Step Problem-Solving & Concrete Examples
-  5. ## Comparison & Trade-Offs (Use Markdown comparison tables wherever relevant).
-  6. ## Commonly Confused / High-Yield Gotchas (Common student pitfalls, traps, edge cases).
-  7. ## Self-Check Active Recall (5-8 testable questions labeled [High-yield] or [Good-to-know], with answers in a collapsible `<details><summary>Click to reveal answers</summary>...</details>` block).
-  8. ## Quick-Reference Glossary (Two-column Markdown table of key terms and concise definitions).
-  9. **Topics to expand next:** (1 line suggestion of next logical study topic).
+FORMAT REQUIREMENTS & QUALITY GUIDELINES:
+1. LaTeX Math Formatting:
+   - For inline variables, symbols, and short formulas inside sentences, always use single dollar signs: `$x_i$`, `$y_i$`, `$f(x)$`, `$P$`, `$L$`, `$\\mathcal{{D}}$`.
+   - For major display equations, place them on dedicated separate lines enclosed by double dollar signs:
+     $$
+     f^* = \\arg\\min_f \\mathbb{{E}}_{{(x,y) \\sim P}} \\left[ L(y, f(x)) \\right]
+     $$
+2. Structured Bullet Lists:
+   - Always format definitions, paradigms, steps, and sub-points as clean Markdown bullet points (`- **Term / Principle**: Clear explanation`).
+   - Never write run-on wall-of-text paragraphs.
+3. Zero Emojis: Maintain an articulate, pristine academic tone.
+4. Structure:
+   - # {day_topic} — Study Notes
+   - > **TL;DR / Summary**: 3-5 line high-density essence box.
+   - ## Core Governing Principles & Mathematical Framework
+   - ## Step-by-Step Problem-Solving & Concrete Examples
+   - ## Comparison & Trade-Offs (Use a clean Markdown comparison table)
+   - ## High-Yield Gotchas & Common Pitfalls
+   - ## Self-Check Active Recall (5-8 testable questions labeled [High-yield], with answers in `<details><summary>Click to reveal answers</summary>...</details>`)
+   - ## Quick-Reference Glossary (Two-column Markdown table of key terms and concise definitions)
+   - **Next Topic to Explore:** (1 line suggestion)
 """
     notes = await llm_client.chat([{"role": "user", "content": prompt}], temperature=0.2)
-    return notes.strip()
+    return clean_study_notes_markdown(notes)
 
 
 async def _generate_study_plan(user_id: str, topic_id: str, target_date: str, hours_per_day: float) -> dict:

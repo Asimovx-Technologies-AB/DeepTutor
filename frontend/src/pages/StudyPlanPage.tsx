@@ -3,6 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
+import MermaidDiagram from '../components/MermaidDiagram'
 import {
   Calendar,
   Sparkles,
@@ -22,6 +26,8 @@ import {
   Volume2,
   Copy,
   Check,
+  Download,
+  Printer,
   X,
   Search,
   Layers,
@@ -267,6 +273,20 @@ export default function StudyPlanPage() {
     navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const downloadMarkdown = (text: string, title: string) => {
+    if (!text) return
+    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const cleanFileName = (title || 'Study_Notes').replace(/[^a-zA-Z0-9_-]/g, '_')
+    link.setAttribute('download', `${cleanFileName}.md`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
   const speakNotes = (text: string) => {
@@ -1053,6 +1073,24 @@ export default function StudyPlanPage() {
                   </button>
 
                   <button
+                    onClick={() => downloadMarkdown(activeNotesModal.notes, `${activeNotesModal.topic}_Day_${activeNotesModal.dayNum}_Study_Notes`)}
+                    disabled={activeNotesModal.loading || !activeNotesModal.notes}
+                    className="p-2 rounded-[1.25rem] text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-40"
+                    title="Download as Markdown (.md)"
+                  >
+                    <Download size={18} />
+                  </button>
+
+                  <button
+                    onClick={() => window.print()}
+                    disabled={activeNotesModal.loading || !activeNotesModal.notes}
+                    className="p-2 rounded-[1.25rem] text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-40"
+                    title="Print Study Notes"
+                  >
+                    <Printer size={18} />
+                  </button>
+
+                  <button
                     onClick={() => {
                       if (isSpeaking) window.speechSynthesis.cancel()
                       setIsSpeaking(false)
@@ -1073,9 +1111,98 @@ export default function StudyPlanPage() {
                     <p className="text-xs font-bold text-slate-500">Generating AI Study Notes from PDF...</p>
                   </div>
                 ) : (
-                  <div className="markdown-content text-slate-800 leading-relaxed text-sm">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {activeNotesModal.notes}
+                  <div className="prose prose-sm max-w-none text-slate-800 space-y-3">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm, remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
+                      components={{
+                        h1: ({ children }) => (
+                          <h1 className="text-xl font-black text-slate-900 mt-6 mb-3 pb-2 border-b border-slate-200">
+                            {children}
+                          </h1>
+                        ),
+                        h2: ({ children }) => (
+                          <h2 className="text-base font-bold text-slate-900 mt-6 mb-2.5 flex items-center gap-2">
+                            {children}
+                          </h2>
+                        ),
+                        h3: ({ children }) => (
+                          <h3 className="text-sm font-bold text-slate-800 mt-4 mb-2">
+                            {children}
+                          </h3>
+                        ),
+                        p: ({ children }) => (
+                          <p className="text-xs sm:text-sm text-slate-700 leading-relaxed mb-3 font-normal">
+                            {children}
+                          </p>
+                        ),
+                        ul: ({ children }) => (
+                          <ul className="list-disc pl-5 space-y-1.5 text-xs sm:text-sm text-slate-700 mb-3">
+                            {children}
+                          </ul>
+                        ),
+                        ol: ({ children }) => (
+                          <ol className="list-decimal pl-5 space-y-1.5 text-xs sm:text-sm text-slate-700 mb-3">
+                            {children}
+                          </ol>
+                        ),
+                        li: ({ children }) => (
+                          <li className="leading-relaxed">
+                            {children}
+                          </li>
+                        ),
+                        blockquote: ({ children }) => (
+                          <blockquote className="border-l-4 border-indigo-500 pl-4 py-2 my-3 bg-indigo-50/60 rounded-r-xl text-xs sm:text-sm text-slate-800 italic">
+                            {children}
+                          </blockquote>
+                        ),
+                        table: ({ children }) => (
+                          <div className="overflow-x-auto my-4 rounded-xl border border-slate-200 shadow-2xs">
+                            <table className="w-full text-xs border-collapse">{children}</table>
+                          </div>
+                        ),
+                        th: ({ children }) => (
+                          <th className="border-b border-slate-200 bg-slate-100/80 p-2.5 font-bold text-left text-slate-800">
+                            {children}
+                          </th>
+                        ),
+                        td: ({ children }) => (
+                          <td className="border-b border-slate-100 p-2.5 text-left text-slate-700">
+                            {children}
+                          </td>
+                        ),
+                        code({ className, children, ...props }: any) {
+                          const match = /language-(\w+)/.exec(className || '')
+                          const isMermaid = match && match[1] === 'mermaid'
+                          const isInline = !match
+
+                          if (isMermaid) {
+                            return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />
+                          }
+                          if (isInline) {
+                            return (
+                              <code className="bg-slate-100 text-indigo-700 px-1.5 py-0.5 rounded-md text-xs font-mono font-semibold border border-slate-200">
+                                {children}
+                              </code>
+                            )
+                          }
+                          return (
+                            <pre className="bg-slate-900 text-slate-100 p-4 rounded-2xl overflow-x-auto text-xs font-mono my-3 shadow-inner">
+                              <code>{children}</code>
+                            </pre>
+                          )
+                        },
+                      }}
+                    >
+                      {(() => {
+                        const raw = activeNotesModal.notes || ''
+                        // Inline math delimiter normalization
+                        let cleaned = raw.replace(/(?<!\$)\$\$\s*([^\$\n]+?)\s*\$\$(?!\$)/g, (_m: string, p1: string) => `$${p1.trim()}$`)
+                        cleaned = cleaned.replace(/([^\n])\s*\$\$\s*\n/g, '$1\n\n$$\n')
+                        cleaned = cleaned.replace(/\n\s*\$\$\s*([^\n])/g, '\n$$\n\n$1')
+                        cleaned = cleaned.replace(/\n(Supervised Learning|Unsupervised Learning|Reinforcement Learning|Semi-Supervised Learning):\s*/g, '\n- **$1**: ')
+                        return cleaned
+                      })()}
                     </ReactMarkdown>
                   </div>
                 )}
