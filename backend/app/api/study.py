@@ -500,7 +500,7 @@ async def send_agent_message(
     # Retrieve previous conversation history before adding new message
     history = body.history
     if not history:
-        prev_msgs = get_session_messages(body.session_id, limit=6)
+        prev_msgs = get_session_messages(body.session_id, limit=20)
         history = [{"role": m.get("role", "user"), "text": m.get("text", "")} for m in prev_msgs]
 
     # Record student message in SQLite

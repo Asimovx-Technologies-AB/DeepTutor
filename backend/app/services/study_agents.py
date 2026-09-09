@@ -218,8 +218,46 @@ GENERIC_NON_SUBJECT_TERMS = {
     "topic for the material", "topics for the material", "topic of the material", "topics of the material",
     "topic for material", "topics for material", "topic of material", "topics of material",
     "topic for the meterial", "topics for the meterial", "topic of the meterial", "topics of the meterial",
-    "topics in the material", "topics in this material", "material topics", "material topic"
+    "topics in the material", "topics in this material", "material topics", "material topic",
+    "main topics", "what are the main topics", "main topics in here", "topics in here"
 }
+
+
+def clean_response_noise(text: str) -> str:
+    """
+    Sanitizes LLM responses to ensure clean, readable, student-friendly output:
+    - Strips noisy unrendered LaTeX artifacts: \\mathbf{w} -> **w**, \\mathit{x} -> *x*, \\text{x} -> x.
+    - Cleans ugly raw parentheses around variables like ( \\mathbf{w} ) or ( **w** ) -> **w**.
+    - Cleans inline fractions like \\frac{2}{||\\mathbf{w}||} into readable 2 / ||w|| if outside block math.
+    - Removes naked stray $ signs that create syntax noise in regular sentences.
+    - Removes all emoji characters for a strictly professional academic tone.
+    """
+    if not text:
+        return text
+
+    # 1. Clean LaTeX styling commands
+    cleaned = re.sub(r"\\mathbf\{([^}]+)\}", r"**\1**", text)
+    cleaned = re.sub(r"\\boldsymbol\{([^}]+)\}", r"**\1**", cleaned)
+    cleaned = re.sub(r"\\mathit\{([^}]+)\}", r"*\1*", cleaned)
+    cleaned = re.sub(r"\\mathrm\{([^}]+)\}", r"\1", cleaned)
+    cleaned = re.sub(r"\\text\{([^}]+)\}", r"\1", cleaned)
+
+    # 2. Clean parentheses wrapping variables: ( **w** ) or ( \mathbf{w} ) -> **w**
+    cleaned = re.sub(r"\(\s*(\*\*[^*]+\*\*)\s*\)", r"\1", cleaned)
+
+    # 3. Clean unrendered ||\mathbf{w}|| or ||**w**|| inside parentheses
+    cleaned = re.sub(r"\(\s*(\|\|[^*]+\|\|)\s*\)", r"\1", cleaned)
+
+    # 4. Clean naked LaTeX fractions outside math blocks: \frac{a}{b} -> a / b
+    cleaned = re.sub(r"(?<!\$)\\frac\{([^}]+)\}\{([^}]+)\}(?!\$)", r"\1 / \2", cleaned)
+
+    # 5. Clean stray dollar noise in regular words like $word$ when not an equation
+    cleaned = re.sub(r"(?<!\$)\$(?!\$)\s*([a-zA-Z])\s*(?<!\$)\$(?!\$)", r"**\1**", cleaned)
+
+    # 6. Remove all emojis
+    cleaned = re.sub(r"[\U00010000-\U0010ffff]", "", cleaned)
+
+    return cleaned
 
 
 def is_material_topics_query(query: str) -> bool:
@@ -239,17 +277,25 @@ def is_material_topics_query(query: str) -> bool:
         "topic for the meterial", "topics for the meterial", "what is the topic for the meterial",
         "what are the topics for the meterial", "topic for meterial", "topics for meterial",
         "what is the topic in the material", "what is the topic in this material",
-        "what are the topics in the material", "what are topics in this material"
+        "what are the topics in the material", "what are topics in this material",
+        "what are the main topics in here", "what are the main topics", "what are the important topics",
+        "what are main topics", "main topics in here", "topics in here", "main topics",
+        "what are the key topics", "important topics in here", "key topics in here",
+        "what does this material cover", "what is covered here", "what are we studying in here",
+        "what are the main topics covered here", "what are the chapters in here",
+        "show me the topics", "what topics are in here"
     )
     if any(p in q for p in exact_phrases):
         return True
     patterns = [
-        r"\b(?:what (?:is|are) (?:the )?(?:topics?|chapters?|curriculum|syllabus))\b",
-        r"\b(?:topics?|chapters?|syllabus|curriculum)\s+(?:for|of|in|from)\s+(?:the|this|my)?\s*(?:material|meterial|materiel|document|pdf|notes?|book|textbook|course|session)\b",
-        r"\b(?:list|show|give|tell|display|see|find)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?(?:topics?|chapters?|syllabus|curriculum)\b",
-        r"\bwhat\s+(?:does\s+)?(?:this|the)\s+(?:material|meterial|materiel|document|pdf|notes?|book)\s+(?:cover|contain|have|include)\b",
-        r"\bwhat\s+(?:can\s+i\s+learn|can\s+we\s+learn|topics?\s+are\s+there)\s+(?:from|in)\s+(?:this|the)\s+(?:material|meterial|materiel|document|pdf|notes?)\b",
-        r"\bwhat\s+is\s+(?:inside|in)\s+(?:this|the)\s+(?:material|meterial|materiel|document|pdf)\b",
+        r"\b(?:what (?:is|are) (?:all |the )?(?:main|important|key|major|primary|core)?\s*(?:topics?|chapters?|curriculum|syllabus))\b",
+        r"\b(?:main|important|key|core|major|primary)?\s*(?:topics?|chapters?|syllabus|curriculum)\s+(?:for|of|in|from)\s+(?:the|this|my|here)?\s*(?:material|meterial|materiel|document|pdf|notes?|book|textbook|course|session|here)?\b",
+        r"\b(?:list|show|give|tell|display|see|find)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?(?:main|important|key)?\s*(?:topics?|chapters?|syllabus|curriculum)\b",
+        r"\bwhat\s+(?:does\s+)?(?:this|the|here)\s+(?:material|meterial|materiel|document|pdf|notes?|book)?\s*(?:cover|contain|have|include)\b",
+        r"\bwhat\s+(?:can\s+i\s+learn|can\s+we\s+learn|topics?\s+are\s+there)\s+(?:from|in)\s+(?:this|the|here)\s*(?:material|meterial|materiel|document|pdf|notes?)?\b",
+        r"\bwhat\s+is\s+(?:inside|in)\s+(?:this|the|here)\s*(?:material|meterial|materiel|document|pdf)?\b",
+        r"\b(?:main|important|key|core)\s+topics?\b",
+        r"\btopics?\s+in\s+here\b",
     ]
     for pat in patterns:
         if re.search(pat, q):
@@ -1002,10 +1048,83 @@ IMPORTANT OUTPUT RULES:
 # ─── 1. Planner Agent (Instant Zero-Latency Fast-Path) ───────────────────────
 
 class QueryAnalyzerAgent:
-    """Instant heuristic planning agent that decomposes queries and identifies search requirements in < 1ms."""
+    """Intelligent planning agent with dual fast-path heuristics (< 1ms) and an LLM Reasoning Tool for deep query thinking."""
+
+    async def think_with_llm(self, user_query: str, subject: str = "General Study", history: List[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        """
+        Dedicated LLM Query Thinking Tool: Deep cognitive analysis of the student's query,
+        determining true pedagogical goals, extracting target concepts, identifying visual/diagram needs,
+        and formulating retrieval keywords.
+        """
+        try:
+            recent_history_str = ""
+            if history:
+                recent_lines = [
+                    f"{(m.get('role') or m.get('sender') or 'User').capitalize()}: {(m.get('text') or m.get('content') or '')[:200]}"
+                    for m in history[-6:]
+                    if (m.get('text') or m.get('content'))
+                ]
+                if recent_lines:
+                    recent_history_str = "Recent Conversation Context:\n" + "\n".join(recent_lines) + "\n\n"
+
+            prompt = f"""You are DeepTutor's Query Planning & Intent Reasoning Agent.
+Analyze this student query for the course subject: "{subject}".
+
+{recent_history_str}Student Query:
+"{user_query}"
+
+Think step-by-step:
+1. True Pedagogical Intent:
+   - "material_topics": Student is asking what are the main/important topics, chapters, or syllabus covered in their material/document/here.
+   - "diagram": Student is asking to study, explain, or understand a figure, diagram, chart, or visual workflow.
+   - "chat_followup": Student is asking a question referring back to earlier chat conversation in this session.
+   - "comparison": Comparing two concepts (difference between X and Y, X vs Y).
+   - "quiz": Requesting a quiz, practice questions, or flashcards.
+   - "solve": Problem solving, calculation, or table completion.
+   - "study_notes": Requesting comprehensive study notes / cheat sheet.
+   - "conceptual": Conceptual explanation or definition.
+2. Target Academic Concept / Noun Phrase (clean title, null if asking general syllabus/greeting).
+3. Search Terms: 1-3 clean search queries to find the relevant text in course materials.
+
+Return strict JSON only:
+{{
+  "thought_process": "1-2 sentence reasoning on student intent and optimal response strategy",
+  "intent": "material_topics" | "diagram" | "chat_followup" | "comparison" | "quiz" | "solve" | "study_notes" | "conceptual",
+  "target_topic": "string or null",
+  "search_queries": ["query1", "query2"],
+  "response_format": "material_topics" | "diagram" | "comparison" | "quiz" | "solve" | "study_notes" | "conceptual",
+  "is_material_topics": true | false,
+  "is_figure_query": true | false,
+  "is_chat_followup": true | false
+}}"""
+            raw = await call_llm(
+                prompt,
+                system_instruction="You are DeepTutor's Query Planning Agent. Think carefully and return strict JSON only.",
+                temperature=0.1
+            )
+            return robust_json_parse(raw)
+        except Exception as e:
+            print(f"[QueryAnalyzerAgent] think_with_llm notice: {e}")
+            return None
 
     async def plan(self, user_query: str, subject: str = "General Study", history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         q_lower = user_query.lower().strip()
+
+        # Fast-path for bare greetings (< 0.2ms)
+        is_bare_greeting = q_lower in ("hi", "hello", "hey", "good morning", "good evening", "greetings")
+        if is_bare_greeting:
+            return {
+                "intent": "GREETING",
+                "response_format": "conceptual",
+                "sub_intents": ["conceptual"],
+                "requires_table_data": False,
+                "requires_image_data": False,
+                "search_terms": [subject],
+                "confidence": 0.98,
+                "explanation_level": "standard",
+                "target_page": None,
+                "is_material_topics_query": False,
+            }
 
         # 0. Check if this query is an affirmative continuation to a previous assistant offer ("yes", "sure", etc.)
         bool_yes_pattern = r"^(yes|y|yeah|yup|sure|ok|okay|true|tell me more|explain that|go ahead|please do|solve that|continue)\b[,\s]*(.*)$"
@@ -1020,7 +1139,6 @@ class QueryAnalyzerAgent:
         if is_affirmative and history:
             prev_asst_text = extract_previous_assistant_response(history) or ""
             if prev_asst_text:
-                # Extract the offered question from previous assistant turn
                 offered_q = ""
                 for line in reversed(prev_asst_text.split("\n")):
                     l_clean = line.strip()
@@ -1030,7 +1148,6 @@ class QueryAnalyzerAgent:
                 if not offered_q:
                     offered_q = prev_asst_text[-200:].lower()
 
-                # Extract topic from previous turn
                 topic_m = re.search(r"^#+\s*(.+)$", prev_asst_text, re.MULTILINE)
                 if topic_m:
                     continuation_topic = re.sub(r"[\*#_`~?]", "", topic_m.group(1)).replace("What is", "").replace("What are", "").strip()
@@ -1049,15 +1166,27 @@ class QueryAnalyzerAgent:
                     continuation_format = "quiz"
                     continuation_keyword = "practice quiz"
 
+        # Dedicated LLM Query Thinking Tool (analyzes query intent, figure needs, and chat references)
+        llm_analysis = None
+        if not is_affirmative:
+            llm_analysis = await self.think_with_llm(user_query, subject, history)
+
         # 1. Format & Sub-intent classification
+        is_material_topics = is_material_topics_query(user_query) or (
+            bool(llm_analysis and (llm_analysis.get("is_material_topics") or llm_analysis.get("intent") == "material_topics"))
+        )
         is_quiz = any(k in q_lower for k in ("quiz", "test me", "ask me a question", "pop quiz", "mcq"))
         is_study_notes = bool(re.search(
             r"\b(study notes?|cheat sheet|revision notes?|study map|summari[sz]e.*as notes|create.*(?:md|\.md|markdown)|make.*(?:md|\.md|markdown)|generate.*(?:md|\.md|markdown)|(?:md|\.md|markdown)\s*(?:file|doc)?\s*(?:on|for|about))\b", q_lower
         ))
         is_comparison = any(k in q_lower for k in ("compare", "versus", " vs ", "difference between", "distinguish", "relate to"))
-        is_diagram = any(k in q_lower for k in ("diagram", "figure", "chart", "architecture", "flowchart", "illustration"))
+        is_diagram = (
+            any(k in q_lower for k in ("diagram", "figure", "chart", "architecture", "flowchart", "illustration"))
+            or bool(llm_analysis and (llm_analysis.get("is_figure_query") or llm_analysis.get("intent") == "diagram"))
+        )
         is_solve = any(k in q_lower for k in ("solve", "calculate", "fill", "matrix", "column", "row", "position", "sequence", "table", "problem"))
         is_conceptual = any(k in q_lower for k in ("explain", "what is", "how does", "tell me", "break down", "overview", "definition", "concept", "why is", "describe"))
+        is_meta_referential = bool(llm_analysis and (llm_analysis.get("is_chat_followup") or llm_analysis.get("intent") == "chat_followup"))
 
         # Explanation level classification
         is_eli5 = any(k in q_lower for k in ("eli5", "like i'm 5", "like im 5", "like a 5 year old", "like a five year old", "explain simply", "simple words", "for beginners", "for a child"))
@@ -1073,8 +1202,7 @@ class QueryAnalyzerAgent:
         else:
             explanation_level = "standard"
 
-        # Primary format
-        is_material_topics = is_material_topics_query(user_query)
+        # Primary format determination
         if continuation_format:
             resp_format = continuation_format
         elif is_material_topics:
@@ -1089,6 +1217,8 @@ class QueryAnalyzerAgent:
             resp_format = "diagram"
         elif is_solve:
             resp_format = "solve"
+        elif llm_analysis and llm_analysis.get("response_format"):
+            resp_format = llm_analysis.get("response_format")
         else:
             resp_format = "conceptual"
 
@@ -1566,9 +1696,9 @@ class DecisionAgent:
             subject_display = f" for **{subject}**" if subject and subject not in ("General Study", "New Course Workspace", "Default Study Room", "") else ""
 
             if session_topics:
-                rows = []
+                bullets = []
                 first_topic_name = ""
-                for idx, top in enumerate(session_topics[:8], 1):
+                for idx, top in enumerate(session_topics[:10], 1):
                     raw_title = top.get("title") or f"Topic {idx}"
                     clean_title = re.sub(r"^\d+[\.\:\-]\s*", "", raw_title).strip()
                     if idx == 1:
@@ -1576,50 +1706,50 @@ class DecisionAgent:
                     summary = top.get("summary") or ""
                     key_c = top.get("key_concepts") or []
                     if isinstance(key_c, list) and key_c:
-                        key_str = ", ".join(str(k) for k in key_c[:3])
-                        focus = f"{summary} (Concepts: {key_str})" if summary else key_str
+                        key_str = ", ".join(str(k) for k in key_c[:4])
+                        focus = f"{summary} (Core concepts: {key_str})" if summary else f"Core concepts: {key_str}"
                     else:
-                        focus = summary or "Foundational theory and core applications"
-                    if len(focus) > 110:
-                        focus = focus[:107].rsplit(" ", 1)[0] + "..."
-                    diff = (top.get("difficulty") or "Standard").capitalize()
-                    rows.append(f"| {idx} | **{clean_title}** | {focus} | {diff} |")
+                        focus = summary or "Foundational principles, core mechanisms, and applications"
+                    bullets.append(f"- **{clean_title}**: {focus}")
 
-                table_md = "| # | Topic | Key Focus & Concepts | Difficulty |\n|---|---|---|---|\n" + "\n".join(rows)
+                topic_bullets_md = "\n".join(bullets)
                 first_ref = f"Topic 1 ({first_topic_name})" if first_topic_name else "Topic 1"
 
                 resp_text = (
-                    f"Here are the primary topics covered in {doc_label}{subject_display}:\n\n"
-                    f"{table_md}\n\n"
-                    f"These topics provide a structured progression through your course material.\n\n"
-                    f"**Would you like to start with {first_ref}, or is there a specific topic you want to explore first?**"
+                    f"Here are the main important topics covered in {doc_label}{subject_display}:\n\n"
+                    f"{topic_bullets_md}\n\n"
+                    f"**Which of these topics would you like to explore first?**"
                 )
                 return {
-                    "thought_process": f"Retrieved {len(session_topics)} curriculum topics for {doc_label}. Formatted structured table with difficulty levels and key focus.",
+                    "thought_process": f"Retrieved {len(session_topics)} curriculum topics for {doc_label}. Formatted as structured bullet points of important topics.",
                     "response": resp_text,
                     "sources": [{"chunk_id": c["chunk_id"], "page": c["page"]} for c in all_doc_chunks[:2]],
                     "format": "material_topics"
                 }
 
-            # If documents exist but session_topics is empty, synthesize topics from chunks
-            chunks_context = "\n\n".join(c["content"] for c in all_doc_chunks[:6])
+            # If documents exist but session_topics is empty, synthesize topics from chunks across the document
+            toc_chunks = search_fts_chunks(session_id, "contents chapter unit syllabus topic overview", limit=8)
+            if not toc_chunks:
+                all_chunks = get_all_chunks(session_id, limit=30)
+                toc_chunks = all_chunks[3:13] if len(all_chunks) > 6 else all_chunks
+
+            chunks_context = "\n\n".join(c["content"] for c in toc_chunks[:8])
             synth_prompt = (
                 f"The student asked: \"{user_query}\"\n\n"
-                f"Extract and summarize the curriculum topics from their uploaded course material ({doc_label}).\n"
+                f"Extract and summarize the main important curriculum topics from their uploaded course material ({doc_label}).\n"
                 f"MATERIAL TEXT EXCERPTS:\n{chunks_context}\n\n"
                 f"INSTRUCTIONS:\n"
-                f"1. Start with a 1-sentence overview introducing the topics covered in {doc_label}.\n"
-                f"2. Present a clean Markdown table with 4 to 6 main topics:\n"
-                f"   | # | Topic | Key Focus & Concepts | Difficulty |\n"
-                f"3. Add a 1-sentence note summarizing the learning progression.\n"
-                f"4. End with a single bold conversational follow-up question (e.g. \"**Would you like to start with Topic 1, or is there a specific topic you want to explore first?**\").\n"
-                f"STRICT RULES: Zero emojis. Clean, professional, student-friendly tone."
+                f"1. Start with a 1-sentence overview introducing the main topics covered in {doc_label}.\n"
+                f"2. Present 4 to 8 main important topics as clean Markdown bullet points:\n"
+                f"   - **[Topic Title]**: [1-2 sentences summarizing key focus, core concepts, and why it matters]\n"
+                f"3. End with a single bold conversational follow-up question: '**Which of these topics would you like to explore first?**'\n"
+                f"STRICT RULES: Zero emojis. Clean bullet points format. Zero LaTeX noise or raw symbols."
             )
-            synth_resp = await call_llm(synth_prompt, system_instruction="You are DeepTutor, an elite academic AI mentor. Zero emojis. Clean Markdown table.")
+            synth_resp = await call_llm(synth_prompt, system_instruction="You are DeepTutor, an elite academic AI mentor. Zero emojis. Clean bullet points.")
             return {
-                "thought_process": f"Extracted curriculum topics on the fly from {len(all_doc_chunks)} chunks of {doc_label}.",
+                "thought_process": f"Extracted main curriculum topics on the fly from {len(toc_chunks)} chunks of {doc_label}.",
                 "response": synth_resp or f"Your uploaded material {doc_label} covers the core syllabus for {subject}. Please ask any specific question from your material to begin.",
-                "sources": [{"chunk_id": c["chunk_id"], "page": c["page"]} for c in all_doc_chunks[:2]],
+                "sources": [{"chunk_id": c["chunk_id"], "page": c["page"]} for c in toc_chunks[:2]],
                 "format": "material_topics"
             }
 
@@ -1961,16 +2091,18 @@ Provide a clear, helpful, expert academic response to the user's query."""
                 if not retrieved_chunks:
                     retrieved_chunks = get_all_chunks(session_id, limit=5)
 
-        # 3. Format Recent Conversation History
+        # 3. Format Recent Conversation History (Full Session Chat Context)
         history_block = ""
         if history:
-            history_lines = [
-                f"{(m.get('role') or m.get('sender') or 'user').capitalize()}: {(m.get('text') or m.get('content') or m.get('message') or '')}"
-                for m in history[-3:]
-                if (m.get('text') or m.get('content') or m.get('message'))
-            ]
+            history_lines = []
+            for m in history[-14:]:
+                role = (m.get('role') or m.get('sender') or 'user').capitalize()
+                raw_t = (m.get('text') or m.get('content') or m.get('message') or '').strip()
+                if raw_t:
+                    clean_t = raw_t[:350] + "..." if len(raw_t) > 350 else raw_t
+                    history_lines.append(f"{role}: {clean_t}")
             if history_lines:
-                history_block = "Recent Conversation History:\n" + "\n".join(history_lines) + "\n\n"
+                history_block = "Session Chat History (Prior Conversation Context):\n" + "\n".join(history_lines) + "\n\n"
 
         # 4. Check if student asked for flashcards or a quiz (and not a compound conceptual+quiz request)
         sub_intents = plan.get("sub_intents") or []
@@ -2237,27 +2369,32 @@ STRICT RULES:
    - TEACH FOR DEEP INTUITION: Do not write like a boring dictionary or output rigid generic templates (never literally output "Key Concept:", "Applications:", "SVM evolved from..."). Instead, teach like an exceptional mentor using the 3-part pedagogical structure:
      1. **The Core Intuition (Mental Model First)**: Begin with an intuitive, plain-English "Aha!" analogy or visual picture that anchors the concept before technical formulas (e.g. for SVM, explain how it creates the widest possible street or buffer zone between two groups).
      2. **How It Works (Core Mechanism)**: Break down 2 to 3 essential pillars using bold descriptive headers (e.g. `- **Maximum-Margin Boundary**: ...`, `- **Support Vectors**: ...`, `- **Kernel Trick**: ...`). Keep them clear, crisp, and high-impact.
-     3. **When to Use It / Practical Takeaway**: 1 punchy takeaway of where this is applied in practice or tested on exams.
-   - SIZING GUIDELINES:
-     * SMALL (Default): Keep the response concise, clear, and direct (under 180 words) so a student grasps the whole idea in 30 seconds without cognitive overload. Zero unnecessary filler.
-     * MEDIUM: Provide a balanced explanation with definitions, core mechanisms, formulas, and a short summary table if applicable.
-     * LARGE: Deliver an exhaustive, in-depth breakdown covering theory, formulas, step-by-step mechanisms, and comprehensive tables.
-   - DIFFERENCES & COMPARISONS:
-     Whenever comparing concepts (or asking "difference between X and Y", "compare X and Y", "X vs Y"):
-     1. Give a crisp 1-2 sentence paragraph contrasting their fundamental philosophies.
-     2. Present a clean, structured Markdown Comparison Table:
-        `| Aspect / Feature | Concept A | Concept B |`
-        contrasting core parameters, objectives, math/loss functions, pros/cons, and primary use cases.
-     3. A 1-sentence bottom-line student takeaway.
-   - ZERO EMOJIS: Strictly zero emojis (no 📌, 💡, ⚠️, 🚀, etc.). Clean, academic, encouraging tone.
-   - NO UNSOLICITED EXAM TRAPS / PITFALLS: Do not include "Common Pitfalls & Exam Traps" sections.
+      - ZERO EMOJIS: Strictly zero emojis (no 📌, 💡, ⚠️, 🚀, etc.). Clean, academic, encouraging tone.
+    - NO UNSOLICITED EXAM TRAPS / PITFALLS: Do not include "Common Pitfalls & Exam Traps" sections.
 9. Chain-of-Thought: Provide a dedicated thought process detailing your reasoning and verification before the answer.
 10. Interactive Follow-up Question (Conversational Closing):
     ALWAYS end your response with a single, clear, relevant next-step question in bold offering a concrete next step (e.g., "**Would you like a step-by-step numerical example of how the margin is calculated?**" or "**Would you like a quick practice question to test your understanding on this?**") that the student can easily answer with a simple 'Yes' or 'No'. Never ask compound "A or B" questions like "example, or compare?" where "yes" becomes ambiguous.
 11. Textbook Correctness Inquiry:
     - If the student asks whether the textbook, author, or uploaded material is wrong about a concept ('is this textbook wrong about X'):
       1. First, objectively explain what the uploaded material specifically states.
-      2. If the material's claim is inconsistent with well-established academic facts, flag this as an objective caveat/note of caution (e.g., "Note: While your text states X, standard literature notes Y because..."), rather than an aggressive contradiction. Always explain what the course material states first.{compound_guidance}{eli5_comparison_guidance}
+      2. If the material's claim is inconsistent with well-established academic facts, flag this as an objective caveat/note of caution (e.g., "Note: While your text states X, standard literature notes Y because..."), rather than an aggressive contradiction. Always explain what the course material states first.
+12. Figures, Diagrams & Visual Study Protocol:
+    When the student asks about a diagram, figure, chart, schematic, or visual representation:
+    - Figure Purpose: State clearly in 1 sentence what system, process, or mechanism the figure depicts.
+    - Step-by-Step Flow Breakdown: Break down the visual elements, labeled parts, arrows, or stages using clear **bold bullet points** so the student can easily study the workflow.
+    - Core Study Takeaway: Explain the underlying academic principle demonstrated by this figure that the student must remember.
+    - Real-World Example: Provide a brief intuitive scenario showing this figure in practice.
+    - Filter Irrelevant Data: If retrieved chunks mention unrelated figures from metadata or other chapters, strictly ignore them and focus on the relevant topic.
+    - Conversational Follow-up: Ask a clear next-step question offering to explore a specific part of the diagram.
+13. Referencing Past Session Chat:
+    The student may ask questions referring back to earlier messages, answers, questions, or topics discussed in this session chat (e.g. 'referring to that chat...', 'what did you mean earlier?', 'can you explain the second point you gave?').
+    ALWAYS consult the Session Chat History provided above. Address the student's reference directly, connect it to what was previously discussed in the chat, and provide continuous, progressive tutoring.
+14. Response Cleanliness & Zero LaTeX Noise:
+    Write clean, natural, elegant Markdown for maximum readability by students.
+    - Strictly do NOT output raw LaTeX syntax noise or unrendered commands in running sentences (NEVER write `\\mathbf{w}`, `\\mathit{...}`, `\\text{...}`, unescaped backslashes, or naked `$` signs in regular prose).
+    - Write clean natural terms: e.g. "weight vector **w**", "norm ||**w**||", "margin M = 2 / ||**w**||".
+    - Do NOT wrap words or math in raw parentheses like `( \\mathbf{w} )`.
+    - Reserve LaTeX block math `$$ ... $$` ONLY for standalone, dedicated formulas when necessary. Keep running text 100% clean and readable.{compound_guidance}{eli5_comparison_guidance}
 
 Return ONLY valid JSON in this exact structure:
 {{
@@ -2303,6 +2440,7 @@ Return ONLY valid JSON in this exact structure:
 
         thought, answer, quiz_data = parse_llm_json_response(raw)
         answer = sanitize_katex(answer)
+        answer = clean_response_noise(answer)
 
         # ─── Verification & Self-Correction Repair Loops ────────────────────
 
@@ -2321,6 +2459,7 @@ Return ONLY valid JSON in this exact structure:
                 ans2 = sanitize_katex(ans2)
                 if ans2:
                     thought, answer, quiz_data = th2 or thought, ans2, qd2 or quiz_data
+                    answer = clean_response_noise(answer)
 
         # Check 2: STEM Table Verification (Row Count & Placeholder Enforcement - Category 2)
         if answer and ("|" in answer or plan.get("requires_table_data")):
@@ -2343,6 +2482,7 @@ Return ONLY valid JSON in this exact structure:
                     ans2 = sanitize_katex(ans2)
                     if ans2:
                         thought, answer, quiz_data = th2 or thought, ans2, qd2 or quiz_data
+                        answer = clean_response_noise(answer)
 
         if not answer:
             # Fallback direct generation if JSON parse failed
@@ -2354,6 +2494,7 @@ Return ONLY valid JSON in this exact structure:
 
         # Self-Verification Regrounding Pass
         answer = await self._maybe_reground(answer, context_text, subject)
+        answer = clean_response_noise(answer)
 
         # Background update of student memory (extract learning facts / weaknesses)
         asyncio.create_task(self._update_memory_background(user_id, user_query, answer))

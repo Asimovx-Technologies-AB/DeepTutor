@@ -239,6 +239,8 @@ class QueryAnalyzerAgent:
         plan = await self._plan_with_retries(raw_msg, current_subject, history)
         return plan.as_dict()
 
+    analyze_query = analyze
+
     async def _plan_with_retries(
         self,
         raw_msg: str,

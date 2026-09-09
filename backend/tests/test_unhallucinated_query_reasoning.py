@@ -108,24 +108,46 @@ async def test_executor_agent_material_topics_with_session_topics(monkeypatch):
 
     plan = {"response_format": "material_topics", "is_material_topics_query": True}
     result = await study_agents.executor_agent.execute(
-        user_query="what is the topic for the meterial",
+        user_query="what are the main topics in here",
         plan=plan,
         session_id="session_with_topics",
         subject="Machine Learning"
     )
 
     resp = result["response"]
-    # Verify professional, structured response
+    # Verify professional, structured bullet point response for important topics
     assert "Machine_Learning_Fundamentals.pdf" in resp
-    assert "| # | Topic | Key Focus & Concepts | Difficulty |" in resp
-    assert "Introduction to Supervised Learning" in resp
-    assert "Support Vector Machines" in resp
-    assert "Beginner" in resp
-    assert "Intermediate" in resp
+    assert "- **Introduction to Supervised Learning**:" in resp
+    assert "- **Support Vector Machines**:" in resp
+    assert "Regression, Classification, Loss" in resp
     # Verify closing question
-    assert "Would you like to start with Topic 1" in resp
+    assert "Which of these topics would you like to explore first?" in resp
     # Verify zero emojis
     assert "⚠️" not in resp
     assert "📌" not in resp
     assert "💡" not in resp
     assert "Out of Material Scope" not in resp
+
+
+def test_clean_response_noise():
+    from app.services.study_agents import clean_response_noise
+    # Cleans raw \mathbf{w}
+    assert clean_response_noise(r"weight vector \mathbf{w}") == "weight vector **w**"
+    # Cleans parentheses around variables
+    assert clean_response_noise(r"norm of ( \mathbf{w} )") == "norm of **w**"
+    assert clean_response_noise(r"norm of ( **w** )") == "norm of **w**"
+    # Cleans raw \text and \mathit
+    assert clean_response_noise(r"\text{Decision boundary}") == "Decision boundary"
+    assert clean_response_noise(r"\mathit{margin}") == "*margin*"
+    # Cleans emojis
+    assert clean_response_noise("Hello 💡 test 🚀") == "Hello  test "
+
+
+def test_is_material_topics_query_main_topics():
+    from app.services.study_agents import is_material_topics_query
+    assert is_material_topics_query("what are the main topics in here") is True
+    assert is_material_topics_query("what are the main topics") is True
+    assert is_material_topics_query("what are the important topics") is True
+    assert is_material_topics_query("topics in here") is True
+    assert is_material_topics_query("main topics") is True
+    assert is_material_topics_query("what does this cover") is True
