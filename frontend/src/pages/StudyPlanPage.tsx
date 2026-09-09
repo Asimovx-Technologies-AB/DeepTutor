@@ -26,6 +26,8 @@ import {
   Volume2,
   Copy,
   Check,
+  Download,
+  Printer,
   X,
   Search,
   Layers,
@@ -271,6 +273,20 @@ export default function StudyPlanPage() {
     navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const downloadMarkdown = (text: string, title: string) => {
+    if (!text) return
+    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const cleanFileName = (title || 'Study_Notes').replace(/[^a-zA-Z0-9_-]/g, '_')
+    link.setAttribute('download', `${cleanFileName}.md`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
   const speakNotes = (text: string) => {
@@ -1054,6 +1070,24 @@ export default function StudyPlanPage() {
                     title="Copy Notes"
                   >
                     {copied ? <Check size={18} className="text-emerald-600" /> : <Copy size={18} />}
+                  </button>
+
+                  <button
+                    onClick={() => downloadMarkdown(activeNotesModal.notes, `${activeNotesModal.topic}_Day_${activeNotesModal.dayNum}_Study_Notes`)}
+                    disabled={activeNotesModal.loading || !activeNotesModal.notes}
+                    className="p-2 rounded-[1.25rem] text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-40"
+                    title="Download as Markdown (.md)"
+                  >
+                    <Download size={18} />
+                  </button>
+
+                  <button
+                    onClick={() => window.print()}
+                    disabled={activeNotesModal.loading || !activeNotesModal.notes}
+                    className="p-2 rounded-[1.25rem] text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-40"
+                    title="Print Study Notes"
+                  >
+                    <Printer size={18} />
                   </button>
 
                   <button
