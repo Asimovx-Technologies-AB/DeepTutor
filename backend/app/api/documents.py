@@ -46,7 +46,7 @@ async def list_user_documents(
             else db.get_documents_for_user(user["id"])
         )
     except Exception as e:
-        print(f"[documents.list] DB fetch error: {e}")
+        logger.warning(f"[documents.list] DB fetch error: {e}")
         docs = []
 
     # Fetch all user sessions from registry to compute session links
@@ -57,7 +57,7 @@ async def list_user_documents(
             if s.get("id"):
                 sessions_by_id[s["id"]] = s
     except Exception as e:
-        print(f"[documents.list] Session registry error: {e}")
+        logger.warning(f"[documents.list] Session registry error: {e}")
         user_sessions = []
 
     # Map each document with indexing status and subjects
@@ -67,12 +67,21 @@ async def list_user_documents(
         doc["detected_subject"] = subject_marker.removeprefix("__subject__:").strip()
         doc["key_topics"] = [topic for topic in topics if not str(topic).startswith("__subject__:")]
         status = _indexing_status.get(doc["id"])
-        doc["index_status"] = status.get("status") if status else ("done" if doc.get("indexed") else "pending")
-        doc["index_progress"] = status.get("progress", 0) if status else (100 if doc.get("indexed") else 0)
+        db_status = doc.get("status") or ("done" if doc.get("indexed") else "pending")
+        if db_status == "completed":
+            db_status = "done"
+
+        doc["index_status"] = status.get("status") if status else db_status
+        doc["index_progress"] = status.get("progress", 100 if db_status == "done" else (0 if db_status == "failed" else 20)) if status else (100 if db_status == "done" else 0)
         doc["index_stats"] = status.get("stats", {}) if status else {}
 
+    # Track existing filenames to prevent duplicate document cards
+    existing_filenames = {
+        str(d.get("file_name") or "").strip().lower()
+        for d in docs if d.get("file_name")
+    }
+
     # Merge session materials not yet captured in documents table
-    existing_filenames = {d["file_name"].lower() for d in docs if d.get("file_name")}
     for s in user_sessions:
         sid = s.get("id")
         if not sid:
@@ -81,22 +90,35 @@ async def list_user_documents(
         if not doc_names:
             continue
 
-        session_topics = get_session_topics(sid)
+        # Identify documents not yet present in docs before querying database
+        new_docs = [
+            fn for fn in doc_names
+            if fn and fn.strip().lower() not in existing_filenames
+        ]
+        if not new_docs:
+            continue
+
+        # Lazy query for topics only when new documents actually exist
+        session_topics = get_session_topics(sid, user_id=user["id"])
         topic_titles = [t.get("title", "") for t in session_topics if t.get("title")]
 
-        for fn in doc_names:
-            if not fn or fn.lower() in existing_filenames:
-                continue
-            existing_filenames.add(fn.lower())
-            clean_title = Path(fn).stem.replace("_", " ").title()
+        for fn in new_docs:
+            clean_fn = fn.strip()
+            existing_filenames.add(clean_fn.lower())
+            clean_title = Path(clean_fn).stem.replace("_", " ").title()
             subject_name = s.get("subject") or clean_title
+
+            candidate_path = Path(settings.UPLOAD_DIR) / user["id"] / sid / clean_fn
+            if not candidate_path.exists():
+                candidate_path = Path(settings.UPLOAD_DIR) / sid / clean_fn
+
             docs.append({
-                "id": f"{sid}_{fn}",
+                "id": f"{sid}_{clean_fn}",
                 "user_id": s.get("user_id", user["id"]),
                 "topic_id": sid,
-                "file_name": fn,
-                "file_path": str(Path(settings.UPLOAD_DIR) / sid / fn),
-                "file_type": Path(fn).suffix.lower().lstrip(".") or "pdf",
+                "file_name": clean_fn,
+                "file_path": str(candidate_path),
+                "file_type": Path(clean_fn).suffix.lower().lstrip(".") or "pdf",
                 "indexed": True,
                 "entity_count": len(topic_titles),
                 "chunk_count": s.get("topic_count", 0),
@@ -205,7 +227,7 @@ async def _run_indexing(doc_id: str, section_id: str, file_path: str, user_id: s
         # Dispatch Background Path: Stage 2 (Table) & Stage 3 (Image/VLM) Enrichment
         asyncio.create_task(doc_processor.run_background_enrichment(doc_id))
     except Exception as e:
-        print(f"[documents] Indexing error for {doc_id}: {e}")
+        logger.error(f"[documents] Indexing error for {doc_id}: {e}")
         _indexing_status[doc_id] = {"status": "error", "progress": 0, "error": str(e), "stats": {}}
         db.update_document_stats(
             doc_id=doc_id,
@@ -616,7 +638,7 @@ async def link_document_to_session_endpoint(
         try:
             link_document_to_session(doc_hash, session_id, user_id, db=db)
         except Exception as e:
-            print(f"[link_document_to_session] Warning: {e}")
+            logger.warning(f"[link_document_to_session] Warning: {e}")
 
     # Register in session_documents table
     save_session_document(
@@ -661,7 +683,7 @@ async def link_document_to_session_endpoint(
                         if prior_topics:
                             break
             except Exception as e:
-                print(f"[link_document_to_session] Warning retrieving prior topics: {e}")
+                logger.warning(f"[link_document_to_session] Warning retrieving prior topics: {e}")
 
         if not prior_topics and doc and doc.get("key_topics"):
             for t_title in doc["key_topics"]:
@@ -679,7 +701,7 @@ async def link_document_to_session_endpoint(
             try:
                 save_session_topics(session_id, prior_topics, user_id=user_id)
             except Exception as e:
-                print(f"[link_document_to_session] Warning saving topics: {e}")
+                logger.warning(f"[link_document_to_session] Warning saving topics: {e}")
 
     # Update session registry entry so it displays properly on the page
     clean_title = Path(effective_filename).stem.replace("_", " ").title()
