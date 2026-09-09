@@ -223,8 +223,19 @@ async def upload_document(
             detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(list(allowed_exts)))}"
         )
 
+    safe_filename = os.path.basename(file.filename).strip()
+    if not safe_filename or safe_filename.startswith("."):
+        safe_filename = f"upload_{db.new_id()[:8]}{ext}"
+
     content = await file.read()
     size_mb = len(content) / (1024 * 1024)
+    max_allowed_mb = user.get("max_upload_size_mb", 100 if user.get("is_premium") else 10)
+    if size_mb > max_allowed_mb:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File size ({size_mb:.1f} MB) exceeds maximum permitted limit of {max_allowed_mb} MB."
+        )
+
     section_id = (section_id or topic_id or "general").strip() or "general"
 
     # Fast Content Hash Deduplication
@@ -236,8 +247,8 @@ async def upload_document(
             "status": "already_processed",
             "id": existing_doc.get("id") if existing_doc else None,
             "doc_hash": doc_hash,
-            "file_name": file.filename,
-            "filename": file.filename,
+            "file_name": safe_filename,
+            "filename": safe_filename,
             "file_type": ext.lstrip("."),
             "chunks_created": 0,
             "size_mb": round(size_mb, 2),
@@ -245,16 +256,20 @@ async def upload_document(
             "message": "Document already exists, linked to this session instantly",
         }
 
-    upload_dir = Path(settings.UPLOAD_DIR) / user["id"] / section_id
+    upload_dir = (Path(settings.UPLOAD_DIR) / user["id"] / section_id).resolve()
     upload_dir.mkdir(parents=True, exist_ok=True)
-    file_path = str(upload_dir / file.filename)
+    dest_path = (upload_dir / safe_filename).resolve()
+    if not str(dest_path).startswith(str(upload_dir)):
+        raise HTTPException(status_code=400, detail="Invalid filename path traversal attempt.")
+    file_path = str(dest_path)
+
     with open(file_path, "wb") as f:
         f.write(content)
 
     doc = db.create_document(
         user_id=user["id"],
         topic_id=section_id,
-        file_name=file.filename,
+        file_name=safe_filename,
         file_path=file_path,
         file_type=ext.lstrip("."),
         doc_hash=doc_hash,
@@ -263,19 +278,19 @@ async def upload_document(
     link_document_to_session(doc_hash, section_id, user["id"], db=db)
 
     db.delete_flashcards_for_topic(section_id)
-    background_tasks.add_task(_run_indexing, doc["id"], section_id, file_path, user["id"], file.filename)
+    background_tasks.add_task(_run_indexing, doc["id"], section_id, file_path, user["id"], safe_filename)
 
     return {
         "status": "processed",
         "id": doc["id"],
         "doc_hash": doc_hash,
-        "file_name": file.filename,
-        "filename": file.filename,
+        "file_name": safe_filename,
+        "filename": safe_filename,
         "file_type": ext.lstrip("."),
         "size_mb": round(size_mb, 2),
         "topic_id": topic_id,
         "chunks_created": 0,
-        "message": f"✅ {file.filename} uploaded and indexing started.",
+        "message": f"✅ {safe_filename} uploaded and indexing started.",
     }
 
 

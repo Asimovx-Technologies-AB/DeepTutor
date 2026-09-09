@@ -474,10 +474,58 @@ export default function LearnPage() {
     }
   }, [routeSessionId, activeSessionId, fetchSessions])
 
+  // Reset Mode-Specific States (Normal, Teacher, Exam Mode, TTS)
+  const resetModeStates = useCallback(() => {
+    setCoreIdeaData(null)
+    setCoreIdeaStep(0)
+    setIsLoadingCoreIdea(false)
+    setCustomNormalTopic('')
+    setTopicDoubtInput('')
+    setTopicDoubtAnswer(null)
+    setIsLoadingDoubt(false)
+
+    setTeacherLectureText('')
+    setCurrentLecturePhase('Introduction')
+    setIsTeacherStreaming(false)
+    if (teacherAbortControllerRef.current) {
+      teacherAbortControllerRef.current.abort()
+    }
+    setCustomTeacherTopic('')
+    setOutOfSyllabusAlert(null)
+    setActiveLectureId(null)
+    setDiagnosticData(null)
+    setDiagnosticSelectedOption(null)
+    setDiagnosticResult(null)
+    setIsLoadingDiagnostic(false)
+    setIsEvaluatingDiagnostic(false)
+    setIsPaused(false)
+    setPauseQuestion('')
+    setPauseAnswer(null)
+    setIsLoadingPause(false)
+    setTeachBackPromptData(null)
+    setTeachBackInput('')
+    setTeachBackResult(null)
+    setIsEvaluatingTeachBack(false)
+
+    setExamQuestions([])
+    setExamAnswers({})
+    setIsLoadingExam(false)
+    setExamEvaluation(null)
+    setIsSubmittingExam(false)
+
+    setSpeakingMsgId(null)
+    setSpeakingWordIndex(null)
+    setSpeakingTokens([])
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+    }
+  }, [])
+
   // ─── 2. Load Session Details & SQLite Data ───
   const loadSessionDetails = useCallback(async (sid: string) => {
     if (!sid) return
     setIsSessionLoading(true)
+    resetModeStates()
     try {
       const res = await studyApi.getSession(sid)
       const data = res.data
@@ -492,6 +540,8 @@ export default function LearnPage() {
       setTopics(data.topics || [])
       if (data.topics && data.topics.length > 0) {
         setActiveTopic(data.topics[0])
+      } else {
+        setActiveTopic(null)
       }
 
       // Prepare study notes in state, but do NOT auto-open viewer initially
@@ -520,7 +570,7 @@ export default function LearnPage() {
     } finally {
       setIsSessionLoading(false)
     }
-  }, [])
+  }, [resetModeStates])
 
   useEffect(() => {
     if (activeSessionId) {
@@ -1277,6 +1327,7 @@ export default function LearnPage() {
 
   const handleCreateNewSession = async () => {
     try {
+      resetModeStates()
       const res = await studyApi.createSession({
         subject: 'General Study',
         title: 'New Study Workspace'
@@ -1317,8 +1368,10 @@ export default function LearnPage() {
           handleSelectSession(remaining[0].id)
         } else {
           setActiveSessionId('')
+          resetModeStates()
           setMessages([])
           setTopics([])
+          setActiveTopic(null)
         }
       }
       setSessionToDelete(null)

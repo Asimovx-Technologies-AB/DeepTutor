@@ -177,10 +177,19 @@ async def generate_smart_notes(
     topic_display = topic_id.replace("-", " ").title() if topic_id != "general" else subject
 
     # 1. Process Chapter / Subject Material
+    max_bytes = 50 * 1024 * 1024  # 50 MB limit
     if material_file and material_file.filename:
-        material_name = material_file.filename
-        file_path = str(upload_dir / material_file.filename)
+        safe_fn = os.path.basename(material_file.filename).strip()
+        if not safe_fn or safe_fn.startswith("."):
+            safe_fn = f"material_{db.new_id()[:8]}.pdf"
+        material_name = safe_fn
+        dest_path = (upload_dir / safe_fn).resolve()
+        if not str(dest_path).startswith(str(upload_dir.resolve())):
+            raise HTTPException(status_code=400, detail="Invalid file path in uploaded material.")
+        file_path = str(dest_path)
         content = await material_file.read()
+        if len(content) > max_bytes:
+            raise HTTPException(status_code=413, detail="Uploaded material file exceeds 50MB size limit.")
         with open(file_path, "wb") as f:
             f.write(content)
         material_text = await asyncio.to_thread(_extract_text_from_file, file_path)
@@ -230,15 +239,23 @@ async def generate_smart_notes(
     if pyq_files:
         for pyq in pyq_files:
             if pyq and pyq.filename:
-                pyq_names.append(pyq.filename)
-                pyq_path = str(upload_dir / pyq.filename)
+                safe_pyq_fn = os.path.basename(pyq.filename).strip()
+                if not safe_pyq_fn or safe_pyq_fn.startswith("."):
+                    safe_pyq_fn = f"pyq_{db.new_id()[:8]}.pdf"
+                dest_pyq_path = (upload_dir / safe_pyq_fn).resolve()
+                if not str(dest_pyq_path).startswith(str(upload_dir.resolve())):
+                    continue
+                pyq_names.append(safe_pyq_fn)
+                pyq_path = str(dest_pyq_path)
                 p_content = await pyq.read()
+                if len(p_content) > max_bytes:
+                    continue
                 with open(pyq_path, "wb") as pf:
                     pf.write(p_content)
                 extracted_pyq = await asyncio.to_thread(_extract_text_from_file, pyq_path)
                 if extracted_pyq.strip():
                     has_pyqs = True
-                    pyq_text_combined += f"\n\n--- [PYQ Paper: {pyq.filename}] ---\n" + extracted_pyq
+                    pyq_text_combined += f"\n\n--- [PYQ Paper: {safe_pyq_fn}] ---\n" + extracted_pyq
 
     if not material_text and not pyq_text_combined:
         material_text = f"Subject: {subject}. Chapter Topic: {material_name or topic_id}. Comprehensive student study material."
