@@ -111,23 +111,24 @@ def _eval_ast_math(node):
 
 def _validate_safe_code(code: str) -> None:
     tree = ast.parse(code)
-    disallowed_modules = {
-        "os", "sys", "subprocess", "shutil", "socket", "ctypes",
-        "builtins", "__builtin__", "importlib", "requests", "urllib",
-        "http", "ftplib", "pathlib", "posix", "pty", "commands",
-        "pickle", "marshal", "shelve", "tempfile"
+    allowed_modules = {
+        "math", "random", "datetime", "time", "itertools", "functools",
+        "collections", "heapq", "bisect", "string", "json", "re",
+        "typing", "dataclasses", "enum", "copy", "statistics", "decimal", "fractions"
     }
     disallowed_calls = {
         "eval", "exec", "open", "__import__", "compile", "globals",
-        "locals", "vars", "getattr", "setattr", "delattr"
+        "locals", "vars", "getattr", "setattr", "delattr", "input",
+        "help", "dir", "id", "memoryview"
     }
 
     for node in ast.walk(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             names = [alias.name.split(".")[0] for alias in getattr(node, "names", [])]
             mod = (getattr(node, "module", "") or "").split(".")[0]
-            if mod in disallowed_modules or any(n in disallowed_modules for n in names):
-                raise ValueError(f"Import of restricted module '{mod or names}' is prohibited in sandbox.")
+            if (mod and mod not in allowed_modules) or any(n and n not in allowed_modules for n in names):
+                target_mod = mod or (names[0] if names else "unknown")
+                raise ValueError(f"Import of unapproved module '{target_mod}' is prohibited in sandbox.")
         elif isinstance(node, ast.Call):
             if isinstance(node.func, ast.Name) and node.func.id in disallowed_calls:
                 raise ValueError(f"Direct invocation of '{node.func.id}()' is prohibited in sandbox.")
@@ -270,7 +271,26 @@ class MCPClientManager:
                 val = None
                 try:
                     import sympy
-                    parsed_expr = sympy.sympify(expr.strip(), rational=True)
+                    from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
+
+                    math_ast = ast.parse(expr.strip(), mode="eval")
+                    for n in ast.walk(math_ast):
+                        if isinstance(n, (ast.Import, ast.ImportFrom, ast.Attribute, ast.Lambda, ast.Dict, ast.List, ast.Set)):
+                            raise ValueError("Forbidden syntax in math expression")
+
+                    safe_globals = {
+                        "sin": sympy.sin, "cos": sympy.cos, "tan": sympy.tan,
+                        "sqrt": sympy.sqrt, "log": sympy.log, "exp": sympy.exp,
+                        "abs": sympy.Abs, "pi": sympy.pi, "E": sympy.E
+                    }
+                    transformations = (standard_transformations + (implicit_multiplication_application,))
+                    parsed_expr = parse_expr(
+                        expr.strip(),
+                        global_dict=safe_globals,
+                        local_dict={},
+                        transformations=transformations,
+                        evaluate=True
+                    )
                     val = str(parsed_expr.evalf() if hasattr(parsed_expr, "evalf") else parsed_expr)
                 except Exception:
                     val = _eval_ast_math(ast.parse(expr.strip(), mode="eval"))

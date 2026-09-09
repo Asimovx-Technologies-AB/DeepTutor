@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text as sql_text
+from sqlalchemy import text as sql_text, bindparam
 
 from app.core.config import get_settings
 from app.core.database import engine
@@ -680,23 +680,66 @@ def get_session_documents(
 
 def delete_session_document(session_id: str, document_name_or_id: str, user_id: Optional[str] = None) -> bool:
     """Delete a document and all its indexed chunks from PostgreSQL and clean up stale hashes."""
-    # Delete chunks
-    pg_fts_store.delete_session_document(session_id, document_name_or_id)
+    sid_str = str(session_id)
+    doc_id_str = str(document_name_or_id)
 
-    # Delete from session_documents
-    statement = sql_text("""
-        DELETE FROM session_documents
-        WHERE session_id = :session_id
-          AND (id = :doc_id OR filename = :doc_id OR doc_hash = :doc_id)
-          AND (:user_id IS NULL OR user_id = :user_id OR user_id IS NULL)
-    """)
+    # Check if doc_id_str is a valid UUID string to prevent PostgreSQL UUID type mismatch errors
+    is_uuid = False
+    try:
+        import uuid
+        uuid.UUID(doc_id_str)
+        is_uuid = True
+    except ValueError:
+        is_uuid = False
+
+    id_clause = "(id = :doc_id OR filename = :doc_id OR doc_hash = :doc_id)" if is_uuid else "(filename = :doc_id OR doc_hash = :doc_id)"
+
     with engine.begin() as conn:
-        res = conn.execute(statement, {
-            "session_id": str(session_id),
-            "doc_id": str(document_name_or_id),
-            "user_id": str(user_id) if user_id else None,
-        })
-        return (res.rowcount or 0) > 0
+        # 1. Mandatory ownership verification when user_id is supplied
+        if user_id:
+            uid_str = str(user_id)
+            owner_check = conn.execute(
+                sql_text(f"""
+                    SELECT 1 FROM workspace_sessions WHERE id = :sid AND user_id = :uid
+                    UNION
+                    SELECT 1 FROM session_documents WHERE session_id = :sid AND {id_clause} AND user_id = :uid
+                    UNION
+                    SELECT 1 FROM chat_sessions WHERE id = :sid AND user_id = :uid
+                """),
+                {"sid": sid_str, "doc_id": doc_id_str, "uid": uid_str}
+            ).fetchone()
+            if not owner_check:
+                return False
+
+            statement = sql_text(f"""
+                DELETE FROM session_documents
+                WHERE session_id = :session_id
+                  AND {id_clause}
+                  AND user_id = :user_id
+            """)
+            res = conn.execute(statement, {
+                "session_id": sid_str,
+                "doc_id": doc_id_str,
+                "user_id": uid_str,
+            })
+        else:
+            statement = sql_text(f"""
+                DELETE FROM session_documents
+                WHERE session_id = :session_id
+                  AND {id_clause}
+            """)
+            res = conn.execute(statement, {
+                "session_id": sid_str,
+                "doc_id": doc_id_str,
+            })
+
+        deleted = (res.rowcount or 0) > 0
+
+    # 2. ONLY delete vector/FTS chunks after session document ownership & metadata deletion is verified!
+    if deleted:
+        pg_fts_store.delete_session_document(sid_str, doc_id_str)
+
+    return deleted
 
 
 # ─── Workspace Sessions Registry (workspace_sessions) ─────────────────────────
@@ -725,30 +768,19 @@ def list_registry_sessions(user_id: Optional[str] = None) -> List[Dict[str, Any]
     if session_ids:
         try:
             with engine.connect() as conn:
-                if IS_POSTGRES:
-                    doc_stmt = sql_text("""
-                        SELECT session_id, filename
-                        FROM session_documents
-                        WHERE session_id = ANY(:sids)
-                        ORDER BY created_at ASC
-                    """)
-                    doc_rows = conn.execute(doc_stmt, {"sids": session_ids}).fetchall()
-                else:
-                    placeholders = ",".join([f":s{i}" for i in range(len(session_ids))])
-                    doc_stmt = sql_text(f"""
-                        SELECT session_id, filename
-                        FROM session_documents
-                        WHERE session_id IN ({placeholders})
-                        ORDER BY created_at ASC
-                    """)
-                    sqlite_params = {f"s{i}": sid for i, sid in enumerate(session_ids)}
-                    doc_rows = conn.execute(doc_stmt, sqlite_params).fetchall()
+                doc_stmt = sql_text("""
+                    SELECT session_id, filename
+                    FROM session_documents
+                    WHERE session_id IN :sids
+                    ORDER BY created_at ASC
+                """).bindparams(bindparam("sids", expanding=True))
+                doc_rows = conn.execute(doc_stmt, {"sids": session_ids}).fetchall()
 
                 for d_sid, d_fn in doc_rows:
                     if d_fn and str(d_sid) in docs_by_session:
                         docs_by_session[str(d_sid)].append(d_fn)
         except Exception as e:
-            print(f"[list_registry_sessions] Batch document fetch notice: {e}")
+            logger.warning(f"[list_registry_sessions] Batch document fetch notice: {e}")
 
     sessions = []
     for r in rows:
@@ -895,16 +927,6 @@ def delete_registry_session(session_id: str, user_id: Optional[str] = None) -> b
 
     sid_str = str(session_id)
 
-    # Ownership verification: if user_id is provided, ensure session belongs to user
-    if user_id:
-        with engine.connect() as conn:
-            owner_row = conn.execute(
-                sql_text("SELECT user_id FROM workspace_sessions WHERE id = :sid"),
-                {"sid": sid_str}
-            ).fetchone()
-            if owner_row and owner_row[0] and str(owner_row[0]) != str(user_id):
-                return False
-
     delete_targets = [
         ("document_chunks", "session_id"),
         ("workspace_messages", "session_id"),
@@ -917,8 +939,32 @@ def delete_registry_session(session_id: str, user_id: Optional[str] = None) -> b
         ("chat_sessions", "id"),
         ("documents", "topic_id"),
     ]
-    deleted = False
+
     with engine.begin() as conn:
+        # Mandatory fail-closed ownership verification inside transaction
+        if user_id:
+            uid_str = str(user_id)
+            ws_owner = conn.execute(
+                sql_text("SELECT user_id FROM workspace_sessions WHERE id = :sid"),
+                {"sid": sid_str}
+            ).fetchone()
+
+            cs_owner = conn.execute(
+                sql_text("SELECT user_id FROM chat_sessions WHERE id = :sid"),
+                {"sid": sid_str}
+            ).fetchone()
+
+            is_valid_owner = False
+            if ws_owner is not None and ws_owner[0] is not None and str(ws_owner[0]) == uid_str:
+                is_valid_owner = True
+            elif cs_owner is not None and cs_owner[0] is not None and str(cs_owner[0]) == uid_str:
+                is_valid_owner = True
+
+            # Fail-closed: reject if no record exists, owner is null, or owner does not match user_id
+            if not is_valid_owner:
+                return False
+
+        deleted = False
         for tbl, col in delete_targets:
             try:
                 with conn.begin_nested():
