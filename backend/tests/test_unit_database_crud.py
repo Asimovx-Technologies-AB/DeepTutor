@@ -199,3 +199,41 @@ class TestConcurrencyAndLocks:
         assert all(results)
         final_state = session_manager.load_session_state(sid)
         assert len(final_state["messages"]) == 1  # Last writer wins safely without deadlocks
+
+
+class TestDocumentStatusCRUD:
+
+    def test_update_document_status_with_non_uuid_id(self):
+        """Ensures update_document_status handles string doc IDs like 'doc_6492144' without database errors."""
+        from app.services.study_storage import save_session_document, update_document_status, get_session_documents
+        import uuid
+
+        sid = f"session_test_{uuid.uuid4().hex[:8]}"
+        doc_id = f"doc_{uuid.uuid4().hex[:8]}"
+        filename = f"test_doc_{doc_id}.pdf"
+
+        # Register metadata with non-UUID doc_id
+        res_id = save_session_document(
+            session_id=sid,
+            doc_id=doc_id,
+            filename=filename,
+            file_path=f"/tmp/{filename}",
+            status="uploading",
+        )
+        assert res_id is not None
+
+        # Update status using the non-UUID doc_id string
+        updated = update_document_status(
+            session_id=sid,
+            doc_id=doc_id,
+            status="text_ready",
+            page_count=5,
+        )
+        assert updated is True
+
+        docs = get_session_documents(sid)
+        matching = [d for d in docs if d.get("filename") == filename]
+        assert len(matching) == 1
+        assert matching[0]["status"] == "text_ready"
+        assert matching[0]["page_count"] == 5
+

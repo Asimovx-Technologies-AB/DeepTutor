@@ -627,18 +627,41 @@ def update_document_status(
 ) -> bool:
     """Update processing status for a session document."""
     pc_clause = ", page_count = :page_count" if page_count is not None else ""
+
+    doc_id_str = str(doc_id)
+    is_uuid = False
+    try:
+        uuid.UUID(doc_id_str)
+        is_uuid = True
+    except (ValueError, TypeError, AttributeError):
+        is_uuid = False
+
+    deterministic_uuid = to_uuid(doc_id_str, namespace_suffix=str(session_id))
+
+    if _is_postgres():
+        id_condition = "(id = CAST(:uuid_id AS UUID) OR filename = :doc_id OR doc_hash = :doc_id)"
+        params: Dict[str, Any] = {
+            "session_id": str(session_id),
+            "doc_id": doc_id_str,
+            "uuid_id": doc_id_str if is_uuid else deterministic_uuid,
+            "status": status,
+        }
+    else:
+        id_condition = "(id = :doc_id OR id = :uuid_id OR filename = :doc_id OR doc_hash = :doc_id)"
+        params = {
+            "session_id": str(session_id),
+            "doc_id": doc_id_str,
+            "uuid_id": deterministic_uuid,
+            "status": status,
+        }
+
     statement = sql_text(f"""
         UPDATE session_documents
         SET status = :status {pc_clause}
         WHERE session_id = :session_id
-          AND (id = :doc_id OR filename = :doc_id)
+          AND {id_condition}
     """)
 
-    params: Dict[str, Any] = {
-        "session_id": str(session_id),
-        "doc_id": str(doc_id),
-        "status": status,
-    }
     if page_count is not None:
         params["page_count"] = int(page_count)
 

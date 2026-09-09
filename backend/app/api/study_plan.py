@@ -77,7 +77,7 @@ Key concepts to cover: {", ".join(key_concepts) if key_concepts else "Core princ
 
 FORMAT REQUIREMENTS & QUALITY GUIDELINES:
 1. LaTeX Math Formatting:
-   - For inline variables, symbols, and short formulas inside sentences, always use single dollar signs: `$x_i$`, `$y_i$`, `$f(x)$`, `$P$`, `$L$`, `$\mathcal{{D}}$`.
+   - For inline variables, symbols, and short formulas inside sentences, always use single dollar signs: `$x_i$`, `$y_i$`, `$f(x)$`, `$P$`, `$L$`, `$\\mathcal{{D}}$`.
    - For major display equations, place them on dedicated separate lines enclosed by double dollar signs:
      $$
      f^* = \\arg\\min_f \\mathbb{{E}}_{{(x,y) \\sim P}} \\left[ L(y, f(x)) \\right]
