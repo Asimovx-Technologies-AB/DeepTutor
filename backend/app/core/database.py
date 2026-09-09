@@ -1376,15 +1376,37 @@ def delete_study_plan(plan_id: str, user_id: Optional[str] = None) -> bool:
     return False
 
 
-# ─── Leaderboard Helper ────────────────────────────────────────────────────────
+def _mask_email(email: str) -> str:
+    if not email or "@" not in email:
+        return ""
+    parts = email.split("@", 1)
+    username, domain = parts[0], parts[1]
+    if len(username) <= 2:
+        masked_user = username[0] + "*"
+    else:
+        masked_user = username[0] + "*" * min(len(username) - 2, 4) + username[-1]
+    return f"{masked_user}@{domain}"
+
+
 def get_leaderboard_rankings(current_user_id: str) -> dict:
+    from collections import defaultdict
     with DBContext() as db:
         users = db.query(User).all()
-        rankings = []
+        all_attempts = db.query(QuizAttempt).all()
+        all_docs = db.query(Document).all()
 
+        attempts_by_user = defaultdict(list)
+        for a in all_attempts:
+            attempts_by_user[a.user_id].append(a)
+
+        docs_by_user = defaultdict(list)
+        for d in all_docs:
+            docs_by_user[d.user_id].append(d)
+
+        rankings = []
         for user in users:
-            attempts = db.query(QuizAttempt).filter(QuizAttempt.user_id == user.id).all()
-            docs = db.query(Document).filter(Document.user_id == user.id).all()
+            attempts = attempts_by_user.get(user.id, [])
+            docs = docs_by_user.get(user.id, [])
 
             quizzes_taken = len(attempts)
             total_correct = sum(a.score for a in attempts)
@@ -1409,19 +1431,22 @@ def get_leaderboard_rankings(current_user_id: str) -> dict:
             if docs_count >= 2:
                 badges.append("PDF Pioneer")
 
+            is_current = (user.id == current_user_id)
+            display_email = user.email if is_current else _mask_email(user.email)
+
             rankings.append({
                 "user_id": user.id,
                 "username": user.username,
-                "email": user.email,
+                "email": display_email,
                 "total_xp": total_xp,
                 "quizzes_taken": quizzes_taken,
                 "avg_accuracy": avg_accuracy,
                 "docs_uploaded": docs_count,
                 "badges": badges,
-                "is_current_user": (user.id == current_user_id)
+                "is_current_user": is_current,
             })
 
-        # Sort by XP descending
+        # Sort by XP descending, then accuracy descending
         rankings.sort(key=lambda x: (x["total_xp"], x["avg_accuracy"]), reverse=True)
 
         # Assign rank numbers
