@@ -531,6 +531,13 @@ async def send_agent_message(
 
     # Record assistant message in SQLite
     assistant_msg_id = str(uuid.uuid4())
+    attachment_data = {
+        "response_format": exec_result.get("response_format", exec_result.get("format", "conceptual")),
+        "format": exec_result.get("format", "conceptual"),
+        "export_ready": exec_result.get("export_ready", False),
+        "is_synthetic_textbook": exec_result.get("is_synthetic_textbook", False),
+        "sources": exec_result.get("sources", []),
+    }
     save_session_message(
         session_id=body.session_id,
         message_id=assistant_msg_id,
@@ -538,6 +545,7 @@ async def send_agent_message(
         text=exec_result["response"],
         thought_process=exec_result.get("thought_process", ""),
         quiz_data=exec_result.get("quiz_data"),
+        attachment=attachment_data,
         is_explanation=True
     )
 
@@ -943,6 +951,69 @@ async def get_session_details(session_id: str, user: dict = Depends(get_current_
         asyncio.to_thread(get_session_topics, session_id),
         asyncio.to_thread(get_session_documents, session_id),
     )
+
+    # Auto-heal: If session has documents attached but 0 topics, populate topics from linked documents
+    if not topics and documents:
+        try:
+            from app.core import database as db
+            from pathlib import Path
+            for doc_item in documents:
+                fn = doc_item.get("filename") or ""
+                dh = doc_item.get("doc_hash") or ""
+                d_id = doc_item.get("doc_id") or doc_item.get("id")
+
+                doc = None
+                if d_id:
+                    doc = db.get_document(d_id, user_id=user["id"])
+                if not doc and dh:
+                    doc = db.get_document_by_hash(dh, user_id=user["id"])
+
+                doc_topics = []
+                if doc and doc.get("topic_id"):
+                    try:
+                        orig = get_session_topics(str(doc["topic_id"]), user_id=user["id"])
+                        if orig:
+                            for ot in orig:
+                                doc_topics.append({
+                                    "title": ot.get("title") or "Study Topic",
+                                    "summary": ot.get("summary") or f"Core study topic from {fn}",
+                                    "difficulty": ot.get("difficulty") or "Intermediate",
+                                    "key_concepts": ot.get("key_concepts") or [],
+                                    "estimated_study_time": ot.get("estimated_study_time") or "15 mins",
+                                    "document_name": fn,
+                                })
+                    except Exception:
+                        pass
+
+                if not doc_topics and doc and doc.get("key_topics"):
+                    clean_ts = [t for t in doc["key_topics"] if not str(t).startswith("__subject__:")]
+                    for t_title in clean_ts:
+                        doc_topics.append({
+                            "title": str(t_title),
+                            "summary": f"Core study topic from {fn}",
+                            "difficulty": "Intermediate",
+                            "key_concepts": [],
+                            "estimated_study_time": "15 mins",
+                            "document_name": fn,
+                        })
+
+                if not doc_topics and fn:
+                    clean_topic_title = Path(fn).stem.replace("_", " ").replace("-", " ").title()
+                    doc_topics.append({
+                        "title": clean_topic_title,
+                        "summary": f"Comprehensive study topic for {fn}",
+                        "difficulty": "Beginner",
+                        "key_concepts": [],
+                        "estimated_study_time": "20 mins",
+                        "document_name": fn,
+                    })
+
+                if doc_topics:
+                    save_session_topics(session_id, doc_topics, user_id=user["id"], append=True, document_name=fn)
+
+            topics = get_session_topics(session_id)
+        except Exception as e:
+            print(f"[get_session_details] Auto-heal topics notice: {e}")
 
     return {
         "meta": meta,

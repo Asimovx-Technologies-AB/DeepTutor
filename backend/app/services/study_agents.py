@@ -120,7 +120,8 @@ def is_meta_referential_query(query: str) -> bool:
         r"\b(what|that)\s+(you|we)\s+(gave|explained|discussed|covered|provided|wrote|taught|generated)\b",
         r"\b(module|content|topic|answer|response|concept|material)\s+(you|we)\s+(gave|gave me|explained|discussed|provided|wrote|taught)\b",
         r"\b(from|on|about|based on|for)\s+(the\s+)?(above|previous|last|this)\b",
-        r"^(make|create|generate|give me|build|show)?\s*(a\s+)?(flashcards?|quiz|test|deck)\s+(on|for|about|from)?\s*(this|it|above|previous|the above|what you gave|what you gave me|above module|the above module|previous module|above content)?\s*$",
+        r"^(make|create|generate|give me|build|show|prepare|write)?\s*(a\s+)?(flashcards?|quiz|test|deck|study notes?|notes?|cheat sheet|summary|diagram|figure)\s+(on|for|about|from)?\s*(this|it|that|above|previous|the above|what you gave|what you gave me|above module|the above module|previous module|above content|this response|that response)?\s*$",
+        r"\b(study notes?|notes?|cheat sheet|summary|diagram|figure|quiz)\s+(for|on|about|of)\s+(this|that|it|the above|previous|last)\b",
     ]
     for pat in patterns:
         if re.search(pat, q):
@@ -133,7 +134,10 @@ def is_meta_referential_query(query: str) -> bool:
         "what you gave", "what you gave me", "what you just gave", "what you just explained", "what you explained",
         "what we discussed", "what we just discussed", "what you wrote", "what you just taught", "what you taught",
         "based on previous", "from previous", "from the previous", "from above", "on the above", "on above",
-        "from this", "on this", "for this", "for the above", "for it", "this topic", "this module", "this concept"
+        "from this", "on this", "for this", "for the above", "for it", "this topic", "this module", "this concept",
+        "for this response", "for that response", "for that", "about this", "of this",
+        "notes for this", "study note for this", "study notes for this", "study note for that", "study notes for that",
+        "make a study note for this", "make study notes for this", "make a study note for that", "study notes on this"
     )
     return any(p in q for p in meta_phrases)
 
@@ -148,6 +152,27 @@ def extract_previous_assistant_response(history: Optional[List[Dict[str, Any]]])
         if role in ("assistant", "model", "bot", "ai") and text:
             return text
     return None
+
+
+def clean_study_topic(text: str) -> str:
+    """Sanitizes user queries into clean, professional academic topic titles for study notes."""
+    if not text:
+        return ""
+    t = text.strip()
+    # Strip leading command/study-note phrases
+    t = re.sub(
+        r"^(?:give me|make|create|generate|prepare|write|show me|provide)?\s*(?:a\s+|an\s+|the\s+)?(?:study notes?|notes?|cheat sheet|summary|overview)?\s*(?:on|for|about|of)?\s*(?:a\s+|an\s+|the\s+)?",
+        "", t, flags=re.IGNORECASE
+    ).strip()
+    # Strip trailing visual or formatting qualifiers like "with a figure", "with diagram", "with svg", "and table"
+    t = re.sub(
+        r"\s+(?:with|having|including|and)\s+(?:a\s+|an\s+|the\s+)?(?:figure|diagram|image|photo|picture|illustration|visual|drawing|table|chart|flowchart|svg)[\s\S]*$",
+        "", t, flags=re.IGNORECASE
+    ).strip()
+    # Strip leading articles
+    t = re.sub(r"^(?:a|an|the)\s+", "", t, flags=re.IGNORECASE).strip()
+    t = t.rstrip("?.!, ").strip()
+    return t.title() if (len(t) <= 50 and not t.isupper()) else t
 
 
 async def resolve_topic_from_text(text: str, default_subject: str = "Course Material") -> str:
@@ -1076,15 +1101,19 @@ Analyze this student query for the course subject: "{subject}".
 Think step-by-step:
 1. True Pedagogical Intent:
    - "material_topics": Student is asking what are the main/important topics, chapters, or syllabus covered in their material/document/here.
-   - "diagram": Student is asking to study, explain, or understand a figure, diagram, chart, or visual workflow.
-   - "chat_followup": Student is asking a question referring back to earlier chat conversation in this session.
+   - "diagram": Student is asking to study, explain, generate, or understand a figure, diagram, chart, or visual workflow.
+   - "chat_followup": Student is asking a question referring back to earlier chat conversation in this session ("this", "that response", "what you explained").
    - "comparison": Comparing two concepts (difference between X and Y, X vs Y).
    - "quiz": Requesting a quiz, practice questions, or flashcards.
    - "solve": Problem solving, calculation, or table completion.
-   - "study_notes": Requesting comprehensive study notes / cheat sheet.
+   - "study_notes": Requesting comprehensive study notes / cheat sheet / summary document.
    - "conceptual": Conceptual explanation or definition.
-2. Target Academic Concept / Noun Phrase (clean title, null if asking general syllabus/greeting).
-3. Search Terms: 1-3 clean search queries to find the relevant text in course materials.
+2. Canonical Academic Concept (target_topic):
+   - Extract the precise, canonical academic concept or topic name without conversational noise or visual request clauses (e.g. strip "with a figure", "a ...", "make a study note for").
+   - If the student uses an acronym or abbreviation in ANY academic field (medicine, biology, physics, chemistry, engineering, computer science, economics, mathematics, etc.), use your deep academic knowledge to normalize it into its canonical full title with abbreviation (e.g., "SVM" -> "Support Vector Machine (SVM)", "DNA" -> "Deoxyribonucleic Acid (DNA)", "GDP" -> "Gross Domestic Product (GDP)", "PCR" -> "Polymerase Chain Reaction (PCR)", "IS-LM" -> "IS-LM Model").
+   - If the student references previous interaction ("this", "that", "this response", "notes on this"), resolve the exact specific concept from the Recent Conversation Context.
+   - Set null only if this is a general syllabus inquiry or greeting.
+3. Search Terms: 1-3 clean, high-recall search queries to retrieve relevant textbook chunks from the course material. Expand any abbreviations into full academic search terms.
 
 Return strict JSON only:
 {{
@@ -1289,50 +1318,51 @@ Return strict JSON only:
                 if c2_phrase not in bm25_queries:
                     bm25_queries.append(c2_phrase)
 
-        # Domain expansions for common technical/math abbreviations
-        expansions = []
-        if any(w in filtered_words for w in ("q", "k", "v")) or "q k v" in q_lower or "qkv" in q_lower:
-            expansions.append("query key value attention")
-        if "svm" in filtered_words:
-            expansions.append("support vector machine kernel")
-        if "knn" in filtered_words:
-            expansions.append("k nearest neighbor")
-        if "cnn" in filtered_words:
-            expansions.append("convolutional neural network")
-        if "rnn" in filtered_words or "lstm" in filtered_words:
-            expansions.append("recurrent neural network lstm")
-        if "ap" in filtered_words:
-            expansions.append("arithmetic sequence progression")
+        # Dynamic search queries reasoned by the LLM Query Thinking Tool (works across ANY academic discipline)
+        if llm_analysis and llm_analysis.get("search_queries"):
+            for sq in llm_analysis["search_queries"]:
+                if sq and sq not in bm25_queries:
+                    bm25_queries.append(sq)
 
-        for exp in expansions:
-            if exp not in bm25_queries:
-                bm25_queries.append(exp)
-
-        # Check if query is anaphoric / meta-referential to previous interaction
-        is_meta_ref = is_meta_referential_query(user_query)
+        # Primary canonical topic resolution: Use LLM-reasoned target_topic
         resolved_topic = ""
+        if llm_analysis and llm_analysis.get("target_topic"):
+            resolved_topic = str(llm_analysis["target_topic"]).strip()
+
+        # Fallback heuristic resolution if LLM query thinking was offline or returned empty
+        is_meta_ref = is_meta_referential_query(user_query)
         prev_assistant_text = ""
-        if is_meta_ref and history:
+        if not resolved_topic and is_meta_ref and history:
             prev_assistant_text = extract_previous_assistant_response(history) or ""
-            if prev_assistant_text:
+            # First, check previous user message for an explicit concept
+            for h in reversed(history):
+                r = (h.get("role") or h.get("sender") or "").lower()
+                t = (h.get("text") or h.get("content") or "").strip()
+                if r == "user" and t and not is_meta_referential_query(t):
+                    clean_u = re.sub(r"^(what is|explain|tell me about|how does|what are|describe)\s+", "", t, flags=re.IGNORECASE).rstrip("?.!, ").strip()
+                    if clean_u and len(clean_u) > 2 and clean_u.lower() not in GENERIC_NON_SUBJECT_TERMS:
+                        resolved_topic = clean_study_topic(clean_u)
+                        break
+            if not resolved_topic and prev_assistant_text:
                 h_match = re.search(r"^#+\s*(.+)$", prev_assistant_text, re.MULTILINE)
                 if h_match:
                     clean_h = re.sub(r"[\*#_`~]", "", h_match.group(1)).strip()
-                    if clean_h and len(clean_h) > 2 and clean_h.lower() not in ("overview", "summary", "notes", "key insights", "definitions", "module"):
-                        resolved_topic = clean_h
+                    if clean_h and len(clean_h) > 2 and clean_h.lower() not in ("overview", "summary", "notes", "key insights", "definitions", "module", "the core intuition", "how it works"):
+                        resolved_topic = clean_study_topic(clean_h)
                 if not resolved_topic:
                     b_match = re.search(r"\*\*([A-Za-z0-9\s\-_–—:,]+)\*\*", prev_assistant_text)
                     if b_match:
                         clean_b = re.sub(r"[\*#_`~]", "", b_match.group(1)).strip()
-                        if clean_b and 3 <= len(clean_b) <= 50 and clean_b.lower() not in ("overview", "summary", "key insights", "note", "important"):
-                            resolved_topic = clean_b
-            if resolved_topic:
-                if resolved_topic not in bm25_queries:
-                    bm25_queries.insert(0, resolved_topic)
-            elif prev_assistant_text:
-                prev_kw = [w for w in re.findall(r"[a-z0-9_]+", prev_assistant_text.lower()) if len(w) > 4 and w not in stopwords]
-                if prev_kw:
-                    bm25_queries.insert(0, " ".join(prev_kw[:5]))
+                        if clean_b and 3 <= len(clean_b) <= 50 and clean_b.lower() not in ("overview", "summary", "key insights", "note", "important", "the core intuition", "how it works", "comparison"):
+                            resolved_topic = clean_study_topic(clean_b)
+
+        if resolved_topic:
+            if resolved_topic not in bm25_queries:
+                bm25_queries.insert(0, resolved_topic)
+        elif prev_assistant_text:
+            prev_kw = [w for w in re.findall(r"[a-z0-9_]+", prev_assistant_text.lower()) if len(w) > 4 and w not in stopwords]
+            if prev_kw:
+                bm25_queries.insert(0, " ".join(prev_kw[:5]))
 
         if subject and subject.lower() not in clean_noun_phrase.lower() and subject != "General Study":
             bm25_queries.append(f"{clean_noun_phrase} {subject}")
@@ -2314,6 +2344,52 @@ Provide a clear, helpful, expert academic response to the user's query."""
 
         trailing_constraint_str = f"Specific Focus / Constraint: '{trailing_clause}'\n" if trailing_clause else ""
 
+        resolved_target = plan.get("resolved_topic")
+        specific_topic_focus = ""
+        if resolved_target:
+            clean_resolved = clean_study_topic(resolved_target)
+            specific_topic_focus = (
+                f"\nCRITICAL TARGET TOPIC FOCUS:\n"
+                f"- The student's request is specifically about the previous topic: **{clean_resolved}**.\n"
+                f"- You MUST focus your response (study notes, explanation, or diagram) specifically on **{clean_resolved}** — DO NOT generate notes for the entire textbook or syllabus.\n"
+                f"- If creating study notes, title it `# {clean_resolved} — Study Notes` and cover the sub-mechanisms and equations of **{clean_resolved}**.\n"
+            )
+
+        resp_contract = plan.get('response_format', 'conceptual')
+        is_study_notes = (resp_contract == "study_notes") or any(
+            w in user_query.lower() for w in ("study note", "study notes", "cheat sheet", "revision note", "notes on", "notes for")
+        )
+
+        study_notes_guidance = ""
+        if is_study_notes:
+            clean_t = clean_study_topic(resolved_target or user_query) or subject
+            study_notes_guidance = f"""
+CRITICAL STUDY NOTE FORMAT & STRUCTURE (STUDENT-OPTIMIZED REFERENCE DOCUMENT):
+You are generating a standalone, publication-quality study note for students on: **{clean_t}**.
+MANDATORY HIGH-YIELD STUDENT STRUCTURE:
+1. Title:
+   `# {clean_t} — Study Notes`
+2. Quick Summary Box:
+   `> **TL;DR**: [2-3 sentences capturing the intuitive mental model, big picture, and core intuition for a student.]`
+3. Concept Figure / Architecture Diagram (MANDATORY):
+   - Include a clean, colorful, high-clarity inline SVG diagram inside a fenced ```svg code block (using `viewBox="0 0 700 400"`, rounded rects `rx="10"`, distinct pastel/solid color coding, clear text labels, and directional arrows with markers).
+   - If the topic is SVM: Draw the 2D classification plane with blue circles (+ class), orange squares (- class), the solid central Hyperplane line, the two dashed Margin boundary lines, the Margin width ($2/||w||$), highlighted halo circles on Support Vectors, and clean text labels for 'Hyperplane', 'Margin', and 'Support Vectors'.
+   - If the topic is another concept: Draw the architecture, pipeline, state machine, or dataflow with clear visual boxes and arrows.
+4. The Core Intuition (Easy Concept Explanation):
+   - Explain the concept using an intuitive real-world analogy (e.g. for SVM: the widest street or neutral buffer zone between two rival neighborhoods).
+   - Use simple, crystal-clear language that any student can grasp on the first read with zero unnecessary jargon.
+5. How It Works (Key Mechanisms):
+   - 3-4 structured bullet points with bold headers (e.g. `- **Maximum-Margin Hyperplane**: ...`, `- **Support Vectors**: ...`, `- **Kernel Trick**: ...`) explaining the essential pillars.
+6. Comparison & Component Table:
+   - Include a structured Markdown comparison table (`| Component / Aspect | Role in System | Key Significance / Impact |`) summarizing the elements.
+7. Key Formulas & Mathematical Intuition (if applicable):
+   - Format key formulas in standalone KaTeX display math `$$ ... $$` with simple variable explanations.
+8. High-Yield Exam Takeaways:
+   - 3-5 crisp bullet points summarizing what students must remember for exams.
+9. STRICT RULE: ZERO CLOSING CONVERSATIONAL QUESTIONS:
+   - ABSOLUTELY DO NOT include ANY follow-up question at the end (NEVER write "Would you like...", "Shall we...", "Do you want...", or ask any question at the end). Study notes are self-contained reference documents, not chat dialogue turns.
+"""
+
         # 7. Prompt LLM with Strict Academic Grounding, Conversational Follow-up, & KaTeX Math
         prompt = f"""
 You are DeepTutor's Execution Agent (DecisionAgent).
@@ -2329,7 +2405,7 @@ Student Goals: {goals_str}
 
 Student Message:
 "{user_query}"
-{trailing_constraint_str}{continuation_directive}
+{trailing_constraint_str}{continuation_directive}{specific_topic_focus}{study_notes_guidance}
 STRICT RULES:
 1. Grounding & Missing Information Protocol (3 Modes):
    - Mode 1 (Sufficient Material): Answer strictly and objectively from the retrieved chunks and conversation history.
@@ -2373,7 +2449,8 @@ STRICT RULES:
     - NO UNSOLICITED EXAM TRAPS / PITFALLS: Do not include "Common Pitfalls & Exam Traps" sections.
 9. Chain-of-Thought: Provide a dedicated thought process detailing your reasoning and verification before the answer.
 10. Interactive Follow-up Question (Conversational Closing):
-    ALWAYS end your response with a single, clear, relevant next-step question in bold offering a concrete next step (e.g., "**Would you like a step-by-step numerical example of how the margin is calculated?**" or "**Would you like a quick practice question to test your understanding on this?**") that the student can easily answer with a simple 'Yes' or 'No'. Never ask compound "A or B" questions like "example, or compare?" where "yes" becomes ambiguous.
+    - STRICT EXCEPTION FOR STUDY NOTES: If the response is a study note (Response Contract is 'study_notes' or user asked for notes), DO NOT INCLUDE ANY FOLLOW-UP QUESTION AT THE END. A study note is a downloadable reference document, not a chat dialogue turn. Conclude cleanly after the High-Yield Exam Takeaways.
+    - For all other response formats (conceptual, solve, diagram, etc.): ALWAYS end your response with a single, clear, relevant next-step question in bold offering a concrete next step (e.g., "**Would you like a step-by-step numerical example of how the margin is calculated?**" or "**Would you like a quick practice question to test your understanding on this?**") that the student can easily answer with a simple 'Yes' or 'No'. Never ask compound "A or B" questions like "example, or compare?" where "yes" becomes ambiguous.
 11. Textbook Correctness Inquiry:
     - If the student asks whether the textbook, author, or uploaded material is wrong about a concept ('is this textbook wrong about X'):
       1. First, objectively explain what the uploaded material specifically states.
@@ -2391,9 +2468,9 @@ STRICT RULES:
     ALWAYS consult the Session Chat History provided above. Address the student's reference directly, connect it to what was previously discussed in the chat, and provide continuous, progressive tutoring.
 14. Response Cleanliness & Zero LaTeX Noise:
     Write clean, natural, elegant Markdown for maximum readability by students.
-    - Strictly do NOT output raw LaTeX syntax noise or unrendered commands in running sentences (NEVER write `\\mathbf{w}`, `\\mathit{...}`, `\\text{...}`, unescaped backslashes, or naked `$` signs in regular prose).
+    - Strictly do NOT output raw LaTeX syntax noise or unrendered commands in running sentences (NEVER write `\\mathbf{{w}}`, `\\mathit{{...}}`, `\\text{{...}}`, unescaped backslashes, or naked `$` signs in regular prose).
     - Write clean natural terms: e.g. "weight vector **w**", "norm ||**w**||", "margin M = 2 / ||**w**||".
-    - Do NOT wrap words or math in raw parentheses like `( \\mathbf{w} )`.
+    - Do NOT wrap words or math in raw parentheses like `( \\mathbf{{w}} )`.
     - Reserve LaTeX block math `$$ ... $$` ONLY for standalone, dedicated formulas when necessary. Keep running text 100% clean and readable.{compound_guidance}{eli5_comparison_guidance}
 
 Return ONLY valid JSON in this exact structure:
@@ -2487,8 +2564,9 @@ Return ONLY valid JSON in this exact structure:
         if not answer:
             # Fallback direct generation if JSON parse failed
             if retrieved_chunks:
-                first_chunk = retrieved_chunks[0]["content"]
-                answer = f"Based on your uploaded course notes:\n\n{first_chunk}\n\nPlease ask a specific follow-up question regarding these mechanics."
+                raw_chunk_text = retrieved_chunks[0].get("content", "")
+                clean_chunk = re.sub(r"^\[Doc:[^\]]+\]\s*", "", raw_chunk_text).strip()
+                answer = f"Based on your uploaded course notes:\n\n{clean_chunk}\n\n**Would you like me to explain this concept step-by-step with an intuitive example?**"
             else:
                 answer = f"I could not find the answer to this in your uploaded PDF. Please ask questions specifically related to the concepts and chapters in your uploaded material for {subject}."
 
@@ -2500,6 +2578,25 @@ Return ONLY valid JSON in this exact structure:
         asyncio.create_task(self._update_memory_background(user_id, user_query, answer))
 
         resp_format = plan.get("response_format", "conceptual")
+        is_notes = (resp_format == "study_notes") or is_study_notes
+
+        if is_notes and answer:
+            # 1. Guarantee ZERO trailing conversational questions in study notes
+            answer = re.sub(
+                r"\n+(?:\*\*)?(?:Would you like|Shall we|Do you want|Let me know if|Feel free to|Should we|Are you interested in|If you'd like)[^\n]+\??(?:\*\*)?\s*$",
+                "",
+                answer,
+                flags=re.IGNORECASE
+            ).rstrip()
+
+            # 2. Clean up awkward title if present (e.g., "# A Svm With A Figure — Study Notes" -> "# Support Vector Machine (SVM) — Study Notes")
+            def _clean_title(match):
+                raw_t = match.group(1).strip()
+                cleaned_t = clean_study_topic(raw_t)
+                return f"# {cleaned_t} — Study Notes"
+            answer = re.sub(r"^#\s+([^\n—\-]+?)(?:\s*[-—]\s*Study Notes?)?$", _clean_title, answer, flags=re.MULTILINE, count=1)
+            resp_format = "study_notes"
+
         export_ready = (resp_format == "study_notes") and ("could not find the answer" not in answer.lower())
 
         return {

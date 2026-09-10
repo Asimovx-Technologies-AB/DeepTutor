@@ -23,7 +23,8 @@ import { exportNotesToPdf } from '../utils/pdfExport'
 import { useAuthStore } from '../stores/authStore'
 import confetti from 'canvas-confetti'
 import MermaidDiagram from '../components/MermaidDiagram'
-import StudyNotesCard, { extractDocTitle } from '../components/StudyNotesCard'
+import InlineSVGDiagram from '../components/InlineSVGDiagram'
+import StudyNotesCard, { extractDocTitle, isStudyNotesContent } from '../components/StudyNotesCard'
 import FlashcardQuizCard from '../components/FlashcardQuizCard'
 import ConfirmModal from '../components/ConfirmModal'
 import { SessionLoadingAnimation } from '../components/SessionLoadingAnimation'
@@ -547,17 +548,10 @@ export default function LearnPage() {
       // Prepare study notes in state, but do NOT auto-open viewer initially
       if (data.messages && data.messages.length > 0) {
         const latestNotes = [...data.messages].reverse().find((m: any) =>
-          m.role === 'assistant' && (
-            m.export_ready ||
-            m.is_synthetic_textbook ||
-            m.format === 'study_notes' ||
-            m.response_format === 'study_notes' ||
-            (Boolean(m.text) && m.text.startsWith('# ') && m.text.toLowerCase().includes('study notes')) ||
-            (Boolean(m.text) && m.text.includes('Generated Study Textbook'))
-          )
+          isStudyNotesContent(m)
         )
         if (latestNotes) {
-          setCurrentArtifactMarkdown(latestNotes.text)
+          setCurrentArtifactMarkdown(latestNotes.text || latestNotes.content || '')
           setArtifactDockSide('right')
         }
         // No popup initially on session load; only pops up when clicking the note box
@@ -705,6 +699,17 @@ export default function LearnPage() {
         if (r.data?.documents) setSessionDocuments(r.data.documents)
       }
 
+      if (res.data?.topics && res.data.topics.length > 0) {
+        setTopics(res.data.topics)
+        setActiveTopic((prev) => prev || res.data.topics[0])
+      } else {
+        const r = await studyApi.getSession(activeSessionId)
+        if (r.data?.topics && r.data.topics.length > 0) {
+          setTopics(r.data.topics)
+          setActiveTopic((prev) => prev || r.data.topics[0])
+        }
+      }
+
       setIsSelectLibraryModalOpen(false)
 
       // Add student-friendly notice in chat
@@ -787,12 +792,7 @@ export default function LearnPage() {
       )
 
       const isExport = Boolean(
-        res.data.export_ready ?? (
-          res.data.response_format === 'study_notes' ||
-          res.data.format === 'study_notes' ||
-          (Boolean(res.data.text) && res.data.text.startsWith('# ') && res.data.text.toLowerCase().includes('study notes')) ||
-          isSyntheticTextbook
-        )
+        res.data.export_ready ?? isStudyNotesContent(res.data)
       )
 
       const assistantMsg: ChatMessage = {
@@ -1492,7 +1492,8 @@ export default function LearnPage() {
     pre: ({ node: _node, children, ...props }: any) => {
       const child = React.Children.toArray(children)[0] as any
       const className = child?.props?.className || ''
-      if (className.includes('language-mermaid')) {
+      const childStr = String(child?.props?.children || '')
+      if (className.includes('language-mermaid') || className.includes('language-svg') || (childStr.includes('<svg') && childStr.includes('</svg>'))) {
         return <>{children}</>
       }
       return (
@@ -1507,6 +1508,9 @@ export default function LearnPage() {
       const codeString = String(children).replace(/\n$/, '')
       if (!inline && lang === 'mermaid') {
         return <MermaidDiagram chart={codeString} />
+      }
+      if (!inline && (lang === 'svg' || (codeString.includes('<svg') && codeString.includes('</svg>')))) {
+        return <InlineSVGDiagram svg={codeString} />
       }
       return <code className={className} {...props}>{children}</code>
     },
@@ -1914,8 +1918,8 @@ export default function LearnPage() {
                                     <p className="text-[11px] font-semibold text-slate-800 truncate" title={doc.filename}>{doc.filename}</p>
                                     <p className="text-[10px] text-slate-400">
                                       {doc.page_count ? `${doc.page_count} pages • ` : ''}
-                                      <span className={doc.status === 'fully_processed' ? 'text-emerald-600 font-medium' : 'text-amber-600 font-medium'}>
-                                        {doc.status === 'fully_processed' ? 'Fully Ready' : 'Text Ready'}
+                                      <span className={['fully_processed', 'completed', 'ready', 'text_ready'].includes(String(doc.status || '').toLowerCase()) ? 'text-emerald-600 font-medium' : 'text-amber-600 font-medium'}>
+                                        {['fully_processed', 'completed', 'ready', 'text_ready'].includes(String(doc.status || '').toLowerCase()) ? 'Fully Ready' : 'Text Ready'}
                                       </span>
                                     </p>
                                   </div>
@@ -2277,13 +2281,7 @@ export default function LearnPage() {
                           Boolean(msg.is_synthetic_textbook) ||
                           (Boolean(msg.text) && msg.text.includes('Generated Study Textbook'))
                         )
-                        const isStudyNotes = !isUser && (
-                          Boolean(msg.export_ready) ||
-                          msg.response_format === 'study_notes' ||
-                          msg.format === 'study_notes' ||
-                          (Boolean(msg.text) && msg.text.startsWith('# ') && msg.text.toLowerCase().includes('study notes')) ||
-                          isSyntheticTextbook
-                        )
+                        const isStudyNotes = !isUser && isStudyNotesContent(msg)
 
                         return (
                           <motion.div
@@ -3639,7 +3637,7 @@ export default function LearnPage() {
                           <FileText size={12} className={isFilterActive ? 'text-indigo-700 shrink-0' : 'text-indigo-600 shrink-0'} />
                           <span className="truncate flex-1">{doc.filename}</span>
                           <span className={`text-[9px] px-1 py-0.2 rounded shrink-0 ${isFilterActive ? 'bg-indigo-200/70 text-indigo-800 font-bold' : 'bg-white text-slate-500'}`}>
-                            {doc.status === 'fully_processed' ? 'Ready' : 'Indexing'}
+                            {['fully_processed', 'completed', 'ready', 'text_ready'].includes(String(doc.status || '').toLowerCase()) ? 'Ready' : 'Indexing'}
                           </span>
                           <button
                             onClick={(e) => {

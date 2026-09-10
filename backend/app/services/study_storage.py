@@ -261,6 +261,19 @@ def get_session_messages(
         msg["topics"] = msg.get("topics_json")
         msg["attachment"] = msg.get("attachment_json")
 
+        if msg.get("attachment") and isinstance(msg["attachment"], dict):
+            att = msg["attachment"]
+            if att.get("response_format"):
+                msg["response_format"] = att.get("response_format")
+            if att.get("format"):
+                msg["format"] = att.get("format")
+            if att.get("export_ready") is not None:
+                msg["export_ready"] = att.get("export_ready")
+            if att.get("is_synthetic_textbook") is not None:
+                msg["is_synthetic_textbook"] = att.get("is_synthetic_textbook")
+            if att.get("sources") and not msg.get("sources"):
+                msg["sources"] = att.get("sources")
+
         if msg.get("quiz_data") and isinstance(msg["quiz_data"], dict):
             initial_m = msg["quiz_data"].get("initial_mode") or "flashcards"
             msg["format"] = "flashcard" if initial_m == "flashcards" else "quiz"
