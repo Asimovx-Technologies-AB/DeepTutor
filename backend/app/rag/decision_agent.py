@@ -117,24 +117,16 @@ RESPONSE GUIDELINES:
     6. Provide a **Concrete Example**.
     7. End with a natural yes/no conversational question (e.g., *"Would you like to explore how data flows through a specific sub-layer in this architecture?"*).
   - **study_notes** (student wants a standalone reference document, not a conversational answer):
-    1. Start with a single H1 title: `# {Topic} — Study Notes`.
-    2. If the student's memory shows related prior topics, add one italic line: `*Builds on: {prior topics}*`.
-    3. **TL;DR / Summary Box**: Include a 3-5 line blockquote summary at the top (`> **TL;DR**: ...`) providing the foundational essence.
-    4. **Hierarchical Concept Sections**: Break the topic into numbered `## ` sections covering core definitions, mechanisms, concrete examples, and trade-offs:
-       - Format definitions consistently as `**Term** — definition`.
-       - Highlight key formulas and equations in standalone block math `$$ ... $$`.
-       - Render comparisons as Markdown tables (`| Concept / Algorithm | X | Y | Key Differences |`) instead of prose.
-       - Wherever the topic involves a pipeline, architecture, or flow, or when illustrating concepts visually, include ONE visual in a fenced ` ```svg ` code block or ` ```mermaid ` code block (4-8 nodes max).
-       - Provide short, concrete examples to anchor each concept.
-    5. **Self-Check Active Recall Quiz**: End with a `## Self-Check Active Recall` section featuring 4-6 testable questions marked with `[High-yield]` or `[Good-to-know]`, followed by answers in a `<details><summary>Click to reveal answers</summary>...</details>` block.
-    6. **Quick-Reference Glossary**: Include a `## Quick-Reference Glossary` two-column table of essential terms and definitions.
-    7. **Expansion Cue**: Close with `**Topics to expand next:** ...` suggesting the next logical subtopic to study.
-    8. Use ONLY the retrieved course material for facts; if the material doesn't cover the topic at
-       all, do not silently fall back to general knowledge — use the standard "not found in material"
-       rule instead of producing generic notes.
-    9. This format must render as clean, valid Markdown only (no page citations) since
-       it is rendered directly in the chat UI's Markdown viewer and also offered as a downloadable
-       `.md` file as-is.
+    1. Start with a single H1 title: `# {Topic} — Study Notes` (clean topic name, e.g. `# Support Vector Machine (SVM) — Study Notes`).
+    2. **TL;DR / Summary Box**: Include a 2-3 line blockquote summary at the top (`> **TL;DR**: ...`) providing the intuitive mental model and big picture.
+    3. **Visual Figure / Diagram (MANDATORY)**: Include a clean, colorful, high-clarity inline SVG diagram inside a fenced ` ```svg ` code block (with `viewBox="0 0 700 400"`, rounded rects `rx="10"`, distinct colors, clear text labels, and directional arrows with markers) illustrating the core concept, architecture, boundaries, or workflow.
+    4. **Core Intuition (Easy Concept Explanation)**: Begin with an intuitive, plain-English "Aha!" analogy or visual picture that anchors the concept before technical formulas with ZERO unnecessary jargon on the first read.
+    5. **How It Works (Key Mechanisms)**: 3-4 structured bullet points with bold descriptive headers explaining the primary building blocks.
+    6. **Comparison / Component Table**: Render a structured Markdown table (`| Component / Aspect | Role in System | Key Significance / Impact |`) summarizing the elements.
+    7. **Key Formulas & Mathematical Intuition**: Highlight key formulas and equations in standalone block math `$$ ... $$` with simple variable explanations.
+    8. **High-Yield Exam Takeaways**: 3-5 crisp bullet points summarizing what students must remember for exams.
+    9. **STRICT RULE — ZERO CLOSING CONVERSATIONAL QUESTIONS**: ABSOLUTELY DO NOT include ANY follow-up question at the end (NEVER write "Would you like...", "Shall we...", "Do you want...", or ask any question at the end). Study notes are self-contained reference documents, NOT chat dialogue turns.
+    10. This format must render as clean, valid Markdown only (no page citations) since it is rendered directly in the chat UI's Markdown viewer and also offered as a downloadable `.md` file as-is.
   - If the plan flags multiple sub_questions (a compound question), answer each sub-question in its own
     clearly labeled section (bold sub-heading per sub-question) rather than blending them into one block.
 - **RESPONSE SIZING & STUDENT-CENTRIC SIMPLICITY (HARD LIMITS)**:
@@ -752,9 +744,17 @@ Respond with ONLY this JSON object:
             not_found
             or is_quiz_in_progress  # quiz evaluation already carries its own next question
             or intent in ("GREETING", "SUBJECT_SPECIFIED")
+            or result_format == "study_notes"  # study notes are self-contained reference documents
             or not reply.strip()
         )
         if skip:
+            if result_format == "study_notes":
+                reply = re.sub(
+                    r"\n+(?:\*\*)?(?:Would you like|Shall we|Do you want|Let me know if|Feel free to|Should we|Are you interested in|If you'd like)[^\n]+\??(?:\*\*)?\s*$",
+                    "",
+                    reply,
+                    flags=re.IGNORECASE
+                ).rstrip()
             return reply, None
 
         # A closing question is any of the last ~3 non-empty lines ending in "?".

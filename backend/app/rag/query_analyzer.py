@@ -248,12 +248,18 @@ def _extract_json(text: str) -> Optional[Dict[str, Any]]:
 def _clean_topic_string(value: Optional[str]) -> Optional[str]:
     if not value or not isinstance(value, str):
         return None
-    value = re.sub(
-        r"^(what is|what are|explain|describe|tell me about|compare)\s+",
+    val = re.sub(
+        r"^(what is|what are|explain|describe|tell me about|compare|give me|make|create|prepare|write|show me)\s+",
         "", value.strip(), flags=re.IGNORECASE,
     ).strip()
-    value = value.rstrip("?.,!").strip()
-    return value or None
+    # Strip trailing visual qualifiers like "with a figure", "with diagram", "and a table"
+    val = re.sub(
+        r"\s+(?:with|having|including|and)\s+(?:a\s+|an\s+|the\s+)?(?:figure|diagram|image|photo|picture|illustration|visual|drawing|table|chart|flowchart|svg)[\s\S]*$",
+        "", val, flags=re.IGNORECASE
+    ).strip()
+    val = re.sub(r"^(?:a|an|the)\s+", "", val, flags=re.IGNORECASE).strip()
+    val = val.rstrip("?.,!").strip()
+    return val or None
 
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
