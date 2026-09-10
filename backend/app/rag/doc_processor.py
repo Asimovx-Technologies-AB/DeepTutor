@@ -656,7 +656,6 @@ class DocumentProcessor:
 
                 if score > 0:
                     scored_chunks.append((score, chunk))
-                    scored_chunks.append((score, chunk))
 
             scored_chunks.sort(key=lambda x: x[0], reverse=True)
             for _, c in scored_chunks[:top_k]:
