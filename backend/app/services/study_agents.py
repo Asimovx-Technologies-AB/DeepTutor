@@ -120,7 +120,8 @@ def is_meta_referential_query(query: str) -> bool:
         r"\b(what|that)\s+(you|we)\s+(gave|explained|discussed|covered|provided|wrote|taught|generated)\b",
         r"\b(module|content|topic|answer|response|concept|material)\s+(you|we)\s+(gave|gave me|explained|discussed|provided|wrote|taught)\b",
         r"\b(from|on|about|based on|for)\s+(the\s+)?(above|previous|last|this)\b",
-        r"^(make|create|generate|give me|build|show)?\s*(a\s+)?(flashcards?|quiz|test|deck)\s+(on|for|about|from)?\s*(this|it|above|previous|the above|what you gave|what you gave me|above module|the above module|previous module|above content)?\s*$",
+        r"^(make|create|generate|give me|build|show|prepare|write)?\s*(a\s+)?(flashcards?|quiz|test|deck|study notes?|notes?|cheat sheet|summary|diagram|figure)\s+(on|for|about|from)?\s*(this|it|that|above|previous|the above|what you gave|what you gave me|above module|the above module|previous module|above content|this response|that response)?\s*$",
+        r"\b(study notes?|notes?|cheat sheet|summary|diagram|figure|quiz)\s+(for|on|about|of)\s+(this|that|it|the above|previous|last)\b",
     ]
     for pat in patterns:
         if re.search(pat, q):
@@ -133,7 +134,10 @@ def is_meta_referential_query(query: str) -> bool:
         "what you gave", "what you gave me", "what you just gave", "what you just explained", "what you explained",
         "what we discussed", "what we just discussed", "what you wrote", "what you just taught", "what you taught",
         "based on previous", "from previous", "from the previous", "from above", "on the above", "on above",
-        "from this", "on this", "for this", "for the above", "for it", "this topic", "this module", "this concept"
+        "from this", "on this", "for this", "for the above", "for it", "this topic", "this module", "this concept",
+        "for this response", "for that response", "for that", "about this", "of this",
+        "notes for this", "study note for this", "study notes for this", "study note for that", "study notes for that",
+        "make a study note for this", "make study notes for this", "make a study note for that", "study notes on this"
     )
     return any(p in q for p in meta_phrases)
 
@@ -1314,17 +1318,26 @@ Return strict JSON only:
         prev_assistant_text = ""
         if is_meta_ref and history:
             prev_assistant_text = extract_previous_assistant_response(history) or ""
-            if prev_assistant_text:
+            # First, check previous user message for an explicit concept (e.g. "Ensemble Learning")
+            for h in reversed(history):
+                r = (h.get("role") or h.get("sender") or "").lower()
+                t = (h.get("text") or h.get("content") or "").strip()
+                if r == "user" and t and not is_meta_referential_query(t):
+                    clean_u = re.sub(r"^(what is|explain|tell me about|how does|what are|describe)\s+", "", t, flags=re.IGNORECASE).rstrip("?.!, ").strip()
+                    if clean_u and len(clean_u) > 2 and clean_u.lower() not in GENERIC_NON_SUBJECT_TERMS:
+                        resolved_topic = clean_u.title()
+                        break
+            if not resolved_topic and prev_assistant_text:
                 h_match = re.search(r"^#+\s*(.+)$", prev_assistant_text, re.MULTILINE)
                 if h_match:
                     clean_h = re.sub(r"[\*#_`~]", "", h_match.group(1)).strip()
-                    if clean_h and len(clean_h) > 2 and clean_h.lower() not in ("overview", "summary", "notes", "key insights", "definitions", "module"):
+                    if clean_h and len(clean_h) > 2 and clean_h.lower() not in ("overview", "summary", "notes", "key insights", "definitions", "module", "the core intuition", "how it works"):
                         resolved_topic = clean_h
                 if not resolved_topic:
                     b_match = re.search(r"\*\*([A-Za-z0-9\s\-_–—:,]+)\*\*", prev_assistant_text)
                     if b_match:
                         clean_b = re.sub(r"[\*#_`~]", "", b_match.group(1)).strip()
-                        if clean_b and 3 <= len(clean_b) <= 50 and clean_b.lower() not in ("overview", "summary", "key insights", "note", "important"):
+                        if clean_b and 3 <= len(clean_b) <= 50 and clean_b.lower() not in ("overview", "summary", "key insights", "note", "important", "the core intuition", "how it works", "comparison"):
                             resolved_topic = clean_b
             if resolved_topic:
                 if resolved_topic not in bm25_queries:
@@ -2314,6 +2327,16 @@ Provide a clear, helpful, expert academic response to the user's query."""
 
         trailing_constraint_str = f"Specific Focus / Constraint: '{trailing_clause}'\n" if trailing_clause else ""
 
+        resolved_target = plan.get("resolved_topic")
+        specific_topic_focus = ""
+        if resolved_target:
+            specific_topic_focus = (
+                f"\nCRITICAL TARGET TOPIC FOCUS:\n"
+                f"- The student's request is specifically about the previous topic: **{resolved_target}**.\n"
+                f"- You MUST focus your response (study notes, explanation, or diagram) specifically on **{resolved_target}** — DO NOT generate notes for the entire textbook or syllabus.\n"
+                f"- If creating study notes, title it `# {resolved_target} — Study Notes` and cover the sub-mechanisms and equations of **{resolved_target}**.\n"
+            )
+
         # 7. Prompt LLM with Strict Academic Grounding, Conversational Follow-up, & KaTeX Math
         prompt = f"""
 You are DeepTutor's Execution Agent (DecisionAgent).
@@ -2329,7 +2352,7 @@ Student Goals: {goals_str}
 
 Student Message:
 "{user_query}"
-{trailing_constraint_str}{continuation_directive}
+{trailing_constraint_str}{continuation_directive}{specific_topic_focus}
 STRICT RULES:
 1. Grounding & Missing Information Protocol (3 Modes):
    - Mode 1 (Sufficient Material): Answer strictly and objectively from the retrieved chunks and conversation history.

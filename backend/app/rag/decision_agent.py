@@ -51,6 +51,11 @@ Before answering, think carefully through:
 Document your brief reasoning chain (1-2 sentences) in the "thought_process" field.
 
 RESPONSE GUIDELINES:
+- **MANDATORY VISUAL GENERATION RULE (FIGURES, IMAGES, DIAGRAMS, PHOTOS)**:
+  - Whenever the student's query mentions "figure", "with a figure", "image", "photo", "picture", "diagram", "flowchart", "visual", "draw", "architecture", or asks for a visual explanation IN ANY FORMAT:
+    1. You MUST generate an actual inline visual inside a fenced ` ```svg ` code block (or ` ```mermaid ` for simple linear flows).
+    2. **STRICTLY PROHIBITED**: NEVER merely describe what a figure looks like in text (e.g. NEVER write "Figure 4 Breakdown: Panel (a)..." as plain text without an accompanying diagram). If the retrieved textbook context mentions a figure or diagram (like "Figure 4"), you MUST TRANSLATE AND RENDER IT AS AN ACTUAL `<svg>` DIAGRAM in a ` ```svg ` block so the student can see it rendered visually in the chat!
+    3. NEVER state that you cannot generate images or draw figures. Generate the SVG immediately.
 - Adapt structure dynamically to the student's query and the planning note's response_format:
   - **comparison** (vs / difference / trade-offs):
     1. Start with a 1-sentence intuitive hook contrasting the two approaches in simple words.
@@ -76,17 +81,38 @@ RESPONSE GUIDELINES:
     3. Provide the precise definition with key terms in bold.
     4. Break down key components with bold labels.
     5. Provide a **Concrete Real-World Example** (`**Example:** ...`) with simple numbers or everyday scenario so the student understands immediately.
-    6. **Optional visual** — ONLY if the concept is a process, pipeline, architecture, or the student's
-       question mentions a figure/diagram/table: include either ONE compact Mermaid diagram in a fenced
-       ` ```mermaid ` block (3-6 nodes) or a small Markdown table. Skip this step entirely for concepts
-       that are purely definitional and don't benefit from a visual — don't force one in.
+    6. **Visual diagram (MANDATORY if figure/image requested or for processes/boundaries/architectures)**:
+       - If the student's question mentions a figure, image, photo, picture, diagram, or if the concept involves a process, boundary, architecture, or flow: you MUST include an actual inline visual. Use a fenced ` ```svg ` code block (clean, colorful SVG diagram with viewBox) or a fenced ` ```mermaid ` block.
+       - **NEVER** write a plain text breakdown of a figure (e.g. "Figure 4 Breakdown: Panel (a)...") without the actual rendered SVG diagram. Output the SVG code block so it renders on the screen!
     7. End with a **natural, conversational follow-up question** that the student can easily answer with a simple "yes" or "no" (e.g., *"Would you like to walk through a concrete step-by-step example of this formula?"* or *"Shall we do a quick 2-question quiz to test your understanding on this?"*).
-  - **diagram** (image / visual / drawing / architecture / flowchart request):
-    1. **Never decline image or drawing requests**: When a student asks to "create an image", "draw an image", "generate a picture", "show a diagram", "draw a flowchart", or "visualize" a concept, NEVER state that you cannot generate images. Instead, immediately generate a rich, clean **Mermaid diagram** in a fenced ` ```mermaid ` block to visually represent the concept in the Markdown viewer!
-    2. Start with an intuitive real-world analogy hook (1-2 sentences).
-    3. **Key Topics / Components You Need to Know**: 3-6 bullets naming the main parts/stages involved, each with a one-line plain explanation.
-    4. **Visual Architecture / Flowchart Diagram**: Include ONE well-structured Mermaid diagram in a fenced ` ```mermaid ` code block (4-8 nodes max) using `flowchart TD`, `flowchart LR`, `graph TD`, or `sequenceDiagram`.
-       - *Crucial Mermaid syntax rule*: Always enclose node labels containing parentheses, brackets, colons, or commas in double quotes (e.g., `A["Input Vector (X)"] --> B["Linear Projection (Q, K, V)"]`).
+  - **diagram** (image / figure / photo / visual / drawing / picture / architecture / flowchart / visualization request):
+    1. **Never decline image, figure, or drawing requests**: When a student asks to "create an image", "draw an image", "generate a picture", "make a figure", "show a photo", "show a diagram", "draw a flowchart", "visualize", or ANY similar visual request, NEVER state that you cannot generate images. Instead, immediately generate the visual.
+    2. **PRIMARY VISUAL FORMAT — Inline SVG**: Generate a clean, well-labeled `<svg>` diagram inside a fenced ` ```svg ` code block. SVG guidelines:
+       - Always include a `viewBox` attribute for responsive scaling (e.g., `viewBox="0 0 700 400"`).
+       - Use clean, readable fonts: `font-family="Inter, Segoe UI, Arial, sans-serif"`.
+       - Color-code related components with a harmonious palette (e.g., blues for inputs, greens for processes, oranges for outputs). Do NOT use only black and white.
+       - Include clear `<text>` labels on all nodes, boxes, and arrows. Scientific text (formulas, subscripts like CO2, H2O) must be spelled correctly.
+       - Use `<rect>` with rounded corners (`rx="10"`) for concept boxes, `<circle>` or `<ellipse>` for entities, `<line>` or `<path>` with `<marker>` arrowheads for connections.
+       - Define reusable arrowhead markers in `<defs>`.
+       - Keep diagrams compact: 15-40 elements max. Do not over-complicate.
+       - Example structure:
+         ````
+         ```svg
+         <svg viewBox="0 0 700 400" xmlns="http://www.w3.org/2000/svg">
+           <defs>
+             <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+               <path d="M 0 0 L 10 5 L 0 10 z" fill="#6366F1"/>
+             </marker>
+           </defs>
+           <rect x="50" y="50" width="140" height="50" rx="10" fill="#EEF2FF" stroke="#6366F1" stroke-width="2"/>
+           <text x="120" y="80" text-anchor="middle" font-family="Inter, sans-serif" font-size="14" font-weight="600" fill="#312E81">Input</text>
+           <!-- more elements -->
+         </svg>
+         ```
+         ````
+       - **FALLBACK**: For very simple linear flows (3-5 sequential steps only), a ` ```mermaid ` block using `flowchart TD` is also acceptable.
+    3. Start with an intuitive real-world analogy hook (1-2 sentences).
+    4. **Key Topics / Components You Need to Know**: 3-6 bullets naming the main parts/stages involved, each with a one-line plain explanation.
     5. **Step-by-Step Mechanism Breakdown**: Explain how data, control, or signals flow through each stage in the diagram with bold labels.
     6. Provide a **Concrete Example**.
     7. End with a natural yes/no conversational question (e.g., *"Would you like to explore how data flows through a specific sub-layer in this architecture?"*).
@@ -98,7 +124,7 @@ RESPONSE GUIDELINES:
        - Format definitions consistently as `**Term** — definition`.
        - Highlight key formulas and equations in standalone block math `$$ ... $$`.
        - Render comparisons as Markdown tables (`| Concept / Algorithm | X | Y | Key Differences |`) instead of prose.
-       - Wherever the topic involves a pipeline, architecture, or flow, include ONE Mermaid diagram in fenced ` ```mermaid ` code block (4-8 nodes max) or structured ASCII.
+       - Wherever the topic involves a pipeline, architecture, or flow, or when illustrating concepts visually, include ONE visual in a fenced ` ```svg ` code block or ` ```mermaid ` code block (4-8 nodes max).
        - Provide short, concrete examples to anchor each concept.
     5. **Self-Check Active Recall Quiz**: End with a `## Self-Check Active Recall` section featuring 4-6 testable questions marked with `[High-yield]` or `[Good-to-know]`, followed by answers in a `<details><summary>Click to reveal answers</summary>...</details>` block.
     6. **Quick-Reference Glossary**: Include a `## Quick-Reference Glossary` two-column table of essential terms and definitions.
@@ -300,7 +326,7 @@ Respond with ONLY this JSON object:
         base_messages = self._build_base_messages(
             current_subject, doc_status_note, context, file_name,
             difficulty, user_id, query_analysis, history, pending_followup,
-            has_uploaded_material,
+            has_uploaded_material, message=message,
         )
 
         result: Optional[Dict[str, Any]] = None
@@ -362,8 +388,25 @@ Respond with ONLY this JSON object:
         history: Optional[List[Dict[str, str]]],
         pending_followup: Optional[Dict[str, Any]] = None,
         has_uploaded_material: Optional[bool] = None,
+        message: Optional[str] = None,
     ) -> List[Dict[str, str]]:
         messages = [{"role": "system", "content": self.SYSTEM_PROMPT}]
+
+        is_visual_query = (
+            (query_analysis and (query_analysis.get("requires_image_data") or query_analysis.get("response_format") == "diagram"))
+            or any(w in (message or "").lower() for w in ["figure", "image", "photo", "picture", "diagram", "flowchart", "visual", "draw", "plot", "illustration", "show me a"])
+        )
+        if is_visual_query:
+            messages.append({
+                "role": "system",
+                "content": (
+                    "CRITICAL VISUAL GENERATION REQUIREMENT:\n"
+                    "The student requested a figure, diagram, image, or visual illustration.\n"
+                    "1. You MUST generate an actual inline visual in a fenced ```svg code block (or ```mermaid for simple linear flows).\n"
+                    "2. STRICTLY FORBIDDEN: DO NOT merely write a text description or breakdown of a figure (e.g., NEVER write 'Figure 4 Breakdown: Panel (a)...' in plain text without the actual rendered SVG diagram). If the retrieved textbook context mentions a figure or diagram (like 'Figure 4'), you MUST TRANSLATE IT INTO AN ACTUAL RENDERABLE <svg>...</svg> CODE BLOCK so it renders on the student's screen.\n"
+                    "3. Make the SVG clean, colorful, with a viewBox attribute (e.g. viewBox=\"0 0 700 400\"), rounded rects, clear text labels, and colored markers."
+                ),
+            })
 
         if query_analysis:
             plan_note = self._format_plan_note(query_analysis)
@@ -558,7 +601,7 @@ Respond with ONLY this JSON object:
         if plan.get("requires_table_data"):
             parts.append("- likely needs table/numeric data")
         if plan.get("requires_image_data"):
-            parts.append("- likely needs diagram/figure explanation")
+            parts.append("- requires_image_data: true (VISUAL REQUEST: MUST generate an inline ```svg or ```mermaid diagram block)")
         if plan.get("confidence") is not None:
             parts.append(f"- planner confidence: {plan.get('confidence')}")
         status = plan.get("status")

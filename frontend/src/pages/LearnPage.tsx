@@ -23,7 +23,8 @@ import { exportNotesToPdf } from '../utils/pdfExport'
 import { useAuthStore } from '../stores/authStore'
 import confetti from 'canvas-confetti'
 import MermaidDiagram from '../components/MermaidDiagram'
-import StudyNotesCard, { extractDocTitle } from '../components/StudyNotesCard'
+import InlineSVGDiagram from '../components/InlineSVGDiagram'
+import StudyNotesCard, { extractDocTitle, isStudyNotesContent } from '../components/StudyNotesCard'
 import FlashcardQuizCard from '../components/FlashcardQuizCard'
 import ConfirmModal from '../components/ConfirmModal'
 import { SessionLoadingAnimation } from '../components/SessionLoadingAnimation'
@@ -547,17 +548,10 @@ export default function LearnPage() {
       // Prepare study notes in state, but do NOT auto-open viewer initially
       if (data.messages && data.messages.length > 0) {
         const latestNotes = [...data.messages].reverse().find((m: any) =>
-          m.role === 'assistant' && (
-            m.export_ready ||
-            m.is_synthetic_textbook ||
-            m.format === 'study_notes' ||
-            m.response_format === 'study_notes' ||
-            (Boolean(m.text) && m.text.startsWith('# ') && m.text.toLowerCase().includes('study notes')) ||
-            (Boolean(m.text) && m.text.includes('Generated Study Textbook'))
-          )
+          isStudyNotesContent(m)
         )
         if (latestNotes) {
-          setCurrentArtifactMarkdown(latestNotes.text)
+          setCurrentArtifactMarkdown(latestNotes.text || latestNotes.content || '')
           setArtifactDockSide('right')
         }
         // No popup initially on session load; only pops up when clicking the note box
@@ -798,12 +792,7 @@ export default function LearnPage() {
       )
 
       const isExport = Boolean(
-        res.data.export_ready ?? (
-          res.data.response_format === 'study_notes' ||
-          res.data.format === 'study_notes' ||
-          (Boolean(res.data.text) && res.data.text.startsWith('# ') && res.data.text.toLowerCase().includes('study notes')) ||
-          isSyntheticTextbook
-        )
+        res.data.export_ready ?? isStudyNotesContent(res.data)
       )
 
       const assistantMsg: ChatMessage = {
@@ -1503,7 +1492,8 @@ export default function LearnPage() {
     pre: ({ node: _node, children, ...props }: any) => {
       const child = React.Children.toArray(children)[0] as any
       const className = child?.props?.className || ''
-      if (className.includes('language-mermaid')) {
+      const childStr = String(child?.props?.children || '')
+      if (className.includes('language-mermaid') || className.includes('language-svg') || (childStr.includes('<svg') && childStr.includes('</svg>'))) {
         return <>{children}</>
       }
       return (
@@ -1518,6 +1508,9 @@ export default function LearnPage() {
       const codeString = String(children).replace(/\n$/, '')
       if (!inline && lang === 'mermaid') {
         return <MermaidDiagram chart={codeString} />
+      }
+      if (!inline && (lang === 'svg' || (codeString.includes('<svg') && codeString.includes('</svg>')))) {
+        return <InlineSVGDiagram svg={codeString} />
       }
       return <code className={className} {...props}>{children}</code>
     },
@@ -2288,13 +2281,7 @@ export default function LearnPage() {
                           Boolean(msg.is_synthetic_textbook) ||
                           (Boolean(msg.text) && msg.text.includes('Generated Study Textbook'))
                         )
-                        const isStudyNotes = !isUser && (
-                          Boolean(msg.export_ready) ||
-                          msg.response_format === 'study_notes' ||
-                          msg.format === 'study_notes' ||
-                          (Boolean(msg.text) && msg.text.startsWith('# ') && msg.text.toLowerCase().includes('study notes')) ||
-                          isSyntheticTextbook
-                        )
+                        const isStudyNotes = !isUser && isStudyNotesContent(msg)
 
                         return (
                           <motion.div

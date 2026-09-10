@@ -531,6 +531,13 @@ async def send_agent_message(
 
     # Record assistant message in SQLite
     assistant_msg_id = str(uuid.uuid4())
+    attachment_data = {
+        "response_format": exec_result.get("response_format", exec_result.get("format", "conceptual")),
+        "format": exec_result.get("format", "conceptual"),
+        "export_ready": exec_result.get("export_ready", False),
+        "is_synthetic_textbook": exec_result.get("is_synthetic_textbook", False),
+        "sources": exec_result.get("sources", []),
+    }
     save_session_message(
         session_id=body.session_id,
         message_id=assistant_msg_id,
@@ -538,6 +545,7 @@ async def send_agent_message(
         text=exec_result["response"],
         thought_process=exec_result.get("thought_process", ""),
         quiz_data=exec_result.get("quiz_data"),
+        attachment=attachment_data,
         is_explanation=True
     )
 

@@ -60,7 +60,7 @@ Work through this 5-pillar reasoning chain internally before writing JSON:
    - entities: Array of specific technical entities, formulas, laws, theorems, algorithms, or constants (e.g. ["chlorophyll", "Calvin cycle", "ATP"]).
 3. QUERY DECOMPOSITION & IMPLICIT REQUIREMENTS:
    - Break compound queries into atomic sub-questions that can each be answered from focused retrieval. If a single atomic question, sub_questions = [the question itself].
-   - Identify implicit visual needs: e.g. "create an image" / "draw" / "diagram" / "flowchart" / "architecture" / "visualize" -> response_format = "diagram", requires_image_data = true; "compare" / "trade-offs" / "numbers" -> requires_table_data = true.
+   - Identify visual and diagram needs: e.g. "figure" / "with a figure" / "image" / "photo" / "picture" / "draw" / "diagram" / "flowchart" / "architecture" / "visualize" / "create an image" / "show me a diagram" -> ALWAYS set response_format = "diagram", requires_image_data = true; "compare" / "trade-offs" / "numbers" -> requires_table_data = true.
 4. RESOURCE & RETRIEVAL PLANNING:
    - sources: Subset of ["vector", "bm25", "tables", "images"].
      - Include "tables" if numeric, trade-off, or tabular data is needed.
@@ -125,6 +125,7 @@ _META_REFERENTIAL_PATTERNS = [
     r"\b(what|that)\s+(you|we)\s+(gave|explained|discussed|covered|provided|wrote|taught|generated)\b",
     r"\b(module|content|topic|answer|response|concept|material)\s+(you|we)\s+(gave|gave me|explained|discussed|provided|wrote|taught)\b",
     r"\b(go back to|revisit|recap)\b.*\b(previous|last|prior|earlier)\b",
+    r"\b(study notes?|notes?|cheat sheet|diagram|figure|quiz)\s+(for|on|about|of)\s+(this|that|it|the above|previous|last|this response|that response)\b",
 ]
 _META_REFERENTIAL_PHRASES = (
     "above module", "previous module", "module you gave", "module above", "module you gave me",
@@ -134,6 +135,9 @@ _META_REFERENTIAL_PHRASES = (
     "what you gave", "what you gave me", "what you just gave", "what you just explained", "what you explained",
     "what we discussed", "what we just discussed", "what you wrote", "what you just taught", "what you taught",
     "earlier in this session", "earlier you said", "you said earlier",
+    "for this", "for this response", "for that response", "for that", "about this", "on this", "of this",
+    "notes for this", "study note for this", "study notes for this", "study note for that", "study notes for that",
+    "make a study note for this", "make study notes for this", "study notes on this", "notes on this"
 )
 
 
@@ -648,7 +652,7 @@ class QueryAnalyzerAgent:
             try:
                 data = await self._call_planner_llm(raw_msg, current_subject, history, strict=attempt > 0)
                 if data:
-                    return self._parse_plan(data, raw_msg)
+                    return self._parse_plan(data, raw_msg, history=history)
             except Exception as e:  # noqa: BLE001 - we deliberately degrade, never crash
                 last_error = e
                 print(f"[QueryAnalyzerAgent] planning attempt {attempt} failed: {e}")
@@ -657,7 +661,7 @@ class QueryAnalyzerAgent:
 
         if last_error:
             print(f"[QueryAnalyzerAgent] all planning attempts exhausted, using heuristic fallback: {last_error}")
-        return self._heuristic_plan(raw_msg, current_subject)
+        return self._heuristic_plan(raw_msg, current_subject, history=history)
 
     async def _call_planner_llm(
         self,
@@ -690,7 +694,7 @@ class QueryAnalyzerAgent:
         raw_response = await llm_client.chat(messages, temperature=temperature)
         return _extract_json(raw_response)
 
-    def _parse_plan(self, data: Dict[str, Any], raw_msg: str) -> QueryPlan:
+    def _parse_plan(self, data: Dict[str, Any], raw_msg: str, history: Optional[List[Dict[str, str]]] = None) -> QueryPlan:
         intent = data.get("intent") or "EXPLANATION_REQUEST"
 
         # Guardrail: a question sentence is never a subject declaration, regardless of what the LLM said.
@@ -703,6 +707,27 @@ class QueryAnalyzerAgent:
             intent = "EXPLANATION_REQUEST"
 
         target_topic = _clean_topic_string(data.get("target_topic"))
+        if (not target_topic or target_topic.lower() in ("this", "that", "it", "this response", "that response", "the above", "the previous response")) and history:
+            for h in reversed(history):
+                r = (h.get("role") or h.get("sender") or "").lower()
+                c = (h.get("content") or h.get("text") or "").strip()
+                if r == "user" and c and not _is_meta_referential(c.lower()):
+                    cand = re.sub(r"^(what is|explain|tell me about|how does|what are|describe)\s+", "", c, flags=re.IGNORECASE).rstrip("?.!, ").strip()
+                    if cand and len(cand) > 2:
+                        target_topic = cand.title()
+                        break
+            if not target_topic or target_topic.lower() in ("this", "that", "it", "this response", "that response", "the above"):
+                for h in reversed(history):
+                    r = (h.get("role") or h.get("sender") or "").lower()
+                    c = (h.get("content") or h.get("text") or "").strip()
+                    if r in ("assistant", "model", "ai") and c:
+                        m = re.search(r"^#+\s*(.+)$", c, re.MULTILINE) or re.search(r"\*\*([A-Za-z0-9\s\-_]+)\*\*", c)
+                        if m:
+                            cand = _clean_topic_string(m.group(1))
+                            if cand and len(cand) > 2 and cand.lower() not in ("overview", "summary", "notes", "key insights", "definitions", "the core intuition", "how it works", "comparison"):
+                                target_topic = cand.title()
+                                break
+
         extracted_subject = (
             _clean_topic_string(data.get("extracted_subject"))
             if intent == "NEW_SUBJECT_DECLARATION" and not is_question else None
@@ -794,7 +819,7 @@ class QueryAnalyzerAgent:
             clarification_prompt=clarification_prompt,
         )
 
-    def _heuristic_plan(self, raw_msg: str, current_subject: Optional[str]) -> QueryPlan:
+    def _heuristic_plan(self, raw_msg: str, current_subject: Optional[str], history: Optional[List[Dict[str, str]]] = None) -> QueryPlan:
         """Deterministic fallback used only if the LLM is unreachable after all retries."""
         lower = raw_msg.lower()
         is_study_notes = bool(re.search(
@@ -807,7 +832,7 @@ class QueryAnalyzerAgent:
         ))
         is_quiz = bool(re.search(r"\b(quiz|test me|ask me|practice questions)\b", lower))
         is_comparison = bool(re.search(r"\b(vs|versus|compare|difference|trade-?offs?)\b", lower))
-        is_diagram = bool(re.search(r"\b(diagram|architecture|figure|visual|image)\b", lower))
+        is_diagram = bool(re.search(r"\b(diagram|architecture|figure|visual|image|photo|picture|draw|flowchart|illustration)\b", lower))
 
         if is_study_notes:
             clean_topic = _clean_topic_string(
@@ -816,6 +841,15 @@ class QueryAnalyzerAgent:
                     "", lower, flags=re.IGNORECASE
                 )
             )
+            # Check if clean_topic is a pronoun/meta-reference (e.g., 'this', 'that', 'this response')
+            if clean_topic and clean_topic.lower() in ("this", "that", "this response", "that response", "it", "the above"):
+                clean_topic = None
+            if not clean_topic and history:
+                prev_user_msgs = [m.get("text") or m.get("content", "") for m in history if m.get("role") == "user"]
+                if prev_user_msgs:
+                    cand = prev_user_msgs[-1].strip()
+                    if cand and len(cand) > 2 and len(cand) < 60 and not any(p in cand.lower() for p in ("study note", "quiz", "diagram")):
+                        clean_topic = cand
             topic = (clean_topic.title() if clean_topic and len(clean_topic) > 2 else current_subject)
             return QueryPlan(
                 intent="STUDY_NOTES_REQUEST",
