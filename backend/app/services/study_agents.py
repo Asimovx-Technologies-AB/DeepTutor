@@ -45,29 +45,104 @@ from app.services.study_storage import (
 
 # ─── Universal Fast LLM Caller with Multi-Provider Cascade & Vision Grounding ─
 
+import logging
+import time
+
+logger = logging.getLogger("study_agents.llm")
+if not logger.handlers:
+    # Azure App Service's Log Stream / Application Insights reliably captures the
+    # `logging` module's output across worker processes; bare `print()` is easy to
+    # lose under gunicorn/uvicorn with multiple workers, which is why failures here
+    # were previously invisible in Azure even though the same code ran fine locally.
+    logging.basicConfig(level=logging.INFO)
+
 settings = get_settings()
+
+# Azure OpenAI vision support depends on the deployment's api-version and region.
+# Flip this on if you confirm (via the env vars your llm_client/vlm_client actually
+# read) that the Azure OpenAI resource is configured for a chat deployment rather
+# than a dedicated vision-capable one, or if AZURE_OPENAI_API_VERSION predates
+# 2024-08-01-preview — both are common reasons vision silently no-ops on Azure
+# while an unrestricted openai.com key works locally.
+AZURE_VISION_CONFIG_WARNING_EMITTED = False
+
+
+def _warn_once_azure_vision_misconfig(reason: str) -> None:
+    global AZURE_VISION_CONFIG_WARNING_EMITTED
+    if not AZURE_VISION_CONFIG_WARNING_EMITTED:
+        logger.warning(
+            "[vision-config] Possible Azure OpenAI vision misconfiguration: %s. "
+            "Check AZURE_OPENAI_API_VERSION (needs >= 2024-08-01-preview for GPT-4o-mini "
+            "vision) and that the deployment name used by vlm_client actually points at "
+            "a vision-capable GPT-4o-mini deployment, not a text-only one.",
+            reason,
+        )
+        AZURE_VISION_CONFIG_WARNING_EMITTED = True
+
+
+def _classify_llm_error(exc: Exception) -> str:
+    """Buckets a raw client exception into an actionable category so logs point at
+    the actual fix instead of a bare traceback."""
+    msg = str(exc).lower()
+    if "401" in msg or "unauthorized" in msg or "invalid api key" in msg or "authentication" in msg:
+        return "auth (bad/missing AZURE_OPENAI_API_KEY or AZURE_OPENAI_ENDPOINT)"
+    if "404" in msg or "deploymentnotfound" in msg or "resource not found" in msg:
+        return "deployment not found (AZURE_OPENAI_DEPLOYMENT name doesn't match an actual Azure deployment)"
+    if "content_filter" in msg or "content management policy" in msg:
+        return "Azure content filter blocked the request/response"
+    if "429" in msg or "rate limit" in msg or "quota" in msg:
+        return "rate limit / quota exceeded"
+    if "timeout" in msg or "timed out" in msg:
+        return "timeout (check Azure region latency / increase client timeout)"
+    if "does not support" in msg or "unsupported" in msg or "invalid image" in msg:
+        return "model/deployment does not accept image input at this api-version"
+    return "unclassified"
+
 
 async def call_vlm(
     prompt: str,
     image_bytes: bytes,
     system_instruction: str = "",
-    temperature: float = 0.1
+    temperature: float = 0.1,
+    max_retries: int = 2,
 ) -> str:
-    """Universal VLM Caller: routes to OpenAI GPT-4o Vision."""
-    try:
-        from app.rag.vlm_client import vlm_client
-        # The caller's prompt is the instruction, not a hint: callers here ask
-        # for diagram descriptions and table reads, not plain transcription.
-        resp = await vlm_client.extract_text_from_image(
-            image_bytes=image_bytes,
-            mime_type="image/png",
-            prompt=prompt,
-            context_hint=system_instruction.strip(),
+    """Universal VLM Caller: routes to OpenAI GPT-4o-mini Vision, with retries and
+    Azure-aware diagnostics instead of a silent empty-string fallback."""
+    last_exc: Optional[Exception] = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            from app.rag.vlm_client import vlm_client
+            # The caller's prompt is the instruction, not a hint: callers here ask
+            # for diagram descriptions and table reads, not plain transcription.
+            resp = await vlm_client.extract_text_from_image(
+                image_bytes=image_bytes,
+                mime_type="image/png",
+                prompt=prompt,
+                context_hint=system_instruction.strip(),
+            )
+            if resp and resp.strip():
+                return resp.strip()
+            logger.warning(
+                "[call_vlm] attempt %d/%d returned an empty response (no exception raised) — "
+                "the call succeeded but the model returned nothing usable.",
+                attempt, max_retries,
+            )
+        except Exception as e:
+            last_exc = e
+            category = _classify_llm_error(e)
+            logger.error("[call_vlm] attempt %d/%d failed (%s): %s", attempt, max_retries, category, e)
+            if category.startswith(("auth", "deployment not found", "model/deployment does not accept")):
+                _warn_once_azure_vision_misconfig(category)
+                break  # not transient — retrying won't help, fail fast
+            if attempt < max_retries:
+                await asyncio.sleep(0.6 * attempt)  # short exponential backoff
+
+    if last_exc is not None:
+        logger.error(
+            "[call_vlm] giving up after %d attempt(s): %s. Falling back to text-only generation "
+            "for this turn — the response will note it could not visually inspect the material.",
+            max_retries, last_exc,
         )
-        if resp and resp.strip():
-            return resp.strip()
-    except Exception as e:
-        print(f"[study_agents] VLM error: {e}")
     return ""
 
 call_openai_vision = call_vlm
@@ -78,28 +153,54 @@ async def call_llm(
     prompt: str,
     system_instruction: str = "",
     temperature: float = 0.2,
-    image_bytes: Optional[bytes] = None
+    image_bytes: Optional[bytes] = None,
+    max_retries: int = 2,
 ) -> str:
-    """Universal Async LLM: OpenAI ChatGPT API (GPT-4o-mini / GPT-4o)."""
+    """Universal Async LLM: OpenAI GPT-4o-mini (works against either the public
+    OpenAI API or an Azure OpenAI deployment — selection happens inside
+    app.rag.llm_client / app.rag.vlm_client based on your env config)."""
     # 0. High-Precision Vision Mode (for technical tables, circuits, formulas, diagrams)
     if image_bytes:
         vision_resp = await call_vlm(prompt, image_bytes, system_instruction, temperature)
         if vision_resp and vision_resp.strip():
             return vision_resp.strip()
+        # Vision failed or came back empty — don't just fall through silently;
+        # this is exactly the "works locally, no image on Azure" symptom. Log it
+        # loudly and continue with a text-only call so the student still gets an
+        # answer, just without visual grounding for this turn.
+        logger.warning(
+            "[call_llm] image_bytes was provided but vision call produced no usable output "
+            "— continuing with text-only generation for this turn."
+        )
 
-    # 1. Primary OpenAI LLM Client
-    try:
-        from app.rag.llm_client import llm_client
-        msgs = []
-        if system_instruction:
-            msgs.append({"role": "system", "content": system_instruction})
-        msgs.append({"role": "user", "content": prompt})
-        resp = await llm_client.chat(msgs, temperature=temperature)
-        if resp and resp.strip():
-            return resp.strip()
-    except Exception as e:
-        print(f"[call_llm] OpenAI chat error: {e}")
+    # 1. Primary OpenAI/Azure LLM Client
+    last_exc: Optional[Exception] = None
+    for attempt in range(1, max_retries + 1):
+        start = time.monotonic()
+        try:
+            from app.rag.llm_client import llm_client
+            msgs = []
+            if system_instruction:
+                msgs.append({"role": "system", "content": system_instruction})
+            msgs.append({"role": "user", "content": prompt})
+            resp = await llm_client.chat(msgs, temperature=temperature)
+            elapsed = time.monotonic() - start
+            if resp and resp.strip():
+                if elapsed > 15:
+                    logger.warning("[call_llm] slow response: %.1fs (attempt %d)", elapsed, attempt)
+                return resp.strip()
+            logger.warning("[call_llm] attempt %d/%d returned an empty response after %.1fs", attempt, max_retries, elapsed)
+        except Exception as e:
+            last_exc = e
+            category = _classify_llm_error(e)
+            logger.error("[call_llm] attempt %d/%d failed (%s): %s", attempt, max_retries, category, e)
+            if category.startswith(("auth", "deployment not found")):
+                break  # config error — retrying identically won't help
+            if attempt < max_retries:
+                await asyncio.sleep(0.6 * attempt)
 
+    if last_exc is not None:
+        logger.error("[call_llm] giving up after %d attempt(s): %s", max_retries, last_exc)
     return ""
 
 
@@ -120,7 +221,8 @@ def is_meta_referential_query(query: str) -> bool:
         r"\b(what|that)\s+(you|we)\s+(gave|explained|discussed|covered|provided|wrote|taught|generated)\b",
         r"\b(module|content|topic|answer|response|concept|material)\s+(you|we)\s+(gave|gave me|explained|discussed|provided|wrote|taught)\b",
         r"\b(from|on|about|based on|for)\s+(the\s+)?(above|previous|last|this)\b",
-        r"^(make|create|generate|give me|build|show)?\s*(a\s+)?(flashcards?|quiz|test|deck)\s+(on|for|about|from)?\s*(this|it|above|previous|the above|what you gave|what you gave me|above module|the above module|previous module|above content)?\s*$",
+        r"^(make|create|generate|give me|build|show|prepare|write)?\s*(a\s+)?(flashcards?|quiz|test|deck|study notes?|notes?|cheat sheet|summary|diagram|figure)\s+(on|for|about|from)?\s*(this|it|that|above|previous|the above|what you gave|what you gave me|above module|the above module|previous module|above content|this response|that response)?\s*$",
+        r"\b(study notes?|notes?|cheat sheet|summary|diagram|figure|quiz)\s+(for|on|about|of)\s+(this|that|it|the above|previous|last)\b",
     ]
     for pat in patterns:
         if re.search(pat, q):
@@ -133,7 +235,10 @@ def is_meta_referential_query(query: str) -> bool:
         "what you gave", "what you gave me", "what you just gave", "what you just explained", "what you explained",
         "what we discussed", "what we just discussed", "what you wrote", "what you just taught", "what you taught",
         "based on previous", "from previous", "from the previous", "from above", "on the above", "on above",
-        "from this", "on this", "for this", "for the above", "for it", "this topic", "this module", "this concept"
+        "from this", "on this", "for this", "for the above", "for it", "this topic", "this module", "this concept",
+        "for this response", "for that response", "for that", "about this", "of this",
+        "notes for this", "study note for this", "study notes for this", "study note for that", "study notes for that",
+        "make a study note for this", "make study notes for this", "make a study note for that", "study notes on this"
     )
     return any(p in q for p in meta_phrases)
 
@@ -218,8 +323,46 @@ GENERIC_NON_SUBJECT_TERMS = {
     "topic for the material", "topics for the material", "topic of the material", "topics of the material",
     "topic for material", "topics for material", "topic of material", "topics of material",
     "topic for the meterial", "topics for the meterial", "topic of the meterial", "topics of the meterial",
-    "topics in the material", "topics in this material", "material topics", "material topic"
+    "topics in the material", "topics in this material", "material topics", "material topic",
+    "main topics", "what are the main topics", "main topics in here", "topics in here"
 }
+
+
+def clean_response_noise(text: str) -> str:
+    """
+    Sanitizes LLM responses to ensure clean, readable, student-friendly output:
+    - Strips noisy unrendered LaTeX artifacts: \\mathbf{w} -> **w**, \\mathit{x} -> *x*, \\text{x} -> x.
+    - Cleans ugly raw parentheses around variables like ( \\mathbf{w} ) or ( **w** ) -> **w**.
+    - Cleans inline fractions like \\frac{2}{||\\mathbf{w}||} into readable 2 / ||w|| if outside block math.
+    - Removes naked stray $ signs that create syntax noise in regular sentences.
+    - Removes all emoji characters for a strictly professional academic tone.
+    """
+    if not text:
+        return text
+
+    # 1. Clean LaTeX styling commands
+    cleaned = re.sub(r"\\mathbf\{([^}]+)\}", r"**\1**", text)
+    cleaned = re.sub(r"\\boldsymbol\{([^}]+)\}", r"**\1**", cleaned)
+    cleaned = re.sub(r"\\mathit\{([^}]+)\}", r"*\1*", cleaned)
+    cleaned = re.sub(r"\\mathrm\{([^}]+)\}", r"\1", cleaned)
+    cleaned = re.sub(r"\\text\{([^}]+)\}", r"\1", cleaned)
+
+    # 2. Clean parentheses wrapping variables: ( **w** ) or ( \mathbf{w} ) -> **w**
+    cleaned = re.sub(r"\(\s*(\*\*[^*]+\*\*)\s*\)", r"\1", cleaned)
+
+    # 3. Clean unrendered ||\mathbf{w}|| or ||**w**|| inside parentheses
+    cleaned = re.sub(r"\(\s*(\|\|[^*]+\|\|)\s*\)", r"\1", cleaned)
+
+    # 4. Clean naked LaTeX fractions outside math blocks: \frac{a}{b} -> a / b
+    cleaned = re.sub(r"(?<!\$)\\frac\{([^}]+)\}\{([^}]+)\}(?!\$)", r"\1 / \2", cleaned)
+
+    # 5. Clean stray dollar noise in regular words like $word$ when not an equation
+    cleaned = re.sub(r"(?<!\$)\$(?!\$)\s*([a-zA-Z])\s*(?<!\$)\$(?!\$)", r"**\1**", cleaned)
+
+    # 6. Remove all emojis
+    cleaned = re.sub(r"[\U00010000-\U0010ffff]", "", cleaned)
+
+    return cleaned
 
 
 def is_material_topics_query(query: str) -> bool:
@@ -239,17 +382,25 @@ def is_material_topics_query(query: str) -> bool:
         "topic for the meterial", "topics for the meterial", "what is the topic for the meterial",
         "what are the topics for the meterial", "topic for meterial", "topics for meterial",
         "what is the topic in the material", "what is the topic in this material",
-        "what are the topics in the material", "what are topics in this material"
+        "what are the topics in the material", "what are topics in this material",
+        "what are the main topics in here", "what are the main topics", "what are the important topics",
+        "what are main topics", "main topics in here", "topics in here", "main topics",
+        "what are the key topics", "important topics in here", "key topics in here",
+        "what does this material cover", "what is covered here", "what are we studying in here",
+        "what are the main topics covered here", "what are the chapters in here",
+        "show me the topics", "what topics are in here"
     )
     if any(p in q for p in exact_phrases):
         return True
     patterns = [
-        r"\b(?:what (?:is|are) (?:the )?(?:topics?|chapters?|curriculum|syllabus))\b",
-        r"\b(?:topics?|chapters?|syllabus|curriculum)\s+(?:for|of|in|from)\s+(?:the|this|my)?\s*(?:material|meterial|materiel|document|pdf|notes?|book|textbook|course|session)\b",
-        r"\b(?:list|show|give|tell|display|see|find)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?(?:topics?|chapters?|syllabus|curriculum)\b",
-        r"\bwhat\s+(?:does\s+)?(?:this|the)\s+(?:material|meterial|materiel|document|pdf|notes?|book)\s+(?:cover|contain|have|include)\b",
-        r"\bwhat\s+(?:can\s+i\s+learn|can\s+we\s+learn|topics?\s+are\s+there)\s+(?:from|in)\s+(?:this|the)\s+(?:material|meterial|materiel|document|pdf|notes?)\b",
-        r"\bwhat\s+is\s+(?:inside|in)\s+(?:this|the)\s+(?:material|meterial|materiel|document|pdf)\b",
+        r"\b(?:what (?:is|are) (?:all |the )?(?:main|important|key|major|primary|core)?\s*(?:topics?|chapters?|curriculum|syllabus))\b",
+        r"\b(?:main|important|key|core|major|primary)?\s*(?:topics?|chapters?|syllabus|curriculum)\s+(?:for|of|in|from)\s+(?:the|this|my|here)?\s*(?:material|meterial|materiel|document|pdf|notes?|book|textbook|course|session|here)?\b",
+        r"\b(?:list|show|give|tell|display|see|find)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?(?:main|important|key)?\s*(?:topics?|chapters?|syllabus|curriculum)\b",
+        r"\bwhat\s+(?:does\s+)?(?:this|the|here)\s+(?:material|meterial|materiel|document|pdf|notes?|book)?\s*(?:cover|contain|have|include)\b",
+        r"\bwhat\s+(?:can\s+i\s+learn|can\s+we\s+learn|topics?\s+are\s+there)\s+(?:from|in)\s+(?:this|the|here)\s*(?:material|meterial|materiel|document|pdf|notes?)?\b",
+        r"\bwhat\s+is\s+(?:inside|in)\s+(?:this|the|here)\s*(?:material|meterial|materiel|document|pdf)?\b",
+        r"\b(?:main|important|key|core)\s+topics?\b",
+        r"\btopics?\s+in\s+here\b",
     ]
     for pat in patterns:
         if re.search(pat, q):
@@ -1002,10 +1153,83 @@ IMPORTANT OUTPUT RULES:
 # ─── 1. Planner Agent (Instant Zero-Latency Fast-Path) ───────────────────────
 
 class QueryAnalyzerAgent:
-    """Instant heuristic planning agent that decomposes queries and identifies search requirements in < 1ms."""
+    """Intelligent planning agent with dual fast-path heuristics (< 1ms) and an LLM Reasoning Tool for deep query thinking."""
+
+    async def think_with_llm(self, user_query: str, subject: str = "General Study", history: List[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        """
+        Dedicated LLM Query Thinking Tool: Deep cognitive analysis of the student's query,
+        determining true pedagogical goals, extracting target concepts, identifying visual/diagram needs,
+        and formulating retrieval keywords.
+        """
+        try:
+            recent_history_str = ""
+            if history:
+                recent_lines = [
+                    f"{(m.get('role') or m.get('sender') or 'User').capitalize()}: {(m.get('text') or m.get('content') or '')[:200]}"
+                    for m in history[-6:]
+                    if (m.get('text') or m.get('content'))
+                ]
+                if recent_lines:
+                    recent_history_str = "Recent Conversation Context:\n" + "\n".join(recent_lines) + "\n\n"
+
+            prompt = f"""You are DeepTutor's Query Planning & Intent Reasoning Agent.
+Analyze this student query for the course subject: "{subject}".
+
+{recent_history_str}Student Query:
+"{user_query}"
+
+Think step-by-step:
+1. True Pedagogical Intent:
+   - "material_topics": Student is asking what are the main/important topics, chapters, or syllabus covered in their material/document/here.
+   - "diagram": Student is asking to study, explain, or understand a figure, diagram, chart, or visual workflow.
+   - "chat_followup": Student is asking a question referring back to earlier chat conversation in this session.
+   - "comparison": Comparing two concepts (difference between X and Y, X vs Y).
+   - "quiz": Requesting a quiz, practice questions, or flashcards.
+   - "solve": Problem solving, calculation, or table completion.
+   - "study_notes": Requesting comprehensive study notes / cheat sheet.
+   - "conceptual": Conceptual explanation or definition.
+2. Target Academic Concept / Noun Phrase (clean title, null if asking general syllabus/greeting).
+3. Search Terms: 1-3 clean search queries to find the relevant text in course materials.
+
+Return strict JSON only:
+{{
+  "thought_process": "1-2 sentence reasoning on student intent and optimal response strategy",
+  "intent": "material_topics" | "diagram" | "chat_followup" | "comparison" | "quiz" | "solve" | "study_notes" | "conceptual",
+  "target_topic": "string or null",
+  "search_queries": ["query1", "query2"],
+  "response_format": "material_topics" | "diagram" | "comparison" | "quiz" | "solve" | "study_notes" | "conceptual",
+  "is_material_topics": true | false,
+  "is_figure_query": true | false,
+  "is_chat_followup": true | false
+}}"""
+            raw = await call_llm(
+                prompt,
+                system_instruction="You are DeepTutor's Query Planning Agent. Think carefully and return strict JSON only.",
+                temperature=0.1
+            )
+            return robust_json_parse(raw)
+        except Exception as e:
+            print(f"[QueryAnalyzerAgent] think_with_llm notice: {e}")
+            return None
 
     async def plan(self, user_query: str, subject: str = "General Study", history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         q_lower = user_query.lower().strip()
+
+        # Fast-path for bare greetings (< 0.2ms)
+        is_bare_greeting = q_lower in ("hi", "hello", "hey", "good morning", "good evening", "greetings")
+        if is_bare_greeting:
+            return {
+                "intent": "GREETING",
+                "response_format": "conceptual",
+                "sub_intents": ["conceptual"],
+                "requires_table_data": False,
+                "requires_image_data": False,
+                "search_terms": [subject],
+                "confidence": 0.98,
+                "explanation_level": "standard",
+                "target_page": None,
+                "is_material_topics_query": False,
+            }
 
         # 0. Check if this query is an affirmative continuation to a previous assistant offer ("yes", "sure", etc.)
         bool_yes_pattern = r"^(yes|y|yeah|yup|sure|ok|okay|true|tell me more|explain that|go ahead|please do|solve that|continue)\b[,\s]*(.*)$"
@@ -1020,7 +1244,6 @@ class QueryAnalyzerAgent:
         if is_affirmative and history:
             prev_asst_text = extract_previous_assistant_response(history) or ""
             if prev_asst_text:
-                # Extract the offered question from previous assistant turn
                 offered_q = ""
                 for line in reversed(prev_asst_text.split("\n")):
                     l_clean = line.strip()
@@ -1030,7 +1253,6 @@ class QueryAnalyzerAgent:
                 if not offered_q:
                     offered_q = prev_asst_text[-200:].lower()
 
-                # Extract topic from previous turn
                 topic_m = re.search(r"^#+\s*(.+)$", prev_asst_text, re.MULTILINE)
                 if topic_m:
                     continuation_topic = re.sub(r"[\*#_`~?]", "", topic_m.group(1)).replace("What is", "").replace("What are", "").strip()
@@ -1049,15 +1271,27 @@ class QueryAnalyzerAgent:
                     continuation_format = "quiz"
                     continuation_keyword = "practice quiz"
 
+        # Dedicated LLM Query Thinking Tool (analyzes query intent, figure needs, and chat references)
+        llm_analysis = None
+        if not is_affirmative:
+            llm_analysis = await self.think_with_llm(user_query, subject, history)
+
         # 1. Format & Sub-intent classification
+        is_material_topics = is_material_topics_query(user_query) or (
+            bool(llm_analysis and (llm_analysis.get("is_material_topics") or llm_analysis.get("intent") == "material_topics"))
+        )
         is_quiz = any(k in q_lower for k in ("quiz", "test me", "ask me a question", "pop quiz", "mcq"))
         is_study_notes = bool(re.search(
             r"\b(study notes?|cheat sheet|revision notes?|study map|summari[sz]e.*as notes|create.*(?:md|\.md|markdown)|make.*(?:md|\.md|markdown)|generate.*(?:md|\.md|markdown)|(?:md|\.md|markdown)\s*(?:file|doc)?\s*(?:on|for|about))\b", q_lower
         ))
         is_comparison = any(k in q_lower for k in ("compare", "versus", " vs ", "difference between", "distinguish", "relate to"))
-        is_diagram = any(k in q_lower for k in ("diagram", "figure", "chart", "architecture", "flowchart", "illustration"))
+        is_diagram = (
+            any(k in q_lower for k in ("diagram", "figure", "chart", "architecture", "flowchart", "illustration"))
+            or bool(llm_analysis and (llm_analysis.get("is_figure_query") or llm_analysis.get("intent") == "diagram"))
+        )
         is_solve = any(k in q_lower for k in ("solve", "calculate", "fill", "matrix", "column", "row", "position", "sequence", "table", "problem"))
         is_conceptual = any(k in q_lower for k in ("explain", "what is", "how does", "tell me", "break down", "overview", "definition", "concept", "why is", "describe"))
+        is_meta_referential = bool(llm_analysis and (llm_analysis.get("is_chat_followup") or llm_analysis.get("intent") == "chat_followup"))
 
         # Explanation level classification
         is_eli5 = any(k in q_lower for k in ("eli5", "like i'm 5", "like im 5", "like a 5 year old", "like a five year old", "explain simply", "simple words", "for beginners", "for a child"))
@@ -1073,8 +1307,7 @@ class QueryAnalyzerAgent:
         else:
             explanation_level = "standard"
 
-        # Primary format
-        is_material_topics = is_material_topics_query(user_query)
+        # Primary format determination
         if continuation_format:
             resp_format = continuation_format
         elif is_material_topics:
@@ -1089,6 +1322,8 @@ class QueryAnalyzerAgent:
             resp_format = "diagram"
         elif is_solve:
             resp_format = "solve"
+        elif llm_analysis and llm_analysis.get("response_format"):
+            resp_format = llm_analysis.get("response_format")
         else:
             resp_format = "conceptual"
 
@@ -1184,17 +1419,26 @@ class QueryAnalyzerAgent:
         prev_assistant_text = ""
         if is_meta_ref and history:
             prev_assistant_text = extract_previous_assistant_response(history) or ""
-            if prev_assistant_text:
+            # First, check previous user message for an explicit concept (e.g. "Ensemble Learning")
+            for h in reversed(history):
+                r = (h.get("role") or h.get("sender") or "").lower()
+                t = (h.get("text") or h.get("content") or "").strip()
+                if r == "user" and t and not is_meta_referential_query(t):
+                    clean_u = re.sub(r"^(what is|explain|tell me about|how does|what are|describe)\s+", "", t, flags=re.IGNORECASE).rstrip("?.!, ").strip()
+                    if clean_u and len(clean_u) > 2 and clean_u.lower() not in GENERIC_NON_SUBJECT_TERMS:
+                        resolved_topic = clean_u.title()
+                        break
+            if not resolved_topic and prev_assistant_text:
                 h_match = re.search(r"^#+\s*(.+)$", prev_assistant_text, re.MULTILINE)
                 if h_match:
                     clean_h = re.sub(r"[\*#_`~]", "", h_match.group(1)).strip()
-                    if clean_h and len(clean_h) > 2 and clean_h.lower() not in ("overview", "summary", "notes", "key insights", "definitions", "module"):
+                    if clean_h and len(clean_h) > 2 and clean_h.lower() not in ("overview", "summary", "notes", "key insights", "definitions", "module", "the core intuition", "how it works"):
                         resolved_topic = clean_h
                 if not resolved_topic:
                     b_match = re.search(r"\*\*([A-Za-z0-9\s\-_–—:,]+)\*\*", prev_assistant_text)
                     if b_match:
                         clean_b = re.sub(r"[\*#_`~]", "", b_match.group(1)).strip()
-                        if clean_b and 3 <= len(clean_b) <= 50 and clean_b.lower() not in ("overview", "summary", "key insights", "note", "important"):
+                        if clean_b and 3 <= len(clean_b) <= 50 and clean_b.lower() not in ("overview", "summary", "key insights", "note", "important", "the core intuition", "how it works", "comparison"):
                             resolved_topic = clean_b
             if resolved_topic:
                 if resolved_topic not in bm25_queries:
@@ -1566,9 +1810,9 @@ class DecisionAgent:
             subject_display = f" for **{subject}**" if subject and subject not in ("General Study", "New Course Workspace", "Default Study Room", "") else ""
 
             if session_topics:
-                rows = []
+                bullets = []
                 first_topic_name = ""
-                for idx, top in enumerate(session_topics[:8], 1):
+                for idx, top in enumerate(session_topics[:10], 1):
                     raw_title = top.get("title") or f"Topic {idx}"
                     clean_title = re.sub(r"^\d+[\.\:\-]\s*", "", raw_title).strip()
                     if idx == 1:
@@ -1576,50 +1820,50 @@ class DecisionAgent:
                     summary = top.get("summary") or ""
                     key_c = top.get("key_concepts") or []
                     if isinstance(key_c, list) and key_c:
-                        key_str = ", ".join(str(k) for k in key_c[:3])
-                        focus = f"{summary} (Concepts: {key_str})" if summary else key_str
+                        key_str = ", ".join(str(k) for k in key_c[:4])
+                        focus = f"{summary} (Core concepts: {key_str})" if summary else f"Core concepts: {key_str}"
                     else:
-                        focus = summary or "Foundational theory and core applications"
-                    if len(focus) > 110:
-                        focus = focus[:107].rsplit(" ", 1)[0] + "..."
-                    diff = (top.get("difficulty") or "Standard").capitalize()
-                    rows.append(f"| {idx} | **{clean_title}** | {focus} | {diff} |")
+                        focus = summary or "Foundational principles, core mechanisms, and applications"
+                    bullets.append(f"- **{clean_title}**: {focus}")
 
-                table_md = "| # | Topic | Key Focus & Concepts | Difficulty |\n|---|---|---|---|\n" + "\n".join(rows)
+                topic_bullets_md = "\n".join(bullets)
                 first_ref = f"Topic 1 ({first_topic_name})" if first_topic_name else "Topic 1"
 
                 resp_text = (
-                    f"Here are the primary topics covered in {doc_label}{subject_display}:\n\n"
-                    f"{table_md}\n\n"
-                    f"These topics provide a structured progression through your course material.\n\n"
-                    f"**Would you like to start with {first_ref}, or is there a specific topic you want to explore first?**"
+                    f"Here are the main important topics covered in {doc_label}{subject_display}:\n\n"
+                    f"{topic_bullets_md}\n\n"
+                    f"**Which of these topics would you like to explore first?**"
                 )
                 return {
-                    "thought_process": f"Retrieved {len(session_topics)} curriculum topics for {doc_label}. Formatted structured table with difficulty levels and key focus.",
+                    "thought_process": f"Retrieved {len(session_topics)} curriculum topics for {doc_label}. Formatted as structured bullet points of important topics.",
                     "response": resp_text,
                     "sources": [{"chunk_id": c["chunk_id"], "page": c["page"]} for c in all_doc_chunks[:2]],
                     "format": "material_topics"
                 }
 
-            # If documents exist but session_topics is empty, synthesize topics from chunks
-            chunks_context = "\n\n".join(c["content"] for c in all_doc_chunks[:6])
+            # If documents exist but session_topics is empty, synthesize topics from chunks across the document
+            toc_chunks = search_fts_chunks(session_id, "contents chapter unit syllabus topic overview", limit=8)
+            if not toc_chunks:
+                all_chunks = get_all_chunks(session_id, limit=30)
+                toc_chunks = all_chunks[3:13] if len(all_chunks) > 6 else all_chunks
+
+            chunks_context = "\n\n".join(c["content"] for c in toc_chunks[:8])
             synth_prompt = (
                 f"The student asked: \"{user_query}\"\n\n"
-                f"Extract and summarize the curriculum topics from their uploaded course material ({doc_label}).\n"
+                f"Extract and summarize the main important curriculum topics from their uploaded course material ({doc_label}).\n"
                 f"MATERIAL TEXT EXCERPTS:\n{chunks_context}\n\n"
                 f"INSTRUCTIONS:\n"
-                f"1. Start with a 1-sentence overview introducing the topics covered in {doc_label}.\n"
-                f"2. Present a clean Markdown table with 4 to 6 main topics:\n"
-                f"   | # | Topic | Key Focus & Concepts | Difficulty |\n"
-                f"3. Add a 1-sentence note summarizing the learning progression.\n"
-                f"4. End with a single bold conversational follow-up question (e.g. \"**Would you like to start with Topic 1, or is there a specific topic you want to explore first?**\").\n"
-                f"STRICT RULES: Zero emojis. Clean, professional, student-friendly tone."
+                f"1. Start with a 1-sentence overview introducing the main topics covered in {doc_label}.\n"
+                f"2. Present 4 to 8 main important topics as clean Markdown bullet points:\n"
+                f"   - **[Topic Title]**: [1-2 sentences summarizing key focus, core concepts, and why it matters]\n"
+                f"3. End with a single bold conversational follow-up question: '**Which of these topics would you like to explore first?**'\n"
+                f"STRICT RULES: Zero emojis. Clean bullet points format. Zero LaTeX noise or raw symbols."
             )
-            synth_resp = await call_llm(synth_prompt, system_instruction="You are DeepTutor, an elite academic AI mentor. Zero emojis. Clean Markdown table.")
+            synth_resp = await call_llm(synth_prompt, system_instruction="You are DeepTutor, an elite academic AI mentor. Zero emojis. Clean bullet points.")
             return {
-                "thought_process": f"Extracted curriculum topics on the fly from {len(all_doc_chunks)} chunks of {doc_label}.",
+                "thought_process": f"Extracted main curriculum topics on the fly from {len(toc_chunks)} chunks of {doc_label}.",
                 "response": synth_resp or f"Your uploaded material {doc_label} covers the core syllabus for {subject}. Please ask any specific question from your material to begin.",
-                "sources": [{"chunk_id": c["chunk_id"], "page": c["page"]} for c in all_doc_chunks[:2]],
+                "sources": [{"chunk_id": c["chunk_id"], "page": c["page"]} for c in toc_chunks[:2]],
                 "format": "material_topics"
             }
 
@@ -1961,16 +2205,18 @@ Provide a clear, helpful, expert academic response to the user's query."""
                 if not retrieved_chunks:
                     retrieved_chunks = get_all_chunks(session_id, limit=5)
 
-        # 3. Format Recent Conversation History
+        # 3. Format Recent Conversation History (Full Session Chat Context)
         history_block = ""
         if history:
-            history_lines = [
-                f"{(m.get('role') or m.get('sender') or 'user').capitalize()}: {(m.get('text') or m.get('content') or m.get('message') or '')}"
-                for m in history[-3:]
-                if (m.get('text') or m.get('content') or m.get('message'))
-            ]
+            history_lines = []
+            for m in history[-14:]:
+                role = (m.get('role') or m.get('sender') or 'user').capitalize()
+                raw_t = (m.get('text') or m.get('content') or m.get('message') or '').strip()
+                if raw_t:
+                    clean_t = raw_t[:350] + "..." if len(raw_t) > 350 else raw_t
+                    history_lines.append(f"{role}: {clean_t}")
             if history_lines:
-                history_block = "Recent Conversation History:\n" + "\n".join(history_lines) + "\n\n"
+                history_block = "Session Chat History (Prior Conversation Context):\n" + "\n".join(history_lines) + "\n\n"
 
         # 4. Check if student asked for flashcards or a quiz (and not a compound conceptual+quiz request)
         sub_intents = plan.get("sub_intents") or []
@@ -2182,6 +2428,16 @@ Provide a clear, helpful, expert academic response to the user's query."""
 
         trailing_constraint_str = f"Specific Focus / Constraint: '{trailing_clause}'\n" if trailing_clause else ""
 
+        resolved_target = plan.get("resolved_topic")
+        specific_topic_focus = ""
+        if resolved_target:
+            specific_topic_focus = (
+                f"\nCRITICAL TARGET TOPIC FOCUS:\n"
+                f"- The student's request is specifically about the previous topic: **{resolved_target}**.\n"
+                f"- You MUST focus your response (study notes, explanation, or diagram) specifically on **{resolved_target}** — DO NOT generate notes for the entire textbook or syllabus.\n"
+                f"- If creating study notes, title it `# {resolved_target} — Study Notes` and cover the sub-mechanisms and equations of **{resolved_target}**.\n"
+            )
+
         # 7. Prompt LLM with Strict Academic Grounding, Conversational Follow-up, & KaTeX Math
         prompt = f"""
 You are DeepTutor's Execution Agent (DecisionAgent).
@@ -2197,7 +2453,7 @@ Student Goals: {goals_str}
 
 Student Message:
 "{user_query}"
-{trailing_constraint_str}{continuation_directive}
+{trailing_constraint_str}{continuation_directive}{specific_topic_focus}
 STRICT RULES:
 1. Grounding & Missing Information Protocol (3 Modes):
    - Mode 1 (Sufficient Material): Answer strictly and objectively from the retrieved chunks and conversation history.
@@ -2237,27 +2493,32 @@ STRICT RULES:
    - TEACH FOR DEEP INTUITION: Do not write like a boring dictionary or output rigid generic templates (never literally output "Key Concept:", "Applications:", "SVM evolved from..."). Instead, teach like an exceptional mentor using the 3-part pedagogical structure:
      1. **The Core Intuition (Mental Model First)**: Begin with an intuitive, plain-English "Aha!" analogy or visual picture that anchors the concept before technical formulas (e.g. for SVM, explain how it creates the widest possible street or buffer zone between two groups).
      2. **How It Works (Core Mechanism)**: Break down 2 to 3 essential pillars using bold descriptive headers (e.g. `- **Maximum-Margin Boundary**: ...`, `- **Support Vectors**: ...`, `- **Kernel Trick**: ...`). Keep them clear, crisp, and high-impact.
-     3. **When to Use It / Practical Takeaway**: 1 punchy takeaway of where this is applied in practice or tested on exams.
-   - SIZING GUIDELINES:
-     * SMALL (Default): Keep the response concise, clear, and direct (under 180 words) so a student grasps the whole idea in 30 seconds without cognitive overload. Zero unnecessary filler.
-     * MEDIUM: Provide a balanced explanation with definitions, core mechanisms, formulas, and a short summary table if applicable.
-     * LARGE: Deliver an exhaustive, in-depth breakdown covering theory, formulas, step-by-step mechanisms, and comprehensive tables.
-   - DIFFERENCES & COMPARISONS:
-     Whenever comparing concepts (or asking "difference between X and Y", "compare X and Y", "X vs Y"):
-     1. Give a crisp 1-2 sentence paragraph contrasting their fundamental philosophies.
-     2. Present a clean, structured Markdown Comparison Table:
-        `| Aspect / Feature | Concept A | Concept B |`
-        contrasting core parameters, objectives, math/loss functions, pros/cons, and primary use cases.
-     3. A 1-sentence bottom-line student takeaway.
-   - ZERO EMOJIS: Strictly zero emojis (no 📌, 💡, ⚠️, 🚀, etc.). Clean, academic, encouraging tone.
-   - NO UNSOLICITED EXAM TRAPS / PITFALLS: Do not include "Common Pitfalls & Exam Traps" sections.
+      - ZERO EMOJIS: Strictly zero emojis (no 📌, 💡, ⚠️, 🚀, etc.). Clean, academic, encouraging tone.
+    - NO UNSOLICITED EXAM TRAPS / PITFALLS: Do not include "Common Pitfalls & Exam Traps" sections.
 9. Chain-of-Thought: Provide a dedicated thought process detailing your reasoning and verification before the answer.
 10. Interactive Follow-up Question (Conversational Closing):
     ALWAYS end your response with a single, clear, relevant next-step question in bold offering a concrete next step (e.g., "**Would you like a step-by-step numerical example of how the margin is calculated?**" or "**Would you like a quick practice question to test your understanding on this?**") that the student can easily answer with a simple 'Yes' or 'No'. Never ask compound "A or B" questions like "example, or compare?" where "yes" becomes ambiguous.
 11. Textbook Correctness Inquiry:
     - If the student asks whether the textbook, author, or uploaded material is wrong about a concept ('is this textbook wrong about X'):
       1. First, objectively explain what the uploaded material specifically states.
-      2. If the material's claim is inconsistent with well-established academic facts, flag this as an objective caveat/note of caution (e.g., "Note: While your text states X, standard literature notes Y because..."), rather than an aggressive contradiction. Always explain what the course material states first.{compound_guidance}{eli5_comparison_guidance}
+      2. If the material's claim is inconsistent with well-established academic facts, flag this as an objective caveat/note of caution (e.g., "Note: While your text states X, standard literature notes Y because..."), rather than an aggressive contradiction. Always explain what the course material states first.
+12. Figures, Diagrams & Visual Study Protocol:
+    When the student asks about a diagram, figure, chart, schematic, or visual representation:
+    - Figure Purpose: State clearly in 1 sentence what system, process, or mechanism the figure depicts.
+    - Step-by-Step Flow Breakdown: Break down the visual elements, labeled parts, arrows, or stages using clear **bold bullet points** so the student can easily study the workflow.
+    - Core Study Takeaway: Explain the underlying academic principle demonstrated by this figure that the student must remember.
+    - Real-World Example: Provide a brief intuitive scenario showing this figure in practice.
+    - Filter Irrelevant Data: If retrieved chunks mention unrelated figures from metadata or other chapters, strictly ignore them and focus on the relevant topic.
+    - Conversational Follow-up: Ask a clear next-step question offering to explore a specific part of the diagram.
+13. Referencing Past Session Chat:
+    The student may ask questions referring back to earlier messages, answers, questions, or topics discussed in this session chat (e.g. 'referring to that chat...', 'what did you mean earlier?', 'can you explain the second point you gave?').
+    ALWAYS consult the Session Chat History provided above. Address the student's reference directly, connect it to what was previously discussed in the chat, and provide continuous, progressive tutoring.
+14. Response Cleanliness & Zero LaTeX Noise:
+    Write clean, natural, elegant Markdown for maximum readability by students.
+    - Strictly do NOT output raw LaTeX syntax noise or unrendered commands in running sentences (NEVER write `\\mathbf{{w}}`, `\\mathit{{...}}`, `\\text{{...}}`, unescaped backslashes, or naked `$` signs in regular prose).
+    - Write clean natural terms: e.g. "weight vector **w**", "norm ||**w**||", "margin M = 2 / ||**w**||".
+    - Do NOT wrap words or math in raw parentheses like `( \\mathbf{{w}} )`.
+    - Reserve LaTeX block math `$$ ... $$` ONLY for standalone, dedicated formulas when necessary. Keep running text 100% clean and readable.{compound_guidance}{eli5_comparison_guidance}
 
 Return ONLY valid JSON in this exact structure:
 {{
@@ -2273,26 +2534,75 @@ Return ONLY valid JSON in this exact structure:
         )
 
         if has_visual_need:
-            try:
-                docs = get_session_documents(session_id)
-                if docs:
-                    pdf_rel = docs[0].get("file_path", "")
-                    pdf_full = Path(pdf_rel)
-                    if not pdf_full.is_absolute():
-                        pdf_full = BACKEND_DIR / pdf_rel
-                    if pdf_full.exists() and pdf_full.suffix.lower() == ".pdf":
+            docs = get_session_documents(session_id)
+            if not docs:
+                logger.info("[vision-grounding] session %s has no registered documents — skipping page render.", session_id)
+            else:
+                pdf_rel = docs[0].get("file_path", "")
+                pdf_full = Path(pdf_rel)
+                if not pdf_full.is_absolute():
+                    pdf_full = BACKEND_DIR / pdf_rel
+
+                if not pdf_full.exists():
+                    # This is the #1 cause of "works locally, no image on Azure": Azure App
+                    # Service's local filesystem is ephemeral and NOT shared across worker
+                    # processes/instances. A file saved by the upload request can be gone (or
+                    # never present) by the time a different worker handles this chat request.
+                    # Fix: store uploads in Azure Blob Storage (or Azure Files mounted at a
+                    # shared path) and resolve pdf_full from that shared location instead of
+                    # a path relative to BACKEND_DIR on local disk.
+                    logger.error(
+                        "[vision-grounding] PDF not found at resolved path '%s' (BACKEND_DIR=%s, "
+                        "file_path from DB=%s). On Azure this almost always means local disk "
+                        "storage isn't persistent/shared across instances — switch document "
+                        "storage to Azure Blob Storage.",
+                        pdf_full, BACKEND_DIR, pdf_rel,
+                    )
+                elif pdf_full.suffix.lower() != ".pdf":
+                    logger.info("[vision-grounding] document at '%s' is not a PDF — skipping page render.", pdf_full)
+                else:
+                    try:
                         import pymupdf
-                        p_doc = pymupdf.open(str(pdf_full))
-                        p_num = target_page
-                        if p_num is None and retrieved_chunks:
-                            p_num = retrieved_chunks[0].get("page", 1)
-                        if p_num and 1 <= p_num <= len(p_doc):
-                            page_obj = p_doc[p_num - 1]
-                            pix = page_obj.get_pixmap(dpi=120)
-                            page_image_bytes = pix.tobytes("png")
-                        p_doc.close()
-            except Exception as e:
-                print(f"[Vision Grounding] Note: {e}")
+                    except ImportError as e:
+                        # PyMuPDF ships native (non-pure-Python) binaries. A pinned version in
+                        # requirements.txt that doesn't have a prebuilt wheel for Azure's Linux
+                        # App Service Python version will fail to import at runtime even though
+                        # `pip install` appeared to succeed during deployment.
+                        logger.error(
+                            "[vision-grounding] pymupdf failed to import on this host: %s. "
+                            "Pin an exact pymupdf version in requirements.txt with a manylinux "
+                            "wheel matching the Azure App Service Python version, and verify it "
+                            "via `pip show pymupdf` in the Azure SSH console.",
+                            e,
+                        )
+                        pymupdf = None
+
+                    if pymupdf is not None:
+                        try:
+                            p_doc = pymupdf.open(str(pdf_full))
+                            try:
+                                p_num = target_page
+                                if p_num is None and retrieved_chunks:
+                                    p_num = retrieved_chunks[0].get("page", 1)
+                                if p_num and 1 <= p_num <= len(p_doc):
+                                    page_obj = p_doc[p_num - 1]
+                                    pix = page_obj.get_pixmap(dpi=120)
+                                    page_image_bytes = pix.tobytes("png")
+                                else:
+                                    logger.warning(
+                                        "[vision-grounding] target page %s out of range for '%s' (%d pages) — no image rendered.",
+                                        p_num, pdf_full, len(p_doc),
+                                    )
+                            finally:
+                                p_doc.close()
+                        except Exception as e:
+                            logger.error("[vision-grounding] pymupdf failed to render '%s': %s", pdf_full, e)
+
+        if has_visual_need and page_image_bytes is None:
+            logger.warning(
+                "[vision-grounding] visual need was detected for this query but no page image "
+                "was produced — the response will proceed text-only for this turn."
+            )
 
         sys_inst = (
             "You are an elite academic tutor. Output clean JSON only. "
@@ -2303,6 +2613,7 @@ Return ONLY valid JSON in this exact structure:
 
         thought, answer, quiz_data = parse_llm_json_response(raw)
         answer = sanitize_katex(answer)
+        answer = clean_response_noise(answer)
 
         # ─── Verification & Self-Correction Repair Loops ────────────────────
 
@@ -2321,6 +2632,7 @@ Return ONLY valid JSON in this exact structure:
                 ans2 = sanitize_katex(ans2)
                 if ans2:
                     thought, answer, quiz_data = th2 or thought, ans2, qd2 or quiz_data
+                    answer = clean_response_noise(answer)
 
         # Check 2: STEM Table Verification (Row Count & Placeholder Enforcement - Category 2)
         if answer and ("|" in answer or plan.get("requires_table_data")):
@@ -2343,17 +2655,20 @@ Return ONLY valid JSON in this exact structure:
                     ans2 = sanitize_katex(ans2)
                     if ans2:
                         thought, answer, quiz_data = th2 or thought, ans2, qd2 or quiz_data
+                        answer = clean_response_noise(answer)
 
         if not answer:
             # Fallback direct generation if JSON parse failed
             if retrieved_chunks:
-                first_chunk = retrieved_chunks[0]["content"]
-                answer = f"Based on your uploaded course notes:\n\n{first_chunk}\n\nPlease ask a specific follow-up question regarding these mechanics."
+                raw_chunk_text = retrieved_chunks[0].get("content", "")
+                clean_chunk = re.sub(r"^\[Doc:[^\]]+\]\s*", "", raw_chunk_text).strip()
+                answer = f"Based on your uploaded course notes:\n\n{clean_chunk}\n\n**Would you like me to explain this concept step-by-step with an intuitive example?**"
             else:
                 answer = f"I could not find the answer to this in your uploaded PDF. Please ask questions specifically related to the concepts and chapters in your uploaded material for {subject}."
 
         # Self-Verification Regrounding Pass
         answer = await self._maybe_reground(answer, context_text, subject)
+        answer = clean_response_noise(answer)
 
         # Background update of student memory (extract learning facts / weaknesses)
         asyncio.create_task(self._update_memory_background(user_id, user_query, answer))

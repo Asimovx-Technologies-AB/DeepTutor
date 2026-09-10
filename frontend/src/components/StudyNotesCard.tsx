@@ -17,7 +17,51 @@ export function extractDocTitle(markdown: string): string {
       .replace(/[\*\_~`]/g, '')
       .trim()
   }
+  const noteMatch = markdown.match(/^(?:\*\*)?Study Notes?(?:\*\*)?:\s*(.+)$/im)
+  if (noteMatch && noteMatch[1]) {
+    return noteMatch[1]
+      .replace(/[\*\_~`]/g, '')
+      .trim()
+  }
   return ''
+}
+
+export function isStudyNotesContent(msgOrContent: any): boolean {
+  if (!msgOrContent) return false
+  if (typeof msgOrContent === 'string') {
+    const text = msgOrContent
+    const lower = text.toLowerCase()
+    const trimmed = text.trimStart()
+    return (
+      lower.includes('generated study textbook') ||
+      (trimmed.startsWith('#') && lower.includes('study note')) ||
+      trimmed.startsWith('study note:') ||
+      trimmed.startsWith('**study note') ||
+      lower.includes('study note:') ||
+      lower.includes('> **tl;dr**') ||
+      (lower.includes('study note') && lower.includes('the core intuition'))
+    )
+  }
+
+  if (msgOrContent.role && msgOrContent.role !== 'assistant') return false
+  if (msgOrContent.export_ready) return true
+  if (msgOrContent.is_synthetic_textbook) return true
+  if (msgOrContent.response_format === 'study_notes' || msgOrContent.format === 'study_notes') return true
+
+  const text = msgOrContent.text || msgOrContent.content || ''
+  if (!text) return false
+
+  const lower = text.toLowerCase()
+  const trimmed = text.trimStart()
+  return (
+    lower.includes('generated study textbook') ||
+    (trimmed.startsWith('#') && lower.includes('study note')) ||
+    trimmed.startsWith('study note:') ||
+    trimmed.startsWith('**study note') ||
+    lower.includes('study note:') ||
+    lower.includes('> **tl;dr**') ||
+    (lower.includes('study note') && lower.includes('the core intuition'))
+  )
 }
 
 export function downloadMarkdownFile(content: string, title?: string) {

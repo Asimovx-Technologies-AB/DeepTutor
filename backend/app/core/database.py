@@ -847,6 +847,7 @@ def get_document_status_for_ui(session_id: str, user_id: str) -> List[dict]:
 
 
 def delete_document(doc_id: str, user_id: str) -> Optional[dict]:
+    linked_sids = []
     with DBContext() as db:
         doc = db.query(Document).filter(Document.id == doc_id, Document.user_id == user_id).first()
         if not doc:
@@ -860,20 +861,29 @@ def delete_document(doc_id: str, user_id: str) -> Optional[dict]:
             "doc_hash": getattr(doc, "doc_hash", None),
         }
         if doc_dict.get("doc_hash"):
+            s_docs = db.query(SessionDocument).filter(
+                SessionDocument.user_id == user_id,
+                SessionDocument.doc_hash == doc_dict["doc_hash"]
+            ).all()
+            linked_sids.extend([sd.session_id for sd in s_docs if sd.session_id])
             db.query(SessionDocument).filter(
                 SessionDocument.user_id == user_id,
                 SessionDocument.doc_hash == doc_dict["doc_hash"]
             ).delete(synchronize_session=False)
         db.delete(doc)
 
+    all_sids = set(linked_sids)
     if doc_dict.get("topic_id"):
-        try:
-            from app.services.study_storage import delete_session_document
-            delete_session_document(doc_dict["topic_id"], doc_dict["file_name"], user_id=user_id)
+        all_sids.add(doc_dict["topic_id"])
+
+    try:
+        from app.services.study_storage import delete_session_document
+        for sid in all_sids:
+            delete_session_document(sid, doc_dict["file_name"], user_id=user_id)
             if doc_dict.get("doc_hash"):
-                delete_session_document(doc_dict["topic_id"], doc_dict["doc_hash"], user_id=user_id)
-        except Exception:
-            pass
+                delete_session_document(sid, doc_dict["doc_hash"], user_id=user_id)
+    except Exception:
+        pass
 
     return doc_dict
 

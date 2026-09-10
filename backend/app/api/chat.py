@@ -151,11 +151,18 @@ async def send_message(
         )
         return await asyncio.to_thread(db.add_message, session_id, "assistant", msg)
 
-    # ── SPECULATIVE CONCURRENCY: Run DB history, Hybrid Retrieval, and Query Analysis in Parallel ──
+    # ── Fetch history first to supply conversation context to query planner ──
     subject_title = session.get("title") or session.get("topic_id")
+    history = await asyncio.to_thread(db.get_messages, session_id, last_n=10)
+    hist_messages = [{"role": m.get("role", ""), "content": m.get("content", "")} for m in (history[:-1] if history else [])]
 
-    async def _fetch_history():
-        return await asyncio.to_thread(db.get_messages, session_id, last_n=10)
+    # ── Extract pending_followup from the last assistant message's metadata ──
+    prev_followup = None
+    for h in reversed(history[:-1] if history else []):
+        if h.get("role") == "assistant":
+            h_meta = h.get("metadata") or {}
+            prev_followup = h_meta.get("pending_followup")
+            break
 
     async def _fetch_context():
         ctx, status_note, meta = await asyncio.to_thread(doc_processor.retrieve_context, doc_id=session_id, query=body.content)
@@ -170,11 +177,11 @@ async def send_message(
         return await query_analyzer.analyze_query(
             message=body.content,
             current_subject=subject_title,
-            history=[],
+            history=hist_messages,
+            pending_followup=prev_followup,
         )
 
-    history, (context, status_note, meta), plan = await asyncio.gather(
-        _fetch_history(),
+    (context, status_note, meta), plan = await asyncio.gather(
         _fetch_context(),
         _fetch_plan(),
     )
@@ -188,6 +195,7 @@ async def send_message(
         doc_status_note=status_note,
         user_id=str(user["id"]),
         query_analysis=plan,
+        pending_followup=prev_followup,
     )
 
     reply_text = res.get("reply", "")
@@ -210,6 +218,7 @@ async def send_message(
             "graph_context": graph_context,
             "response_format": response_format,
             "export_ready": export_ready,
+            "pending_followup": res.get("pending_followup"),
         },
     )
     if isinstance(msg, dict):
@@ -240,11 +249,18 @@ async def stream_message(
     user_id = str(session.get("user_id", user["id"]))
     await asyncio.to_thread(db.add_message, session_id, "user", content)
 
-    # ── SPECULATIVE CONCURRENCY: Fetch history, context, and plan concurrently ──
+    # ── Fetch history first to supply conversation context to query planner ──
     subject_title = session.get("title") or session.get("topic_id")
+    history = await asyncio.to_thread(db.get_messages, session_id, last_n=10)
+    hist_messages = [{"role": m.get("role", ""), "content": m.get("content", "")} for m in (history[:-1] if history else [])]
 
-    async def _fetch_history():
-        return await asyncio.to_thread(db.get_messages, session_id, last_n=10)
+    # ── Extract pending_followup from the last assistant message's metadata ──
+    prev_followup = None
+    for h in reversed(history[:-1] if history else []):
+        if h.get("role") == "assistant":
+            h_meta = h.get("metadata") or {}
+            prev_followup = h_meta.get("pending_followup")
+            break
 
     async def _fetch_context():
         ctx, status_note, meta = await asyncio.to_thread(doc_processor.retrieve_context, doc_id=session_id, query=content)
@@ -259,11 +275,11 @@ async def stream_message(
         return await query_analyzer.analyze_query(
             message=content,
             current_subject=subject_title,
-            history=[],
+            history=hist_messages,
+            pending_followup=prev_followup,
         )
 
-    history, (context, status_note, meta), plan = await asyncio.gather(
-        _fetch_history(),
+    (context, status_note, meta), plan = await asyncio.gather(
         _fetch_context(),
         _fetch_plan(),
     )
@@ -287,13 +303,22 @@ async def stream_message(
         yield f"data: {json.dumps({'type': 'graph_context', 'data': {'retrieved': len(sources), 'response_format': resp_fmt}})}\n\n"
 
         # Build concise, high-speed streaming prompt
+        followup_note = ""
+        if prev_followup:
+            followup_note = (
+                f"\n\nPREVIOUS OFFER: Your previous message offered: {json.dumps(prev_followup)}. "
+                "If the student says 'yes' or agrees, you MUST fulfill that offer in addition to anything else they ask."
+            )
+
         system_instruction = (
             "You are DeepTutor, an elite academic AI tutor. "
             "Explain concepts clearly, intuitively, and rigorously grounded strictly in the provided study context. "
+            "When the student asks to 'create an image', 'draw an image/diagram', 'show a flowchart', or 'visualize' a concept, NEVER state that you cannot generate images; instead, immediately generate a rich, clean Mermaid diagram in a fenced ```mermaid ... ``` code block to visually represent it in the Markdown viewer! "
             "Always wrap mathematical formulas and equations in standalone LaTeX blocks `$$ ... $$` or inline `$ ... $`. "
             "Present comparisons in clean Markdown tables. Strictly zero emojis.\n\n"
             f"STUDY CONTEXT:\n{context or 'General course material'}\n\n"
             f"RECOMMENDED FORMAT: {resp_fmt}"
+            f"{followup_note}"
         )
 
         messages = [{"role": "system", "content": system_instruction}]

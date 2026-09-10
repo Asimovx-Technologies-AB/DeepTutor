@@ -157,3 +157,82 @@ class TestQueryAnalyzerHeuristics:
             plan = await agent.analyze("Explain k-means clustering")
 
         assert "intent" in plan  # should degrade gracefully
+
+    @pytest.mark.asyncio
+    async def test_topics_and_entities_extraction(self):
+        """Advanced architecture: verify topics and technical entities extraction."""
+        from app.rag.query_analyzer import QueryAnalyzerAgent
+
+        mock_response = json.dumps({
+            "reasoning": "Photosynthesis concept explanation with chlorophyll entity.",
+            "intent": "EXPLANATION_REQUEST",
+            "topics": ["Biology", "Photosynthesis"],
+            "entities": ["chlorophyll", "ATP", "Calvin cycle"],
+            "sub_questions": ["What is photosynthesis?", "What is the role of chlorophyll?"],
+            "target_topic": "Photosynthesis",
+            "search_queries": ["photosynthesis", "chlorophyll ATP"],
+            "response_format": "conceptual",
+            "requires_table_data": False,
+            "requires_image_data": True,
+            "retrieval_plan": {"sources": ["vector", "bm25", "images"], "tools": ["none"]},
+            "status": "clear",
+            "clarification_prompt": None,
+            "confidence": 0.95,
+            "recommended_action": "EXPLAIN",
+        })
+
+        with patch("app.rag.ollama_client.ollama.chat", new=AsyncMock(return_value=mock_response)):
+            agent = QueryAnalyzerAgent()
+            plan = await agent.analyze("Explain photosynthesis and the role of chlorophyll with diagram")
+
+        assert "Biology" in plan["topics"] or "Photosynthesis" in plan["topics"]
+        assert "chlorophyll" in plan["entities"]
+        assert "images" in plan["retrieval_plan"]["sources"]
+        assert plan["status"] == "clear"
+
+    @pytest.mark.asyncio
+    async def test_ambiguity_and_clarification_prompt(self):
+        """Advanced architecture: verify ambiguity detection & clarification prompt generation."""
+        from app.rag.query_analyzer import QueryAnalyzerAgent
+
+        mock_response = json.dumps({
+            "reasoning": "Query is a single vague term without context.",
+            "intent": "EXPLANATION_REQUEST",
+            "topics": ["Formula"],
+            "entities": [],
+            "sub_questions": ["formula"],
+            "target_topic": "Formula",
+            "search_queries": ["formula"],
+            "response_format": "conceptual",
+            "requires_table_data": False,
+            "requires_image_data": False,
+            "retrieval_plan": {"sources": ["vector", "bm25"], "tools": ["none"]},
+            "status": "needs_clarification",
+            "clarification_prompt": "Which formula from your textbook would you like to explore (e.g., quadratic formula, Newton's law)?",
+            "confidence": 0.3,
+            "needs_clarification": True,
+            "recommended_action": "CLARIFY",
+        })
+
+        with patch("app.rag.ollama_client.ollama.chat", new=AsyncMock(return_value=mock_response)):
+            agent = QueryAnalyzerAgent()
+            plan = await agent.analyze("formula")
+
+        assert plan["status"] == "needs_clarification"
+        assert plan["needs_clarification"] is True
+        assert "Which formula" in plan["clarification_prompt"]
+
+    @pytest.mark.asyncio
+    async def test_comparison_fast_path_retrieval_plan(self):
+        """Verify comparison fast-path populates retrieval_plan with tables."""
+        from app.rag.query_analyzer import QueryAnalyzerAgent
+
+        agent = QueryAnalyzerAgent()
+        plan = await agent.analyze("difference between CNN and RNN")
+
+        assert plan["response_format"] == "comparison"
+        assert plan["requires_table_data"] is True
+        assert "tables" in plan["retrieval_plan"]["sources"]
+        assert any(t.lower() == "cnn" for t in plan["topics"]) or any(e.lower() == "cnn" for e in plan["entities"])
+        assert plan["status"] == "clear"
+

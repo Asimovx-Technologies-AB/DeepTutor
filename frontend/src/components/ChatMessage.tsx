@@ -8,7 +8,8 @@ import { Bot, User, Copy, Check, Image } from 'lucide-react'
 import { motion } from 'framer-motion'
 import SourceCard, { type Source } from './SourceCard'
 import MermaidDiagram from './MermaidDiagram'
-import StudyNotesCard from './StudyNotesCard'
+import InlineSVGDiagram from './InlineSVGDiagram'
+import StudyNotesCard, { isStudyNotesContent } from './StudyNotesCard'
 
 interface Props {
   role: 'user' | 'assistant'
@@ -28,11 +29,12 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding, 
   const [copied, setCopied] = useState(false)
   const isAssistant = role === 'assistant'
   
-  const isStudyNotes = isAssistant && (
-    export_ready ||
-    response_format === 'study_notes' ||
-    (Boolean(content) && content.startsWith('# ') && content.toLowerCase().includes('study notes'))
-  )
+  const isStudyNotes = isStudyNotesContent({
+    role,
+    content,
+    export_ready,
+    response_format
+  })
   
   // Use React 19 deferred value during streaming so UI thread stays responsive to scrolling and typing
   const deferredContent = useDeferredValue(content)
@@ -94,7 +96,8 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding, 
                   pre({ node, children, ...props }: any) {
                     const child = React.Children.toArray(children)[0] as any
                     const className = child?.props?.className || ''
-                    if (className.includes('language-mermaid')) {
+                    const childStr = String(child?.props?.children || '')
+                    if (className.includes('language-mermaid') || className.includes('language-svg') || (childStr.includes('<svg') && childStr.includes('</svg>'))) {
                       return <>{children}</>
                     }
                     return <pre {...props}>{children}</pre>
@@ -105,6 +108,9 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding, 
                     const codeStr = String(children).replace(/\n$/, '')
                     if (language === 'mermaid') {
                       return <MermaidDiagram chart={codeStr} />
+                    }
+                    if (language === 'svg' || (codeStr.includes('<svg') && codeStr.includes('</svg>'))) {
+                      return <InlineSVGDiagram svg={codeStr} />
                     }
                     return (
                       <code className={className} {...props}>

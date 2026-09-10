@@ -230,51 +230,74 @@ class DocumentProcessor:
 
                 total_pages, digital_pages, scanned_pages_to_vlm = await asyncio.to_thread(_extract_pdf_pages)
                 text_chunks: List[DocumentChunk] = []
+                indexed_pages_set = set()
+                failed_pages = []
 
                 for page_num, page_text in digital_pages:
                     chunks = self._chunk_text(page_text, doc_id=doc_id, page=page_num, source_type="text")
-                    text_chunks.extend(chunks)
+                    if chunks:
+                        text_chunks.extend(chunks)
+                        indexed_pages_set.add(page_num)
+                    else:
+                        failed_pages.append(page_num)
 
-                # Scanned pages handled with parallel VLM OCR
+                # Scanned pages handled with bounded parallel VLM OCR
                 if scanned_pages_to_vlm:
-                    fast_scanned = scanned_pages_to_vlm[:6]
-                    print(f"[DocProcessor] Scanned PDF detected ({len(scanned_pages_to_vlm)}/{total_pages} scanned pages). Running OpenAI Vision OCR on {len(fast_scanned)} pages...")
+                    print(f"[DocProcessor] Scanned PDF detected ({len(scanned_pages_to_vlm)}/{total_pages} scanned pages). Running Vision OCR across all scanned pages...")
+                    sem = asyncio.Semaphore(4)
 
                     async def _ocr_single_page(p_idx: int) -> List[DocumentChunk]:
                         p_num = p_idx + 1
-                        try:
-                            p_img = await asyncio.to_thread(self.vlm.render_pdf_page_to_image, file_path, p_idx, 120)
-                            if not p_img:
-                                return []
-                            p_ocr_text = await self.vlm.extract_text_from_image(
-                                p_img, mime_type="image/png", context_hint=subject
-                            )
-                            if p_ocr_text and p_ocr_text.strip():
-                                p_chunks = self._chunk_text(
-                                    p_ocr_text,
-                                    doc_id=doc_id,
-                                    page=p_num,
-                                    source_type="text"
+                        async with sem:
+                            try:
+                                p_img = await asyncio.to_thread(self.vlm.render_pdf_page_to_image, file_path, p_idx, 120)
+                                if not p_img:
+                                    return []
+                                p_ocr_text = await self.vlm.extract_text_from_image(
+                                    p_img, mime_type="image/png", context_hint=subject
                                 )
-                                return p_chunks
-                        except Exception as ocr_err:
-                            print(f"[DocProcessor] Error on page {p_num}: {ocr_err}")
-                        return []
+                                if p_ocr_text and p_ocr_text.strip():
+                                    p_chunks = self._chunk_text(
+                                        p_ocr_text,
+                                        doc_id=doc_id,
+                                        page=p_num,
+                                        source_type="text"
+                                    )
+                                    return p_chunks
+                            except Exception as ocr_err:
+                                print(f"[DocProcessor] OCR Error on page {p_num}: {ocr_err}")
+                            return []
 
-                    page_results = await asyncio.gather(*[_ocr_single_page(p) for p in fast_scanned], return_exceptions=True)
-                    for res in page_results:
-                        if isinstance(res, list):
+                    page_results = await asyncio.gather(*[_ocr_single_page(p) for p in scanned_pages_to_vlm], return_exceptions=True)
+                    for p_idx, res in zip(scanned_pages_to_vlm, page_results):
+                        p_num = p_idx + 1
+                        if isinstance(res, list) and res:
                             text_chunks.extend(res)
+                            indexed_pages_set.add(p_num)
+                        else:
+                            failed_pages.append(p_num)
 
                 doc.chunks.extend(text_chunks)
                 doc.stats["text_chunks"] = len(text_chunks)
-                doc.status = "text_ready"
+                indexed_count = len(indexed_pages_set)
+                coverage = indexed_count / total_pages if total_pages else 0.0
+
+                if coverage < 0.8 or (total_pages > 0 and len(text_chunks) == 0):
+                    doc.status = "indexing_incomplete"
+                    doc.error_message = (
+                        f"Indexed {indexed_count}/{total_pages} pages ({coverage:.0%}). "
+                        f"Failed pages: {failed_pages[:10]}"
+                    )
+                    print(f"[DocProcessor] WARNING: {doc.error_message}")
+                else:
+                    doc.status = "text_ready"
 
                 await self._index_chunks_to_vector_and_fts(text_chunks, session_id, doc_id)
-                print(f"[DocProcessor] Fast path completed: {len(text_chunks)} text chunks indexed for doc {doc_id}.")
+                print(f"[DocProcessor] Fast path completed: {len(text_chunks)} text chunks across {indexed_count}/{total_pages} pages indexed for doc {doc_id} (status={doc.status}).")
             except Exception as e:
                 print(f"[DocProcessor] Fast path text extraction error: {e}")
-                doc.status = "text_ready"
+                doc.status = "indexing_incomplete"
+                doc.error_message = str(e)
 
         # 4. Word documents (.docx, .doc)
         elif ext in {".docx", ".doc"}:
@@ -365,8 +388,9 @@ class DocumentProcessor:
         return ""
 
     # ─── STAGE 2 & 3: ASYNC BACKGROUND ENRICHMENT ─────────────────────────
+    # ─── STAGE 2 & 3: ASYNC BACKGROUND ENRICHMENT ─────────────────────────
     async def run_background_enrichment(self, doc_id: str):
-        """Extracts tables and captures diagram captions asynchronously."""
+        """Extracts tables and captures diagram captions asynchronously in parallel."""
         doc = self._docs.get(doc_id)
         if not doc or not os.path.exists(doc.file_path):
             return
@@ -378,48 +402,62 @@ class DocumentProcessor:
 
         doc.status = "processing_enrichment"
 
-        # Stage 2: Table Extraction
-        try:
-            table_chunks = await asyncio.to_thread(self._extract_tables_from_pdf, doc.file_path, doc_id)
-            if table_chunks:
-                doc.chunks.extend(table_chunks)
-                doc.stats["tables"] = len(table_chunks)
-                await self._index_chunks_to_vector_and_fts(table_chunks, doc.session_id, doc_id)
-        except Exception as e:
-            print(f"[DocProcessor] Table extraction warning: {e}")
+        async def _run_table_stage():
+            try:
+                table_chunks = await asyncio.to_thread(self._extract_tables_from_pdf, doc.file_path, doc_id)
+                if table_chunks:
+                    doc.chunks.extend(table_chunks)
+                    doc.stats["tables"] = len(table_chunks)
+                    await self._index_chunks_to_vector_and_fts(table_chunks, doc.session_id, doc_id)
+            except Exception as e:
+                print(f"[DocProcessor] Table extraction warning: {e}")
 
-        # Stage 3: Image Extraction & VLM Captioning
-        try:
-            image_chunks = await self._extract_and_caption_images(doc.file_path, doc_id)
-            if image_chunks:
-                doc.chunks.extend(image_chunks)
-                doc.stats["images"] = len(image_chunks)
-                await self._index_chunks_to_vector_and_fts(image_chunks, doc.session_id, doc_id)
-        except Exception as e:
-            print(f"[DocProcessor] Image captioning warning: {e}")
+        async def _run_image_stage():
+            try:
+                image_chunks = await self._extract_and_caption_images(doc.file_path, doc_id)
+                if image_chunks:
+                    doc.chunks.extend(image_chunks)
+                    doc.stats["images"] = len(image_chunks)
+                    await self._index_chunks_to_vector_and_fts(image_chunks, doc.session_id, doc_id)
+            except Exception as e:
+                print(f"[DocProcessor] Image captioning warning: {e}")
 
+        await asyncio.gather(_run_table_stage(), _run_image_stage())
         doc.status = "fully_processed"
 
     def _extract_tables_from_pdf(self, file_path: str, doc_id: str) -> List[DocumentChunk]:
-        """Extracts tables per page using pdfplumber and formats them as Markdown tables."""
+        """Extracts tables per page using pdfplumber and formats them as Markdown tables with captured titles."""
         table_chunks: List[DocumentChunk] = []
         try:
             with pdfplumber.open(file_path) as pdf:
                 for page_idx, page in enumerate(pdf.pages):
                     page_num = page_idx + 1
                     tables = page.extract_tables()
+                    if not tables:
+                        continue
+
+                    page_text = page.extract_text() or ""
+                    table_titles = re.findall(r"\b(Table\s*\d+(?:\.\d+)?(?::[^\n]+)?)\b", page_text, re.IGNORECASE)
+
                     for t_idx, table in enumerate(tables):
                         if not table or len(table) < 2:
                             continue
                         md_table = self._format_table_as_markdown(table)
                         if md_table.strip():
+                            t_title = table_titles[t_idx].strip() if t_idx < len(table_titles) else f"Table {t_idx + 1}"
+                            content_str = f"[{t_title} | Page {page_num} | Type: table]\n{md_table}"
                             chunk = DocumentChunk(
                                 chunk_id=f"{doc_id}_p{page_num}_tbl_{t_idx + 1}",
                                 doc_id=doc_id,
                                 page=page_num,
                                 source_type="table",
-                                content=md_table,
-                                metadata={"table_index": t_idx + 1, "rows": len(table), "cols": len(table[0]) if table else 0}
+                                content=content_str,
+                                metadata={
+                                    "table_index": t_idx + 1,
+                                    "table_title": t_title,
+                                    "rows": len(table),
+                                    "cols": len(table[0]) if table else 0
+                                }
                             )
                             table_chunks.append(chunk)
         except Exception as e:
@@ -449,19 +487,20 @@ class DocumentProcessor:
         return "\n".join(md_lines)
 
     async def _extract_and_caption_images(self, file_path: str, doc_id: str, max_images: int = 8) -> List[DocumentChunk]:
-        """Extracts images from PDF pages and runs OpenAI Vision factual captioning."""
+        """Extracts images from PDF pages and runs OpenAI Vision factual captioning concurrently."""
         image_chunks: List[DocumentChunk] = []
         try:
             import fitz
             pdf_doc = fitz.open(file_path)
+            raw_images = []
             for page_num in range(len(pdf_doc)):
-                if len(image_chunks) >= max_images:
+                if len(raw_images) >= max_images:
                     break
                 page = pdf_doc[page_num]
                 image_list = page.get_images(full=True)
 
                 for img_index, img in enumerate(image_list):
-                    if len(image_chunks) >= max_images:
+                    if len(raw_images) >= max_images:
                         break
                     xref = img[0]
                     base_image = pdf_doc.extract_image(xref)
@@ -471,17 +510,34 @@ class DocumentProcessor:
                     if not image_bytes or len(image_bytes) < 3000:
                         continue
 
-                    caption = await self.vlm.caption_diagram(image_bytes, mime_type=f"image/{image_ext}")
+                    raw_images.append((page_num + 1, img_index + 1, image_bytes, image_ext))
+
+            pdf_doc.close()
+
+            if not raw_images:
+                return []
+
+            sem = asyncio.Semaphore(4)
+
+            async def _caption_item(p_num: int, img_idx: int, img_bytes: bytes, img_ext: str) -> Optional[DocumentChunk]:
+                async with sem:
+                    caption = await self.vlm.caption_diagram(img_bytes, mime_type=f"image/{img_ext}")
                     if caption and len(caption.strip()) > 10:
-                        chunk = DocumentChunk(
-                            chunk_id=f"{doc_id}_p{page_num+1}_img_{img_index+1}",
+                        return DocumentChunk(
+                            chunk_id=f"{doc_id}_p{p_num}_img_{img_idx}",
                             doc_id=doc_id,
-                            page=page_num + 1,
+                            page=p_num,
                             source_type="image_caption",
-                            content=f"Figure/Diagram on Page {page_num + 1}: {caption.strip()}",
-                            metadata={"image_index": img_index + 1}
+                            content=f"Figure/Diagram on Page {p_num}: {caption.strip()}",
+                            metadata={"image_index": img_idx}
                         )
-                        image_chunks.append(chunk)
+                return None
+
+            tasks = [_caption_item(p, idx, b, ext_name) for p, idx, b, ext_name in raw_images]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for res in results:
+                if isinstance(res, DocumentChunk):
+                    image_chunks.append(res)
         except Exception as e:
             print(f"[DocProcessor] Image captioning error: {e}")
         return image_chunks
@@ -546,6 +602,13 @@ class DocumentProcessor:
         table_keywords = {"table", "value", "compare", "how many", "number", "data", "columns", "rows", "statistic", "percent", "metric", "versus", "vs"}
         is_table_query = any(re.search(rf"\b{re.escape(kw)}\b", query_lower) for kw in table_keywords)
 
+        image_keywords = {"image", "figure", "diagram", "photo", "picture", "illustration", "graphic", "chart", "visual", "draw"}
+        is_image_query = any(re.search(rf"\b{re.escape(kw)}\b", query_lower) for kw in image_keywords)
+
+        table_fig_label_match = re.search(r"\b(?:table|tbl|figure|fig)\s*(\d+(?:\.\d+)?)\b", query_lower)
+        target_label = f"table {table_fig_label_match.group(1)}" if table_fig_label_match else None
+        target_label_num = table_fig_label_match.group(1) if table_fig_label_match else None
+
         page_match = re.search(r"\b(?:page\s*number|pagenumber|page|pg|p\.?)\s*(?:no\.?)?\s*(\d+)\b", query_lower)
         target_page = int(page_match.group(1)) if page_match else None
 
@@ -577,12 +640,20 @@ class DocumentProcessor:
                 content_lower = chunk.content.lower()
                 if target_page is not None and chunk.page == target_page:
                     score += 60.0
+
+                if target_label and (target_label in content_lower or (target_label_num and f"table {target_label_num}" in content_lower)):
+                    score += 100.0
+
                 for word in query_words:
                     count = content_lower.count(word)
                     if count > 0:
                         score += 1.0 + min(count * 0.5, 3.0)
+
                 if is_table_query and chunk.source_type == "table":
-                    score *= 2.5
+                    score = (score + 15.0) * 3.0
+                elif is_image_query and chunk.source_type == "image_caption":
+                    score = (score + 15.0) * 3.0
+
                 if score > 0:
                     scored_chunks.append((score, chunk))
 

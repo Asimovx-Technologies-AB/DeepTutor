@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { notesApi, documentsApi } from '../services/api'
 import MermaidDiagram from '../components/MermaidDiagram'
+import InlineSVGDiagram from '../components/InlineSVGDiagram'
 import ConfirmModal from '../components/ConfirmModal'
 
 const PRESET_SUBJECTS = [
@@ -611,8 +612,12 @@ export default function SmartNotesPage() {
                       const isMermaid = match && match[1] === 'mermaid'
                       const isInline = !match
 
+                      const codeStr = String(children).replace(/\n$/, '')
                       if (isMermaid) {
-                        return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />
+                        return <MermaidDiagram chart={codeStr} />
+                      }
+                      if ((match && match[1] === 'svg') || (codeStr.includes('<svg') && codeStr.includes('</svg>'))) {
+                        return <InlineSVGDiagram svg={codeStr} />
                       }
                       if (isInline) {
                         return (

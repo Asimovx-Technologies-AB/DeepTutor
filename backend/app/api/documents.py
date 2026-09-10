@@ -196,27 +196,38 @@ async def _run_indexing(doc_id: str, section_id: str, file_path: str, user_id: s
 
         detected_subject = extracted.get("title") or section_id or "General Studies"
 
+        is_incomplete = bool(doc_record and doc_record.status == "indexing_incomplete")
+        final_db_status = "indexing_incomplete" if is_incomplete else "completed"
+
         stats = {
             "chunks_indexed": len(doc_record.chunks) if doc_record else 0,
             "entities_extracted": len(topic_titles),
             "detected_subject": detected_subject,
+            "indexing_status": doc_record.status if doc_record else "unknown",
+            "error_message": getattr(doc_record, "error_message", None) if doc_record else None,
         }
-        _indexing_status[doc_id] = {"status": "done", "progress": 100, "stats": stats}
+        _indexing_status[doc_id] = {
+            "status": "incomplete" if is_incomplete else "done",
+            "progress": 50 if is_incomplete else 100,
+            "stats": stats,
+            "error": getattr(doc_record, "error_message", None) if is_incomplete else None,
+        }
 
         db.update_document_stats(
             doc_id=doc_id,
-            indexed=True,
+            indexed=not is_incomplete,
             entity_count=len(topic_titles),
             chunk_count=len(doc_record.chunks) if doc_record else 0,
             key_topics=[f"__subject__:{detected_subject}", *topic_titles],
-            status="completed",
+            status=final_db_status,
+            error_message=getattr(doc_record, "error_message", None) if is_incomplete else None,
         )
 
         try:
             from app.services.study_storage import update_document_status
-            update_document_status(section_id, doc_id, "completed")
+            update_document_status(section_id, doc_id, final_db_status)
         except Exception as err:
-            logger.debug(f"[documents._run_indexing] update_document_status completed: {err}")
+            logger.debug(f"[documents._run_indexing] update_document_status {final_db_status}: {err}")
 
         # Invalidate existing flashcards only after successful re-indexing
         try:
@@ -377,6 +388,35 @@ async def indexing_status(doc_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Document not found")
     status = _indexing_status.get(doc_id, {"status": "pending", "progress": 0})
     return status
+
+
+@router.post("/{doc_id}/reindex")
+async def reindex_document(
+    doc_id: str,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_current_user),
+):
+    """Re-triggers document indexing for a document (e.g. if previous indexing was incomplete)."""
+    user_doc = db.get_document(doc_id, user_id=user["id"])
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    file_path = user_doc.get("file_path")
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=400, detail=f"Document file not found on disk at {file_path}")
+
+    section_id = user_doc.get("topic_id") or "general"
+    file_name = user_doc.get("file_name") or f"doc_{doc_id}"
+
+    db.update_document_stats(doc_id=doc_id, indexed=False, status="indexing", error_message=None)
+    background_tasks.add_task(_run_indexing, doc_id, section_id, file_path, user["id"], file_name)
+
+    return {
+        "status": "indexing_started",
+        "doc_id": doc_id,
+        "file_name": file_name,
+        "message": f"Re-indexing started for '{file_name}'.",
+    }
 
 
 @router.post("/concept-explain")
@@ -561,9 +601,23 @@ async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
                         "message": f"Deleted session material '{candidate_fn}'."
                     }
 
-    # 3. Check if doc_id is a session ID or directly referenced session document
-    delete_registry_session(doc_id, user_id=user_id)
-    return {"ok": True, "doc_id": doc_id, "file_name": doc_id, "message": f"Deleted session material '{doc_id}'."}
+    # 3. Check if doc_id matches a session_document directly by hash, ID, or filename
+    with db.DBContext() as session_db:
+        s_docs = session_db.query(db.SessionDocument).filter(
+            db.SessionDocument.user_id == user_id,
+            (db.SessionDocument.doc_hash == doc_id) | (db.SessionDocument.filename == doc_id) | (db.SessionDocument.id == doc_id)
+        ).all()
+        if s_docs:
+            for sd in s_docs:
+                delete_session_document(sd.session_id, doc_id, user_id=user_id)
+            return {
+                "ok": True,
+                "doc_id": doc_id,
+                "file_name": doc_id,
+                "message": f"Detached and deleted material '{doc_id}' from sessions."
+            }
+
+    return {"ok": True, "doc_id": doc_id, "file_name": doc_id, "message": f"Material '{doc_id}' deleted or already unlinked."}
 
 
 @router.get("/session/{session_id}/status")
@@ -640,13 +694,13 @@ async def link_document_to_session_endpoint(
         except Exception as e:
             logger.warning(f"[link_document_to_session] Warning: {e}")
 
-    # Register in session_documents table
+    # Register in session_documents table with fully_processed status
     save_session_document(
         session_id=session_id,
         doc_id=doc_id,
         filename=effective_filename,
         file_path=effective_file_path,
-        status="completed",
+        status="fully_processed",
         user_id=user_id,
         doc_hash=doc_hash or "",
     )
@@ -664,42 +718,95 @@ async def link_document_to_session_endpoint(
         logger.error(f"[link_document_to_session] Error cloning chunks: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to clone document chunks to session: {e}")
 
-    # Populate curriculum topics in new session if not yet present
-    current_session_topics = get_session_topics(session_id, user_id=user_id)
-    if not current_session_topics:
-        prior_topics = []
-        if doc_id:
-            try:
-                prior_topics = db.get_topics_for_document(doc_id) or []
-            except Exception:
-                prior_topics = []
+    # Populate curriculum topics in session for this document
+    existing_session_topics = get_session_topics(session_id, user_id=user_id)
+    doc_topics_already_present = any(
+        t.get("document_name") and t.get("document_name").lower() == effective_filename.lower()
+        for t in existing_session_topics
+    )
 
-        if not prior_topics and effective_filename:
+    if not doc_topics_already_present:
+        prior_topics = []
+
+        # 1. Try to fetch existing rich topics from the document's original session
+        if doc and doc.get("topic_id"):
             try:
-                user_sessions = list_registry_sessions(user_id=user_id)
-                for s in user_sessions:
-                    if s["id"] != session_id and effective_filename.lower() in [str(n).lower() for n in s.get("documents", [])]:
-                        prior_topics = get_session_topics(s["id"], user_id=user_id)
-                        if prior_topics:
+                orig_topics = get_session_topics(str(doc["topic_id"]), user_id=user_id)
+                if orig_topics:
+                    for ot in orig_topics:
+                        prior_topics.append({
+                            "title": ot.get("title") or "Study Topic",
+                            "summary": ot.get("summary") or f"Core study topic from {effective_filename}",
+                            "difficulty": ot.get("difficulty") or "Intermediate",
+                            "key_concepts": ot.get("key_concepts") or [],
+                            "estimated_study_time": ot.get("estimated_study_time") or "15 mins",
+                            "document_name": effective_filename,
+                        })
+            except Exception as e:
+                logger.warning(f"[link_document_to_session] Error getting orig topics: {e}")
+
+        # 2. Search other sessions that have this document
+        if not prior_topics:
+            try:
+                from sqlalchemy import text as sql_text
+                from app.core.database import engine
+                with engine.connect() as conn:
+                    rows = conn.execute(
+                        sql_text("SELECT session_id FROM session_documents WHERE (doc_hash = :h OR filename = :fn) AND session_id != :sid"),
+                        {"h": doc_hash or "", "fn": effective_filename, "sid": session_id}
+                    ).fetchall()
+                    for r in rows:
+                        other_sid = str(r[0])
+                        other_topics = get_session_topics(other_sid, user_id=user_id)
+                        if other_topics:
+                            for ot in other_topics:
+                                prior_topics.append({
+                                    "title": ot.get("title") or "Study Topic",
+                                    "summary": ot.get("summary") or f"Core study topic from {effective_filename}",
+                                    "difficulty": ot.get("difficulty") or "Intermediate",
+                                    "key_concepts": ot.get("key_concepts") or [],
+                                    "estimated_study_time": ot.get("estimated_study_time") or "15 mins",
+                                    "document_name": effective_filename,
+                                })
                             break
             except Exception as e:
-                logger.warning(f"[link_document_to_session] Warning retrieving prior topics: {e}")
+                logger.warning(f"[link_document_to_session] Warning searching other sessions for topics: {e}")
 
+        # 3. Fallback to doc["key_topics"]
         if not prior_topics and doc and doc.get("key_topics"):
-            for t_title in doc["key_topics"]:
-                if str(t_title).startswith("__subject__:"):
-                    continue
+            raw_key_topics = doc.get("key_topics") or []
+            clean_topics = [t for t in raw_key_topics if not str(t).startswith("__subject__:")]
+            for idx, t_title in enumerate(clean_topics):
                 prior_topics.append({
                     "title": str(t_title),
                     "summary": f"Core study topic from {effective_filename}",
                     "difficulty": "Intermediate",
                     "key_concepts": [],
+                    "estimated_study_time": "15 mins",
                     "document_name": effective_filename,
                 })
 
+        # 4. Fallback if still empty: generate at least 1 clean default topic so Focus is never empty
+        if not prior_topics:
+            clean_topic_title = Path(effective_filename).stem.replace("_", " ").replace("-", " ").title()
+            prior_topics.append({
+                "title": clean_topic_title,
+                "summary": f"Comprehensive progressive curriculum topic for {effective_filename}",
+                "difficulty": "Beginner",
+                "key_concepts": [],
+                "estimated_study_time": "20 mins",
+                "document_name": effective_filename,
+            })
+
         if prior_topics:
             try:
-                save_session_topics(session_id, prior_topics, user_id=user_id)
+                save_session_topics(
+                    session_id=session_id,
+                    topics=prior_topics,
+                    user_id=user_id,
+                    append=True,
+                    document_name=effective_filename,
+                )
             except Exception as e:
                 logger.warning(f"[link_document_to_session] Warning saving topics: {e}")
 
@@ -710,15 +817,18 @@ async def link_document_to_session_endpoint(
         session_id=session_id,
         subject=effective_subject,
         title=f"{clean_title} Study Room",
+        status="fully_processed",
         document_name=effective_filename,
         user_id=user_id,
     )
 
-    # Return the refreshed document list for this session
+    # Return the refreshed document list and curriculum topics for this session
     updated_docs = get_session_documents(session_id, user_id)
+    updated_topics = get_session_topics(session_id, user_id)
     return {
         "ok": True,
         "message": f"Successfully linked '{effective_filename}' to session.",
         "documents": updated_docs,
+        "topics": updated_topics,
     }
 
