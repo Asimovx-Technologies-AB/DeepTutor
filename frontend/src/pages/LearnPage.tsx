@@ -705,6 +705,17 @@ export default function LearnPage() {
         if (r.data?.documents) setSessionDocuments(r.data.documents)
       }
 
+      if (res.data?.topics && res.data.topics.length > 0) {
+        setTopics(res.data.topics)
+        setActiveTopic((prev) => prev || res.data.topics[0])
+      } else {
+        const r = await studyApi.getSession(activeSessionId)
+        if (r.data?.topics && r.data.topics.length > 0) {
+          setTopics(r.data.topics)
+          setActiveTopic((prev) => prev || r.data.topics[0])
+        }
+      }
+
       setIsSelectLibraryModalOpen(false)
 
       // Add student-friendly notice in chat
@@ -1914,8 +1925,8 @@ export default function LearnPage() {
                                     <p className="text-[11px] font-semibold text-slate-800 truncate" title={doc.filename}>{doc.filename}</p>
                                     <p className="text-[10px] text-slate-400">
                                       {doc.page_count ? `${doc.page_count} pages • ` : ''}
-                                      <span className={doc.status === 'fully_processed' ? 'text-emerald-600 font-medium' : 'text-amber-600 font-medium'}>
-                                        {doc.status === 'fully_processed' ? 'Fully Ready' : 'Text Ready'}
+                                      <span className={['fully_processed', 'completed', 'ready', 'text_ready'].includes(String(doc.status || '').toLowerCase()) ? 'text-emerald-600 font-medium' : 'text-amber-600 font-medium'}>
+                                        {['fully_processed', 'completed', 'ready', 'text_ready'].includes(String(doc.status || '').toLowerCase()) ? 'Fully Ready' : 'Text Ready'}
                                       </span>
                                     </p>
                                   </div>
@@ -3639,7 +3650,7 @@ export default function LearnPage() {
                           <FileText size={12} className={isFilterActive ? 'text-indigo-700 shrink-0' : 'text-indigo-600 shrink-0'} />
                           <span className="truncate flex-1">{doc.filename}</span>
                           <span className={`text-[9px] px-1 py-0.2 rounded shrink-0 ${isFilterActive ? 'bg-indigo-200/70 text-indigo-800 font-bold' : 'bg-white text-slate-500'}`}>
-                            {doc.status === 'fully_processed' ? 'Ready' : 'Indexing'}
+                            {['fully_processed', 'completed', 'ready', 'text_ready'].includes(String(doc.status || '').toLowerCase()) ? 'Ready' : 'Indexing'}
                           </span>
                           <button
                             onClick={(e) => {

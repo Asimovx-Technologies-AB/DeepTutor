@@ -2391,9 +2391,9 @@ STRICT RULES:
     ALWAYS consult the Session Chat History provided above. Address the student's reference directly, connect it to what was previously discussed in the chat, and provide continuous, progressive tutoring.
 14. Response Cleanliness & Zero LaTeX Noise:
     Write clean, natural, elegant Markdown for maximum readability by students.
-    - Strictly do NOT output raw LaTeX syntax noise or unrendered commands in running sentences (NEVER write `\\mathbf{w}`, `\\mathit{...}`, `\\text{...}`, unescaped backslashes, or naked `$` signs in regular prose).
+    - Strictly do NOT output raw LaTeX syntax noise or unrendered commands in running sentences (NEVER write `\\mathbf{{w}}`, `\\mathit{{...}}`, `\\text{{...}}`, unescaped backslashes, or naked `$` signs in regular prose).
     - Write clean natural terms: e.g. "weight vector **w**", "norm ||**w**||", "margin M = 2 / ||**w**||".
-    - Do NOT wrap words or math in raw parentheses like `( \\mathbf{w} )`.
+    - Do NOT wrap words or math in raw parentheses like `( \\mathbf{{w}} )`.
     - Reserve LaTeX block math `$$ ... $$` ONLY for standalone, dedicated formulas when necessary. Keep running text 100% clean and readable.{compound_guidance}{eli5_comparison_guidance}
 
 Return ONLY valid JSON in this exact structure:
@@ -2487,8 +2487,9 @@ Return ONLY valid JSON in this exact structure:
         if not answer:
             # Fallback direct generation if JSON parse failed
             if retrieved_chunks:
-                first_chunk = retrieved_chunks[0]["content"]
-                answer = f"Based on your uploaded course notes:\n\n{first_chunk}\n\nPlease ask a specific follow-up question regarding these mechanics."
+                raw_chunk_text = retrieved_chunks[0].get("content", "")
+                clean_chunk = re.sub(r"^\[Doc:[^\]]+\]\s*", "", raw_chunk_text).strip()
+                answer = f"Based on your uploaded course notes:\n\n{clean_chunk}\n\n**Would you like me to explain this concept step-by-step with an intuitive example?**"
             else:
                 answer = f"I could not find the answer to this in your uploaded PDF. Please ask questions specifically related to the concepts and chapters in your uploaded material for {subject}."
 
