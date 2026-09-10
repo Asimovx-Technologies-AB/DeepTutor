@@ -60,7 +60,10 @@ Work through this 5-pillar reasoning chain internally before writing JSON:
    - entities: Array of specific technical entities, formulas, laws, theorems, algorithms, or constants (e.g. ["chlorophyll", "Calvin cycle", "ATP"]).
 3. QUERY DECOMPOSITION & IMPLICIT REQUIREMENTS:
    - Break compound queries into atomic sub-questions that can each be answered from focused retrieval. If a single atomic question, sub_questions = [the question itself].
-   - Identify visual and diagram needs: e.g. "figure" / "with a figure" / "image" / "photo" / "picture" / "draw" / "diagram" / "flowchart" / "architecture" / "visualize" / "create an image" / "show me a diagram" -> ALWAYS set response_format = "diagram", requires_image_data = true; "compare" / "trade-offs" / "numbers" -> requires_table_data = true.
+   - Decide requires_image_data and requires_table_data by REASONING about what would actually help the student understand the answer — not by matching specific words. Ask yourself: "Would a diagram/figure make this answer clearer than prose alone?" and "Would a table of rows/columns make this clearer than prose alone?"
+     - requires_image_data = true only when the concept is genuinely spatial, structural, or visual (a labeled diagram, a circuit, a graph shape, an anatomical figure, a process flow) AND a visual would add real understanding beyond what a well-written explanation gives.
+     - requires_table_data = true only when the answer is naturally tabular (multiple items compared across multiple attributes, or numeric data with several rows) AND a table would be clearer than prose.
+     - Judge each query on its own meaning, not on the presence of any particular word. A query can mention "draw a conclusion" or "plot my progress" without needing a diagram; a query can ask to "explain the water cycle" without saying "diagram" and still genuinely need one. If uncertain, prefer false — the executor agent can still choose to include a visual on its own judgment.
 4. RESOURCE & RETRIEVAL PLANNING:
    - sources: Subset of ["vector", "bm25", "tables", "images"].
      - Include "tables" if numeric, trade-off, or tabular data is needed.

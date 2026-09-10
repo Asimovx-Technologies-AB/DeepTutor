@@ -45,29 +45,104 @@ from app.services.study_storage import (
 
 # ─── Universal Fast LLM Caller with Multi-Provider Cascade & Vision Grounding ─
 
+import logging
+import time
+
+logger = logging.getLogger("study_agents.llm")
+if not logger.handlers:
+    # Azure App Service's Log Stream / Application Insights reliably captures the
+    # `logging` module's output across worker processes; bare `print()` is easy to
+    # lose under gunicorn/uvicorn with multiple workers, which is why failures here
+    # were previously invisible in Azure even though the same code ran fine locally.
+    logging.basicConfig(level=logging.INFO)
+
 settings = get_settings()
+
+# Azure OpenAI vision support depends on the deployment's api-version and region.
+# Flip this on if you confirm (via the env vars your llm_client/vlm_client actually
+# read) that the Azure OpenAI resource is configured for a chat deployment rather
+# than a dedicated vision-capable one, or if AZURE_OPENAI_API_VERSION predates
+# 2024-08-01-preview — both are common reasons vision silently no-ops on Azure
+# while an unrestricted openai.com key works locally.
+AZURE_VISION_CONFIG_WARNING_EMITTED = False
+
+
+def _warn_once_azure_vision_misconfig(reason: str) -> None:
+    global AZURE_VISION_CONFIG_WARNING_EMITTED
+    if not AZURE_VISION_CONFIG_WARNING_EMITTED:
+        logger.warning(
+            "[vision-config] Possible Azure OpenAI vision misconfiguration: %s. "
+            "Check AZURE_OPENAI_API_VERSION (needs >= 2024-08-01-preview for GPT-4o-mini "
+            "vision) and that the deployment name used by vlm_client actually points at "
+            "a vision-capable GPT-4o-mini deployment, not a text-only one.",
+            reason,
+        )
+        AZURE_VISION_CONFIG_WARNING_EMITTED = True
+
+
+def _classify_llm_error(exc: Exception) -> str:
+    """Buckets a raw client exception into an actionable category so logs point at
+    the actual fix instead of a bare traceback."""
+    msg = str(exc).lower()
+    if "401" in msg or "unauthorized" in msg or "invalid api key" in msg or "authentication" in msg:
+        return "auth (bad/missing AZURE_OPENAI_API_KEY or AZURE_OPENAI_ENDPOINT)"
+    if "404" in msg or "deploymentnotfound" in msg or "resource not found" in msg:
+        return "deployment not found (AZURE_OPENAI_DEPLOYMENT name doesn't match an actual Azure deployment)"
+    if "content_filter" in msg or "content management policy" in msg:
+        return "Azure content filter blocked the request/response"
+    if "429" in msg or "rate limit" in msg or "quota" in msg:
+        return "rate limit / quota exceeded"
+    if "timeout" in msg or "timed out" in msg:
+        return "timeout (check Azure region latency / increase client timeout)"
+    if "does not support" in msg or "unsupported" in msg or "invalid image" in msg:
+        return "model/deployment does not accept image input at this api-version"
+    return "unclassified"
+
 
 async def call_vlm(
     prompt: str,
     image_bytes: bytes,
     system_instruction: str = "",
-    temperature: float = 0.1
+    temperature: float = 0.1,
+    max_retries: int = 2,
 ) -> str:
-    """Universal VLM Caller: routes to OpenAI GPT-4o Vision."""
-    try:
-        from app.rag.vlm_client import vlm_client
-        # The caller's prompt is the instruction, not a hint: callers here ask
-        # for diagram descriptions and table reads, not plain transcription.
-        resp = await vlm_client.extract_text_from_image(
-            image_bytes=image_bytes,
-            mime_type="image/png",
-            prompt=prompt,
-            context_hint=system_instruction.strip(),
+    """Universal VLM Caller: routes to OpenAI GPT-4o-mini Vision, with retries and
+    Azure-aware diagnostics instead of a silent empty-string fallback."""
+    last_exc: Optional[Exception] = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            from app.rag.vlm_client import vlm_client
+            # The caller's prompt is the instruction, not a hint: callers here ask
+            # for diagram descriptions and table reads, not plain transcription.
+            resp = await vlm_client.extract_text_from_image(
+                image_bytes=image_bytes,
+                mime_type="image/png",
+                prompt=prompt,
+                context_hint=system_instruction.strip(),
+            )
+            if resp and resp.strip():
+                return resp.strip()
+            logger.warning(
+                "[call_vlm] attempt %d/%d returned an empty response (no exception raised) — "
+                "the call succeeded but the model returned nothing usable.",
+                attempt, max_retries,
+            )
+        except Exception as e:
+            last_exc = e
+            category = _classify_llm_error(e)
+            logger.error("[call_vlm] attempt %d/%d failed (%s): %s", attempt, max_retries, category, e)
+            if category.startswith(("auth", "deployment not found", "model/deployment does not accept")):
+                _warn_once_azure_vision_misconfig(category)
+                break  # not transient — retrying won't help, fail fast
+            if attempt < max_retries:
+                await asyncio.sleep(0.6 * attempt)  # short exponential backoff
+
+    if last_exc is not None:
+        logger.error(
+            "[call_vlm] giving up after %d attempt(s): %s. Falling back to text-only generation "
+            "for this turn — the response will note it could not visually inspect the material.",
+            max_retries, last_exc,
         )
-        if resp and resp.strip():
-            return resp.strip()
-    except Exception as e:
-        print(f"[study_agents] VLM error: {e}")
     return ""
 
 call_openai_vision = call_vlm
@@ -78,28 +153,54 @@ async def call_llm(
     prompt: str,
     system_instruction: str = "",
     temperature: float = 0.2,
-    image_bytes: Optional[bytes] = None
+    image_bytes: Optional[bytes] = None,
+    max_retries: int = 2,
 ) -> str:
-    """Universal Async LLM: OpenAI ChatGPT API (GPT-4o-mini / GPT-4o)."""
+    """Universal Async LLM: OpenAI GPT-4o-mini (works against either the public
+    OpenAI API or an Azure OpenAI deployment — selection happens inside
+    app.rag.llm_client / app.rag.vlm_client based on your env config)."""
     # 0. High-Precision Vision Mode (for technical tables, circuits, formulas, diagrams)
     if image_bytes:
         vision_resp = await call_vlm(prompt, image_bytes, system_instruction, temperature)
         if vision_resp and vision_resp.strip():
             return vision_resp.strip()
+        # Vision failed or came back empty — don't just fall through silently;
+        # this is exactly the "works locally, no image on Azure" symptom. Log it
+        # loudly and continue with a text-only call so the student still gets an
+        # answer, just without visual grounding for this turn.
+        logger.warning(
+            "[call_llm] image_bytes was provided but vision call produced no usable output "
+            "— continuing with text-only generation for this turn."
+        )
 
-    # 1. Primary OpenAI LLM Client
-    try:
-        from app.rag.llm_client import llm_client
-        msgs = []
-        if system_instruction:
-            msgs.append({"role": "system", "content": system_instruction})
-        msgs.append({"role": "user", "content": prompt})
-        resp = await llm_client.chat(msgs, temperature=temperature)
-        if resp and resp.strip():
-            return resp.strip()
-    except Exception as e:
-        print(f"[call_llm] OpenAI chat error: {e}")
+    # 1. Primary OpenAI/Azure LLM Client
+    last_exc: Optional[Exception] = None
+    for attempt in range(1, max_retries + 1):
+        start = time.monotonic()
+        try:
+            from app.rag.llm_client import llm_client
+            msgs = []
+            if system_instruction:
+                msgs.append({"role": "system", "content": system_instruction})
+            msgs.append({"role": "user", "content": prompt})
+            resp = await llm_client.chat(msgs, temperature=temperature)
+            elapsed = time.monotonic() - start
+            if resp and resp.strip():
+                if elapsed > 15:
+                    logger.warning("[call_llm] slow response: %.1fs (attempt %d)", elapsed, attempt)
+                return resp.strip()
+            logger.warning("[call_llm] attempt %d/%d returned an empty response after %.1fs", attempt, max_retries, elapsed)
+        except Exception as e:
+            last_exc = e
+            category = _classify_llm_error(e)
+            logger.error("[call_llm] attempt %d/%d failed (%s): %s", attempt, max_retries, category, e)
+            if category.startswith(("auth", "deployment not found")):
+                break  # config error — retrying identically won't help
+            if attempt < max_retries:
+                await asyncio.sleep(0.6 * attempt)
 
+    if last_exc is not None:
+        logger.error("[call_llm] giving up after %d attempt(s): %s", max_retries, last_exc)
     return ""
 
 
@@ -2433,26 +2534,75 @@ Return ONLY valid JSON in this exact structure:
         )
 
         if has_visual_need:
-            try:
-                docs = get_session_documents(session_id)
-                if docs:
-                    pdf_rel = docs[0].get("file_path", "")
-                    pdf_full = Path(pdf_rel)
-                    if not pdf_full.is_absolute():
-                        pdf_full = BACKEND_DIR / pdf_rel
-                    if pdf_full.exists() and pdf_full.suffix.lower() == ".pdf":
+            docs = get_session_documents(session_id)
+            if not docs:
+                logger.info("[vision-grounding] session %s has no registered documents — skipping page render.", session_id)
+            else:
+                pdf_rel = docs[0].get("file_path", "")
+                pdf_full = Path(pdf_rel)
+                if not pdf_full.is_absolute():
+                    pdf_full = BACKEND_DIR / pdf_rel
+
+                if not pdf_full.exists():
+                    # This is the #1 cause of "works locally, no image on Azure": Azure App
+                    # Service's local filesystem is ephemeral and NOT shared across worker
+                    # processes/instances. A file saved by the upload request can be gone (or
+                    # never present) by the time a different worker handles this chat request.
+                    # Fix: store uploads in Azure Blob Storage (or Azure Files mounted at a
+                    # shared path) and resolve pdf_full from that shared location instead of
+                    # a path relative to BACKEND_DIR on local disk.
+                    logger.error(
+                        "[vision-grounding] PDF not found at resolved path '%s' (BACKEND_DIR=%s, "
+                        "file_path from DB=%s). On Azure this almost always means local disk "
+                        "storage isn't persistent/shared across instances — switch document "
+                        "storage to Azure Blob Storage.",
+                        pdf_full, BACKEND_DIR, pdf_rel,
+                    )
+                elif pdf_full.suffix.lower() != ".pdf":
+                    logger.info("[vision-grounding] document at '%s' is not a PDF — skipping page render.", pdf_full)
+                else:
+                    try:
                         import pymupdf
-                        p_doc = pymupdf.open(str(pdf_full))
-                        p_num = target_page
-                        if p_num is None and retrieved_chunks:
-                            p_num = retrieved_chunks[0].get("page", 1)
-                        if p_num and 1 <= p_num <= len(p_doc):
-                            page_obj = p_doc[p_num - 1]
-                            pix = page_obj.get_pixmap(dpi=120)
-                            page_image_bytes = pix.tobytes("png")
-                        p_doc.close()
-            except Exception as e:
-                print(f"[Vision Grounding] Note: {e}")
+                    except ImportError as e:
+                        # PyMuPDF ships native (non-pure-Python) binaries. A pinned version in
+                        # requirements.txt that doesn't have a prebuilt wheel for Azure's Linux
+                        # App Service Python version will fail to import at runtime even though
+                        # `pip install` appeared to succeed during deployment.
+                        logger.error(
+                            "[vision-grounding] pymupdf failed to import on this host: %s. "
+                            "Pin an exact pymupdf version in requirements.txt with a manylinux "
+                            "wheel matching the Azure App Service Python version, and verify it "
+                            "via `pip show pymupdf` in the Azure SSH console.",
+                            e,
+                        )
+                        pymupdf = None
+
+                    if pymupdf is not None:
+                        try:
+                            p_doc = pymupdf.open(str(pdf_full))
+                            try:
+                                p_num = target_page
+                                if p_num is None and retrieved_chunks:
+                                    p_num = retrieved_chunks[0].get("page", 1)
+                                if p_num and 1 <= p_num <= len(p_doc):
+                                    page_obj = p_doc[p_num - 1]
+                                    pix = page_obj.get_pixmap(dpi=120)
+                                    page_image_bytes = pix.tobytes("png")
+                                else:
+                                    logger.warning(
+                                        "[vision-grounding] target page %s out of range for '%s' (%d pages) — no image rendered.",
+                                        p_num, pdf_full, len(p_doc),
+                                    )
+                            finally:
+                                p_doc.close()
+                        except Exception as e:
+                            logger.error("[vision-grounding] pymupdf failed to render '%s': %s", pdf_full, e)
+
+        if has_visual_need and page_image_bytes is None:
+            logger.warning(
+                "[vision-grounding] visual need was detected for this query but no page image "
+                "was produced — the response will proceed text-only for this turn."
+            )
 
         sys_inst = (
             "You are an elite academic tutor. Output clean JSON only. "
