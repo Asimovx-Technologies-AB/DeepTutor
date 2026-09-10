@@ -152,7 +152,7 @@ class StudyDocumentProcessor:
     async def _process_pdf(self, file_path: str, doc_id: str) -> Tuple[int, List[Dict[str, Any]], str]:
         """
         Fast inspection: pages with <40 characters digital text are flagged as scanned
-        and dispatched concurrently to the Parallel VLM OCR Worker Pool.
+        and dispatched concurrently to the Parallel VLM OCR Worker Pool across all scanned pages.
         """
         import pymupdf  # fitz
         doc = pymupdf.open(file_path)
@@ -170,41 +170,70 @@ class StudyDocumentProcessor:
 
         chunks: List[Dict[str, Any]] = []
         sample_parts: List[str] = []
+        indexed_pages_set = set()
+        failed_pages = []
 
         fname = Path(file_path).name
         # Process digital pages immediately
         for page_num, p_text in digital_pages:
             sample_parts.append(p_text)
             p_chunks = _chunk_text(p_text)
-            for c_idx, c_text in enumerate(p_chunks):
-                chunks.append({
-                    "chunk_id": f"{doc_id}_p{page_num}_{c_idx}",
-                    "page": page_num,
-                    "source_type": "text",
-                    "content": f"[Doc: {fname} | Page {page_num} | Type: text] {c_text}"
-                })
+            if p_chunks:
+                indexed_pages_set.add(page_num)
+                for c_idx, c_text in enumerate(p_chunks):
+                    chunks.append({
+                        "chunk_id": f"{doc_id}_p{page_num}_{c_idx}",
+                        "page": page_num,
+                        "source_type": "text",
+                        "content": f"[Doc: {fname} | Page {page_num} | Type: text] {c_text}"
+                    })
+            else:
+                failed_pages.append(page_num)
 
-        # Process scanned pages in parallel (asyncio.gather)
+        # Process ALL scanned pages in bounded parallel batches (asyncio.gather + Semaphore)
         if scanned_page_nums:
-            # Cap parallel OCR to first 12 pages for latency safety
-            ocr_targets = scanned_page_nums[:12]
-            ocr_tasks = [self._ocr_single_page(file_path, p_num) for p_num in ocr_targets]
+            logger.info(
+                "[StudyDocProcessor] Scanned PDF detected (%d/%d scanned pages for %s). Running VLM OCR across all scanned pages...",
+                len(scanned_page_nums), page_count, fname
+            )
+            sem = asyncio.Semaphore(4)
+
+            async def _ocr_bounded(p_num: int):
+                async with sem:
+                    return await self._ocr_single_page(file_path, p_num)
+
+            ocr_tasks = [_ocr_bounded(p_num) for p_num in scanned_page_nums]
             ocr_results = await asyncio.gather(*ocr_tasks, return_exceptions=True)
 
-            for p_num, result in zip(ocr_targets, ocr_results):
+            for p_num, result in zip(scanned_page_nums, ocr_results):
                 if isinstance(result, str) and result.strip():
                     sample_parts.append(result)
                     p_chunks = _chunk_text(result)
-                    for c_idx, c_text in enumerate(p_chunks):
-                        chunks.append({
-                            "chunk_id": f"{doc_id}_p{p_num}_ocr_{c_idx}",
-                            "page": p_num,
-                            "source_type": "scanned_vlm",
-                            "content": f"[Doc: {fname} | Page {p_num} | Type: scanned_vlm] {c_text}"
-                        })
+                    if p_chunks:
+                        indexed_pages_set.add(p_num)
+                        for c_idx, c_text in enumerate(p_chunks):
+                            chunks.append({
+                                "chunk_id": f"{doc_id}_p{p_num}_ocr_{c_idx}",
+                                "page": p_num,
+                                "source_type": "scanned_vlm",
+                                "content": f"[Doc: {fname} | Page {p_num} | Type: scanned_vlm] {c_text}"
+                            })
+                    else:
+                        failed_pages.append(p_num)
+                else:
+                    failed_pages.append(p_num)
 
         doc.close()
         full_sample = "\n\n".join(sample_parts)
+
+        indexed_count = len(indexed_pages_set)
+        coverage = indexed_count / page_count if page_count else 0.0
+        if coverage < 0.8 or (page_count > 0 and len(chunks) == 0):
+            logger.warning(
+                "[StudyDocProcessor] Ingestion incomplete for %s: %d/%d pages indexed (%.0f%%). Failed pages: %s",
+                fname, indexed_count, page_count, coverage * 100, failed_pages[:10]
+            )
+
         return page_count, chunks, full_sample
 
     async def _ocr_single_page(self, pdf_path: str, page_num: int) -> str:
@@ -353,65 +382,95 @@ class StudyDocumentProcessor:
 
         enrichment_chunks: List[Dict[str, Any]] = []
 
-        # Stage 2: pdfplumber Table Extraction
-        try:
-            import pdfplumber
-            with pdfplumber.open(file_path) as pdf:
-                for p_idx, page in enumerate(pdf.pages[:20]):
-                    tables = page.extract_tables()
-                    for t_idx, table in enumerate(tables):
-                        if table and len(table) > 1:
-                            # Convert to clean markdown table
-                            header = " | ".join(str(cell or "").strip() for cell in table[0])
-                            divider = " | ".join(["---"] * len(table[0]))
-                            rows = [
-                                " | ".join(str(cell or "").strip() for cell in row)
-                                for row in table[1:]
-                                if any(row)
-                            ]
-                            md_table = f"\n| {header} |\n| {divider} |\n" + "\n".join(f"| {r} |" for r in rows)
-                            enrichment_chunks.append({
-                                "chunk_id": f"{doc_id}_tbl_p{p_idx+1}_{t_idx}",
-                                "page": p_idx + 1,
-                                "source_type": "table",
-                                "content": f"[Doc: {path.name} | Page {p_idx+1} | Type: table]\n{md_table}"
-                            })
-        except Exception:
-            pass
+        def _extract_tables_sync() -> List[Dict[str, Any]]:
+            tbl_chunks = []
+            try:
+                import pdfplumber
+                with pdfplumber.open(file_path) as pdf:
+                    for p_idx, page in enumerate(pdf.pages):
+                        tables = page.extract_tables()
+                        if not tables:
+                            continue
 
-        # Stage 3: PyMuPDF Embedded Figures Contextual Captioning
-        try:
-            import pymupdf
-            doc = pymupdf.open(file_path)
-            settings = get_settings()
+                        page_text = page.extract_text() or ""
+                        table_titles = re.findall(r"\b(Table\s*\d+(?:\.\d+)?(?::[^\n]+)?)\b", page_text, re.IGNORECASE)
 
-            from app.services.study_agents import call_vlm
-
-            extracted_img_count = 0
-            for p_idx in range(min(len(doc), 15)):
-                page = doc[p_idx]
-                images = page.get_images()
-                for img_idx, img in enumerate(images[:2]):
-                    if extracted_img_count >= 5:
-                        break
-                    xref = img[0]
-                    base_img = doc.extract_image(xref)
-                    if base_img and base_img.get("image"):
-                        img_bytes = base_img["image"]
-                        if len(img_bytes) > 5000:  # Skip tiny icons
-                            prompt = "Describe this technical diagram or academic figure concisely. Detail all labeled axes, steps, and key principles."
-                            fig_text = await call_vlm(prompt, img_bytes)
-                            if fig_text and fig_text.strip():
-                                enrichment_chunks.append({
-                                    "chunk_id": f"{doc_id}_fig_p{p_idx+1}_{img_idx}",
+                        for t_idx, table in enumerate(tables):
+                            if table and len(table) > 1:
+                                header = " | ".join(str(cell or "").strip() for cell in table[0])
+                                divider = " | ".join(["---"] * len(table[0]))
+                                rows = [
+                                    " | ".join(str(cell or "").strip() for cell in row)
+                                    for row in table[1:]
+                                    if any(row)
+                                ]
+                                md_table = f"\n| {header} |\n| {divider} |\n" + "\n".join(f"| {r} |" for r in rows)
+                                t_title = table_titles[t_idx].strip() if t_idx < len(table_titles) else f"Table {t_idx + 1}"
+                                tbl_chunks.append({
+                                    "chunk_id": f"{doc_id}_tbl_p{p_idx+1}_{t_idx}",
                                     "page": p_idx + 1,
-                                    "source_type": "image_caption",
-                                    "content": f"[Doc: {path.name} | Page {p_idx+1} | Type: figure_diagram] {fig_text.strip()}"
+                                    "source_type": "table",
+                                    "content": f"[Doc: {path.name} | Page {p_idx+1} | {t_title} | Type: table]\n{md_table}"
                                 })
-                                extracted_img_count += 1
-            doc.close()
-        except Exception:
-            pass
+            except Exception as ex:
+                logger.warning("[StudyDocProcessor] Table extraction warning: %s", ex)
+            return tbl_chunks
+
+        async def _run_table_task():
+            tbl_res = await asyncio.to_thread(_extract_tables_sync)
+            return tbl_res
+
+        async def _run_diagram_task():
+            diag_chunks = []
+            try:
+                import pymupdf
+                doc = pymupdf.open(file_path)
+                from app.services.study_agents import call_vlm
+
+                raw_figs = []
+                for p_idx in range(min(len(doc), 15)):
+                    page = doc[p_idx]
+                    images = page.get_images()
+                    for img_idx, img in enumerate(images[:2]):
+                        if len(raw_figs) >= 5:
+                            break
+                        xref = img[0]
+                        base_img = doc.extract_image(xref)
+                        if base_img and base_img.get("image"):
+                            img_bytes = base_img["image"]
+                            if len(img_bytes) > 5000:
+                                raw_figs.append((p_idx + 1, img_idx, img_bytes))
+                doc.close()
+
+                if raw_figs:
+                    sem = asyncio.Semaphore(4)
+
+                    async def _caption_fig(p_num: int, img_idx: int, img_b: bytes):
+                        async with sem:
+                            prompt = "Describe this technical diagram or academic figure concisely. Detail all labeled axes, steps, and key principles."
+                            fig_text = await call_vlm(prompt, img_b)
+                            if fig_text and fig_text.strip():
+                                return {
+                                    "chunk_id": f"{doc_id}_fig_p{p_num}_{img_idx}",
+                                    "page": p_num,
+                                    "source_type": "image_caption",
+                                    "content": f"[Doc: {path.name} | Page {p_num} | Type: figure_diagram] {fig_text.strip()}"
+                                }
+                        return None
+
+                    tasks = [_caption_fig(p, idx, b) for p, idx, b in raw_figs]
+                    fig_results = await asyncio.gather(*tasks, return_exceptions=True)
+                    for r in fig_results:
+                        if isinstance(r, dict):
+                            diag_chunks.append(r)
+            except Exception as ex:
+                logger.warning("[StudyDocProcessor] Diagram extraction warning: %s", ex)
+            return diag_chunks
+
+        results = await asyncio.gather(_run_table_task(), _run_diagram_task(), return_exceptions=True)
+        for r in results:
+            if isinstance(r, list):
+                enrichment_chunks.extend(r)
 
         if enrichment_chunks:
             insert_chunks_to_fts(session_id, doc_id, enrichment_chunks)

@@ -196,27 +196,38 @@ async def _run_indexing(doc_id: str, section_id: str, file_path: str, user_id: s
 
         detected_subject = extracted.get("title") or section_id or "General Studies"
 
+        is_incomplete = bool(doc_record and doc_record.status == "indexing_incomplete")
+        final_db_status = "indexing_incomplete" if is_incomplete else "completed"
+
         stats = {
             "chunks_indexed": len(doc_record.chunks) if doc_record else 0,
             "entities_extracted": len(topic_titles),
             "detected_subject": detected_subject,
+            "indexing_status": doc_record.status if doc_record else "unknown",
+            "error_message": getattr(doc_record, "error_message", None) if doc_record else None,
         }
-        _indexing_status[doc_id] = {"status": "done", "progress": 100, "stats": stats}
+        _indexing_status[doc_id] = {
+            "status": "incomplete" if is_incomplete else "done",
+            "progress": 50 if is_incomplete else 100,
+            "stats": stats,
+            "error": getattr(doc_record, "error_message", None) if is_incomplete else None,
+        }
 
         db.update_document_stats(
             doc_id=doc_id,
-            indexed=True,
+            indexed=not is_incomplete,
             entity_count=len(topic_titles),
             chunk_count=len(doc_record.chunks) if doc_record else 0,
             key_topics=[f"__subject__:{detected_subject}", *topic_titles],
-            status="completed",
+            status=final_db_status,
+            error_message=getattr(doc_record, "error_message", None) if is_incomplete else None,
         )
 
         try:
             from app.services.study_storage import update_document_status
-            update_document_status(section_id, doc_id, "completed")
+            update_document_status(section_id, doc_id, final_db_status)
         except Exception as err:
-            logger.debug(f"[documents._run_indexing] update_document_status completed: {err}")
+            logger.debug(f"[documents._run_indexing] update_document_status {final_db_status}: {err}")
 
         # Invalidate existing flashcards only after successful re-indexing
         try:
@@ -377,6 +388,35 @@ async def indexing_status(doc_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Document not found")
     status = _indexing_status.get(doc_id, {"status": "pending", "progress": 0})
     return status
+
+
+@router.post("/{doc_id}/reindex")
+async def reindex_document(
+    doc_id: str,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_current_user),
+):
+    """Re-triggers document indexing for a document (e.g. if previous indexing was incomplete)."""
+    user_doc = db.get_document(doc_id, user_id=user["id"])
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    file_path = user_doc.get("file_path")
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=400, detail=f"Document file not found on disk at {file_path}")
+
+    section_id = user_doc.get("topic_id") or "general"
+    file_name = user_doc.get("file_name") or f"doc_{doc_id}"
+
+    db.update_document_stats(doc_id=doc_id, indexed=False, status="indexing", error_message=None)
+    background_tasks.add_task(_run_indexing, doc_id, section_id, file_path, user["id"], file_name)
+
+    return {
+        "status": "indexing_started",
+        "doc_id": doc_id,
+        "file_name": file_name,
+        "message": f"Re-indexing started for '{file_name}'.",
+    }
 
 
 @router.post("/concept-explain")
