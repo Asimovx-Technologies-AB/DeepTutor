@@ -9,7 +9,7 @@ Features:
 - Sub-2ms SQLite FTS5 BM25 indexation
 - Asynchronous non-blocking background enrichment workers (tables & diagrams)
 """
-
+import re
 import os
 import io
 import asyncio

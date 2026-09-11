@@ -354,15 +354,26 @@ class PgFTSStore:
 
         if self.engine.dialect.name == "sqlite":
             terms = [clean_q]
-            words = [w for w in re.findall(r"[a-zA-Z0-9]+", clean_q) if len(w) > 2]
+            words = [w for w in re.findall(r"[a-zA-Z0-9\.]+", clean_q) if len(w) > 1]
             for w in words:
                 if w.lower() not in terms:
                     terms.append(w)
+
+            tbl_label_match = re.search(r"\b(?:table|tbl|figure|fig)\s*(\d+(?:\.\d+)?)\b", clean_q, re.I)
+            target_lbl = f"table {tbl_label_match.group(1)}" if tbl_label_match else None
+            target_num = tbl_label_match.group(1) if tbl_label_match else (re.search(r"\b(\d+\.\d+)\b", clean_q).group(1) if re.search(r"\b(\d+\.\d+)\b", clean_q) else None)
+
+            if target_lbl and target_lbl not in terms:
+                terms.insert(0, target_lbl)
+            if target_num and target_num not in terms:
+                terms.insert(0, target_num)
 
             term_clauses = []
             params: Dict[str, Any] = {
                 "session_id": str(session_id),
                 "limit": limit,
+                "lbl_exact": f"%{target_lbl}%" if target_lbl else "%__none__%",
+                "num_exact": f"%{target_num}%" if target_num else "%__none__%",
             }
             if source_type:
                 params["source_type"] = source_type
@@ -387,7 +398,7 @@ class PgFTSStore:
                 )
                   {type_filter}
                   {like_filter}
-                ORDER BY id ASC
+                ORDER BY (CASE WHEN chunk_text LIKE :lbl_exact THEN 1 WHEN chunk_text LIKE :num_exact THEN 2 ELSE 3 END), id ASC
                 LIMIT :limit
             """)
 
@@ -407,6 +418,10 @@ class PgFTSStore:
                     dedup_results.append(dict(r))
             return dedup_results
 
+        tbl_label_match = re.search(r"\b(?:table|tbl|figure|fig)\s*(\d+(?:\.\d+)?)\b", clean_q, re.I)
+        target_lbl = f"table {tbl_label_match.group(1)}" if tbl_label_match else None
+        target_num = tbl_label_match.group(1) if tbl_label_match else (re.search(r"\b(\d+\.\d+)\b", clean_q).group(1) if re.search(r"\b(\d+\.\d+)\b", clean_q) else None)
+
         statement = text(f"""
             SELECT id, chunk_id, doc_id, page, source_type, chunk_text AS content,
                    ts_rank_cd(search_vector, plainto_tsquery('english', :query)) AS score
@@ -419,8 +434,10 @@ class PgFTSStore:
               AND (
                   search_vector @@ plainto_tsquery('english', :query)
                   OR chunk_text ILIKE :query_like
+                  OR chunk_text ILIKE :lbl_exact
+                  OR chunk_text ILIKE :num_exact
               )
-            ORDER BY score DESC
+            ORDER BY (CASE WHEN chunk_text ILIKE :lbl_exact THEN 1 WHEN chunk_text ILIKE :num_exact THEN 2 ELSE 3 END), score DESC
             LIMIT :limit
         """)
 
@@ -428,6 +445,8 @@ class PgFTSStore:
             "session_id": str(session_id),
             "query": clean_q,
             "query_like": f"%{clean_q}%",
+            "lbl_exact": f"%{target_lbl}%" if target_lbl else "%__none__%",
+            "num_exact": f"%{target_num}%" if target_num else "%__none__%",
             "limit": limit,
         }
         if source_type:

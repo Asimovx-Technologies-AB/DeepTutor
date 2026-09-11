@@ -60,10 +60,10 @@ Work through this 5-pillar reasoning chain internally before writing JSON:
    - entities: Array of specific technical entities, formulas, laws, theorems, algorithms, or constants (e.g. ["chlorophyll", "Calvin cycle", "ATP"]).
 3. QUERY DECOMPOSITION & IMPLICIT REQUIREMENTS:
    - Break compound queries into atomic sub-questions that can each be answered from focused retrieval. If a single atomic question, sub_questions = [the question itself].
-   - Decide requires_image_data and requires_table_data by REASONING about what would actually help the student understand the answer — not by matching specific words. Ask yourself: "Would a diagram/figure make this answer clearer than prose alone?" and "Would a table of rows/columns make this clearer than prose alone?"
-     - requires_image_data = true only when the concept is genuinely spatial, structural, or visual (a labeled diagram, a circuit, a graph shape, an anatomical figure, a process flow) AND a visual would add real understanding beyond what a well-written explanation gives.
-     - requires_table_data = true only when the answer is naturally tabular (multiple items compared across multiple attributes, or numeric data with several rows) AND a table would be clearer than prose.
-     - Judge each query on its own meaning, not on the presence of any particular word. A query can mention "draw a conclusion" or "plot my progress" without needing a diagram; a query can ask to "explain the water cycle" without saying "diagram" and still genuinely need one. If uncertain, prefer false — the executor agent can still choose to include a visual on its own judgment.
+   - Decide requires_image_data and requires_table_data by REASONING about what would actually help the student understand the answer:
+     - CRITICAL: If the query explicitly asks for an image, figure, diagram, photo, picture, or visual (e.g. "with a image", "with an image", "show an image", "with a diagram", "draw a figure"), you MUST set response_format = "diagram" and requires_image_data = true!
+     - Otherwise, set requires_image_data = true when the concept is genuinely spatial, structural, or visual (a labeled diagram, a circuit, a graph shape, an anatomical figure, a process flow) AND a visual would add real understanding beyond prose.
+     - Set requires_table_data = true when the answer is naturally tabular (multiple items compared across multiple attributes, or numeric data with several rows) AND a table would be clearer than prose.
 4. RESOURCE & RETRIEVAL PLANNING:
    - sources: Subset of ["vector", "bm25", "tables", "images"].
      - Include "tables" if numeric, trade-off, or tabular data is needed.
@@ -768,8 +768,13 @@ class QueryAnalyzerAgent:
         if raw_msg not in search_queries:
             search_queries.append(raw_msg)
 
+        is_explicit_visual = bool(re.search(
+            r"\b(figure|diagram|image|photo|picture|flowchart|illustration|visual|draw|with a figure|with an image|with image|with figure|with photo|with picture|show figure|draw figure|show image|draw image)\b",
+            raw_msg.lower()
+        ))
         requires_table_data = bool(data.get("requires_table_data", False))
-        requires_image_data = bool(data.get("requires_image_data", False))
+        requires_image_data = bool(data.get("requires_image_data", False)) or is_explicit_visual
+        response_format = "diagram" if is_explicit_visual else (data.get("response_format") or "conceptual")
 
         # Build retrieval plan
         raw_plan = data.get("retrieval_plan")
@@ -809,7 +814,7 @@ class QueryAnalyzerAgent:
             target_topic=target_topic if not is_question or intent != "NEW_SUBJECT_DECLARATION" else target_topic,
             search_queries=search_queries,
             extracted_subject=extracted_subject,
-            response_format=data.get("response_format") or "conceptual",
+            response_format=response_format,
             requires_table_data=requires_table_data,
             requires_image_data=requires_image_data,
             confidence=confidence,

@@ -392,15 +392,19 @@ Respond with ONLY this JSON object:
     ) -> List[Dict[str, str]]:
         messages = [{"role": "system", "content": self.SYSTEM_PROMPT}]
 
-        # Trust the planner agent's own reasoning about whether a visual would help —
-        # it already judged this from the full query meaning (see query_analyzer.py),
-        # not a keyword match. Re-deriving this here from a raw word list previously
-        # meant an unrelated phrase like "draw a conclusion" or "plot my progress"
-        # could force an SVG diagram even when the planner explicitly decided against
-        # one, or vice versa create inconsistent behavior between the two agents.
+        raw_msg = (message or "").lower()
+        has_explicit_visual = bool(re.search(
+            r"\b(figure|diagram|image|photo|picture|flowchart|illustration|visual|draw|with a figure|with an image|with image|with figure|with photo|with picture|show figure|draw figure|show image|draw image)\b",
+            raw_msg
+        ))
         is_visual_query = bool(
-            query_analysis and (query_analysis.get("requires_image_data") or query_analysis.get("response_format") == "diagram")
+            has_explicit_visual
+            or (query_analysis and (query_analysis.get("requires_image_data") or query_analysis.get("response_format") == "diagram"))
         )
+        if is_visual_query and query_analysis:
+            query_analysis["response_format"] = "diagram"
+            query_analysis["requires_image_data"] = True
+
         if is_visual_query:
             messages.append({
                 "role": "system",

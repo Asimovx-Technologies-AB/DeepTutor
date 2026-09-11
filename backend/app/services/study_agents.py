@@ -1286,7 +1286,7 @@ Return strict JSON only:
         ))
         is_comparison = any(k in q_lower for k in ("compare", "versus", " vs ", "difference between", "distinguish", "relate to"))
         is_diagram = (
-            any(k in q_lower for k in ("diagram", "figure", "chart", "architecture", "flowchart", "illustration"))
+            any(k in q_lower for k in ("diagram", "figure", "chart", "architecture", "flowchart", "illustration", "image", "photo", "picture", "visual", "draw", "with a figure", "with an image", "with image", "with figure", "with photo", "with picture", "show figure", "draw figure", "show image", "draw image"))
             or bool(llm_analysis and (llm_analysis.get("is_figure_query") or llm_analysis.get("intent") == "diagram"))
         )
         is_solve = any(k in q_lower for k in ("solve", "calculate", "fill", "matrix", "column", "row", "position", "sequence", "table", "problem"))
@@ -1355,7 +1355,7 @@ Return strict JSON only:
 
         # 2. Content requirements
         is_table = is_solve or any(k in q_lower for k in ("table", "data", "fill", "solve", "matrix", "column", "row", "calculate", "position", "sequence"))
-        is_image = is_diagram or any(k in q_lower for k in ("image", "picture", "visual", "graph", "plot"))
+        is_image = is_diagram or any(k in q_lower for k in ("image", "picture", "visual", "graph", "plot", "figure", "photo", "draw", "illustration"))
 
         # 3. Clean search keywords with acronym & symbol preservation
         stopwords = {
@@ -2503,13 +2503,12 @@ STRICT RULES:
       1. First, objectively explain what the uploaded material specifically states.
       2. If the material's claim is inconsistent with well-established academic facts, flag this as an objective caveat/note of caution (e.g., "Note: While your text states X, standard literature notes Y because..."), rather than an aggressive contradiction. Always explain what the course material states first.
 12. Figures, Diagrams & Visual Study Protocol:
-    When the student asks about a diagram, figure, chart, schematic, or visual representation:
-    - Figure Purpose: State clearly in 1 sentence what system, process, or mechanism the figure depicts.
-    - Step-by-Step Flow Breakdown: Break down the visual elements, labeled parts, arrows, or stages using clear **bold bullet points** so the student can easily study the workflow.
-    - Core Study Takeaway: Explain the underlying academic principle demonstrated by this figure that the student must remember.
-    - Real-World Example: Provide a brief intuitive scenario showing this figure in practice.
-    - Filter Irrelevant Data: If retrieved chunks mention unrelated figures from metadata or other chapters, strictly ignore them and focus on the relevant topic.
-    - Conversational Follow-up: Ask a clear next-step question offering to explore a specific part of the diagram.
+    When the student query asks for or mentions a diagram, figure, image, photo, picture, chart, schematic, flowchart, visual representation, or drawing (e.g., "explain with a figure", "with an image", "show diagram", etc.):
+    - MANDATORY VISUAL GENERATION RULE:
+      1. You MUST generate an actual inline visual inside a fenced ```svg code block (or ```mermaid for simple linear flows).
+      2. STRICTLY PROHIBITED: NEVER merely describe what a figure looks like in text (e.g. NEVER write "Figure 4 Breakdown: Panel (a)..." in plain text without an accompanying diagram). If the retrieved textbook context mentions a figure or diagram (like "Figure 4"), you MUST TRANSLATE AND RENDER IT AS AN ACTUAL `<svg>` DIAGRAM in a ```svg code block so the student can see it rendered visually on screen!
+      3. Make the SVG clean, colorful, with a viewBox attribute (e.g. viewBox="0 0 700 400"), rounded rects, clear text labels, and colored markers.
+      4. Filter Irrelevant Data: If retrieved chunks mention unrelated figures from metadata or other chapters, strictly ignore them and focus on the requested topic.
 13. Referencing Past Session Chat:
     The student may ask questions referring back to earlier messages, answers, questions, or topics discussed in this session chat (e.g. 'referring to that chat...', 'what did you mean earlier?', 'can you explain the second point you gave?').
     ALWAYS consult the Session Chat History provided above. Address the student's reference directly, connect it to what was previously discussed in the chat, and provide continuous, progressive tutoring.
