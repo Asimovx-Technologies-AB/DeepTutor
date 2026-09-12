@@ -37,6 +37,10 @@ def enqueue_task(
     max_attempts: int = 3,
 ) -> str:
     """Enqueues a task durably into PostgreSQL with guaranteed persistence."""
+    if engine.dialect.name == "sqlite":
+        logger.warning(f"[TaskQueue] Task queue is PostgreSQL-backed; skipping enqueue for '{task_type}' in SQLite mode.")
+        return str(uuid.uuid4())
+
     task_id = str(uuid.uuid4())
     payload_json = json.dumps(payload or {})
 
@@ -69,6 +73,9 @@ def enqueue_task(
 
 def fetch_and_lock_next_task(lease_seconds: int = 300) -> Optional[Dict[str, Any]]:
     """Atomically acquires the next available task using PostgreSQL FOR UPDATE SKIP LOCKED."""
+    if engine.dialect.name == "sqlite":
+        return None
+
     fetch_sql = sql_text(f"""
         WITH next_task AS (
             SELECT id
@@ -115,6 +122,9 @@ def fetch_and_lock_next_task(lease_seconds: int = 300) -> Optional[Dict[str, Any
 
 def mark_task_completed(task_id: str):
     """Marks a task as successfully completed."""
+    if engine.dialect.name == "sqlite":
+        return
+
     statement = sql_text("""
         UPDATE background_tasks
         SET status = 'completed',
@@ -132,6 +142,9 @@ def mark_task_completed(task_id: str):
 
 def mark_task_failed(task_id: str, error_message: str):
     """Marks a task as failed or records error for retry."""
+    if engine.dialect.name == "sqlite":
+        return
+
     statement = sql_text("""
         UPDATE background_tasks
         SET status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'pending' END,
@@ -158,6 +171,9 @@ class BackgroundTaskWorker:
 
     async def start(self):
         if self._running:
+            return
+        if engine.dialect.name == "sqlite":
+            logger.info("[TaskQueue] SQLite in use; durable PostgreSQL background worker is inactive.")
             return
         self._running = True
         self._worker_task = asyncio.create_task(self._run_loop())

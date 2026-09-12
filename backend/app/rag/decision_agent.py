@@ -179,6 +179,7 @@ CRITICAL MATERIAL GROUNDING & "UNKNOWN ANSWER" RULES:
      - **Do NOT guess, invent, or hallucinate an answer.**
      - **Explicitly tell the student**: "I could not find the answer to this in your uploaded PDF."
      - **Prompt the student**: "Please ask questions specifically related to the concepts and chapters in your uploaded material for **{Subject}** (e.g. {List of available syllabus topics})."
+   - **EXCEPTION — numbered table/figure references**: If the student asked about a specific "Table X.Y" or "Figure X.Y" and a `TABLE/FIGURE REFERENCE NOTE` system message is present, that note is the authoritative source of truth on whether that table/figure exists — it was checked against the document's actual table registry, not a retrieval guess. Follow its instruction exactly instead of applying the generic "not found in the PDF" rule above, even if the retrieved context looks thin. Do not repeat an identical refusal for two different phrasings of the same table reference — the note's verdict does not change based on how the student phrased the request.
 3. **NEVER MISTAKE A CONCEPTUAL QUESTION FOR A SUBJECT TITLE**: If the user asks a question like "what is the type of forest in india", "how does SVM work", or "explain photosynthesis", NEVER treat it as a subject name or say "Understood. Let's study what is the type of forest in india". Answer the question directly using the document context, or state that it is not in the uploaded material.
 4. Match tone to an expert peer mentor: warm, articulate, clear, and direct. No emojis.
 5. **NEVER HALLUCINATE THE PREVIOUS CONVERSATION**: If the student asks about what you previously
@@ -417,6 +418,10 @@ Respond with ONLY this JSON object:
                 ),
             })
 
+        table_ref_note = self._format_table_reference_note(query_analysis)
+        if table_ref_note:
+            messages.append({"role": "system", "content": table_ref_note})
+
         if query_analysis:
             plan_note = self._format_plan_note(query_analysis)
             messages.append({
@@ -625,6 +630,68 @@ Respond with ONLY this JSON object:
         if plan.get("reasoning"):
             parts.append(f"- planner reasoning: {plan.get('reasoning')}")
         return "\n".join(parts)
+
+    @staticmethod
+    def _format_table_reference_note(query_analysis: Optional[Dict[str, Any]]) -> Optional[str]:
+        """Turns the planner's table/figure gate result into an explicit,
+        deterministic instruction — see query_analyzer._apply_table_gate.
+        Without this, a numeric reference like 'Table 1.3' falls through to
+        the generic 'UNKNOWN ANSWER' rule in the system prompt, which
+        produces the same confident refusal regardless of whether the table
+        genuinely exists, is still indexing, or was never registered at
+        all — exactly the bug reported ('solve Table 1.3' and 'solve the
+        table in page number 1.3' both got an identical, unhelpful denial).
+        """
+        if not query_analysis or not query_analysis.get("target_table_number"):
+            return None
+
+        number = query_analysis["target_table_number"]
+
+        if query_analysis.get("table_index_unavailable"):
+            return (
+                f"TABLE/FIGURE REFERENCE NOTE: The student referenced Table/Figure {number}. "
+                "This session has no table/figure registry to check against, so you cannot confirm "
+                "or deny whether it exists. Do NOT claim it is missing from the material. Instead, "
+                "rely on the retrieved context below: if it contains Table/Figure {number}'s data, "
+                "solve it from that; if the retrieved context is empty or unrelated, say you could not "
+                "retrieve that specific table's data and ask the student to confirm the table number "
+                "or paste its contents, rather than asserting it isn't in the document."
+            )
+
+        if query_analysis.get("table_indexing_in_progress"):
+            return (
+                f"TABLE/FIGURE REFERENCE NOTE: Table/Figure {number} was found in this document's "
+                "table registry, but it is still being indexed/processed. Tell the student it was "
+                "located but is still being processed, and ask them to try again in a moment — do "
+                "NOT say it is not in the material."
+            )
+
+        if query_analysis.get("table_in_material") is True:
+            caption = query_analysis.get("matched_table_caption")
+            caption_line = f" (\"{caption}\")" if caption else ""
+            return (
+                f"TABLE/FIGURE REFERENCE NOTE: Table/Figure {number}{caption_line} is confirmed present "
+                "in this document. Solve/explain it strictly from the retrieved context below. If the "
+                "retrieved context below is unexpectedly empty despite this confirmation, say the table "
+                "was located but its content could not be retrieved this turn, and ask the student to "
+                "retry — do NOT say the table is out of scope."
+            )
+
+        if query_analysis.get("table_in_material") is False:
+            available = query_analysis.get("available_table_numbers") or []
+            avail_line = (
+                f" Tables/figures actually available in this material: {', '.join(available)}."
+                if available else " No tables/figures are registered for this material yet."
+            )
+            return (
+                f"TABLE/FIGURE REFERENCE NOTE: Table/Figure {number} was checked against this "
+                f"document's table registry and is NOT present.{avail_line} Tell the student plainly "
+                "that this table/figure number isn't in their uploaded material, and surface the "
+                "available list above so they can ask about the right one instead of repeating the "
+                "same request."
+            )
+
+        return None
 
     # ------------------------------------------------------------------
     # Parsing & cleanup
@@ -1020,6 +1087,38 @@ Respond with ONLY this JSON object:
                 "reply": f"{summary_text}\n\n**Key Takeaway:** Focus on how this principle applies to your problem solving.\n\n**Quick check:** Would you like a practice quiz question on this topic?",
                 "groundedness_note": "Directly extracted from retrieved context; not LLM-synthesized.",
                 "pending_followup": {"type": "quiz_offer", "target_topic": current_subject},
+            }
+
+        if query_analysis and query_analysis.get("target_table_number"):
+            number = query_analysis["target_table_number"]
+            if query_analysis.get("table_in_material") is False:
+                available = query_analysis.get("available_table_numbers") or []
+                avail_line = (
+                    f" Tables/figures found in your material: {', '.join(available)}."
+                    if available else " No tables/figures are registered for this material yet."
+                )
+                reply = f"I checked your material's table index and Table/Figure {number} isn't in it.{avail_line}"
+            elif query_analysis.get("table_indexing_in_progress"):
+                reply = f"Table/Figure {number} was found but is still being processed — please try again in a moment."
+            elif query_analysis.get("table_index_unavailable"):
+                reply = (
+                    f"I couldn't reach the reasoning engine to verify Table/Figure {number} right now. "
+                    "Please try again in a moment."
+                )
+            else:
+                reply = (
+                    f"I couldn't reach the reasoning engine to solve Table/Figure {number} just now, "
+                    "though it is confirmed present in your material. Please try again in a moment."
+                )
+            return {
+                "thought_process": f"LLM unavailable; table/figure gate result for {number} returned directly.",
+                "intent": "PROBLEM_SOLVING_REQUEST",
+                "extracted_subject": None,
+                "is_explanation": True,
+                "quiz_data": None,
+                "reply": reply,
+                "groundedness_note": "Table/figure registry lookup; not LLM-synthesized.",
+                "pending_followup": None,
             }
 
         if query_analysis and query_analysis.get("intent") == "MATERIAL_TOPICS_REQUEST":
