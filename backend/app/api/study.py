@@ -427,11 +427,15 @@ async def upload_document(
     is_generic_title = not prev_title or prev_title in ("New Study Workspace", "New Course Workspace", "Study Room Session", "Default Study Room")
     session_title = f"{clean_title} Study Room" if is_generic_title else prev_title
 
+    ingest_status = ingest_result.get("status", "text_ready")
+    is_incomplete = bool(ingest_status == "indexing_incomplete")
+    final_status = "indexing_incomplete" if is_incomplete else "text_ready"
+
     register_or_update_session(
         session_id=study_id,
         subject=effective_subject,
         title=session_title,
-        status="text_ready",
+        status=final_status,
         document_name=file.filename,
         user_id=user["id"]
     )
@@ -448,16 +452,16 @@ async def upload_document(
             file_path=file_path,
             file_type=ext,
             doc_hash=doc_hash,
-            status="completed",
+            status="indexing_incomplete" if is_incomplete else "completed",
         )
         topic_titles = [t.get("title", "") for t in (all_session_topics or topics) if t.get("title")]
         db.update_document_stats(
             doc_id=db_doc["id"],
-            indexed=True,
+            indexed=not is_incomplete,
             entity_count=len(topic_titles),
             chunk_count=ingest_result.get("chunk_count", 0),
             key_topics=[f"__subject__:{effective_subject}", *topic_titles],
-            status="completed",
+            status="indexing_incomplete" if is_incomplete else "completed",
         )
         db.link_document_to_session(doc_hash=content_hash, session_id=study_id, user_id=user["id"])
     except Exception as e:
@@ -470,7 +474,7 @@ async def upload_document(
 
     all_docs = get_session_documents(study_id)
     return {
-        "status": "text_ready",
+        "status": final_status,
         "session_id": study_id,
         "doc_id": doc_id,
         "doc_hash": content_hash,
