@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { ArrowRight, BookOpen, FileText, Search, Sparkles, UploadCloud, Trash2, Layers } from 'lucide-react'
-import { documentsApi } from '../services/api'
+import { documentsApi, studyApi } from '../services/api'
 import { useLanguageStore } from '../stores/languageStore'
 import ConfirmModal from '../components/ConfirmModal'
 import MaterialSessionModal, { type StudyDocument } from '../components/materials/MaterialSessionModal'
@@ -38,6 +38,42 @@ export default function SubjectsPage() {
       console.error('Failed to delete material:', err)
     } finally {
       setIsDeleting(false)
+    }
+  }
+
+  const handleJumpToTopic = async (e: React.MouseEvent, doc: StudyDocument, topic: string) => {
+    e.stopPropagation()
+    let sessionId = doc.linked_sessions?.[0]?.id || doc.topic_id
+    if (!sessionId) {
+      try {
+        const cleanTitle = displayName(doc.file_name)
+        const res = await studyApi.createSession({
+          subject: doc.detected_subject || cleanTitle,
+          title: `${cleanTitle} - ${topic}`,
+        })
+        sessionId = res.data?.id || res.data?.session_id
+        if (sessionId) {
+          try {
+            await documentsApi.linkToSession({
+              session_id: sessionId,
+              doc_id: doc.id,
+              doc_hash: doc.doc_hash,
+              filename: doc.file_name,
+            })
+          } catch (linkErr) {
+            console.warn('Link error:', linkErr)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to create session for topic:', err)
+        sessionId = `session_${Date.now()}`
+      }
+    }
+
+    if (sessionId) {
+      navigate(`/chat/${sessionId}?topic=${encodeURIComponent(topic)}`, {
+        state: { targetTopic: topic },
+      })
     }
   }
 
@@ -129,7 +165,16 @@ export default function SubjectsPage() {
                     <p className="text-[10px] font-black uppercase tracking-wider text-[#777777] mb-2">{copy.topics}</p>
                     <div className="flex flex-wrap gap-1.5">
                       {(doc.key_topics || []).slice(0, 5).map((topic) => (
-                        <span key={topic} className="px-2.5 py-1 rounded-full bg-[#F7F7F7] border border-[#E2E8F0] text-[11px] font-bold text-[#555]">{topic}</span>
+                        <button
+                          key={topic}
+                          type="button"
+                          onClick={(e) => handleJumpToTopic(e, doc, topic)}
+                          title={`Jump directly into ${topic}`}
+                          className="px-2.5 py-1 rounded-full bg-[#F7F7F7] hover:bg-[#4F46E5] hover:text-white border border-[#E2E8F0] hover:border-[#4F46E5] text-[11px] font-bold text-[#555] transition-all cursor-pointer inline-flex items-center gap-1 group/pill shadow-2xs"
+                        >
+                          <span>{topic}</span>
+                          <ArrowRight size={10} className="text-[#AFAFAF] group-hover/pill:text-white group-hover/pill:translate-x-0.5 transition-all" />
+                        </button>
                       ))}
                       {ready && !doc.key_topics?.length && <span className="text-xs text-[#999]">Topics are being prepared</span>}
                     </div>

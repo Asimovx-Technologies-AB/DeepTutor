@@ -407,6 +407,7 @@ export const studyApi = {
   createSession: (payload?: { subject?: string; title?: string }) =>
     api.post('/study/sessions/new', payload || {}),
   getSession: (sessionId: string) => api.get(`/study/sessions/${sessionId}`),
+  getMessages: (sessionId: string) => api.get(`/study/sessions/${sessionId}/messages`),
   deleteSession: (sessionId: string) => api.delete(`/study/sessions/${sessionId}`),
   deleteSessionsBatch: (sessionIds: string[]) =>
     api.post('/study/sessions/batch-delete', { session_ids: sessionIds }),

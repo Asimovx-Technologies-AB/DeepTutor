@@ -105,6 +105,43 @@ export default function MaterialSessionModal({
     }
   }
 
+  const handleOpenTopic = async (topicName: string) => {
+    let targetSessionId = sessions.length > 0 ? sessions[0].id : null
+    if (!targetSessionId) {
+      setIsCreating(true)
+      try {
+        const subject = document.detected_subject || cleanName
+        const title = `${cleanName} - ${topicName}`
+        const res = await studyApi.createSession({ subject, title })
+        targetSessionId = res.data?.id || res.data?.session_id
+        if (targetSessionId) {
+          try {
+            await documentsApi.linkToSession({
+              session_id: targetSessionId,
+              doc_id: document.id,
+              doc_hash: document.doc_hash,
+              filename: document.file_name,
+            })
+          } catch (linkErr) {
+            console.warn('Document link warning:', linkErr)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to create session for topic:', err)
+        targetSessionId = `session_${Date.now()}`
+      } finally {
+        setIsCreating(false)
+      }
+    }
+
+    if (targetSessionId) {
+      onClose()
+      navigate(`/chat/${targetSessionId}?topic=${encodeURIComponent(topicName)}`, {
+        state: { targetTopic: topicName }
+      })
+    }
+  }
+
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
@@ -215,18 +252,24 @@ export default function MaterialSessionModal({
             {/* Extracted Key Topics */}
             {document.key_topics && document.key_topics.length > 0 && (
               <div className="space-y-2 pt-1 border-t border-zinc-100">
-                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                  <BookOpen size={13} className="text-zinc-700" />
-                  <span>Key Concepts in Material</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    <BookOpen size={13} className="text-zinc-700" />
+                    <span>Key Concepts in Material</span>
+                  </div>
+                  <span className="text-[10px] text-zinc-400 font-medium">Click to jump into section</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {document.key_topics.slice(0, 6).map((topic) => (
-                    <span
+                  {document.key_topics.slice(0, 8).map((topic) => (
+                    <button
                       key={topic}
-                      className="px-2.5 py-1 rounded-lg bg-zinc-100 border border-zinc-200 text-[11px] font-medium text-zinc-800"
+                      type="button"
+                      onClick={() => handleOpenTopic(topic)}
+                      className="group/pill inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-900 text-zinc-800 hover:text-white border border-zinc-200 hover:border-zinc-900 text-[11px] font-medium transition-all cursor-pointer shadow-2xs"
                     >
-                      {topic}
-                    </span>
+                      <span>{topic}</span>
+                      <ArrowRight size={11} className="text-zinc-400 group-hover/pill:text-white group-hover/pill:translate-x-0.5 transition-transform" />
+                    </button>
                   ))}
                 </div>
               </div>

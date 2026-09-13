@@ -1,0 +1,191 @@
+import time
+import logging
+from typing import Dict, Any, Optional
+from sqlalchemy.orm import Session
+from app.models.document import Document
+from app.storage.local_storage import default_storage
+from app.pipeline.metadata_extractor import MetadataExtractor
+from app.pipeline.pdf_parser import PyMuPDFParser
+from app.pipeline.classifier import DocumentClassifier
+from app.pipeline.text_pipeline.quality_checker import TextQualityChecker
+from app.pipeline.text_pipeline.vlm_fallback import VLMFallbackExtractor
+from app.pipeline.text_pipeline.normalizer import TextNormalizer
+from app.pipeline.visual_pipeline.layout_analyzer import LayoutAnalyzer
+from app.pipeline.visual_pipeline.table_detector import TableDetector
+from app.pipeline.visual_pipeline.formula_detector import FormulaDetector
+from app.pipeline.structure_builder import DocumentStructureBuilder
+from app.pipeline.semantic_extractor import SemanticKnowledgeExtractor
+from app.pipeline.chunker import KnowledgeChunker
+from app.pipeline.quality_validator import QualityValidator
+from app.pipeline.canonical import CanonicalDocumentBuilder
+from app.services.storage_pipeline import DataStoragePipeline
+from app.schemas.document import CanonicalDocumentRepresentation
+
+logger = logging.getLogger(__name__)
+
+
+class DocumentPipelineOrchestrator:
+    """
+    Central State Machine Orchestrator for the Document Processing and Storage Architecture.
+    Executes all pipeline stages deterministically with timing, metrics, and error handling.
+    """
+
+    @classmethod
+    def process_document(
+        cls,
+        session: Session,
+        file_bytes: bytes,
+        filename: str,
+        existing_doc_id: Optional[str] = None
+    ) -> CanonicalDocumentRepresentation:
+        start_time = time.time()
+        stage_durations: Dict[str, float] = {}
+
+        # 1. Object Storage: Store raw uploaded PDF
+        t0 = time.time()
+        raw_storage_path = default_storage.store_file(file_bytes, filename, subfolder="raw_documents")
+        stage_durations["OBJECT_STORAGE"] = round((time.time() - t0) * 1000, 2)
+
+        # 2. Metadata Extraction
+        t0 = time.time()
+        meta_dict = MetadataExtractor.extract_pdf_metadata(file_bytes, filename)
+        stage_durations["METADATA_EXTRACTION"] = round((time.time() - t0) * 1000, 2)
+
+        # Check or generate document ID
+        file_hash = meta_dict["file_hash"]
+        db_doc = session.query(Document).filter(Document.file_hash == file_hash).first()
+        if db_doc:
+            doc_id = db_doc.id
+        elif existing_doc_id:
+            doc_id = existing_doc_id
+        else:
+            import uuid
+            doc_id = str(uuid.uuid4())
+
+        meta_dict["id"] = doc_id
+        meta_dict["status"] = "PARSING"
+        meta_dict["current_stage"] = "PYMUPDF_PARSER"
+
+        # 3. PyMuPDF Parser: High-fidelity layout, spans, and page rendering
+        t0 = time.time()
+        parser = PyMuPDFParser(render_dpi=100)
+        pages_data = parser.parse_document(file_bytes, doc_id)
+        stage_durations["PYMUPDF_PARSER"] = round((time.time() - t0) * 1000, 2)
+
+        # 4. Document Classification
+        t0 = time.time()
+        doc_classification = DocumentClassifier.classify_document(pages_data)
+        stage_durations["CLASSIFICATION"] = round((time.time() - t0) * 1000, 2)
+        is_scanned_doc = doc_classification.get("overall_classification") in ("scanned", "hybrid")
+
+        # 5. Dual Pipeline Execution (Text Pipeline + Visual Pipeline)
+        t0 = time.time()
+        all_tables = []
+        all_formulas = []
+
+        for page in pages_data:
+            page_num = page["page_number"]
+            raw_text = page["raw_text"]
+            blocks = page["blocks"]
+
+            # Branch A: Text Quality Check
+            q_score, decision = TextQualityChecker.evaluate_quality(raw_text)
+            page["quality_score"] = q_score
+
+            # Only trigger VLM fallback if document is scanned/hybrid or page has zero text.
+            # Prevents 5-10s network latency on clean digital pages.
+            has_no_text = not raw_text or not raw_text.strip()
+            if (decision == "POOR" and is_scanned_doc) or has_no_text:
+                normalized_text = VLMFallbackExtractor.process_scanned_page(page)
+                page["classification"] = "scanned"
+            else:
+                normalized_text = TextNormalizer.normalize(raw_text)
+                page["classification"] = "digital"
+
+            page["normalized_text"] = normalized_text
+
+            # Branch B: Visual & Image Processing Pipeline
+            # 1. Layout Analysis (columns & reading order)
+            blocks = LayoutAnalyzer.analyze_page_layout(blocks, page["width"], page["height"])
+
+            # 2. Table Detection & Extraction (Markdown / HTML)
+            page_tables, blocks = TableDetector.detect_tables(blocks, page_num)
+            all_tables.extend(page_tables)
+
+            # 3. Formula Detection & Recognition (LaTeX)
+            page_formulas, blocks = FormulaDetector.detect_formulas(blocks, page_num)
+            all_formulas.extend(page_formulas)
+
+            page["blocks"] = blocks
+
+        stage_durations["DUAL_PIPELINE"] = round((time.time() - t0) * 1000, 2)
+
+        # 6. Document Structure Builder
+        t0 = time.time()
+        structure_tree = DocumentStructureBuilder.build_structure(pages_data)
+        stage_durations["STRUCTURE_BUILDER"] = round((time.time() - t0) * 1000, 2)
+
+        # 7. Knowledge Chunking (14 Dimensions)
+        t0 = time.time()
+        chunks = KnowledgeChunker.generate_chunks(
+            doc_id=doc_id,
+            pages_data=pages_data,
+            structure_tree=structure_tree,
+            tables=all_tables,
+            formulas=all_formulas,
+        )
+        stage_durations["KNOWLEDGE_CHUNKER"] = round((time.time() - t0) * 1000, 2)
+
+        # 8. Semantic Knowledge Relationships (Graph)
+        t0 = time.time()
+        relationships = []
+        # Link adjacent and conceptually overlapping chunks
+        for i in range(len(chunks) - 1):
+            chunk_a = chunks[i]
+            chunk_b = chunks[i + 1]
+            rels = SemanticKnowledgeExtractor.infer_relationships(
+                chunk_a_id=chunk_a["id"],
+                chunk_a_meta=chunk_a,
+                chunk_b_id=chunk_b["id"],
+                chunk_b_meta=chunk_b,
+            )
+            relationships.extend(rels)
+        stage_durations["SEMANTIC_GRAPH"] = round((time.time() - t0) * 1000, 2)
+
+        # 9. Quality Validation
+        t0 = time.time()
+        valid_chunks, valid_rels, val_metrics = QualityValidator.validate_chunks(chunks, relationships)
+        stage_durations["QUALITY_VALIDATOR"] = round((time.time() - t0) * 1000, 2)
+
+        # 10. Canonical Document Representation Assembly
+        t0 = time.time()
+        meta_dict["status"] = "INDEXED"
+        meta_dict["current_stage"] = "COMPLETED"
+        canonical_doc = CanonicalDocumentBuilder.assemble_canonical(
+            doc_metadata=meta_dict,
+            pages_data=pages_data,
+            structure_tree=structure_tree,
+            chunks=valid_chunks,
+            tables=all_tables,
+            formulas=all_formulas,
+            relationships=valid_rels,
+        )
+        stage_durations["CANONICAL_SYNTHESIS"] = round((time.time() - t0) * 1000, 2)
+
+        # 11. Data Storage Pipeline: Persist to PostgreSQL / pgvector
+        t0 = time.time()
+        DataStoragePipeline.persist_canonical_document(
+            session=session,
+            canonical_doc=canonical_doc,
+            stage_durations=stage_durations,
+        )
+        stage_durations["DATA_STORAGE_PIPELINE"] = round((time.time() - t0) * 1000, 2)
+
+        total_duration_ms = round((time.time() - start_time) * 1000, 2)
+        logger.info(
+            f"[DocumentPipelineOrchestrator] Completed processing for {filename} (ID: {doc_id}) "
+            f"in {total_duration_ms}ms: {len(valid_chunks)} chunks, {len(all_tables)} tables, "
+            f"{len(all_formulas)} formulas, {len(valid_rels)} graph relationships."
+        )
+
+        return canonical_doc

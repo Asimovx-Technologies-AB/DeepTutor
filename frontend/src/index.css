@@ -716,8 +716,51 @@ textarea:focus-visible {
 }
 
 .markdown-content p {
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
+}
+
+/* ─── Markdown Lists (Clean, Indented, Readable) ─── */
+.markdown-content ul {
+  list-style-type: disc;
   margin-top: 0.65em;
-  margin-bottom: 0.65em;
+  margin-bottom: 0.85em;
+  padding-left: 1.5em;
+}
+
+.markdown-content ol {
+  list-style-type: decimal;
+  margin-top: 0.65em;
+  margin-bottom: 0.85em;
+  padding-left: 1.5em;
+}
+
+.markdown-content li {
+  margin-top: 0.4em;
+  margin-bottom: 0.4em;
+  line-height: 1.68;
+}
+
+.markdown-content li > p {
+  margin-top: 0.15em;
+  margin-bottom: 0.25em;
+}
+
+/* ─── Markdown Dividers & Quotes ─── */
+.markdown-content hr {
+  border: 0;
+  border-top: 1.5px solid #E5E7EB;
+  margin: 1.75em 0;
+}
+
+.markdown-content blockquote {
+  border-left: 3.5px solid #2563EB;
+  background-color: #F8FAFC;
+  padding: 0.75rem 1.15rem;
+  margin: 1.15rem 0;
+  border-radius: 0 0.5rem 0.5rem 0;
+  color: #334155;
+  font-style: normal;
 }
 
 /* ─── Code / Formulas / Monospace (JetBrains Mono) ─── */

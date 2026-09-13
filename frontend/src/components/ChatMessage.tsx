@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
-import { Bot, User, Copy, Check, Image } from 'lucide-react'
+import { Bot, User, Copy, Check, Image, Lightbulb, HelpCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import SourceCard, { type Source } from './SourceCard'
 import MermaidDiagram from './MermaidDiagram'
@@ -23,20 +23,34 @@ interface Props {
   }
   export_ready?: boolean
   response_format?: string
+  suggestedQuestions?: string[]
+  socraticFollowUp?: string
+  onSuggestionClick?: (question: string) => void
 }
 
-const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding, export_ready, response_format }: Props) => {
+const ChatMessageComponent = ({
+  role,
+  content,
+  isStreaming,
+  sources,
+  grounding,
+  export_ready,
+  response_format,
+  suggestedQuestions,
+  socraticFollowUp,
+  onSuggestionClick,
+}: Props) => {
   const [copied, setCopied] = useState(false)
   const isAssistant = role === 'assistant'
-  
+
   const isStudyNotes = isStudyNotesContent({
     role,
     content,
     export_ready,
     response_format
   })
-  
-  // Use React 19 deferred value during streaming so UI thread stays responsive to scrolling and typing
+
+  // Use React deferred value during streaming so UI thread stays responsive
   const deferredContent = useDeferredValue(content)
   const displayContent = isStreaming ? deferredContent : content
 
@@ -45,6 +59,9 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding, 
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
+
+  const hasSuggestions = isAssistant && !isStreaming && suggestedQuestions && suggestedQuestions.length > 0
+  const hasFollowUp = isAssistant && !isStreaming && socraticFollowUp && socraticFollowUp.trim()
 
   return (
     <motion.div
@@ -71,7 +88,7 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding, 
         {/* Message bubble */}
         <div className={`px-4 py-2 ${
           isAssistant
-            ? content.includes("Topic Not Found") 
+            ? content.includes("Topic Not Found")
               ? 'bg-brand-primary-soft border border-brand-primary/20 rounded-[2rem] rounded-tl-sm text-text-primary px-5 py-4 shadow-sm'
               : 'text-text-primary'
             : 'bg-brand-primary text-white rounded-[2rem] rounded-tr-sm shadow-sm px-5 py-3 font-medium'
@@ -93,6 +110,34 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding, 
                 remarkPlugins={[remarkMath, remarkGfm]}
                 rehypePlugins={[rehypeKatex]}
                 components={{
+                  h3({ node, children, ...props }: any) {
+                    const text = React.Children.toArray(children).join('')
+                    if (text.includes('Interactive Checkpoint') || text.includes('💡')) {
+                      return (
+                        <div className="mt-6 mb-3 flex items-center gap-2 text-xs font-bold text-brand-primary uppercase tracking-wider bg-brand-primary-soft/80 px-3.5 py-1.5 rounded-xl border border-brand-primary/25 w-fit shadow-xs">
+                          <Lightbulb size={15} className="text-brand-primary" />
+                          <span>Interactive Checkpoint</span>
+                        </div>
+                      )
+                    }
+                    return (
+                      <h3 className="text-base sm:text-lg font-bold text-text-primary mt-5 mb-2 tracking-tight" {...props}>
+                        {children}
+                      </h3>
+                    )
+                  },
+                  hr({ ...props }: any) {
+                    return <hr className="my-5 border-t border-border/70" {...props} />
+                  },
+                  table({ children, ...props }: any) {
+                    return (
+                      <div className="my-4 overflow-x-auto rounded-xl border border-border shadow-xs bg-white">
+                        <table className="w-full text-left border-collapse" {...props}>
+                          {children}
+                        </table>
+                      </div>
+                    )
+                  },
                   pre({ node, children, ...props }: any) {
                     const child = React.Children.toArray(children)[0] as any
                     const className = child?.props?.className || ''
@@ -127,7 +172,6 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding, 
                           className="w-full max-h-[460px] object-contain rounded-xl mx-auto block bg-white"
                           loading="lazy"
                           onError={(e: any) => {
-                            // If hotlink blocked or 404, hide smoothly
                             e.currentTarget.parentElement.style.display = 'none'
                           }}
                           {...props}
@@ -158,9 +202,53 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding, 
           )}
         </div>
 
-        {/* Source cards — shown below assistant messages when not a missing topic notice */}
+        {/* Source cards */}
         {isAssistant && sources && sources.length > 0 && !isStreaming && !content.includes("Topic Not Found") && (
           <SourceCard sources={sources} />
+        )}
+
+        {/* ── Socratic Follow-Up Callout ─────────────────────────────── */}
+        {hasFollowUp && !content.includes("### 💡") && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15, duration: 0.25 }}
+            className="mt-3 flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 shadow-sm"
+          >
+            <Lightbulb size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[11px] font-bold text-amber-600 uppercase tracking-wide mb-1">
+                Checkpoint Question
+              </p>
+              <p className="text-sm text-amber-900 leading-relaxed font-medium">
+                {socraticFollowUp}
+              </p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Suggested Question Chips ───────────────────────────────── */}
+        {hasSuggestions && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.25 }}
+            className="mt-3 flex flex-wrap gap-2"
+          >
+            {suggestedQuestions!.map((q, i) => (
+              <button
+                key={i}
+                onClick={() => onSuggestionClick?.(q)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold
+                           bg-brand-primary/8 text-brand-primary border border-brand-primary/20
+                           hover:bg-brand-primary hover:text-white hover:border-brand-primary
+                           transition-all duration-150 cursor-pointer shadow-sm"
+              >
+                <HelpCircle size={11} />
+                {q}
+              </button>
+            ))}
+          </motion.div>
         )}
 
         {/* Copy button */}
@@ -178,10 +266,11 @@ const ChatMessageComponent = ({ role, content, isStreaming, sources, grounding, 
 }
 
 export default memo(ChatMessageComponent, (prevProps, nextProps) => {
-  // Only re-render if streaming state or content or sources changed
   if (prevProps.isStreaming !== nextProps.isStreaming) return false
   if (prevProps.content !== nextProps.content) return false
   if (prevProps.sources !== nextProps.sources) return false
   if (prevProps.grounding !== nextProps.grounding) return false
+  if (prevProps.suggestedQuestions !== nextProps.suggestedQuestions) return false
+  if (prevProps.socraticFollowUp !== nextProps.socraticFollowUp) return false
   return true
 })
