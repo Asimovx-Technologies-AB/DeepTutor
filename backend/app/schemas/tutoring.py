@@ -32,6 +32,7 @@ class QueryMetadata(BaseModel):
     question_count: Optional[int] = None
     referenced_page: Optional[int] = None
     referenced_table: Optional[str] = None
+    referenced_figure: Optional[str] = None
     format_directives: Optional[Dict[str, Any]] = None
     extracted_entities: List[str] = Field(default_factory=list)
     learning_objective: str = "understand" # recall, understand, apply, analyze, evaluate

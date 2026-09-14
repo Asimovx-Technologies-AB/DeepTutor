@@ -168,14 +168,35 @@ class MultiStrategyRetrievalOrchestrator:
             ))
             topic_affinity_bonus = 0.2 if has_topic_match else 0.0
 
+            # Figure boost: if query asks for a specific figure, prioritize chunks containing that figure reference
+            ref_fig_bonus = 0.0
+            if getattr(query_meta, "referenced_figure", None):
+                fig_name = query_meta.referenced_figure.lower()
+                fig_num = re.sub(r"[^\d.-]", "", fig_name)
+                if fig_num:
+                    f_hyphen = fig_num.replace(".", "-")
+                    f_dot = fig_num.replace("-", ".")
+                    fig_variants = [
+                        f"figure {f_hyphen}",
+                        f"figure {f_dot}",
+                        f"fig. {f_hyphen}",
+                        f"fig. {f_dot}",
+                        f"fig {f_hyphen}",
+                        f"fig {f_dot}",
+                        f"figure-{f_hyphen}",
+                        f"figure-{f_dot}",
+                    ]
+                    if any(v in text_lower for v in fig_variants):
+                        ref_fig_bonus = 2.0
+
             # Strategy weighted score
             if strategy == "multi_concept":
                 entity_overlap = sum(1 for e in entities if e.lower() in text_lower)
-                final_score = (0.3 * lexical_score) + (0.4 * cosine_score) + (0.3 * (entity_overlap / max(1, len(entities)))) + topic_affinity_bonus
+                final_score = (0.3 * lexical_score) + (0.4 * cosine_score) + (0.3 * (entity_overlap / max(1, len(entities)))) + topic_affinity_bonus + ref_fig_bonus
             elif strategy == "thematic":
-                final_score = (0.25 * lexical_score) + (0.55 * cosine_score) + (0.1 * chunk.confidence) + topic_affinity_bonus
+                final_score = (0.25 * lexical_score) + (0.55 * cosine_score) + (0.1 * chunk.confidence) + topic_affinity_bonus + ref_fig_bonus
             else:
-                final_score = (0.4 * lexical_score) + (0.6 * cosine_score) + topic_affinity_bonus
+                final_score = (0.4 * lexical_score) + (0.6 * cosine_score) + topic_affinity_bonus + ref_fig_bonus
 
             scored_chunks.append({
                 "chunk": chunk,

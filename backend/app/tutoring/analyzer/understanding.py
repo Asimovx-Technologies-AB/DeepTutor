@@ -99,6 +99,7 @@ class QueryUnderstanding:
 
     PAGE_PATTERN = re.compile(r"\b(?:(?:page\s*(?:number|no\.?|#)?|p\.)\s*(\d+))\b", re.IGNORECASE)
     TABLE_PATTERN = re.compile(r"\b(table\s*(?:\d+(?:\.\d+)*|[A-Za-z]))\b|\b(the\s+table|a\s+table|this\s+table)\b", re.IGNORECASE)
+    FIGURE_PATTERN = re.compile(r"\b(?:(?:figure|fig\.?)\s*(\d+(?:[.-]\d+)+|\d+))\b|\b(?:(\d+(?:[.-]\d+)+)\s*(?:figure|fig\.?))\b", re.IGNORECASE)
 
     @classmethod
     def analyze_query(
@@ -205,6 +206,21 @@ class QueryUnderstanding:
                             if tbl_m:
                                 referenced_table = tbl_m.group(1).title() if tbl_m.group(1) else "table"
 
+                        # Extract figure reference if present
+                        fig_m = cls.FIGURE_PATTERN.search(raw_query) or cls.FIGURE_PATTERN.search(normalized_query)
+                        referenced_figure = None
+                        if fig_m:
+                            f_num = fig_m.group(1) or fig_m.group(2)
+                            f_hyphen = f_num.replace(".", "-")
+                            f_dot = f_num.replace("-", ".")
+                            referenced_figure = f"Figure {f_hyphen}"
+                            fig_variants = [f"Figure {f_hyphen}", f"Figure {f_dot}", f"Fig {f_hyphen}", f"Fig. {f_dot}"]
+                            for v in fig_variants:
+                                if v not in entities:
+                                    entities.append(v)
+                            if f"Figure {f_hyphen}" not in refined_query:
+                                refined_query = f"{refined_query} Figure {f_hyphen} (Figure {f_dot})"
+
                         # Safety check: if user asked "only need questions" or "just questions", enforce questions_only
                         if re.search(r"\b(?:only\s+(?:need\s+)?questions?|just\s+questions?|no\s+answers?)\b", raw_query, re.IGNORECASE):
                             format_directives["questions_only"] = True
@@ -225,6 +241,7 @@ class QueryUnderstanding:
                             question_count=int(question_count) if question_count else None,
                             referenced_page=int(referenced_page) if referenced_page is not None else None,
                             referenced_table=referenced_table,
+                            referenced_figure=referenced_figure,
                             format_directives=format_directives,
                             extracted_entities=entities[:10],
                             learning_objective="analyze" if intent == "COMPARISON" else ("apply" if intent in ["PRACTICE_QUESTIONS", "PROBLEM_SOLVING"] else "understand"),
@@ -295,6 +312,15 @@ class QueryUnderstanding:
         tbl_m = cls.TABLE_PATTERN.search(cleaned)
         referenced_table = tbl_m.group(1).title() if (tbl_m and tbl_m.group(1)) else ("table" if tbl_m else None)
 
+        # Extract figure reference if present
+        fig_m = cls.FIGURE_PATTERN.search(raw_query) or cls.FIGURE_PATTERN.search(normalized_query) or cls.FIGURE_PATTERN.search(cleaned)
+        referenced_figure = None
+        if fig_m:
+            f_num = fig_m.group(1) or fig_m.group(2)
+            f_hyphen = f_num.replace(".", "-")
+            f_dot = f_num.replace("-", ".")
+            referenced_figure = f"Figure {f_hyphen}"
+
         # Format directives
         format_directives: Dict[str, Any] = {}
         if re.search(r"\b(?:only\s+(?:need\s+)?questions?|just\s+questions?|no\s+answers?)\b", cleaned):
@@ -337,6 +363,14 @@ class QueryUnderstanding:
             if upper_a not in entities:
                 entities.append(upper_a)
 
+        if referenced_figure:
+            fig_num = re.sub(r"[^\d.-]", "", referenced_figure)
+            f_hyphen = fig_num.replace(".", "-")
+            f_dot = fig_num.replace("-", ".")
+            for fv in [f"Figure {f_hyphen}", f"Figure {f_dot}", f"Fig {f_hyphen}", f"Fig. {f_dot}"]:
+                if fv not in entities:
+                    entities.append(fv)
+
         raw_entities = re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b", resolved_query)
         action_verbs = {"Compare", "Explain", "Analyze", "Describe", "Define", "Discuss", "Show", "What", "How", "Why", "Tell", "Give"}
         for ent in raw_entities:
@@ -370,6 +404,7 @@ class QueryUnderstanding:
             question_count=question_count,
             referenced_page=referenced_page,
             referenced_table=referenced_table,
+            referenced_figure=referenced_figure,
             format_directives=format_directives,
             extracted_entities=list(dict.fromkeys(entities))[:10],
             learning_objective="analyze" if intent == "COMPARISON" else ("apply" if intent in ["PRACTICE_QUESTIONS", "PROBLEM_SOLVING"] else "understand"),

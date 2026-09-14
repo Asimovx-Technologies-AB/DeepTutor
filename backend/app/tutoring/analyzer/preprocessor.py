@@ -56,6 +56,20 @@ class QueryPreprocessor:
         normalized = re.sub(r"[ \t]+", " ", cleaned)
         normalized = normalized.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
 
+        # 3b. Figure Reference Normalization (e.g. "2.8 figure", "figure 2.8", "fig 2-8")
+        def _norm_fig(match):
+            num = match.group(1) or match.group(2)
+            num_hyphen = num.replace(".", "-")
+            num_dot = num.replace("-", ".")
+            return f"Figure {num_hyphen} Figure {num_dot}"
+
+        normalized = re.sub(
+            r"\b(?:figure|fig\.?)\s*(\d+(?:[.-]\d+)+|\d+)\b|\b(\d+(?:[.-]\d+)+)\s*(?:figure|fig\.?)\b",
+            _norm_fig,
+            normalized,
+            flags=re.IGNORECASE
+        )
+
         # 4. Spelling / Typo Handling
         words = normalized.split()
         corrected_words = []

@@ -22,6 +22,19 @@ def test_query_preprocessor():
     assert meta["has_typos_fixed"] is True
 
 
+def test_figure_query_normalization_and_understanding():
+    """Verify that inputs like 'explain 2.8 figure' or 'figure 2.8' normalize and extract Figure 2-8."""
+    raw = "explain 2.8 figure"
+    normalized, _, _ = QueryPreprocessor.preprocess(raw)
+    assert "Figure 2-8" in normalized
+    assert "Figure 2.8" in normalized
+
+    meta = QueryUnderstanding.analyze_query(raw_query=raw)
+    assert meta.referenced_figure == "Figure 2-8"
+    assert any("Figure 2-8" in e for e in meta.extracted_entities)
+    assert any("Figure 2.8" in e for e in meta.extracted_entities)
+
+
 def test_reference_resolver():
     history = [
         {"role": "user", "content": "Tell me about Support Vector Machines."},

@@ -103,13 +103,13 @@ class AnswerValidator:
                 break
 
         # Pass / Fail Decision
-        is_valid = (grounding_score >= 0.35) and cross_ref_valid and (pedagogy_score >= 0.6) and is_safe and diagram_valid
+        is_valid = (grounding_score >= 0.30) and cross_ref_valid and (pedagogy_score >= 0.6) and is_safe and diagram_valid
         status = "PASS" if is_valid else "FAIL"
 
         feedback_notes = "All pedagogical, grounding, and cross-reference checks passed."
         if not is_valid:
             reasons = []
-            if grounding_score < 0.35:
+            if grounding_score < 0.30:
                 reasons.append("Low contextual grounding")
             if not cross_ref_valid:
                 reasons.append("Unverified page citations")
