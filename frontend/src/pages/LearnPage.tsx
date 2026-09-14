@@ -143,7 +143,7 @@ export default function LearnPage() {
   const [isSessionLoading, setIsSessionLoading] = useState<boolean>(false)
   const [activeSubject, setActiveSubject] = useState<string>('General Study')
   const [documentName, setDocumentName] = useState<string>('')
-  const [_docStatus, setDocStatus] = useState<string>('text_ready')
+  const [docStatus, setDocStatus] = useState<string>('INDEXED')
   const [sessionDocuments, setSessionDocuments] = useState<any[]>([])
   const [selectedMaterialFilter, setSelectedMaterialFilter] = useState<string>('all')
   const [isMaterialsPopoverOpen, setIsMaterialsPopoverOpen] = useState(false)
@@ -287,10 +287,15 @@ export default function LearnPage() {
 
   // Upload modal & drag drop
   const [isUploading, setIsUploading] = useState(false)
-  const [_uploadingFileMeta, setUploadingFileMeta] = useState<{ name: string; sizeFormatted: string } | null>(null)
+  const [uploadingFileMeta, setUploadingFileMeta] = useState<{ name: string; sizeFormatted: string } | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSubject, setUploadSubject] = useState('')
+
+  const isDocProcessing = Boolean(
+    isUploading ||
+    ['PROCESSING', 'PARSING', 'EXTRACTING', 'INDEXING'].includes((docStatus || '').toUpperCase())
+  )
 
   // Student Profile
   const [_studentMemory, setStudentMemory] = useState<any>(null)
@@ -394,7 +399,7 @@ export default function LearnPage() {
       if (meta) {
         setActiveSubject(meta.subject || 'General Study')
         setDocumentName(meta.document_name || '')
-        setDocStatus(meta.status || 'text_ready')
+        setDocStatus(meta.document_status || meta.status || 'INDEXED')
       }
       setSessionDocuments(data.documents || (meta.document_name ? [meta.document_name] : []))
       setSelectedMaterialFilter('all')
@@ -537,6 +542,67 @@ export default function LearnPage() {
     }).catch(() => { })
   }, [user?.id])
 
+  // ─── 3.1 Real-time polling while document processing/indexing is active ───
+  useEffect(() => {
+    if (!isDocProcessing || !activeSessionId) return
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await studyApi.getSession(activeSessionId)
+        const data = res.data
+        const st = data.document_status || data.status || data.meta?.document_status || data.meta?.status
+        if (st && !['PROCESSING', 'PARSING', 'EXTRACTING', 'INDEXING'].includes(st.toUpperCase())) {
+          setDocStatus(st)
+          if (data.topics && data.topics.length > 0) {
+            setTopics(data.topics)
+            setActiveTopic((prev) => prev || data.topics[0])
+          }
+          if (data.documents) {
+            setSessionDocuments(data.documents)
+          }
+          if (data.messages && data.messages.length > 0) {
+            const formatted: ChatMessage[] = data.messages.map((m: any) => ({
+              id: m.id || `msg-${Math.random()}`,
+              role: m.role,
+              text: m.text || m.content || '',
+              thought_process: m.thought_process,
+              sources: m.sources || [],
+              suggested_questions: m.suggested_questions || [],
+              created_at: m.created_at
+            }))
+            setMessages(formatted)
+          } else {
+            // If no overview message in session yet, synthesize the LLM important topics
+            try {
+              const synthRes = await studyApi.synthesizeCurriculum(activeSessionId)
+              if (synthRes.data?.welcome_briefing) {
+                const overviewMsg: ChatMessage = {
+                  id: `sys-${Date.now()}`,
+                  role: 'assistant',
+                  text: synthRes.data.welcome_briefing,
+                  thought_process: 'Synthesized core document curriculum and important topics.',
+                  suggested_questions: synthRes.data.suggested_questions || [],
+                  format: 'conceptual'
+                }
+                setMessages((prev) => (prev.length === 0 || (prev.length === 1 && prev[0].role === 'assistant')) ? [overviewMsg] : [...prev, overviewMsg])
+                if (synthRes.data.important_topics && synthRes.data.important_topics.length > 0) {
+                  setTopics(synthRes.data.important_topics)
+                  setActiveTopic((prev) => prev || synthRes.data.important_topics[0])
+                }
+              }
+            } catch {
+              // fallback gracefully
+            }
+          }
+          fetchSessions()
+        }
+      } catch {
+        // silent polling catch
+      }
+    }, 1500)
+
+    return () => clearInterval(pollInterval)
+  }, [isDocProcessing, activeSessionId, fetchSessions])
+
   // ─── 4. Document Ingestion Handler ───
   const handleFileUpload = async (file: File) => {
     const sizeStr = file.size < 1024 * 1024 
@@ -557,9 +623,10 @@ export default function LearnPage() {
       setUploadProgress(100)
 
       const data = res.data
+      const docName = data.document_name || data.filename || file.name
       setActiveSessionId(data.session_id)
-      setDocumentName(data.filename)
-      setDocStatus(data.status)
+      setDocumentName(docName)
+      setDocStatus(data.document_status || data.status || 'PROCESSING')
       if (data.documents) {
         setSessionDocuments(data.documents)
       } else {
@@ -573,23 +640,8 @@ export default function LearnPage() {
         setActiveTopic(data.topics[0])
       }
 
-      const docCount = data.document_count || (data.documents ? data.documents.length : 1)
-      const welcomeText = docCount > 1
-        ? `Added **${data.filename}** to this study room! You now have **${docCount} materials** in this workspace.\n\nI can search across all your materials to answer queries, compare concepts, or solve exercises from any of them. What would you like to explore?`
-        : `Welcome! I have prepared your study material for **${data.filename}**.\n\nYou can ask me to:\n- **Explain any concept or topic** with simple step-by-step intuition\n- **Solve exercises and fill tables** from any page in the book\n- **Generate quick revision notes, formulas, or practice quizzes**\n\nWhat would you like to explore first?`
-
-      // Add student-friendly interactive welcome message in chat
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `sys-${Date.now()}`,
-          role: 'assistant',
-          text: welcomeText,
-          thought_process: `Loaded ${docCount} study materials into unified session memory.`,
-          format: 'conceptual'
-        }
-      ])
-
+      // Reset messages so the circle loader displays until processing finishes
+      setMessages([])
       fetchSessions()
       setTimeout(() => {
         setIsUploading(false)
@@ -672,6 +724,8 @@ export default function LearnPage() {
 
   // ─── 5. Send Chat Message (Planner -> Executor) ───
   const handleSendMessage = async (customQuery?: string) => {
+    if (isDocProcessing) return
+
     // If a file is attached without text, upload the file directly
     if (attachedFile?.rawFile && !customQuery && !inputQuery.trim()) {
       const fileToUpload = attachedFile.rawFile
@@ -1903,14 +1957,19 @@ export default function LearnPage() {
 
             {/* GROUNDED TUTOR CHAT (IndTutor Cognitive Minimalist Experience) */}
             <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-[#F9FAFB]">
-                {isSessionLoading ? (
-                  <div className="flex-1 flex items-center justify-center p-4 sm:p-8 bg-[#F9FAFB] overflow-y-auto">
-                    <div className="max-w-2xl w-full">
-                      <SessionLoadingAnimation
-                        sessionTitle={sessions.find((s) => s.id === activeSessionId)?.title || documentName || activeSubject}
-                        subject={activeSubject}
-                      />
-                    </div>
+                {isSessionLoading || isDocProcessing ? (
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#F9FAFB] min-h-[50vh]">
+                    <div className="w-9 h-9 border-2 border-slate-200 border-t-slate-900 rounded-full animate-spin mb-3.5" />
+                    <p className="text-sm font-semibold text-slate-800 font-sans">
+                      {isDocProcessing
+                        ? `Processing ${documentName || uploadingFileMeta?.name || 'document'}...`
+                        : 'Loading study room...'}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1 font-sans">
+                      {isDocProcessing
+                        ? 'Extracting text, tables & syllabus topics'
+                        : 'Preparing workspace...'}
+                    </p>
                   </div>
                 ) : (
                   <>
@@ -2162,29 +2221,7 @@ export default function LearnPage() {
                                   </motion.div>
                                 )}
 
-                                {/* ── Suggested Question Chips ── */}
-                                {msg.suggested_questions && msg.suggested_questions.length > 0 && (
-                                  <motion.div
-                                    initial={{ opacity: 0, y: 4 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.2, duration: 0.25 }}
-                                    className="mt-3 flex flex-wrap gap-2"
-                                  >
-                                    {msg.suggested_questions.map((q: string, i: number) => (
-                                      <button
-                                        key={i}
-                                        onClick={() => handleSendMessage(q)}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold
-                                                   bg-slate-100 text-slate-700 border border-slate-200
-                                                   hover:bg-indigo-600 hover:text-white hover:border-indigo-600
-                                                   transition-all duration-150 cursor-pointer shadow-sm font-sans"
-                                      >
-                                        <HelpCircle size={11} />
-                                        {q}
-                                      </button>
-                                    ))}
-                                  </motion.div>
-                                )}
+
 
                                 {/* Action Footer: Listen + Feedback buttons (Cleanly anchored to assistant response) */}
                                 {Boolean(msg.text && msg.text.trim().length > 0 && !(isAgentThinking && idx === messages.length - 1)) && (
@@ -2307,14 +2344,15 @@ export default function LearnPage() {
                     </AnimatePresence>
 
                     {/* ChatInputForm Pill */}
-                    <div className="rounded-full bg-white border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.07)] focus-within:ring-2 focus-within:ring-slate-800/10 focus-within:border-slate-800 transition-all px-2.5 py-1.5 sm:px-3.5 sm:py-2 flex items-center gap-2">
+                    <div className={`rounded-full bg-white border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.07)] focus-within:ring-2 focus-within:ring-slate-800/10 focus-within:border-slate-800 transition-all px-2.5 py-1.5 sm:px-3.5 sm:py-2 flex items-center gap-2 ${isDocProcessing ? 'bg-slate-50/80 opacity-80 cursor-not-allowed' : ''}`}>
                       {/* ① [+] Attach Button & Popover */}
                       <div className="relative shrink-0" ref={attachMenuRef}>
                         <button
                           type="button"
-                          onClick={() => setIsAttachMenuOpen(!isAttachMenuOpen)}
-                          className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition shrink-0 cursor-pointer"
-                          title="Attach document or select from library"
+                          onClick={() => !isDocProcessing && setIsAttachMenuOpen(!isAttachMenuOpen)}
+                          disabled={isDocProcessing}
+                          className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition shrink-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          title={isDocProcessing ? "Processing in progress..." : "Attach document or select from library"}
                         >
                           <Plus size={15} className={`transition-transform duration-200 ${isAttachMenuOpen ? 'rotate-45 text-slate-900' : ''}`} />
                         </button>
@@ -2383,6 +2421,7 @@ export default function LearnPage() {
                         ref={textareaRef}
                         rows={1}
                         value={inputQuery}
+                        disabled={isAgentThinking || isUploading || isDocProcessing}
                         onChange={(e) => {
                           setInputQuery(e.target.value)
                           if (textareaRef.current) {
@@ -2393,12 +2432,18 @@ export default function LearnPage() {
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault()
-                            handleSendMessage()
-                            if (textareaRef.current) textareaRef.current.style.height = 'auto'
+                            if (!isDocProcessing && !isAgentThinking && (inputQuery.trim() || attachedFile)) {
+                              handleSendMessage()
+                              if (textareaRef.current) textareaRef.current.style.height = 'auto'
+                            }
                           }
                         }}
-                        placeholder={`Ask questions about ${activeTopic?.title || 'your uploaded course notes'}...`}
-                        className="flex-1 bg-transparent border-0 border-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 ring-0 chat-reading font-serif text-slate-900 placeholder-slate-400 resize-none max-h-[120px] py-1 px-1.5 shadow-none"
+                        placeholder={
+                          isDocProcessing
+                            ? "⚡ Processing document text & topics... Please wait"
+                            : `Ask questions about ${activeTopic?.title || 'your uploaded course notes'}...`
+                        }
+                        className={`flex-1 bg-transparent border-0 border-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 ring-0 chat-reading font-serif text-slate-900 placeholder-slate-400 resize-none max-h-[120px] py-1 px-1.5 shadow-none ${isDocProcessing ? 'cursor-not-allowed opacity-60' : ''}`}
                         style={{ outline: 'none', boxShadow: 'none', border: 'none' }}
                       />
 
@@ -2406,23 +2451,26 @@ export default function LearnPage() {
                       {(inputQuery.trim() || attachedFile) ? (
                         <button
                           onClick={() => {
-                            handleSendMessage()
-                            if (textareaRef.current) textareaRef.current.style.height = 'auto'
+                            if (!isDocProcessing && !isAgentThinking) {
+                              handleSendMessage()
+                              if (textareaRef.current) textareaRef.current.style.height = 'auto'
+                            }
                           }}
-                          disabled={isAgentThinking || isUploading}
-                          className="w-8 h-8 rounded-full bg-[#000000] hover:bg-slate-800 text-white flex items-center justify-center transition shrink-0 cursor-pointer shadow-xs disabled:opacity-40"
-                          title={attachedFile ? "Upload and analyze document" : "Send message"}
+                          disabled={isAgentThinking || isUploading || isDocProcessing}
+                          className="w-8 h-8 rounded-full bg-[#000000] hover:bg-slate-800 text-white flex items-center justify-center transition shrink-0 cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                          title={isDocProcessing ? "Document is processing..." : (attachedFile ? "Upload and analyze document" : "Send message")}
                         >
                           <ArrowUp size={16} />
                         </button>
                       ) : (
                         <button
-                          onClick={handleToggleMic}
+                          onClick={() => !isDocProcessing && handleToggleMic()}
+                          disabled={isDocProcessing}
                           className={`w-8 h-8 rounded-full flex items-center justify-center transition shrink-0 cursor-pointer ${isListeningVoice
                             ? 'bg-red-500 text-white animate-pulse'
-                            : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                            : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
                             }`}
-                          title="Voice input"
+                          title={isDocProcessing ? "Processing in progress..." : "Voice input"}
                         >
                           <Mic size={17} />
                         </button>

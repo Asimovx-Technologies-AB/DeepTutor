@@ -417,6 +417,8 @@ export const studyApi = {
     api.post('/study/sessions/batch-delete', { session_ids: sessionIds }),
   deleteDocument: (sessionId: string, docNameOrId: string) =>
     api.delete(`/study/sessions/${sessionId}/documents/${encodeURIComponent(docNameOrId)}`),
+  synthesizeCurriculum: (sessionId: string) =>
+    api.post(`/study/sessions/${sessionId}/synthesize-curriculum`),
   getMemory: (userId: string) => api.get(`/study/memory/${userId}`),
   addMemoryFact: (userId: string, factData: any) =>
     api.post(`/study/memory/${userId}/fact`, factData),

@@ -106,10 +106,15 @@ Before answering, analyze the student's question intent and choose the optimal p
 
 === STRICT OUT-OF-MATERIAL GUARDRAIL ===
 - You are strictly a tutor for the student's uploaded study material and its academic domain.
-- If the student's question is COMPLETELY UNRELATED to the provided study material and cannot be grounded in it:
+- If the student's question is COMPLETELY UNRELATED to the provided study material and its academic domain (for instance, asking about unrelated pop culture, celebrity gossip, stock market advice, or recipes):
   Do NOT answer or hallucinate out-of-scope content.
   Politely decline with:
   "I am your dedicated tutor for this study material. Your question is outside the scope of your uploaded document on **[Topic / Subject]**. To keep your learning focused and productive, please ask questions related to this study material, or upload documents for that subject!"
+- MANDATORY IN-SCOPE EXCEPTIONS (NEVER REFUSE):
+  1. Main Topics & Curriculum Overview: Questions asking "what are the main topics", "what does this document cover", "give me a summary", "overview", "what chapters are there", "learning roadmap", or "syllabus" are ALWAYS 100% IN-SCOPE. Synthesize a structured, engaging curriculum breakdown and learning roadmap from the verified context and topics.
+  2. Questions Grounded in Verified Excerpts: If the student asks about ANY concept, term, chapter, classification, or phenomenon mentioned in the verified study context excerpts below (such as specific types, functions, examples, or distribution), answer it thoroughly, grounded strictly in those excerpts.
+  3. Academic Domain Questions: If the question relates to the general academic subject of the uploaded document (e.g. Geography, Environmental Science, History, Mathematics), answer it authoritatively using the context.
+  4. Pedagogical & Dialogue Requests: Requests for practice questions, quizzes, problem solving, explaining simpler, or asking about earlier conversation turns in this session are ALWAYS IN-SCOPE.
 
 === CITATION & PAGE NUMBER RULES ===
 - Ground all facts strictly in the verified context excerpts provided.
@@ -299,6 +304,11 @@ class TeachingAgent:
         count_str = f"Requested Question Count: {query_meta.question_count}\n" if query_meta.question_count else ""
         topic_spec_str = f"Specific Target Topic: {query_meta.target_topic}\n" if query_meta.target_topic else ""
 
+        curriculum_str = ""
+        if context_bundle.curriculum_topics:
+            c_lines = [f"- {t}" for t in context_bundle.curriculum_topics]
+            curriculum_str = "=== VERIFIED DOCUMENT CURRICULUM & MAIN TOPICS ===\n" + "\n".join(c_lines) + "\n===================================================\n\n"
+
         # Format directives check
         format_dirs = query_meta.format_directives or {}
         is_questions_only = bool(format_dirs.get("questions_only", False))
@@ -309,6 +319,12 @@ class TeachingAgent:
         is_solve_table = bool(format_dirs.get("solve_table")) or bool(query_meta.referenced_table) or (
             "table" in query_meta.resolved_query.lower()
             and any(w in query_meta.resolved_query.lower() for w in ["solve", "fill", "calculate", "complete", "check"])
+        )
+
+        # Overview & Main topics check
+        is_topics_overview = query_meta.intent == "SUMMARY" or any(
+            w in query_meta.resolved_query.lower()
+            for w in ["main topic", "topics", "summary", "overview", "syllabus", "roadmap", "chapters", "table of content", "curriculum"]
         )
 
         if is_solve_table:
@@ -337,6 +353,12 @@ class TeachingAgent:
                     f"Number them cleanly (Question 1, Question 2, ...). "
                     f"If the student requested explanations or answers, provide clear explanations. DO NOT output an interactive multiple-choice quiz.\n"
                 )
+        elif is_topics_overview:
+            task_instruction = (
+                "3. CURRICULUM OVERVIEW / MAIN TOPICS: The student is asking for the main topics, summary, or learning roadmap of this study material. "
+                "Present a structured, engaging breakdown of the verified curriculum and key topics in this document. "
+                "Highlight the core theme of each section clearly, and end with an Interactive Checkpoint asking the student which topic they would like to start with.\n"
+            )
         else:
             task_instruction = ""
 
@@ -348,14 +370,16 @@ class TeachingAgent:
             f"{topic_spec_str}"
             f"Visual aid requested/warranted: {'yes' if wants_visual else 'no'}\n\n"
             f"{history_str}"
+            f"{curriculum_str}"
             f"=== VERIFIED STUDY CONTEXT (from the student's uploaded document) ===\n"
             f"{context_str}\n"
             f"{formulas_str}\n"
             f"{tables_str}\n"
             f"======================================================================\n\n"
             f"Instructions:\n"
-            f"1. Check if the question is within the scope of this study material. If completely unrelated, apply the Out-of-Material Guardrail and decline politely.\n"
-            f"2. Check DIALOGUE HISTORY: If the student asks about ANY of your previous responses or explanations in this session, answer directly and accurately referencing that prior response.\n"
+            f"1. Check if the question is within the scope of this study material. If the student asks about any concept or classification covered in the verified excerpts below, or asks about main topics, curriculum, summary, or practice problems, it is 100% IN-SCOPE and must be answered thoroughly.\n"
+            f"2. Only decline if the question is completely unrelated to the academic subject (e.g. pop culture, celebrity gossip, stock trading, cooking recipes).\n"
+            f"3. Check DIALOGUE HISTORY: If the student asks about ANY of your previous responses or explanations in this session, answer directly and accurately referencing that prior response.\n"
             f"{task_instruction}"
             f"4. Adapt your response format to the query intent (e.g. roadmap for 'main topics', intuitive explanation with analogy for 'explain', table for comparisons, clean LaTeX for math).\n"
             f"5. Do NOT output raw HTML (<br>) or ASCII-art. Use native Markdown only.\n"

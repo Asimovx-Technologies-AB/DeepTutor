@@ -65,6 +65,7 @@ class ContextBundle(BaseModel):
     student_mastery_context: Dict[str, float] = Field(default_factory=dict)
     
     retrieved_chunks: List[KnowledgeChunkRead] = Field(default_factory=list)
+    curriculum_topics: List[str] = Field(default_factory=list)
     related_formulas: List[str] = Field(default_factory=list)
     related_tables: List[str] = Field(default_factory=list)
     citations: List[CitationItem] = Field(default_factory=list)

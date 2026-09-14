@@ -1,5 +1,7 @@
+import re
 import logging
 from typing import List, Dict, Any, Optional
+import numpy as np
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 from app.models.chunk import KnowledgeChunk
@@ -36,10 +38,31 @@ class MultiStrategyRetrievalOrchestrator:
         resolved_query = query_meta.resolved_query
         entities = query_meta.extracted_entities
 
-        # 1. Query Expansion: Generate sub-query terms and concept expansions
-        expanded_terms = set(resolved_query.lower().split())
+        # 1. Query Expansion: Generate informative sub-query terms without grammatical stopwords
+        _STOPWORDS = {
+            "what", "are", "the", "of", "in", "is", "a", "an", "and", "or", "to", "for",
+            "with", "on", "at", "by", "from", "this", "that", "these", "those", "can",
+            "you", "me", "how", "why", "which", "do", "does", "did", "tell", "explain",
+            "give", "please", "about"
+        }
+        clean_tokens = [w.strip("?,.:;\"'()!") for w in resolved_query.lower().split()]
+        informative_terms = [w for w in clean_tokens if len(w) > 2 and w not in _STOPWORDS]
+        expanded_terms = set(informative_terms)
+        for term in informative_terms:
+            if term.endswith("s") and len(term) > 3:
+                expanded_terms.add(term[:-1])
+            elif not term.endswith("s"):
+                expanded_terms.add(term + "s")
         for e in entities:
-            expanded_terms.add(e.lower())
+            e_clean = e.lower().strip()
+            if e_clean and e_clean not in _STOPWORDS:
+                expanded_terms.add(e_clean)
+
+        # Check if query is an overview / main topics / summary inquiry
+        is_overview_query = (
+            query_meta.intent == "SUMMARY"
+            or any(w in resolved_query.lower() for w in ["main topic", "topics", "summary", "overview", "syllabus", "chapters", "what is this document", "what does this cover", "roadmap", "curriculum"])
+        )
 
         # 2. Metadata Filtering & Base Query Construction
         if not document_id:
@@ -50,33 +73,57 @@ class MultiStrategyRetrievalOrchestrator:
                 conversation_history=conversation_history or [],
                 student_mastery_context={},
                 retrieved_chunks=[],
+                curriculum_topics=[],
                 related_formulas=[],
                 related_tables=[],
                 citations=[]
             )
 
+        # Extract curriculum topics for document/session
+        curriculum_topic_titles: List[str] = []
+        from app.models.session import CurriculumTopic
+        db_topics = (
+            session.query(CurriculumTopic)
+            .filter(CurriculumTopic.document_id == document_id)
+            .order_by(CurriculumTopic.order_index)
+            .all()
+        )
+        seen_t = set()
+        for t in db_topics:
+            if t.title and t.title not in seen_t:
+                seen_t.add(t.title)
+                summary_text = f" ({t.summary})" if t.summary and "Page" in t.summary else ""
+                curriculum_topic_titles.append(f"{t.title}{summary_text}")
+
         base_chunk_q = session.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == document_id)
 
-        # Apply strategy-specific filtering
-        if strategy == "contextual" and active_page:
+        # Apply strategy-specific filtering (with resilient fallback so queries never drop to 0 candidates)
+        if strategy == "contextual" and active_page and not is_overview_query:
             # Anchor to active page +/- 1
-            base_chunk_q = base_chunk_q.filter(
+            ctx_q = base_chunk_q.filter(
                 KnowledgeChunk.page_number.between(max(1, active_page - 1), active_page + 1)
             )
-        elif strategy == "thematic" and topic_title:
-            base_chunk_q = base_chunk_q.filter(
+            candidate_chunks = ctx_q.all()
+            if not candidate_chunks:
+                candidate_chunks = base_chunk_q.all()
+        elif strategy == "thematic" and topic_title and not is_overview_query:
+            theme_q = base_chunk_q.filter(
                 or_(
                     KnowledgeChunk.topic.ilike(f"%{topic_title}%"),
                     KnowledgeChunk.chapter_section.ilike(f"%{topic_title}%"),
                 )
             )
-
-        candidate_chunks = base_chunk_q.all()
+            candidate_chunks = theme_q.all()
+            # Resilient fallback: If the explicit topic filter matches 0 chunks (e.g. question is from another chapter),
+            # fall back to all document chunks so hybrid semantic vector + lexical search can find the exact content
+            if not candidate_chunks:
+                candidate_chunks = base_chunk_q.all()
+        else:
+            candidate_chunks = base_chunk_q.all()
 
         # 3. Hybrid Scoring: Lexical Match + Vector Cosine + Graph Linkage
         scored_chunks: List[Dict[str, Any]] = []
         query_vec = default_embedding_service.embed_text(resolved_query)
-        import numpy as np
         q_norm = float(np.linalg.norm(query_vec))
 
         # Check for any chunks lacking stored embeddings and batch embed once
@@ -91,6 +138,10 @@ class MultiStrategyRetrievalOrchestrator:
             except Exception as e:
                 logger.warning(f"Failed to persist chunk embeddings: {e}")
                 session.rollback()
+
+        # Prepare topic terms for soft affinity scoring
+        topic_terms = set(re.findall(r"\w+", (topic_title or "").lower())) if topic_title else set()
+        topic_terms = {t for t in topic_terms if len(t) > 3}
 
         for chunk in candidate_chunks:
             # Lexical BM25 approximation
@@ -107,14 +158,24 @@ class MultiStrategyRetrievalOrchestrator:
             else:
                 cosine_score = 0.0
 
+            # Topic affinity bonus (soft boost rather than destructive filtering)
+            chunk_topic = (chunk.topic or "").lower()
+            chunk_section = (chunk.chapter_section or "").lower()
+            has_topic_match = bool(topic_title and (
+                topic_title.lower() in chunk_topic
+                or topic_title.lower() in chunk_section
+                or any(t in chunk_topic or t in chunk_section for t in topic_terms)
+            ))
+            topic_affinity_bonus = 0.2 if has_topic_match else 0.0
+
             # Strategy weighted score
             if strategy == "multi_concept":
                 entity_overlap = sum(1 for e in entities if e.lower() in text_lower)
-                final_score = (0.3 * lexical_score) + (0.4 * cosine_score) + (0.3 * (entity_overlap / max(1, len(entities))))
+                final_score = (0.3 * lexical_score) + (0.4 * cosine_score) + (0.3 * (entity_overlap / max(1, len(entities)))) + topic_affinity_bonus
             elif strategy == "thematic":
-                final_score = (0.25 * lexical_score) + (0.65 * cosine_score) + (0.1 * chunk.confidence)
+                final_score = (0.25 * lexical_score) + (0.55 * cosine_score) + (0.1 * chunk.confidence) + topic_affinity_bonus
             else:
-                final_score = (0.4 * lexical_score) + (0.6 * cosine_score)
+                final_score = (0.4 * lexical_score) + (0.6 * cosine_score) + topic_affinity_bonus
 
             scored_chunks.append({
                 "chunk": chunk,
@@ -196,6 +257,16 @@ class MultiStrategyRetrievalOrchestrator:
                 elif a.asset_type == "table" and a.markdown and a.markdown not in related_tables:
                     related_tables.append(a.markdown)
 
+        # For overview / main topics queries, guarantee key introductory/topic chunks across the document
+        if is_overview_query and document_id and candidate_chunks:
+            early_chunks = session.query(KnowledgeChunk).filter(
+                KnowledgeChunk.document_id == document_id
+            ).order_by(KnowledgeChunk.page_number, KnowledgeChunk.chunk_index).limit(6).all()
+            for ec in early_chunks:
+                if ec.id not in selected_chunk_ids and len(expanded_chunks) < 8:
+                    expanded_chunks.append(ec)
+                    selected_chunk_ids.add(ec.id)
+
         # 6. Build Citations & Context Bundle
         citations: List[CitationItem] = []
         chunk_reads: List[KnowledgeChunkRead] = []
@@ -223,6 +294,7 @@ class MultiStrategyRetrievalOrchestrator:
             conversation_history=conversation_history or [],
             student_mastery_context={},
             retrieved_chunks=chunk_reads,
+            curriculum_topics=curriculum_topic_titles,
             related_formulas=related_formulas[:5],
             related_tables=related_tables[:3],
             citations=citations,

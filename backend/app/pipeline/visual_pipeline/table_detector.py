@@ -11,14 +11,34 @@ class TableDetector:
     """
 
     @classmethod
-    def detect_tables(cls, blocks: List[LayoutBlock], page_number: int) -> Tuple[List[TableAsset], List[LayoutBlock]]:
+    def detect_tables(
+        cls,
+        blocks: List[LayoutBlock],
+        page_number: int,
+        native_tables: Optional[List[Dict[str, Any]]] = None
+    ) -> Tuple[List[TableAsset], List[LayoutBlock]]:
         """
-        Detects tables from layout blocks.
+        Detects tables from native vector PDF table structures and layout text blocks.
         Returns (extracted_tables, remaining_non_table_blocks).
         """
         tables: List[TableAsset] = []
         regular_blocks: List[LayoutBlock] = []
         table_idx = 0
+
+        # 1. Incorporate native vector tables extracted directly by PyMuPDF
+        if native_tables:
+            for nt in native_tables:
+                tables.append(TableAsset(
+                    table_index=table_idx,
+                    page_number=page_number,
+                    bbox=nt.get("bbox", [0.0, 0.0, 0.0, 0.0]),
+                    markdown=nt.get("markdown", ""),
+                    html=nt.get("html", ""),
+                    headers=nt.get("headers", []),
+                    rows=nt.get("rows", []),
+                    confidence=nt.get("confidence", 1.0),
+                ))
+                table_idx += 1
 
         for block in blocks:
             text = block.text.strip()

@@ -102,9 +102,9 @@ class DocumentPipelineOrchestrator:
 
             page["normalized_text"] = normalized_text
 
-            # Branch B: Visual & Image Processing Pipeline
+            # Branch B: Structure, Table & Formula Extraction
             blocks = LayoutAnalyzer.analyze_page_layout(blocks, page["width"], page["height"])
-            page_tables, blocks = TableDetector.detect_tables(blocks, page_num)
+            page_tables, blocks = TableDetector.detect_tables(blocks, page_num, native_tables=page.get("native_tables"))
             page_formulas, blocks = FormulaDetector.detect_formulas(blocks, page_num)
             page["blocks"] = blocks
             return page, page_tables, page_formulas
@@ -213,6 +213,78 @@ class DocumentPipelineOrchestrator:
                 existing_doc_id=doc_id
             )
             logger.info(f"[BackgroundPipeline] Completed deep processing for {filename} (ID: {doc_id}).")
+
+            # Post-Processing: LLM-Decided Important Topics Synthesis & Interactive Overview
+            try:
+                from app.models.session import StudySession, CurriculumTopic, ChatMessage
+                from app.models.chunk import KnowledgeChunk
+                from app.tutoring.curriculum.synthesizer import CurriculumSynthesizer
+                import uuid
+
+                db_chunks = db.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == doc_id).limit(20).all()
+                chunks_sample = [
+                    {"content": c.content, "search_text": c.search_text, "topic": c.topic, "page_number": c.page_number}
+                    for c in db_chunks
+                ]
+                db_doc = db.query(Document).filter(Document.id == doc_id).first()
+                doc_title = db_doc.title or filename if db_doc else filename
+
+                sessions = db.query(StudySession).filter(StudySession.document_id == doc_id).all()
+                existing_toc = [t.title for s in sessions for t in s.curriculum_topics]
+
+                synthesis = CurriculumSynthesizer.synthesize_curriculum(
+                    document_title=doc_title,
+                    chunks_sample=chunks_sample,
+                    existing_toc=existing_toc
+                )
+
+                for sess in sessions:
+                    important_topics = synthesis.get("important_topics", [])
+                    if important_topics:
+                        db.query(CurriculumTopic).filter(CurriculumTopic.session_id == sess.id).delete(synchronize_session=False)
+                        for t_data in important_topics:
+                            new_top = CurriculumTopic(
+                                session_id=sess.id,
+                                document_id=doc_id,
+                                title=t_data.get("title", "Core Topic"),
+                                summary=t_data.get("summary", ""),
+                                difficulty=t_data.get("difficulty", "Intermediate"),
+                                estimated_study_time=t_data.get("estimated_study_time", "20 mins"),
+                                order_index=t_data.get("order", 0),
+                                key_concepts=t_data.get("key_concepts", []),
+                                page_start=1,
+                                page_end=db_doc.page_count if db_doc else 1
+                            )
+                            db.add(new_top)
+                        sess.topic_count = len(important_topics)
+
+                    # Persist opening LLM overview message if no overview message exists
+                    existing_msg = db.query(ChatMessage).filter(
+                        ChatMessage.session_id == sess.id,
+                        ChatMessage.intent == "DOCUMENT_OVERVIEW"
+                    ).first()
+                    if not existing_msg:
+                        briefing_text = synthesis.get("welcome_briefing_markdown") or (
+                            f"### 📚 Important Topics in **{doc_title}**\n\n"
+                            + "\n".join([f"- **{t['title']}**: {t['summary']}" for t in important_topics])
+                        )
+                        suggested_qs = [t["suggested_question"] for t in important_topics if t.get("suggested_question")]
+                        overview_msg = ChatMessage(
+                            id=f"msg-overview-{uuid.uuid4().hex[:8]}",
+                            session_id=sess.id,
+                            role="assistant",
+                            content=briefing_text,
+                            intent="DOCUMENT_OVERVIEW",
+                            grounding_score=1.0,
+                            citations=[]
+                        )
+                        db.add(overview_msg)
+                        sess.message_count = (sess.message_count or 0) + 1
+
+                db.commit()
+                logger.info(f"[BackgroundPipeline] Synthesized and saved {len(important_topics)} LLM important topics for {filename}.")
+            except Exception as synth_err:
+                logger.warning(f"[BackgroundPipeline] Topic synthesis failed: {synth_err}")
         except Exception as e:
             logger.error(f"[BackgroundPipeline] Deep processing failed for {filename}: {e}", exc_info=True)
             db_doc = db.query(Document).filter(Document.id == doc_id).first()

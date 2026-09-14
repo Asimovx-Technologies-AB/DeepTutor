@@ -51,7 +51,7 @@ def test_query_understanding():
     assert meta.intent == "COMPARISON"
     assert meta.learning_objective == "analyze"
     assert meta.response_requirements["needs_latex"] is True
-    assert "linear" in [e.lower() for e in meta.extracted_entities] or "regression" in [e.lower() for e in meta.extracted_entities]
+    assert any("linear" in e.lower() or "regression" in e.lower() for e in meta.extracted_entities)
 
 
 def test_query_router():
@@ -198,3 +198,96 @@ def test_tutoring_orchestrator_end_to_end(db_session):
     assert messages[0].role == "user"
     assert messages[1].role == "assistant"
     assert messages[1].grounding_score > 0.0
+
+
+def test_tutoring_orchestrator_main_topics_overview(db_session):
+    doc = Document(
+        id="doc-topics-test",
+        file_hash="dummy_hash_for_topics_test_1234567890abcdef1234567890abcdef",
+        filename="course_curriculum.pdf",
+        file_path="storage://course_curriculum.pdf",
+        file_size_bytes=4000,
+        page_count=3,
+        title="Machine Learning Syllabus",
+        status="INDEXED"
+    )
+    db_session.add(doc)
+
+    study_sess = StudySession(
+        id="sess-topics-1",
+        document_id=doc.id,
+        title="ML Study Session",
+        subject="Computer Science",
+        status="active"
+    )
+    db_session.add(study_sess)
+
+    topic1 = CurriculumTopic(
+        id="topic-1",
+        session_id=study_sess.id,
+        document_id=doc.id,
+        title="Supervised Learning",
+        order_index=0,
+        page_start=1,
+        page_end=1
+    )
+    topic2 = CurriculumTopic(
+        id="topic-2",
+        session_id=study_sess.id,
+        document_id=doc.id,
+        title="Deep Neural Networks",
+        order_index=1,
+        page_start=2,
+        page_end=3
+    )
+    db_session.add_all([topic1, topic2])
+    db_session.commit()
+
+    result = TutoringQueryOrchestrator.process_query(
+        session=db_session,
+        raw_query="what are the main topics",
+        session_id="sess-topics-1"
+    )
+
+    assert result is not None
+    assert "outside the scope" not in result["content"].lower()
+    assert result["validation"]["validation_status"] == "PASS"
+
+
+def test_tutoring_orchestrator_processing_document_guard(db_session):
+    # Setup document in PROCESSING status with 0 indexed chunks
+    doc = Document(
+        id="doc-processing-guard",
+        file_hash="dummy_hash_for_processing_guard_1234567890abcdef1234567890abcdef",
+        filename="physics_notes.pdf",
+        file_path="storage://physics_notes.pdf",
+        file_size_bytes=8000,
+        page_count=10,
+        title="Physics 101",
+        status="PROCESSING"
+    )
+    db_session.add(doc)
+
+    study_sess = StudySession(
+        id="sess-processing-guard",
+        document_id=doc.id,
+        title="Physics 101 Study",
+        subject="Physics",
+        status="active"
+    )
+    db_session.add(study_sess)
+    db_session.commit()
+
+    # Query before indexing completes
+    result = TutoringQueryOrchestrator.process_query(
+        session=db_session,
+        raw_query="what is newton's second law?",
+        session_id="sess-processing-guard"
+    )
+
+    assert result is not None
+    assert result["intent"] == "PROCESSING_STATUS"
+    assert "currently being processed and indexed" in result["content"].lower()
+    assert "outside the scope" not in result["content"].lower()
+
+

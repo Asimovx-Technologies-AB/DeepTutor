@@ -59,6 +59,37 @@ class TutoringQueryOrchestrator:
         )
         doc_id = context.get("document_id")
 
+        # Guard: Check if document is still undergoing background parsing/indexing
+        if doc_id:
+            from app.models.document import Document
+            from app.models.chunk import KnowledgeChunk
+            doc_record = session.query(Document).filter(Document.id == doc_id).first()
+            if doc_record and doc_record.status in ("PROCESSING", "PARSING", "EXTRACTING"):
+                chunk_count = session.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == doc_id).count()
+                if chunk_count == 0:
+                    doc_title = doc_record.title or doc_record.filename or "your study material"
+                    msg = (
+                        f"⏳ **{doc_title}** is currently being processed and indexed.\n\n"
+                        f"Please wait a few moments for text and curriculum extraction to complete before asking questions!"
+                    )
+                    return {
+                        "content": msg,
+                        "intent": "PROCESSING_STATUS",
+                        "citations": [],
+                        "grounding_score": 1.0,
+                        "socratic_follow_up": None,
+                        "suggested_questions": [],
+                        "validation": {
+                            "validation_status": "PASS",
+                            "grounding_score": 1.0,
+                            "cross_reference_valid": True,
+                            "is_valid": True,
+                            "violations": [],
+                            "explanation": "Document is still processing."
+                        },
+                        "latency_ms": round((time.time() - start_time) * 1000, 2)
+                    }
+
         # 3. Reference Resolution
         resolved_query, ref_meta = ReferenceResolver.resolve_references(
             query=normalized_query,
@@ -257,6 +288,24 @@ class TutoringQueryOrchestrator:
             topic_id=topic_id
         )
         doc_id = context.get("document_id")
+
+        # Guard: Check if document is still undergoing background parsing/indexing
+        if doc_id:
+            from app.models.document import Document
+            from app.models.chunk import KnowledgeChunk
+            doc_record = session.query(Document).filter(Document.id == doc_id).first()
+            if doc_record and doc_record.status in ("PROCESSING", "PARSING", "EXTRACTING"):
+                chunk_count = session.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == doc_id).count()
+                if chunk_count == 0:
+                    doc_title = doc_record.title or doc_record.filename or "your study material"
+                    msg = (
+                        f"⏳ **{doc_title}** is currently being processed and indexed.\n\n"
+                        f"Please wait a few moments for text and curriculum extraction to complete before asking questions!"
+                    )
+                    yield {"type": "token", "token": msg}
+                    yield {"type": "grounding", "grounding_score": 1.0}
+                    yield {"type": "done"}
+                    return
 
         # 3. Reference Resolution
         resolved_query, ref_meta = ReferenceResolver.resolve_references(

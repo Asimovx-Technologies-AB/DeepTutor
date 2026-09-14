@@ -82,3 +82,58 @@ async def test_fast_upload_creates_session_and_chunks_instantly(db_session):
     chunks = db_session.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == doc_id).all()
     assert len(chunks) == 3
     assert any("quantum states and operators" in c.content for c in chunks)
+
+
+@pytest.mark.asyncio
+async def test_study_upload_with_table_extraction(db_session):
+    from app.api.study import upload_study_material
+    from app.pipeline.pdf_parser import PyMuPDFParser
+    from app.pipeline.visual_pipeline.table_detector import TableDetector
+
+    # Create PDF with text and a formatted Markdown table
+    doc = fitz.open()
+    p1 = doc.new_page()
+    p1.insert_text(
+        (50, 50),
+        "Machine Learning Comparison\n\n"
+        "| Model | Accuracy | Latency |\n"
+        "| --- | --- | --- |\n"
+        "| BERT | 94.2% | 45ms |\n"
+        "| RoBERTa | 95.1% | 50ms |\n"
+        "| DistilBERT | 92.5% | 15ms |\n"
+    )
+    doc.set_toc([[1, "Model Comparison", 1]])
+    pdf_bytes = doc.write()
+    doc.close()
+
+    upload_file = UploadFile(
+        filename="model_benchmarks.pdf",
+        file=io.BytesIO(pdf_bytes)
+    )
+    bg_tasks = BackgroundTasks()
+
+    response = await upload_study_material(
+        background_tasks=bg_tasks,
+        file=upload_file,
+        subject="Computer Science",
+        session_id=None,
+        db=db_session
+    )
+
+    assert response["status"] == "success"
+    assert response["topic_count"] >= 1
+    assert response["session_id"] is not None
+    assert len(bg_tasks.tasks) == 1
+
+    # Verify parser extracts pages with zero image files generated
+    parser = PyMuPDFParser()
+    pages = parser.parse_document(pdf_bytes, "test_doc")
+    assert len(pages) == 1
+    assert pages[0]["image_storage_path"] is None
+
+    # Verify TableDetector extracts table markdown & HTML
+    tables, regular = TableDetector.detect_tables(pages[0]["blocks"], 1, pages[0].get("native_tables"))
+    assert len(tables) >= 1
+    assert "BERT" in tables[0].markdown
+    assert "94.2%" in tables[0].markdown
+

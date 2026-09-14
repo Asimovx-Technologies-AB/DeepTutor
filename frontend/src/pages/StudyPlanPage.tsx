@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
@@ -31,7 +31,11 @@ import {
   Download,
   AlertTriangle,
   Flame,
-  Filter
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react'
 import { studyPlanApi, documentsApi, default as api } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
@@ -94,6 +98,15 @@ export default function StudyPlanPage() {
   // Filter & Search state in timeline
   const [filterMode, setFilterMode] = useState<'all' | 'completed' | 'in_progress' | 'upcoming'>('all')
   const [searchMilestoneQuery, setSearchMilestoneQuery] = useState<string>('')
+
+  // Pagination state for Milestones
+  const [milestonesPage, setMilestonesPage] = useState<number>(1)
+  const [milestonesPerPage, setMilestonesPerPage] = useState<number>(5)
+  const milestonesRef = useRef<HTMLDivElement>(null)
+
+  // Pagination state for Saved Syllabi in Sidebar
+  const [plansPage, setPlansPage] = useState<number>(1)
+  const plansPerPage = 4
 
   // Study Notes Modal State
   const [activeNotesModal, setActiveNotesModal] = useState<{
@@ -439,6 +452,41 @@ export default function StudyPlanPage() {
     return items
   }, [currentPlan, filterMode, searchMilestoneQuery])
 
+  // Reset milestone page when filters, query, or active plan change
+  useEffect(() => {
+    setMilestonesPage(1)
+  }, [filterMode, searchMilestoneQuery, currentPlan?.id, milestonesPerPage])
+
+  // Milestone pagination calculations
+  const totalMilestonePages = Math.max(1, Math.ceil(filteredSchedule.length / milestonesPerPage))
+  const safeMilestonePage = Math.min(Math.max(1, milestonesPage), totalMilestonePages)
+  const paginatedMilestones = useMemo(() => {
+    const start = (safeMilestonePage - 1) * milestonesPerPage
+    return filteredSchedule.slice(start, start + milestonesPerPage)
+  }, [filteredSchedule, safeMilestonePage, milestonesPerPage])
+
+  // Plans pagination calculations (sidebar)
+  const totalPlansPages = Math.max(1, Math.ceil(plans.length / plansPerPage))
+  const safePlansPage = Math.min(Math.max(1, plansPage), totalPlansPages)
+  const paginatedPlans = useMemo(() => {
+    const start = (safePlansPage - 1) * plansPerPage
+    return plans.slice(start, start + plansPerPage)
+  }, [plans, safePlansPage, plansPerPage])
+
+  // Helper for generating pagination range with ellipsis
+  const getPaginationRange = (current: number, total: number): (number | string)[] => {
+    if (total <= 5) {
+      return Array.from({ length: total }, (_, i) => i + 1)
+    }
+    if (current <= 3) {
+      return [1, 2, 3, 4, '...', total]
+    }
+    if (current >= total - 2) {
+      return [1, '...', total - 3, total - 2, total - 1, total]
+    }
+    return [1, '...', current - 1, current, current + 1, '...', total]
+  }
+
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#1C1A17] p-4 sm:p-8 font-sans selection:bg-[#9E6B38]/20 selection:text-[#1C1A17]">
       <div className="max-w-7xl mx-auto space-y-8">
@@ -507,10 +555,33 @@ export default function StudyPlanPage() {
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-[#8C8479]">
                   Saved Syllabi ({plans.length})
                 </h3>
+                {totalPlansPages > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPlansPage((p) => Math.max(1, p - 1))}
+                      disabled={safePlansPage === 1}
+                      className="p-1 rounded text-stone-400 hover:text-[#1C1A17] disabled:opacity-25 disabled:pointer-events-none transition cursor-pointer"
+                      title="Previous Syllabi"
+                    >
+                      <ChevronLeft size={13} />
+                    </button>
+                    <span className="text-[10px] font-mono text-[#8C8479]">
+                      {safePlansPage}/{totalPlansPages}
+                    </span>
+                    <button
+                      onClick={() => setPlansPage((p) => Math.min(totalPlansPages, p + 1))}
+                      disabled={safePlansPage === totalPlansPages}
+                      className="p-1 rounded text-stone-400 hover:text-[#1C1A17] disabled:opacity-25 disabled:pointer-events-none transition cursor-pointer"
+                      title="Next Syllabi"
+                    >
+                      <ChevronRight size={13} />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2.5">
-                {plans.map((p) => {
+                {paginatedPlans.map((p) => {
                   const isSel = (currentPlan?.id ?? plans[0]?.id) === p.id
                   const pct = Math.round(((p.completed_days?.length ?? 0) / (p.schedule?.length || 1)) * 100)
 
@@ -656,14 +727,14 @@ export default function StudyPlanPage() {
                 </section>
 
                 {/* Filter and Search Toolbar */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                <div ref={milestonesRef} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
                   {/* Segmented Filter Pills */}
-                  <div className="flex items-center gap-1.5 p-1 bg-stone-200/50 rounded-lg border border-stone-200/60 self-start sm:self-auto">
+                  <div className="flex items-center gap-1.5 p-1 bg-stone-200/50 rounded-lg border border-stone-200/60 self-start sm:self-auto overflow-x-auto max-w-full">
                     {(['all', 'completed', 'in_progress', 'upcoming'] as const).map((mode) => (
                       <button
                         key={mode}
                         onClick={() => setFilterMode(mode)}
-                        className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
+                        className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer whitespace-nowrap ${
                           filterMode === mode
                             ? 'bg-white text-[#1C1A17] shadow-2xs font-semibold'
                             : 'text-[#5C564E] hover:text-[#1C1A17]'
@@ -677,22 +748,47 @@ export default function StudyPlanPage() {
                     ))}
                   </div>
 
-                  {/* Topic Search Input */}
-                  <div className="relative w-full sm:w-64">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-                    <input
-                      type="text"
-                      value={searchMilestoneQuery}
-                      onChange={(e) => setSearchMilestoneQuery(e.target.value)}
-                      placeholder="Search topics or concepts..."
-                      className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-stone-200/80 rounded-lg text-[#1C1A17] placeholder:text-stone-400 focus:outline-none focus:border-[#1C1A17]"
-                    />
+                  <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                    {/* Topic Search Input */}
+                    <div className="relative flex-1 sm:w-60">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                      <input
+                        type="text"
+                        value={searchMilestoneQuery}
+                        onChange={(e) => setSearchMilestoneQuery(e.target.value)}
+                        placeholder="Search topics or concepts..."
+                        className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-stone-200/80 rounded-lg text-[#1C1A17] placeholder:text-stone-400 focus:outline-none focus:border-[#1C1A17]"
+                      />
+                    </div>
+
+                    {/* Quick top mini-pager if multiple pages */}
+                    {totalMilestonePages > 1 && (
+                      <div className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-lg border border-stone-200/80 bg-white text-xs font-mono text-[#5C564E] shadow-2xs">
+                        <span>{safeMilestonePage}/{totalMilestonePages}</span>
+                        <button
+                          onClick={() => setMilestonesPage((p) => Math.max(1, p - 1))}
+                          disabled={safeMilestonePage === 1}
+                          className="p-0.5 text-stone-400 hover:text-[#1C1A17] disabled:opacity-25 disabled:pointer-events-none transition cursor-pointer"
+                          title="Previous page"
+                        >
+                          <ChevronLeft size={13} />
+                        </button>
+                        <button
+                          onClick={() => setMilestonesPage((p) => Math.min(totalMilestonePages, p + 1))}
+                          disabled={safeMilestonePage === totalMilestonePages}
+                          className="p-0.5 text-stone-400 hover:text-[#1C1A17] disabled:opacity-25 disabled:pointer-events-none transition cursor-pointer"
+                          title="Next page"
+                        >
+                          <ChevronRight size={13} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Day-by-Day Milestone Cards */}
                 <div className="space-y-4">
-                  {filteredSchedule.length === 0 ? (
+                  {paginatedMilestones.length === 0 ? (
                     <div className="p-10 text-center rounded-xl bg-white border border-stone-200/80 space-y-2">
                       <p className="text-xs font-semibold text-[#5C564E]">No milestones matching current filter.</p>
                       <button
@@ -706,10 +802,10 @@ export default function StudyPlanPage() {
                       </button>
                     </div>
                   ) : (
-                    filteredSchedule.map((dayItem, idx) => {
+                    paginatedMilestones.map((dayItem, idx) => {
                       const isDone = currentPlan.completed_days?.includes(dayItem.day)
-                      const prevPhase = idx > 0 ? filteredSchedule[idx - 1].phase : null
-                      const isNewPhase = dayItem.phase && dayItem.phase !== prevPhase
+                      const prevPhase = idx > 0 ? paginatedMilestones[idx - 1].phase : null
+                      const isNewPhase = dayItem.phase && (idx === 0 || dayItem.phase !== prevPhase)
 
                       return (
                         <div key={dayItem.day} className="space-y-3">
@@ -849,6 +945,130 @@ export default function StudyPlanPage() {
                     })
                   )}
                 </div>
+
+                {/* ─── MILESTONE PAGINATION CONTROLS ─── */}
+                {filteredSchedule.length > 0 && (
+                  <div className="mt-6 pt-5 border-t border-stone-200/80 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/70 backdrop-blur-xs p-4 rounded-xl border border-stone-200/80 shadow-2xs">
+                    {/* Showing info & Per Page selector */}
+                    <div className="flex items-center gap-4 flex-wrap justify-center sm:justify-start">
+                      <p className="text-xs text-[#5C564E] font-medium">
+                        Showing{' '}
+                        <span className="font-semibold text-[#1C1A17]">
+                          {(safeMilestonePage - 1) * milestonesPerPage + 1}–{Math.min(safeMilestonePage * milestonesPerPage, filteredSchedule.length)}
+                        </span>{' '}
+                        of <span className="font-semibold text-[#1C1A17]">{filteredSchedule.length}</span> milestones
+                      </p>
+
+                      <div className="flex items-center gap-1.5 text-xs text-[#8C8479]">
+                        <span className="text-[11px] font-mono">Per view:</span>
+                        <select
+                          value={milestonesPerPage}
+                          onChange={(e) => {
+                            setMilestonesPerPage(Number(e.target.value))
+                            setMilestonesPage(1)
+                          }}
+                          className="px-2 py-1 bg-white border border-stone-200 rounded-md text-xs font-medium text-[#1C1A17] focus:outline-none focus:border-[#1C1A17] cursor-pointer shadow-2xs"
+                        >
+                          <option value={5}>5 milestones</option>
+                          <option value={7}>7 milestones (1 Week)</option>
+                          <option value={10}>10 milestones</option>
+                          <option value={filteredSchedule.length || 100}>All milestones</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Navigation Controls */}
+                    {totalMilestonePages > 1 && (
+                      <div className="flex items-center gap-1 flex-wrap justify-center">
+                        {/* Jump to first page */}
+                        {totalMilestonePages > 4 && (
+                          <button
+                            onClick={() => {
+                              setMilestonesPage(1)
+                              milestonesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                            }}
+                            disabled={safeMilestonePage === 1}
+                            className="p-1.5 rounded-lg border border-stone-200 bg-white text-[#5C564E] hover:text-[#1C1A17] hover:border-stone-300 disabled:opacity-25 disabled:pointer-events-none transition cursor-pointer shadow-2xs"
+                            title="First page"
+                          >
+                            <ChevronsLeft size={14} />
+                          </button>
+                        )}
+
+                        {/* Previous page */}
+                        <button
+                          onClick={() => {
+                            setMilestonesPage((p) => Math.max(1, p - 1))
+                            milestonesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                          }}
+                          disabled={safeMilestonePage === 1}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-stone-200 bg-white text-xs font-medium text-[#5C564E] hover:text-[#1C1A17] hover:border-stone-300 disabled:opacity-25 disabled:pointer-events-none transition cursor-pointer shadow-2xs"
+                        >
+                          <ChevronLeft size={14} />
+                          <span className="hidden sm:inline">Prev</span>
+                        </button>
+
+                        {/* Page numbers */}
+                        <div className="flex items-center gap-1">
+                          {getPaginationRange(safeMilestonePage, totalMilestonePages).map((pItem, pIdx) => {
+                            if (pItem === '...') {
+                              return (
+                                <span key={`ellipsis-${pIdx}`} className="px-2 py-1 text-xs text-[#8C8479] font-mono select-none">
+                                  …
+                                </span>
+                              )
+                            }
+                            const isCurrent = pItem === safeMilestonePage
+                            return (
+                              <button
+                                key={`page-${pItem}`}
+                                onClick={() => {
+                                  setMilestonesPage(Number(pItem))
+                                  milestonesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                                }}
+                                className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-mono font-medium transition cursor-pointer ${
+                                  isCurrent
+                                    ? 'bg-[#1C1A17] text-[#FAF8F5] shadow-xs font-bold'
+                                    : 'bg-white border border-stone-200 text-[#5C564E] hover:text-[#1C1A17] hover:border-stone-300 shadow-2xs'
+                                }`}
+                              >
+                                {pItem}
+                              </button>
+                            )
+                          })}
+                        </div>
+
+                        {/* Next page */}
+                        <button
+                          onClick={() => {
+                            setMilestonesPage((p) => Math.min(totalMilestonePages, p + 1))
+                            milestonesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                          }}
+                          disabled={safeMilestonePage === totalMilestonePages}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-stone-200 bg-white text-xs font-medium text-[#5C564E] hover:text-[#1C1A17] hover:border-stone-300 disabled:opacity-25 disabled:pointer-events-none transition cursor-pointer shadow-2xs"
+                        >
+                          <span className="hidden sm:inline">Next</span>
+                          <ChevronRight size={14} />
+                        </button>
+
+                        {/* Jump to last page */}
+                        {totalMilestonePages > 4 && (
+                          <button
+                            onClick={() => {
+                              setMilestonesPage(totalMilestonePages)
+                              milestonesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                            }}
+                            disabled={safeMilestonePage === totalMilestonePages}
+                            className="p-1.5 rounded-lg border border-stone-200 bg-white text-[#5C564E] hover:text-[#1C1A17] hover:border-stone-300 disabled:opacity-25 disabled:pointer-events-none transition cursor-pointer shadow-2xs"
+                            title="Last page"
+                          >
+                            <ChevronsRight size={14} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </main>
             )}
           </div>

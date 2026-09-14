@@ -2,11 +2,12 @@ import json
 import re
 import logging
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, BackgroundTasks
 from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.document import Document
+from app.models.chunk import KnowledgeChunk
 from app.models.session import StudySession, CurriculumTopic, ChatMessage
 from app.schemas.tutoring import (
     StudySessionCreate,
@@ -23,38 +24,161 @@ router = APIRouter(prefix="/study", tags=["Study & Learn"])
 
 @router.post("/upload")
 async def upload_study_material(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     subject: str = Form("General Studies"),
     session_id: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     """
-    Uploads a document, runs the advanced processing & storage pipeline,
-    creates or attaches a StudySession, and auto-generates the curriculum topic hierarchy
-    for the Learn Page.
+    Uploads a document with sub-second response time:
+    Performs fast in-memory extraction for immediate (< 500ms) access, initializes
+    the StudySession and curriculum topics, and schedules deep pipeline processing
+    (14-dimension chunking, embeddings, table/formula extraction, graph) in the background.
     """
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-    # 1. Run Data Processing & Storage Pipeline
-    canonical_doc = DocumentPipelineOrchestrator.process_document(
-        session=db,
-        file_bytes=file_bytes,
-        filename=file.filename
-    )
-    doc_id = canonical_doc.metadata.id
-    doc_title = canonical_doc.metadata.title or file.filename
+    import hashlib
+    import uuid
+    import fitz
+    from app.storage.local_storage import default_storage
+    from app.pipeline.metadata_extractor import MetadataExtractor
 
-    # 2. Create or Find Study Session
+    file_hash = hashlib.sha256(file_bytes).hexdigest()
+    existing_doc = db.query(Document).filter(Document.file_hash == file_hash).first()
+
+    # 1. Fast path for existing processed document
+    if existing_doc:
+        chunk_count = db.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == existing_doc.id).count()
+        if chunk_count > 0:
+            doc_id = existing_doc.id
+            doc_title = existing_doc.title or file.filename
+
+            if session_id:
+                study_sess = db.query(StudySession).filter(StudySession.id == session_id).first()
+                if not study_sess:
+                    study_sess = StudySession(id=session_id, document_id=doc_id, subject=subject, title=doc_title, document_name=file.filename, status="active")
+                    db.add(study_sess)
+                else:
+                    study_sess.document_id = doc_id
+                    study_sess.document_name = file.filename
+                    study_sess.title = doc_title
+            else:
+                study_sess = StudySession(
+                    document_id=doc_id,
+                    subject=subject,
+                    title=doc_title,
+                    document_name=file.filename,
+                    status="active"
+                )
+                db.add(study_sess)
+            db.flush()
+
+            # Clean prior topics for this session if re-attaching
+            db.query(CurriculumTopic).filter(CurriculumTopic.session_id == study_sess.id).delete(synchronize_session=False)
+            db.flush()
+
+            existing_topics = (
+                db.query(CurriculumTopic)
+                .filter(CurriculumTopic.document_id == doc_id)
+                .order_by(CurriculumTopic.order_index)
+                .all()
+            )
+            seen_titles = set()
+            curriculum_topics = []
+            order_idx = 0
+            for t in existing_topics:
+                if t.title not in seen_titles:
+                    seen_titles.add(t.title)
+                    new_topic = CurriculumTopic(
+                        session_id=study_sess.id,
+                        document_id=doc_id,
+                        title=t.title,
+                        summary=t.summary,
+                        order_index=order_idx,
+                        structural_path=t.structural_path,
+                        page_start=t.page_start,
+                        page_end=t.page_end,
+                        difficulty=t.difficulty or "Intermediate",
+                        estimated_study_time=t.estimated_study_time or "15 mins",
+                        key_concepts=t.key_concepts or []
+                    )
+                    db.add(new_topic)
+                    curriculum_topics.append(new_topic)
+                    order_idx += 1
+
+            if not curriculum_topics:
+                fallback_topic = CurriculumTopic(
+                    session_id=study_sess.id,
+                    document_id=doc_id,
+                    title="Core Chapter Overview",
+                    summary="Complete curriculum for this study material",
+                    order_index=0,
+                    page_start=1,
+                    page_end=existing_doc.page_count
+                )
+                db.add(fallback_topic)
+                curriculum_topics.append(fallback_topic)
+
+            study_sess.topic_count = len(curriculum_topics)
+            db.commit()
+            db.refresh(study_sess)
+
+            return {
+                "status": "success",
+                "session_id": study_sess.id,
+                "document_id": doc_id,
+                "document_name": file.filename,
+                "document_status": existing_doc.status or "INDEXED",
+                "title": study_sess.title,
+                "topic_count": len(curriculum_topics),
+                "curriculum_topics": [CurriculumTopicRead.model_validate(t) for t in curriculum_topics]
+            }
+
+    # 2. Fast synchronous ingestion phase (< 400ms):
+    raw_storage_path = default_storage.store_file(file_bytes, file.filename, subfolder="raw_documents")
+    meta_dict = MetadataExtractor.extract_pdf_metadata(file_bytes, file.filename)
+    doc_id = existing_doc.id if existing_doc else str(uuid.uuid4())
+    pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
+    page_count = meta_dict["page_count"] or len(pdf_doc)
+    doc_title = meta_dict["title"] or file.filename
+
+    if not existing_doc:
+        db_doc = Document(
+            id=doc_id,
+            file_hash=file_hash,
+            filename=file.filename,
+            file_path=raw_storage_path,
+            file_size_bytes=len(file_bytes),
+            mime_type="application/pdf",
+            page_count=page_count,
+            title=doc_title,
+            author=meta_dict.get("author") or "Unknown",
+            creation_date=meta_dict.get("creation_date"),
+            pdf_version=meta_dict.get("pdf_version") or "1.4",
+            status="PROCESSING",
+            current_stage="PARSING",
+        )
+        db.add(db_doc)
+    else:
+        existing_doc.status = "PROCESSING"
+        existing_doc.current_stage = "PARSING"
+        existing_doc.page_count = page_count
+        existing_doc.title = doc_title
+    db.flush()
+
+    # Create or update StudySession
     if session_id:
         study_sess = db.query(StudySession).filter(StudySession.id == session_id).first()
         if not study_sess:
-            study_sess = StudySession(id=session_id, document_id=doc_id, subject=subject, title=doc_title, document_name=file.filename)
+            study_sess = StudySession(id=session_id, document_id=doc_id, subject=subject, title=doc_title, document_name=file.filename, status="active")
             db.add(study_sess)
         else:
             study_sess.document_id = doc_id
             study_sess.document_name = file.filename
+            study_sess.title = doc_title
     else:
         study_sess = StudySession(
             document_id=doc_id,
@@ -64,65 +188,94 @@ async def upload_study_material(
             status="active"
         )
         db.add(study_sess)
-
     db.flush()
 
-    # 3. Generate Curriculum Topics from Document Structure Tree (clean prior topics if re-uploading)
+    # Extract TOC / Topics
+    toc = pdf_doc.get_toc()
+    topics_list = []
+    if toc:
+        for item in toc:
+            lvl, t_title, p_num = item[0], item[1].strip(), item[2]
+            if t_title and (lvl == 1 or (lvl <= 2 and len(topics_list) < 20)):
+                topics_list.append((t_title, p_num))
+
+    if not topics_list:
+        step = max(5, page_count // 5) if page_count > 10 else page_count
+        for start_p in range(1, page_count + 1, step):
+            end_p = min(start_p + step - 1, page_count)
+            topics_list.append((f"Section {len(topics_list)+1}: Pages {start_p}-{end_p}", start_p))
+
     db.query(CurriculumTopic).filter(CurriculumTopic.session_id == study_sess.id).delete(synchronize_session=False)
     db.flush()
 
-    order_idx = 0
     curriculum_topics = []
-
-    def extract_topics(nodes, path_prefix=""):
-        nonlocal order_idx
-        for n in nodes:
-            current_path = f"{path_prefix} > {n.title}" if path_prefix else n.title
-            topic = CurriculumTopic(
-                session_id=study_sess.id,
-                document_id=doc_id,
-                title=n.title,
-                summary=f"Section covering pages {n.page_start} to {n.page_end}",
-                difficulty="Intermediate",
-                estimated_study_time="15 mins",
-                order_index=order_idx,
-                structural_path=current_path,
-                page_start=n.page_start,
-                page_end=n.page_end,
-                key_concepts=[c.strip() for c in n.title.split() if len(c.strip()) > 3]
-            )
-            db.add(topic)
-            curriculum_topics.append(topic)
-            order_idx += 1
-
-            if n.children:
-                extract_topics(n.children, current_path)
-
-    if canonical_doc.structure_tree:
-        extract_topics(canonical_doc.structure_tree)
-    else:
-        # Fallback default topic
-        fallback_topic = CurriculumTopic(
+    for idx, (t_title, p_start) in enumerate(topics_list):
+        next_p = topics_list[idx + 1][1] if idx + 1 < len(topics_list) else page_count
+        p_end = max(p_start, next_p if idx + 1 < len(topics_list) else page_count)
+        topic = CurriculumTopic(
             session_id=study_sess.id,
             document_id=doc_id,
-            title="Core Chapter Overview",
-            summary="Complete curriculum for this study material",
-            order_index=0,
-            page_start=1,
-            page_end=canonical_doc.metadata.page_count
+            title=t_title,
+            summary=f"Section covering pages {p_start} to {p_end}",
+            difficulty="Intermediate",
+            estimated_study_time="15 mins",
+            order_index=idx,
+            structural_path=t_title,
+            page_start=p_start,
+            page_end=p_end,
+            key_concepts=[c.strip() for c in t_title.split() if len(c.strip()) > 3]
         )
-        db.add(fallback_topic)
-        curriculum_topics.append(fallback_topic)
+        db.add(topic)
+        curriculum_topics.append(topic)
+
+    # Initial fast text chunks extraction so immediate chat works
+    initial_chunks = []
+    max_preview_pages = min(page_count, 100)
+    for p_idx in range(max_preview_pages):
+        page = pdf_doc[p_idx]
+        p_text = page.get_text().strip()
+        if p_text and len(p_text) > 30:
+            assigned_topic = topics_list[0][0] if topics_list else "General"
+            for t_title, p_start in topics_list:
+                if p_idx + 1 >= p_start:
+                    assigned_topic = t_title
+
+            chunk_id = str(uuid.uuid4())
+            initial_chunks.append(KnowledgeChunk(
+                id=chunk_id,
+                document_id=doc_id,
+                page_number=p_idx + 1,
+                chunk_index=len(initial_chunks),
+                content=p_text[:2500],
+                chunk_type="text",
+                topic=assigned_topic,
+                chapter_section=assigned_topic,
+                confidence=1.0,
+                search_text=p_text[:1200]
+            ))
+
+    if initial_chunks:
+        db.bulk_save_objects(initial_chunks)
 
     study_sess.topic_count = len(curriculum_topics)
     db.commit()
     db.refresh(study_sess)
+    pdf_doc.close()
+
+    # Schedule deep parallel pipeline in background
+    background_tasks.add_task(
+        DocumentPipelineOrchestrator.process_document_background,
+        doc_id,
+        file_bytes,
+        file.filename
+    )
 
     return {
         "status": "success",
         "session_id": study_sess.id,
         "document_id": doc_id,
         "document_name": file.filename,
+        "document_status": "PROCESSING",
         "title": study_sess.title,
         "topic_count": len(curriculum_topics),
         "curriculum_topics": [CurriculumTopicRead.model_validate(t) for t in curriculum_topics]
@@ -245,13 +398,21 @@ def get_study_session(
         for m in msgs
     ]
 
+    doc_status = sess.status
+    if sess.document_id:
+        doc = db.query(Document).filter(Document.id == sess.document_id).first()
+        if doc:
+            doc_status = doc.status or "INDEXED"
+
     return {
         "id": sess.id,
         "subject": sess.subject,
         "title": sess.title,
+        "document_id": sess.document_id,
         "document_name": sess.document_name,
         "documents": [sess.document_name] if sess.document_name else [],
-        "status": sess.status,
+        "status": doc_status,
+        "document_status": doc_status,
         "topic_count": len(topics),
         "message_count": sess.message_count or len(formatted_messages),
         "created_at": sess.created_at.isoformat(),
@@ -262,7 +423,9 @@ def get_study_session(
         "meta": {
             "subject": sess.subject,
             "document_name": sess.document_name,
-            "status": sess.status
+            "document_id": sess.document_id,
+            "status": doc_status,
+            "document_status": doc_status
         }
     }
 
@@ -465,6 +628,100 @@ def generate_topic_exam(
         "exam_content": result["content"],
         "questions": result.get("quiz_data", []),
         "citations": result["citations"]
+    }
+
+
+@router.post("/sessions/{session_id}/synthesize-curriculum")
+def synthesize_session_curriculum(
+    session_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    LLM-powered endpoint to analyze the study material and synthesize the
+    definitive list of important topics, summaries, and student starter questions.
+    """
+    import uuid
+    from app.tutoring.curriculum.synthesizer import CurriculumSynthesizer
+
+    sess = db.query(StudySession).filter(StudySession.id == session_id).first()
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    doc_id = sess.document_id
+    if not doc_id:
+        return {"status": "success", "message": "No document attached to session."}
+
+    db_chunks = db.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == doc_id).limit(20).all()
+    chunks_sample = [
+        {"content": c.content, "search_text": c.search_text, "topic": c.topic, "page_number": c.page_number}
+        for c in db_chunks
+    ]
+    db_doc = db.query(Document).filter(Document.id == doc_id).first()
+    doc_title = db_doc.title or sess.document_name or sess.title or "Study Material"
+    existing_toc = [t.title for t in sess.curriculum_topics]
+
+    synthesis = CurriculumSynthesizer.synthesize_curriculum(
+        document_title=doc_title,
+        chunks_sample=chunks_sample,
+        existing_toc=existing_toc
+    )
+
+    important_topics = synthesis.get("important_topics", [])
+    if important_topics:
+        db.query(CurriculumTopic).filter(CurriculumTopic.session_id == sess.id).delete(synchronize_session=False)
+        for t_data in important_topics:
+            new_top = CurriculumTopic(
+                session_id=sess.id,
+                document_id=doc_id,
+                title=t_data.get("title", "Core Topic"),
+                summary=t_data.get("summary", ""),
+                difficulty=t_data.get("difficulty", "Intermediate"),
+                estimated_study_time=t_data.get("estimated_study_time", "20 mins"),
+                order_index=t_data.get("order", 0),
+                key_concepts=t_data.get("key_concepts", []),
+                page_start=1,
+                page_end=db_doc.page_count if db_doc else 1
+            )
+            db.add(new_top)
+        sess.topic_count = len(important_topics)
+
+    # Save or update overview message
+    briefing_text = synthesis.get("welcome_briefing_markdown") or (
+        f"### 📚 Important Topics in **{doc_title}**\n\n"
+        + "\n".join([f"- **{t['title']}**: {t['summary']}" for t in important_topics])
+    )
+    suggested_qs = [t["suggested_question"] for t in important_topics if t.get("suggested_question")]
+
+    existing_msg = db.query(ChatMessage).filter(
+        ChatMessage.session_id == sess.id,
+        ChatMessage.intent == "DOCUMENT_OVERVIEW"
+    ).first()
+
+    if existing_msg:
+        existing_msg.content = briefing_text
+    else:
+        overview_msg = ChatMessage(
+            id=f"msg-overview-{uuid.uuid4().hex[:8]}",
+            session_id=sess.id,
+            role="assistant",
+            content=briefing_text,
+            intent="DOCUMENT_OVERVIEW",
+            grounding_score=1.0,
+            citations=[]
+        )
+        db.add(overview_msg)
+        sess.message_count = (sess.message_count or 0) + 1
+
+    db.commit()
+
+    updated_topics = db.query(CurriculumTopic).filter(CurriculumTopic.session_id == sess.id).order_by(CurriculumTopic.order_index).all()
+    return {
+        "status": "success",
+        "document_title": doc_title,
+        "executive_summary": synthesis.get("executive_summary"),
+        "important_topics": [CurriculumTopicRead.model_validate(t) for t in updated_topics],
+        "welcome_briefing": briefing_text,
+        "suggested_questions": suggested_qs[:4]
     }
 
 

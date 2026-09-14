@@ -180,7 +180,7 @@ class QueryUnderstanding:
                             referenced_table=referenced_table,
                             format_directives=format_directives,
                             extracted_entities=entities[:10],
-                            learning_objective="apply" if intent in ["PRACTICE_QUESTIONS", "PROBLEM_SOLVING"] else "understand",
+                            learning_objective="analyze" if intent == "COMPARISON" else ("apply" if intent in ["PRACTICE_QUESTIONS", "PROBLEM_SOLVING"] else "understand"),
                             difficulty_level="Intermediate",
                             response_requirements={
                                 "needs_latex": needs_latex,
@@ -310,7 +310,7 @@ class QueryUnderstanding:
             referenced_table=referenced_table,
             format_directives=format_directives,
             extracted_entities=list(dict.fromkeys(entities))[:10],
-            learning_objective="apply" if intent in ["PRACTICE_QUESTIONS", "PROBLEM_SOLVING"] else "understand",
+            learning_objective="analyze" if intent == "COMPARISON" else ("apply" if intent in ["PRACTICE_QUESTIONS", "PROBLEM_SOLVING"] else "understand"),
             difficulty_level="Intermediate",
             response_requirements={
                 "needs_latex": needs_latex,

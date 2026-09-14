@@ -11,12 +11,12 @@ class PyMuPDFParser:
 
     def __init__(self, render_dpi: int = 100, render_images: bool = False):
         self.render_dpi = render_dpi
-        self.render_images = render_images
+        self.render_images = False  # Enforce pure text/table extraction with no image writes
 
     def parse_document(self, file_bytes: bytes, doc_id: str) -> List[Dict[str, Any]]:
         """
         Parses all pages in the PDF document.
-        Returns a list of parsed page dictionaries.
+        Extracts structured text, spans, fonts, bboxes, and native vector tables in memory.
         """
         pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
         parsed_pages: List[Dict[str, Any]] = []
@@ -27,15 +27,44 @@ class PyMuPDFParser:
             rect = page.rect
             width, height = rect.width, rect.height
 
-            # 1. Render page image to object storage only when explicitly requested (avoids 30s disk I/O on large PDFs)
-            image_storage_path = None
-            if self.render_images:
-                pix = page.get_pixmap(dpi=self.render_dpi)
-                img_bytes = pix.tobytes("png")
-                img_filename = f"{doc_id}_page_{page_number}.png"
-                image_storage_path = default_storage.store_file(
-                    img_bytes, img_filename, subfolder="page_images"
-                )
+            # 1. Native Vector Table Extraction (Fast in-memory table recognition)
+            native_tables: List[Dict[str, Any]] = []
+            try:
+                if hasattr(page, "find_tables"):
+                    tabs = page.find_tables()
+                    if tabs and getattr(tabs, "tables", None):
+                        for t_idx, tab in enumerate(tabs.tables):
+                            extracted_df = tab.extract()
+                            if extracted_df and len(extracted_df) >= 2:
+                                headers = [str(c or "").strip() for c in extracted_df[0]]
+                                rows = [[str(c or "").strip() for c in row] for row in extracted_df[1:]]
+                                if any(headers) and any(any(row) for row in rows):
+                                    md_lines = [
+                                        "| " + " | ".join(headers) + " |",
+                                        "| " + " | ".join(["---"] * len(headers)) + " |",
+                                    ]
+                                    for r in rows:
+                                        padded = r + [""] * (len(headers) - len(r))
+                                        md_lines.append("| " + " | ".join(padded[:len(headers)]) + " |")
+                                    markdown_str = "\n".join(md_lines)
+
+                                    html_rows = [f"<tr>{''.join(f'<th>{h}</th>' for h in headers)}</tr>"]
+                                    for r in rows:
+                                        padded = r + [""] * (len(headers) - len(r))
+                                        html_rows.append(f"<tr>{''.join(f'<td>{c}</td>' for c in padded[:len(headers)])}</tr>")
+                                    html_str = f"<table>\n<thead>{html_rows[0]}</thead>\n<tbody>{''.join(html_rows[1:])}</tbody>\n</table>"
+
+                                    native_tables.append({
+                                        "table_index": t_idx,
+                                        "bbox": [round(c, 2) for c in tab.bbox],
+                                        "markdown": markdown_str,
+                                        "html": html_str,
+                                        "headers": headers,
+                                        "rows": rows,
+                                        "confidence": 1.0,
+                                    })
+            except Exception:
+                pass
 
             # 2. Extract structured text with spans, fonts, flags, and bounding boxes
             text_page = page.get_text("dict")
@@ -108,7 +137,8 @@ class PyMuPDFParser:
                 "char_count": char_count,
                 "raw_text": page_full_text,
                 "blocks": blocks,
-                "image_storage_path": image_storage_path,
+                "native_tables": native_tables,
+                "image_storage_path": None,
             })
 
         pdf_doc.close()
