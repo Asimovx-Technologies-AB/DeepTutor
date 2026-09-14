@@ -18,7 +18,8 @@ class ReferenceResolver:
 
     PRONOUN_PATTERN = re.compile(r"\b(it|this|that|these|those|the algorithm|the formula|the equation)\b", re.IGNORECASE)
 
-    PAGE_SECTION_PATTERN = re.compile(r"\b(?:(?:page|p\.)\s*(\d+)|(?:chapter|section)\s*(\d+(?:\.\d+)*))\b", re.IGNORECASE)
+    PAGE_SECTION_PATTERN = re.compile(r"\b(?:(?:page\s*(?:number|no\.?|#)?|p\.)\s*(\d+)|(?:chapter|section)\s*(\d+(?:\.\d+)*))\b", re.IGNORECASE)
+    TABLE_PATTERN = re.compile(r"\b(table\s*(?:\d+(?:\.\d+)*|[A-Za-z]))\b|\b(the\s+table|a\s+table|this\s+table)\b", re.IGNORECASE)
 
     @classmethod
     def resolve_references(cls, query: str, conversation_history: List[Dict[str, str]]) -> Tuple[str, Dict[str, Any]]:
@@ -32,6 +33,7 @@ class ReferenceResolver:
             "resolved_pronouns": [],
             "referenced_page": None,
             "referenced_section": None,
+            "referenced_table": None,
         }
 
         # 1. Page and Section Reference Detection
@@ -41,6 +43,14 @@ class ReferenceResolver:
                 meta["referenced_page"] = int(match.group(1))
             if match.group(2):
                 meta["referenced_section"] = match.group(2)
+
+        # 1b. Table Reference Detection
+        table_match = cls.TABLE_PATTERN.search(query)
+        if table_match:
+            if table_match.group(1):
+                meta["referenced_table"] = table_match.group(1).title()
+            elif table_match.group(2):
+                meta["referenced_table"] = "table"
 
         # 2. Check if query is an immediate follow-up (e.g. 'why?', 'how?', 'tell me more')
         trimmed = query.strip().lower()

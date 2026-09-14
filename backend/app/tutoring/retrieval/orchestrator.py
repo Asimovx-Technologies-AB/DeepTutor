@@ -30,7 +30,8 @@ class MultiStrategyRetrievalOrchestrator:
         document_id: Optional[str] = None,
         topic_title: Optional[str] = None,
         active_page: Optional[int] = None,
-        top_k: int = 5
+        top_k: int = 5,
+        conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> ContextBundle:
         resolved_query = query_meta.resolved_query
         entities = query_meta.extracted_entities
@@ -46,7 +47,7 @@ class MultiStrategyRetrievalOrchestrator:
                 document_id=None,
                 topic_title=topic_title or "Subject Lesson",
                 resolved_query=resolved_query,
-                conversation_history=[],
+                conversation_history=conversation_history or [],
                 student_mastery_context={},
                 retrieved_chunks=[],
                 related_formulas=[],
@@ -125,9 +126,20 @@ class MultiStrategyRetrievalOrchestrator:
         # Sort by final score descending
         ranked = sorted(scored_chunks, key=lambda x: x["score"], reverse=True)[:top_k]
 
-        # 4. Parent + Child Expansion
+        # 4. Parent + Child Expansion & Exact Page Guarantee
         selected_chunk_ids = {item["chunk"].id for item in ranked}
         expanded_chunks: List[KnowledgeChunk] = [item["chunk"] for item in ranked]
+
+        # If an active page was specified (e.g. from user query "page 22"), guarantee all chunks from that page are included
+        if active_page:
+            exact_page_chunks = session.query(KnowledgeChunk).filter(
+                KnowledgeChunk.document_id == document_id,
+                KnowledgeChunk.page_number == active_page
+            ).all()
+            for epc in reversed(exact_page_chunks):
+                if epc.id not in selected_chunk_ids:
+                    expanded_chunks.insert(0, epc)
+                    selected_chunk_ids.add(epc.id)
 
         for item in ranked[:2]:
             parent_id = item["chunk"].parent_id
@@ -141,6 +153,37 @@ class MultiStrategyRetrievalOrchestrator:
         related_formulas = []
         related_tables = []
         pages_hit = list({c.page_number for c in expanded_chunks})
+        if active_page and active_page not in pages_hit:
+            pages_hit.append(active_page)
+
+        # If a specific table was referenced (e.g. "Table 1.2" or "table"), look for it in DocumentAsset
+        if query_meta.referenced_table and document_id:
+            ref_tbl = query_meta.referenced_table.strip()
+            table_assets_q = session.query(DocumentAsset).filter(
+                DocumentAsset.document_id == document_id,
+                DocumentAsset.asset_type == "table",
+            )
+            if ref_tbl.lower() != "table":
+                table_assets_q = table_assets_q.filter(
+                    or_(
+                        DocumentAsset.caption.ilike(f"%{ref_tbl}%"),
+                        DocumentAsset.markdown.ilike(f"%{ref_tbl}%"),
+                    )
+                )
+            for ta in table_assets_q.limit(5).all():
+                if ta.markdown and ta.markdown not in related_tables:
+                    related_tables.append(ta.markdown)
+                if ta.page_number not in pages_hit:
+                    pages_hit.append(ta.page_number)
+                    tbl_chunks = session.query(KnowledgeChunk).filter(
+                        KnowledgeChunk.document_id == document_id,
+                        KnowledgeChunk.page_number == ta.page_number
+                    ).all()
+                    for tc in tbl_chunks:
+                        if tc.id not in selected_chunk_ids:
+                            expanded_chunks.append(tc)
+                            selected_chunk_ids.add(tc.id)
+
         if document_id and pages_hit:
             assets = session.query(DocumentAsset).filter(
                 DocumentAsset.document_id == document_id,
@@ -148,9 +191,9 @@ class MultiStrategyRetrievalOrchestrator:
             ).all()
 
             for a in assets:
-                if a.asset_type == "formula" and a.latex:
+                if a.asset_type == "formula" and a.latex and a.latex not in related_formulas:
                     related_formulas.append(a.latex)
-                elif a.asset_type == "table" and a.markdown:
+                elif a.asset_type == "table" and a.markdown and a.markdown not in related_tables:
                     related_tables.append(a.markdown)
 
         # 6. Build Citations & Context Bundle
@@ -177,7 +220,7 @@ class MultiStrategyRetrievalOrchestrator:
             document_id=document_id,
             topic_title=topic_title or "Subject Lesson",
             resolved_query=resolved_query,
-            conversation_history=[],
+            conversation_history=conversation_history or [],
             student_mastery_context={},
             retrieved_chunks=chunk_reads,
             related_formulas=related_formulas[:5],

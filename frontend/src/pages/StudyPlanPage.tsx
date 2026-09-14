@@ -13,26 +13,25 @@ import {
   Sparkles,
   Clock,
   CheckCircle2,
+  Circle,
   BookOpen,
-  FileText,
   RefreshCw,
   Plus,
   Trash2,
-  ChevronRight,
   Brain,
   Target,
   UploadCloud,
-  CheckSquare,
-  AlertCircle,
-  Volume2,
-  Copy,
-  Check,
-  Download,
-  Printer,
   X,
   Search,
   Layers,
-  ArrowRight
+  Volume2,
+  VolumeX,
+  Copy,
+  Check,
+  Download,
+  AlertTriangle,
+  Flame,
+  Filter
 } from 'lucide-react'
 import { studyPlanApi, documentsApi, default as api } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
@@ -57,6 +56,7 @@ interface StudyPlan {
   id: string
   user_id: string
   topic_id: string
+  session_id?: string
   title: string
   target_date: string
   total_days: number
@@ -79,17 +79,43 @@ export default function StudyPlanPage() {
 
   // Generator form state
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [materialSourceMode, setMaterialSourceMode] = useState<'upload' | 'library' | 'session'>('library')
+  const [materialSourceMode, setMaterialSourceMode] = useState<'library' | 'upload' | 'session'>('library')
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>('')
   const [selectedSessionId, setSelectedSessionId] = useState<string>('')
   const [modalDocSearchQuery, setModalDocSearchQuery] = useState<string>('')
   const [targetDate, setTargetDate] = useState<string>(() => {
     const d = new Date()
-    d.setDate(d.getDate() + 10)
+    d.setDate(d.getDate() + 14)
     return d.toISOString().split('T')[0]
   })
-  const [hoursPerDay, setHoursPerDay] = useState<number>(2.0)
+  const [hoursPerDay, setHoursPerDay] = useState<number>(2.5)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+
+  // Filter & Search state in timeline
+  const [filterMode, setFilterMode] = useState<'all' | 'completed' | 'in_progress' | 'upcoming'>('all')
+  const [searchMilestoneQuery, setSearchMilestoneQuery] = useState<string>('')
+
+  // Study Notes Modal State
+  const [activeNotesModal, setActiveNotesModal] = useState<{
+    dayNum: number
+    topic: string
+    notes: string
+    loading: boolean
+  } | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+
+  // Day Mastery Quiz State
+  const [dayQuizModal, setDayQuizModal] = useState<{ dayNum: number; topic: string } | null>(null)
+  const [quizVerificationMessage, setQuizVerificationMessage] = useState<{
+    passed: boolean
+    message: string
+    dayNum: number
+  } | null>(null)
+
+  // Loading / generating state
+  const [generating, setGenerating] = useState(false)
+  const [activePlanId, setActivePlanId] = useState<string | null>(null)
 
   // Fetch all user uploaded materials across library and sessions
   const { data: userDocuments = [] } = useQuery<any[]>({
@@ -130,29 +156,7 @@ export default function StudyPlanPage() {
     )
   }, [uniqueUserDocuments, modalDocSearchQuery])
 
-  // Study Notes Modal State
-  const [activeNotesModal, setActiveNotesModal] = useState<{
-    dayNum: number
-    topic: string
-    notes: string
-    loading: boolean
-  } | null>(null)
-  const [copied, setCopied] = useState(false)
-  const [isSpeaking, setIsSpeaking] = useState(false)
-
-  // Day Mastery Quiz State
-  const [dayQuizModal, setDayQuizModal] = useState<{ dayNum: number; topic: string } | null>(null)
-  const [quizVerificationMessage, setQuizVerificationMessage] = useState<{
-    passed: boolean
-    message: string
-    dayNum: number
-  } | null>(null)
-
-  // Loading / generating state
-  const [generating, setGenerating] = useState(false)
-  const [activePlanId, setActivePlanId] = useState<string | null>(null)
-
-  // Fetch my study plans with 60s stale cache
+  // Fetch my study plans from PostgreSQL
   const { data: plans = [], isLoading } = useQuery<StudyPlan[]>({
     queryKey: ['study-plans'],
     queryFn: async () => {
@@ -199,13 +203,11 @@ export default function StudyPlanPage() {
   })
 
   const handleOpenStudyNotes = async (dayItem: ScheduleDay, forceRegenerate = false) => {
-    // 1. Check if the study_notes is already a full structured brief (has markdown headers and substantive text)
     const isFullNote =
       dayItem.study_notes &&
       dayItem.study_notes.trim().length > 150 &&
       (dayItem.study_notes.includes('##') || dayItem.study_notes.includes('#'))
 
-    // 2. Zero-token instant open: if already a full structured note and not force-regenerating, open immediately!
     if (!forceRegenerate && isFullNote) {
       setActiveNotesModal({
         dayNum: dayItem.day,
@@ -219,7 +221,7 @@ export default function StudyPlanPage() {
     setActiveNotesModal({
       dayNum: dayItem.day,
       topic: dayItem.topic,
-      notes: `### ${dayItem.topic}\n\nGenerating comprehensive AI Study Notes from document context...`,
+      notes: `### ${dayItem.topic}\n\nGenerating comprehensive AI Study Notes grounded in course materials...`,
       loading: true,
     })
 
@@ -239,7 +241,6 @@ export default function StudyPlanPage() {
           notes: res.data.notes,
           loading: false,
         })
-        // Save to React Query client-side cache so reopening uses 0 tokens & 0ms latency
         queryClient.setQueryData(['study-plans'], (oldPlans: StudyPlan[] | undefined) => {
           if (!oldPlans) return oldPlans
           return oldPlans.map((p) => {
@@ -263,7 +264,7 @@ export default function StudyPlanPage() {
           ? {
               ...prev,
               loading: false,
-              notes: `### Could Not Generate Notes\n\n**Error:** ${errMsg}\n\nPlease try again. If the problem persists, check that the backend is running and your PDF is uploaded for this topic.`,
+              notes: `### Could Not Generate Notes\n\n**Error:** ${errMsg}\n\nPlease try again.`,
             }
           : null
       )
@@ -328,21 +329,37 @@ export default function StudyPlanPage() {
       let sessionId: string | undefined = undefined
 
       if (materialSourceMode === 'upload' && selectedFile) {
-        topicId = `plan_${Date.now()}`
-        await documentsApi.upload(topicId, selectedFile)
-      } else if (materialSourceMode === 'library' && selectedDocumentId) {
-        const doc = userDocuments.find((d: any) => d.id === selectedDocumentId)
+        // Upload the new file and retrieve real document_id & session_id
+        const uploadRes = await documentsApi.upload(
+          `plan_${Date.now()}`,
+          selectedFile
+        )
+        const docId =
+          uploadRes.data?.document_id ||
+          uploadRes.data?.id ||
+          uploadRes.data?.canonical?.metadata?.id
+        if (docId) {
+          topicId = docId
+        }
+        sessionId = uploadRes.data?.session_id
+      } else if (materialSourceMode === 'library') {
+        const docIdToUse = selectedDocumentId || uniqueUserDocuments[0]?.id
+        const doc = userDocuments.find((d: any) => d.id === docIdToUse)
         if (doc) {
-          topicId = doc.topic_id || doc.id || 'general'
-          sessionId = doc.topic_id || doc.id
+          topicId = doc.id || doc.topic_id || 'general'
+          sessionId = doc.session_id || doc.topic_id
         }
       } else if (materialSourceMode === 'session' && selectedSessionId) {
         sessionId = selectedSessionId
         const session = sessions.find((s) => s.id === selectedSessionId)
         topicId = session?.topic_id || selectedSessionId || 'general'
+      } else if (uniqueUserDocuments.length > 0) {
+        // Automatically default to the first available document
+        const firstDoc = uniqueUserDocuments[0]
+        topicId = firstDoc.id || firstDoc.topic_id || 'general'
+        sessionId = firstDoc.session_id
       }
 
-      // Generate Study Plan
       const res = await studyPlanApi.generate({
         topic_id: topicId,
         session_id: sessionId,
@@ -362,280 +379,432 @@ export default function StudyPlanPage() {
       setSelectedSessionId('')
     } catch (err: any) {
       console.error(err)
-      alert(err.response?.data?.detail || 'Failed to generate study plan. Make sure Ollama is running.')
+      alert(err.response?.data?.detail || 'Failed to generate study plan. Please verify backend connection.')
     } finally {
       setGenerating(false)
     }
   }
 
+  // Progress metrics calculation
   const completedCount = currentPlan?.completed_days?.length ?? 0
   const totalScheduleDays = currentPlan?.schedule?.length ?? 1
   const completionPct = Math.round((completedCount / totalScheduleDays) * 100)
 
+  // Target countdown days
+  const daysRemaining = useMemo(() => {
+    if (!currentPlan?.target_date) return 0
+    const target = new Date(currentPlan.target_date).getTime()
+    const now = new Date().setHours(0, 0, 0, 0)
+    return Math.ceil((target - now) / (1000 * 60 * 60 * 24))
+  }, [currentPlan?.target_date])
+
+  // Grounded document reference
+  const groundedDoc = useMemo(() => {
+    if (!currentPlan) return null
+    return (
+      userDocuments.find(
+        (d: any) =>
+          d.id === currentPlan.topic_id ||
+          d.topic_id === currentPlan.topic_id ||
+          d.session_id === currentPlan.session_id
+      ) || null
+    )
+  }, [currentPlan, userDocuments])
+
+  // Filtered milestone schedule
+  const filteredSchedule = useMemo(() => {
+    if (!currentPlan?.schedule) return []
+    let items = currentPlan.schedule
+
+    if (filterMode === 'completed') {
+      items = items.filter((d) => currentPlan.completed_days?.includes(d.day))
+    } else if (filterMode === 'in_progress') {
+      const nextUncompletedDay = items.find((d) => !currentPlan.completed_days?.includes(d.day))?.day
+      items = items.filter((d) => d.day === nextUncompletedDay)
+    } else if (filterMode === 'upcoming') {
+      const nextUncompletedDay = items.find((d) => !currentPlan.completed_days?.includes(d.day))?.day || 0
+      items = items.filter((d) => !currentPlan.completed_days?.includes(d.day) && d.day > nextUncompletedDay)
+    }
+
+    if (searchMilestoneQuery.trim()) {
+      const q = searchMilestoneQuery.toLowerCase()
+      items = items.filter(
+        (d) =>
+          d.topic.toLowerCase().includes(q) ||
+          d.focus.toLowerCase().includes(q) ||
+          (d.key_concepts && d.key_concepts.some((c) => c.toLowerCase().includes(q)))
+      )
+    }
+
+    return items
+  }, [currentPlan, filterMode, searchMilestoneQuery])
+
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8 bg-transparent">
-      {/* ─── HEADER ─── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Calendar size={18} className="text-[#4F46E5]" />
-            <span className="text-xs font-black text-[#4F46E5] uppercase tracking-widest bg-[#EEF2FF] px-2.5 py-0.5 rounded-full border border-[#4F46E5]/20">
-              {t.studyPlan.engineLabel}
-            </span>
-          </div>
-          <h1 className="text-3xl font-black text-[#3C3C3C] tracking-tight">{t.studyPlan.title}</h1>
-          <p className="text-[#777777] text-sm mt-0.5 font-medium">
-            {t.studyPlan.subtitle}
-          </p>
-        </div>
-
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="btn-primary flex items-center gap-2 py-2.5 px-5 text-xs elevation-2 self-start md:self-auto cursor-pointer"
-        >
-          <Plus size={16} /> {t.studyPlan.createNew}
-        </button>
-      </div>
-
-      {isLoading ? (
-        <div className="p-12 text-center">
-          <RefreshCw size={28} className="animate-spin text-[#4F46E5] mx-auto mb-3" />
-          <p className="text-xs font-bold text-[#777777]">Loading study plans...</p>
-        </div>
-      ) : plans.length === 0 ? (
-        /* ─── EMPTY STATE ─── */
-        <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="glass-card p-12 text-center border border-[#E2E8F0] max-w-xl mx-auto space-y-5"
-        >
-          <motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }} className="w-24 h-24 mx-auto select-none pointer-events-none mb-2">
-            <img src="/assets/illustrations/mountain_goal.png" alt="Study Plan" className="w-full h-full object-contain" style={{ filter: 'hue-rotate(200deg) saturate(1.2)' }} />
-          </motion.div>
-          <div>
-            <h2 className="text-xl font-black text-[#3C3C3C]">Nothing here yet.</h2>
-            <p className="text-xs text-[#777777] mt-2 max-w-md mx-auto leading-relaxed font-medium">
-              Start a learning path and your progress will appear here.
+    <div className="min-h-screen bg-[#FAF8F5] text-[#1C1A17] p-4 sm:p-8 font-sans selection:bg-[#9E6B38]/20 selection:text-[#1C1A17]">
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* ─── TOP HEADER BAR (Athenaeum Editorial Luxury) ─── */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-stone-200/80">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase bg-[#9E6B38]/10 text-[#9E6B38] border border-[#9E6B38]/20">
+                <Sparkles size={11} className="text-[#9E6B38]" />
+                Scholia AI • Personalized Learning Roadmap
+              </span>
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-serif font-medium tracking-tight text-[#1C1A17]">
+              {t.studyPlan.title}
+            </h1>
+            <p className="text-xs sm:text-sm text-[#5C564E] max-w-2xl font-normal leading-relaxed">
+              {t.studyPlan.subtitle}
             </p>
           </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="btn-primary flex items-center gap-2 mx-auto py-2.5 px-6 text-xs elevation-2 cursor-pointer"
-          >
-            <Sparkles size={15} /> Start Learning
-          </button>
-        </motion.div>
-      ) : (
-        /* ─── ACTIVE STUDY PLAN DASHBOARD ─── */
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Left: Saved Plans Sidebar */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-black text-[#AFAFAF] uppercase tracking-wider px-1">
-              Your Saved Plans ({plans.length})
-            </h3>
-            <div className="space-y-2">
-              {plans.map((p) => {
-                const isSel = (currentPlan?.id ?? plans[0]?.id) === p.id
-                const pct = Math.round(((p.completed_days?.length ?? 0) / (p.schedule?.length || 1)) * 100)
 
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => setActivePlanId(p.id)}
-                    className={`w-full text-left p-3.5 rounded-[1.5rem] border transition-all cursor-pointer flex flex-col gap-2 hover:scale-[1.02] active:scale-[0.98] ${
-                      isSel
-                        ? 'bg-[#EEF2FF] text-[#4F46E5] border-[#4F46E5]/40 elevation-2'
-                        : 'bg-white text-[#3C3C3C] border-[#E2E8F0] hover:border-[#4F46E5]/40 hover:bg-[#FFFFFF]'
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#1C1A17] text-[#FAF8F5] text-xs font-semibold hover:bg-[#332F2A] active:scale-98 transition shadow-xs cursor-pointer"
+            >
+              <Plus size={15} />
+              <span>{t.studyPlan.createNew}</span>
+            </button>
+          </div>
+        </header>
+
+        {isLoading ? (
+          <div className="p-16 text-center space-y-3">
+            <RefreshCw size={28} className="animate-spin text-[#9E6B38] mx-auto" />
+            <p className="text-xs font-semibold text-[#5C564E]">Loading your academic study plans...</p>
+          </div>
+        ) : plans.length === 0 ? (
+          /* ─── EMPTY STATE (Scholarly Paper Aesthetic) ─── */
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-12 sm:p-16 text-center border border-stone-200/90 rounded-2xl bg-white max-w-xl mx-auto space-y-6 shadow-xs"
+          >
+            <div className="w-16 h-16 rounded-2xl bg-[#9E6B38]/10 border border-[#9E6B38]/20 flex items-center justify-center text-[#9E6B38] mx-auto shadow-2xs">
+              <Calendar size={30} />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-serif font-medium text-[#1C1A17]">No Study Roadmap Active</h2>
+              <p className="text-xs text-[#5C564E] max-w-md mx-auto leading-relaxed">
+                Build a personalized day-by-day learning plan grounded in your textbook or lecture slides with Socratic daily checkpoints.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-[#1C1A17] text-[#FAF8F5] text-xs font-semibold hover:bg-[#332F2A] active:scale-98 transition shadow-xs cursor-pointer"
+            >
+              <Sparkles size={14} className="text-[#9E6B38]" /> Generate Study Roadmap
+            </button>
+          </motion.div>
+        ) : (
+          /* ─── ACTIVE STUDY PLAN DASHBOARD ─── */
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            {/* Left Column: Saved Curricula & Syllabi */}
+            <aside className="space-y-4">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#8C8479]">
+                  Saved Syllabi ({plans.length})
+                </h3>
+              </div>
+
+              <div className="space-y-2.5">
+                {plans.map((p) => {
+                  const isSel = (currentPlan?.id ?? plans[0]?.id) === p.id
+                  const pct = Math.round(((p.completed_days?.length ?? 0) / (p.schedule?.length || 1)) * 100)
+
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => setActivePlanId(p.id)}
+                      className={`w-full text-left p-4 rounded-xl border transition-all cursor-pointer flex flex-col gap-2.5 ${
+                        isSel
+                          ? 'bg-white text-[#1C1A17] border-[#1C1A17] shadow-sm'
+                          : 'bg-white/60 text-[#5C564E] border-stone-200/80 hover:bg-white hover:border-stone-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-[10px] font-mono font-semibold uppercase px-2 py-0.5 rounded-md ${
+                          isSel ? 'bg-[#1C1A17] text-[#FAF8F5]' : 'bg-stone-100 text-[#5C564E]'
+                        }`}>
+                          Target: {p.target_date}
+                        </span>
+                        <span className="text-xs font-mono font-bold text-[#9E6B38]">
+                          {pct}%
+                        </span>
+                      </div>
+
+                      <h4 className="text-xs font-semibold line-clamp-1 text-[#1C1A17]">
+                        {p.title}
+                      </h4>
+
+                      <div className="flex items-center justify-between text-[11px] text-[#8C8479] font-mono">
+                        <span>{p.total_days} Days Total</span>
+                        <span>{p.hours_per_day} hrs/day</span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Spaced repetition micro-card */}
+              <div className="p-4 rounded-xl bg-white/70 border border-stone-200/70 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-semibold text-[#1C1A17]">
+                  <Brain size={14} className="text-[#9E6B38]" />
+                  <span>Cognitive Pacing</span>
+                </div>
+                <p className="text-[11px] text-[#5C564E] leading-relaxed">
+                  Your daily checkpoints verify retention at ≥70% using active recall spaced repetition.
+                </p>
+              </div>
+            </aside>
+
+            {/* Right Column: Active Plan Details & Roadmap */}
+            {currentPlan && (
+              <main className="lg:col-span-3 space-y-6">
+                {/* Quiz Verification Banner */}
+                {quizVerificationMessage && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`p-4 rounded-xl border flex items-center justify-between text-xs font-medium ${
+                      quizVerificationMessage.passed
+                        ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
+                        : 'bg-[#FFFBEB] text-[#92400E] border-[#FDE68A]'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
-                        isSel ? 'bg-[#4F46E5] text-white' : 'bg-[#E5E5E5] text-[#777777]'
-                      }`}>
-                        Target: {p.target_date}
-                      </span>
-                      <span className={`text-xs font-black ${isSel ? 'text-[#4F46E5]' : 'text-[#777777]'}`}>
-                        {pct}%
-                      </span>
+                    <div className="flex items-center gap-2.5">
+                      <Sparkles size={16} className={quizVerificationMessage.passed ? 'text-[#059669]' : 'text-[#D97706]'} />
+                      <span>{quizVerificationMessage.message}</span>
                     </div>
+                    <button
+                      onClick={() => setQuizVerificationMessage(null)}
+                      className="p-1 text-stone-400 hover:text-stone-700 cursor-pointer"
+                    >
+                      <X size={15} />
+                    </button>
+                  </motion.div>
+                )}
 
-                    <p className="text-xs font-extrabold truncate leading-snug">{p.title}</p>
+                {/* Plan Overview Card */}
+                <section className="p-6 sm:p-7 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Countdown / Overdue pill */}
+                        {daysRemaining < 0 && completionPct < 100 ? (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                            <AlertTriangle size={11} /> Overdue by {Math.abs(daysRemaining)} Days
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#9E6B38]/10 text-[#9E6B38] border border-[#9E6B38]/20">
+                            <Clock size={11} />
+                            {daysRemaining === 0 ? 'Target: Today' : `${daysRemaining} Days Remaining`}
+                          </span>
+                        )}
 
-                    <div className="flex items-center justify-between text-[10px] font-semibold opacity-80 mt-1">
-                      <span>{p.total_days} Days Schedule</span>
-                      <span>{p.hours_per_day} hrs/day</span>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Right: Detailed Plan Timeline */}
-          {currentPlan && (
-            <div className="lg:col-span-3 space-y-6">
-              {/* Quiz Verification Result Banner */}
-              {quizVerificationMessage && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`p-4 rounded-[1.5rem] border flex items-center justify-between text-xs font-extrabold elevation-1 ${
-                    quizVerificationMessage.passed
-                      ? 'bg-[#D7FFB8] text-[#46A302] border-[#58CC02]/40'
-                      : 'bg-[#EEF2FF] text-[#FF4B4B] border-[#4F46E5]/40'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Sparkles size={16} className={quizVerificationMessage.passed ? 'text-[#58CC02]' : 'text-[#4F46E5]'} />
-                    <span>{quizVerificationMessage.message}</span>
-                  </div>
-                  <button
-                    onClick={() => setQuizVerificationMessage(null)}
-                    className="p-1 text-[#AFAFAF] hover:text-[#3C3C3C] cursor-pointer"
-                  >
-                    <X size={16} />
-                  </button>
-                </motion.div>
-              )}
-
-              {/* Plan Overview Card */}
-              <div className="glass-card p-6 border border-[#E2E8F0] bg-gradient-to-r from-[#FFFFFF] via-white to-[#EEF2FF] space-y-4 elevation-2">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    {(() => {
-                      const isOverdue =
-                        currentPlan.target_date &&
-                        new Date(currentPlan.target_date).getTime() < new Date().setHours(0, 0, 0, 0) &&
-                        completionPct < 100
-                      return (
-                        <span
-                          className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md border ${
-                            isOverdue
-                              ? 'bg-[#FFD1D1] text-[#FF4B4B] border-[#FF4B4B]/30 animate-pulse'
-                              : 'bg-[#EEF2FF] text-[#4F46E5] border-[#4F46E5]/20'
-                          }`}
-                        >
-                          {isOverdue ? `Target Overdue: ${currentPlan.target_date}` : `Target Finish Date: ${currentPlan.target_date}`}
+                        <span className="text-[10px] font-mono text-[#8C8479]">
+                          Target Finish: {currentPlan.target_date}
                         </span>
-                      )
-                    })()}
-                    <h2 className="text-xl font-black text-[#3C3C3C] mt-2">{currentPlan.title}</h2>
+                      </div>
+
+                      <h2 className="text-xl sm:text-2xl font-serif font-medium text-[#1C1A17]">
+                        {currentPlan.title}
+                      </h2>
+                      {groundedDoc && (
+                        <div className="inline-flex items-center gap-1.5 text-xs text-[#5C564E] pt-0.5">
+                          <BookOpen size={13} className="text-[#9E6B38]" />
+                          <span>
+                            Grounded in: <strong className="text-[#1C1A17]">{groundedDoc.file_name || groundedDoc.title}</strong>{' '}
+                            {groundedDoc.page_count ? `(${groundedDoc.page_count} pages)` : ''}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        if (confirm(`Delete study plan "${currentPlan.title}"?`)) {
+                          deletePlanMutation.mutate(currentPlan.id)
+                        }
+                      }}
+                      className="p-2 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition self-start sm:self-auto cursor-pointer"
+                      title="Delete Study Plan"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
 
-                  <button
-                    onClick={() => deletePlanMutation.mutate(currentPlan.id)}
-                    className="p-2 text-[#AFAFAF] hover:text-[#FF4B4B] hover:bg-[#FFD1D1] rounded-[1.25rem] transition-colors self-start sm:self-auto"
-                    title="Delete Study Plan"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-
-                {/* Progress bar */}
-                <div className="space-y-1.5 pt-2">
-                  <div className="flex items-center justify-between text-xs font-extrabold text-[#777777]">
-                    <span>{uiLanguage === 'sv' ? 'Total studieframgång' : 'Overall Study Completion'}</span>
-                    <span className="text-[#58CC02]">
-                      {completedCount} {uiLanguage === 'sv' ? 'av' : 'of'} {currentPlan.total_days} {uiLanguage === 'sv' ? 'dagar slutförda' : 'Days Completed'} ({completionPct}%)
-                    </span>
+                  {/* High Precision Progress Bar */}
+                  <div className="space-y-2 pt-2 border-t border-stone-100">
+                    <div className="flex items-center justify-between text-xs text-[#5C564E]">
+                      <span className="font-medium">Mastery Progress</span>
+                      <span className="font-mono font-semibold text-[#1C1A17]">
+                        {completedCount} of {currentPlan.total_days} Days Mastered ({completionPct}%)
+                      </span>
+                    </div>
+                    <div className="w-full bg-stone-100 rounded-full h-2 overflow-hidden">
+                      <motion.div
+                        className="bg-[#9E6B38] h-full rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${completionPct}%` }}
+                        transition={{ duration: 0.6, ease: 'easeOut' }}
+                      />
+                    </div>
                   </div>
-                  <div className="w-full bg-[#E5E5E5] rounded-full h-2 overflow-hidden">
-                    <motion.div
-                      className="bg-[#58CC02] h-full rounded-full"
-                      animate={{ width: `${completionPct}%` }}
-                      transition={{ duration: 0.5 }}
+                </section>
+
+                {/* Filter and Search Toolbar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                  {/* Segmented Filter Pills */}
+                  <div className="flex items-center gap-1.5 p-1 bg-stone-200/50 rounded-lg border border-stone-200/60 self-start sm:self-auto">
+                    {(['all', 'completed', 'in_progress', 'upcoming'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => setFilterMode(mode)}
+                        className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
+                          filterMode === mode
+                            ? 'bg-white text-[#1C1A17] shadow-2xs font-semibold'
+                            : 'text-[#5C564E] hover:text-[#1C1A17]'
+                        }`}
+                      >
+                        {mode === 'all' && `All (${currentPlan.schedule?.length || 0})`}
+                        {mode === 'completed' && `Mastered (${completedCount})`}
+                        {mode === 'in_progress' && `In Focus`}
+                        {mode === 'upcoming' && `Upcoming`}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Topic Search Input */}
+                  <div className="relative w-full sm:w-64">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                    <input
+                      type="text"
+                      value={searchMilestoneQuery}
+                      onChange={(e) => setSearchMilestoneQuery(e.target.value)}
+                      placeholder="Search topics or concepts..."
+                      className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-stone-200/80 rounded-lg text-[#1C1A17] placeholder:text-stone-400 focus:outline-none focus:border-[#1C1A17]"
                     />
                   </div>
                 </div>
-              </div>
 
-              {/* Day-by-Day Timeline Schedule */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-black text-[#3C3C3C] flex items-center gap-2">
-                  <Clock size={16} className="text-[#4F46E5]" />
-                  {uiLanguage === 'sv' ? `Dag-för-dag studieplanering (${currentPlan.schedule?.length ?? 0} dagar)` : `Day-by-Day Study Schedule (${currentPlan.schedule?.length ?? 0} Days)`}
-                </h3>
+                {/* Day-by-Day Milestone Cards */}
+                <div className="space-y-4">
+                  {filteredSchedule.length === 0 ? (
+                    <div className="p-10 text-center rounded-xl bg-white border border-stone-200/80 space-y-2">
+                      <p className="text-xs font-semibold text-[#5C564E]">No milestones matching current filter.</p>
+                      <button
+                        onClick={() => {
+                          setFilterMode('all')
+                          setSearchMilestoneQuery('')
+                        }}
+                        className="text-xs text-[#9E6B38] underline cursor-pointer"
+                      >
+                        Reset filters
+                      </button>
+                    </div>
+                  ) : (
+                    filteredSchedule.map((dayItem, idx) => {
+                      const isDone = currentPlan.completed_days?.includes(dayItem.day)
+                      const prevPhase = idx > 0 ? filteredSchedule[idx - 1].phase : null
+                      const isNewPhase = dayItem.phase && dayItem.phase !== prevPhase
 
-                <div className="space-y-3">
-                  {currentPlan.schedule?.map((dayItem, idx) => {
-                    const isDone = currentPlan.completed_days?.includes(dayItem.day)
-                    const prevPhase = idx > 0 ? currentPlan.schedule[idx - 1].phase : null
-                    const isNewPhase = dayItem.phase && dayItem.phase !== prevPhase
-
-                    return (
-                      <div key={dayItem.day} className="space-y-3">
-                        {isNewPhase && (
-                          <div className="pt-3 pb-1">
-                            <div className="flex items-center gap-2.5">
-                              <span className="text-xs font-black text-[#4F46E5] bg-[#EEF2FF] border border-[#4F46E5]/30 px-3 py-1 rounded-[1.25rem] uppercase tracking-wider elevation-1">
-                                {dayItem.phase}
-                              </span>
-                              <div className="flex-1 h-[1px] bg-[#E2E8F0]" />
-                            </div>
-                          </div>
-                        )}
-
-                        <motion.div
-                          initial={{ opacity: 0, y: 6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className={`p-5 rounded-[1.5rem] border transition-all ${
-                            isDone
-                              ? 'bg-[#D7FFB8]/50 border-[#58CC02]/30 elevation-1'
-                              : 'bg-white border-[#E2E8F0] elevation-1 hover:border-[#4F46E5]/40'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex items-start gap-3.5">
-                              {/* Status Indicator (completed via quiz only) */}
-                              <div
-                                className={`w-7 h-7 rounded-[1.25rem] border flex items-center justify-center mt-0.5 flex-shrink-0 ${
-                                  isDone
-                                    ? 'bg-[#58CC02] border-[#58CC02] text-white elevation-1'
-                                    : 'bg-[#F7F7F7] border-[#E2E8F0] text-transparent'
-                                }`}
-                                title={isDone ? (uiLanguage === 'sv' ? 'Klarade Dags-Quiz (≥70%)' : 'Passed Day Quiz (≥70%)') : (uiLanguage === 'sv' ? 'Gör Dags-Quiz för att slutföra' : 'Pass the Day Quiz to complete')}
-                              >
-                                <CheckCircle2 size={18} />
+                      return (
+                        <div key={dayItem.day} className="space-y-3">
+                          {/* Phase Header */}
+                          {isNewPhase && (
+                            <div className="pt-4 pb-1">
+                              <div className="flex items-center gap-3">
+                                <span className="text-[11px] font-serif font-semibold text-[#9E6B38] tracking-wider uppercase px-2 py-0.5 rounded bg-[#9E6B38]/8 border border-[#9E6B38]/15">
+                                  {dayItem.phase}
+                                </span>
+                                <div className="flex-1 h-[1px] bg-stone-200" />
                               </div>
+                            </div>
+                          )}
 
-                              <div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-xs font-black text-[#4F46E5] bg-[#EEF2FF] px-2 py-0.5 rounded-md border border-[#4F46E5]/20">
-                                    {uiLanguage === 'sv' ? 'Dag' : 'Day'} {dayItem.day}
-                                  </span>
-                                  {dayItem.phase && (
-                                    <span className="text-[10px] font-bold text-[#58CC02] bg-[#D7FFB8] px-2 py-0.5 rounded-md border border-[#58CC02]/20">
-                                      {dayItem.phase.split(':')[0]}
+                          {/* Milestone Card */}
+                          <motion.div
+                            initial={{ opacity: 0, y: 5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className={`p-5 sm:p-6 rounded-xl border transition-all ${
+                              isDone
+                                ? 'bg-white/80 border-stone-200/80'
+                                : 'bg-white border-stone-200 hover:border-stone-300 shadow-2xs'
+                            }`}
+                          >
+                            <div className="flex items-start gap-4">
+                              {/* Checkbox toggle */}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  toggleDayMutation.mutate({
+                                    planId: currentPlan.id,
+                                    dayNumber: dayItem.day,
+                                  })
+                                }
+                                title={isDone ? 'Mark as incomplete' : 'Click to mark complete'}
+                                className={`w-6 h-6 rounded-md border mt-0.5 flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer ${
+                                  isDone
+                                    ? 'bg-[#059669] border-[#059669] text-white'
+                                    : 'border-stone-300 hover:border-[#1C1A17] bg-stone-50 text-transparent'
+                                }`}
+                              >
+                                <Check size={14} className={isDone ? 'opacity-100' : 'opacity-0'} />
+                              </button>
+
+                              {/* Content */}
+                              <div className="flex-1 space-y-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-stone-100 text-[#1C1A17] border border-stone-200">
+                                      Day {dayItem.day < 10 ? `0${dayItem.day}` : dayItem.day}
+                                    </span>
+                                    <span className="text-[11px] font-mono text-[#8C8479] flex items-center gap-1">
+                                      <Clock size={11} /> {dayItem.estimated_hours} hrs
+                                    </span>
+                                  </div>
+
+                                  {isDone ? (
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#059669] bg-[#ECFDF5] border border-[#A7F3D0] px-2 py-0.5 rounded-full">
+                                      Mastered
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#8C8479] bg-stone-100 px-2 py-0.5 rounded-full">
+                                      Pending
                                     </span>
                                   )}
-                                  <span className="text-[11px] font-semibold text-[#AFAFAF] flex items-center gap-1">
-                                    <Clock size={11} /> {dayItem.estimated_hours} {uiLanguage === 'sv' ? 'tim' : 'hrs'}
-                                  </span>
                                 </div>
 
-                                <h4 className={`text-sm font-extrabold mt-1.5 ${isDone ? 'line-through text-[#AFAFAF]' : 'text-[#3C3C3C]'}`}>
-                                  {dayItem.topic}
-                                </h4>
+                                <div>
+                                  <h3 className={`text-base font-serif font-semibold text-[#1C1A17] ${isDone ? 'line-through text-[#8C8479]' : ''}`}>
+                                    {dayItem.topic}
+                                  </h3>
+                                  <p className="text-xs text-[#5C564E] mt-1 font-normal leading-relaxed">
+                                    {dayItem.focus}
+                                  </p>
+                                </div>
 
-                                <p className="text-xs text-[#777777] mt-1 leading-relaxed font-medium">
-                                  {dayItem.focus}
-                                </p>
-
-                                {/* Recommended Action */}
+                                {/* Recommended Directive */}
                                 {dayItem.recommended_action && (
-                                  <div className="mt-3 p-2.5 bg-[#FFFFFF] border border-[#E2E8F0] rounded-[1.25rem] text-xs text-[#3C3C3C] flex items-center gap-2">
-                                    <Brain size={13} className="text-[#4F46E5] flex-shrink-0" />
-                                    <span><strong className="text-[#4F46E5]">{uiLanguage === 'sv' ? 'Åtgärd:' : 'Action:'}</strong> {dayItem.recommended_action}</span>
+                                  <div className="p-3 bg-[#FAF8F5] border border-stone-200/70 rounded-lg text-xs text-[#5C564E] flex items-start gap-2.5">
+                                    <Brain size={14} className="text-[#9E6B38] flex-shrink-0 mt-0.5" />
+                                    <span>
+                                      <strong className="text-[#1C1A17]">Daily Directive: </strong>
+                                      {dayItem.recommended_action}
+                                    </span>
                                   </div>
                                 )}
 
-                                {/* Key Concepts Pills */}
+                                {/* Key Concepts Chips */}
                                 {dayItem.key_concepts && dayItem.key_concepts.length > 0 && (
-                                  <div className="flex flex-wrap gap-1.5 mt-3">
-                                    {dayItem.key_concepts.map((concept, idx) => (
+                                  <div className="flex flex-wrap gap-1.5 pt-1">
+                                    {dayItem.key_concepts.map((concept, cIdx) => (
                                       <span
-                                        key={idx}
-                                        className="text-[10px] font-bold bg-[#D7FFB8] text-[#46A302] border border-[#58CC02]/20 px-2 py-0.5 rounded-lg"
+                                        key={cIdx}
+                                        className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-100/80 text-[#5C564E] border border-stone-200/60"
                                       >
                                         {concept}
                                       </span>
@@ -643,14 +812,15 @@ export default function StudyPlanPage() {
                                   </div>
                                 )}
 
-                                {/* Action Buttons: Notes & Day Mastery Quiz */}
-                                <div className="pt-3 flex flex-wrap items-center gap-2.5">
+                                {/* Action Buttons */}
+                                <div className="pt-2 flex flex-wrap items-center gap-2.5">
                                   <button
                                     type="button"
                                     onClick={() => handleOpenStudyNotes(dayItem)}
-                                    className="btn-primary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer elevation-1 active:scale-95"
+                                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-lg border border-stone-200 bg-white hover:bg-stone-50 text-[#1C1A17] active:scale-98 transition cursor-pointer shadow-2xs"
                                   >
-                                    <BookOpen size={14} /> {uiLanguage === 'sv' ? 'Visa AI-Studieanteckningar' : 'View AI Study Notes'}
+                                    <BookOpen size={13} className="text-[#9E6B38]" />
+                                    <span>View AI Study Notes</span>
                                   </button>
 
                                   <button
@@ -661,353 +831,197 @@ export default function StudyPlanPage() {
                                         : ''
                                       setDayQuizModal({ dayNum: dayItem.day, topic: dayItem.topic + conceptsStr })
                                     }}
-                                    className={`py-2 px-3.5 text-xs font-extrabold rounded-[1.25rem] border flex items-center gap-1.5 transition-all cursor-pointer elevation-1 active:scale-95 ${
+                                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-lg border active:scale-98 transition cursor-pointer shadow-2xs ${
                                       isDone
-                                        ? 'bg-[#D7FFB8] text-[#46A302] border-[#58CC02]/30 hover:bg-[#d5e8d8]'
-                                        : 'bg-[#EEF2FF] text-[#4F46E5] border-[#4F46E5]/40 hover:bg-[#E0E7FF]'
+                                        ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0] hover:bg-[#D1FAE5]'
+                                        : 'bg-[#1C1A17] text-[#FAF8F5] border-[#1C1A17] hover:bg-[#332F2A]'
                                     }`}
                                   >
-                                    <Target size={14} />
-                                    {isDone ? (uiLanguage === 'sv' ? 'Gör om Dags-Quiz (Klar)' : 'Retake Day Quiz (Passed)') : (uiLanguage === 'sv' ? 'Gör Dags-Quiz (Klar ≥ 70%)' : 'Take Day Quiz (Pass ≥ 70%)')}
+                                    <Target size={13} />
+                                    <span>{isDone ? 'Retake Quiz (Mastered)' : 'Take Day Mastery Quiz'}</span>
                                   </button>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </motion.div>
-                      </div>
-                    )
-                  })}
+                          </motion.div>
+                        </div>
+                      )
+                    })
+                  )}
                 </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+              </main>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* ─── CREATE / GENERATE STUDY PLAN MODAL ─── */}
       <AnimatePresence>
         {showCreateModal && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+          <div className="fixed inset-0 z-50 bg-[#1C1A17]/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              transition={{ duration: 0.2 }}
-              className="w-full max-w-2xl bg-white rounded-[2.5rem] p-6 sm:p-9 shadow-2xl border border-slate-200/90 relative overflow-hidden my-auto"
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              className="w-full max-w-xl bg-white rounded-2xl p-6 sm:p-8 border border-stone-200 shadow-xl space-y-6"
             >
-              {/* Modal Header */}
-              <div className="flex items-start justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-2xs">
-                    <Sparkles size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-black text-slate-900 font-sans tracking-tight">Generate AI Study Plan</h3>
-                    <p className="text-xs text-slate-500 font-medium mt-0.5">
-                      Personalized day-by-day revision roadmap grounded in your study material
-                    </p>
-                  </div>
+              <div className="flex items-start justify-between pb-4 border-b border-stone-100">
+                <div className="space-y-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#9E6B38]">
+                    AI Curriculum Architect
+                  </span>
+                  <h3 className="text-xl font-serif font-medium text-[#1C1A17]">Generate Study Roadmap</h3>
+                  <p className="text-xs text-[#5C564E]">
+                    Structured day-by-day learning roadmap grounded in your materials.
+                  </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                  className="p-1.5 rounded-lg text-stone-400 hover:text-[#1C1A17] hover:bg-stone-100 cursor-pointer"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              <form onSubmit={handleGeneratePlan} className="space-y-6">
-                {/* ─── Step 1: Select Study Material ─── */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                      1. Choose Study Material
-                    </label>
-                    <span className="text-xs font-medium text-indigo-600">
-                      {materialSourceMode === 'library' && uniqueUserDocuments.length > 0 && `${uniqueUserDocuments.length} available in library`}
-                    </span>
-                  </div>
-
-                  {/* Segmented Control */}
-                  <div className="flex p-1.5 bg-slate-100 rounded-2xl mb-3.5 gap-1.5 border border-slate-200/60">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMaterialSourceMode('library')
-                        setSelectedFile(null)
-                        setSelectedSessionId('')
-                      }}
-                      className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                        materialSourceMode === 'library'
-                          ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/60'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <Layers size={14} className={materialSourceMode === 'library' ? 'text-indigo-600' : 'text-slate-400'} />
-                      <span>From Library ({uniqueUserDocuments.length})</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMaterialSourceMode('upload')
-                        setSelectedDocumentId('')
-                        setSelectedSessionId('')
-                      }}
-                      className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                        materialSourceMode === 'upload'
-                          ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/60'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <UploadCloud size={14} className={materialSourceMode === 'upload' ? 'text-indigo-600' : 'text-slate-400'} />
-                      <span>Upload New File</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMaterialSourceMode('session')
-                        setSelectedFile(null)
-                        setSelectedDocumentId('')
-                      }}
-                      className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                        materialSourceMode === 'session'
-                          ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/60'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <BookOpen size={14} className={materialSourceMode === 'session' ? 'text-indigo-600' : 'text-slate-400'} />
-                      <span>Chat Room ({sessions.length})</span>
-                    </button>
-                  </div>
-
-                  {/* Mode A: Select from Library */}
-                  {materialSourceMode === 'library' && (
-                    <div className="space-y-3">
-                      {uniqueUserDocuments.length > 4 && (
-                        <div className="relative">
-                          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                          <input
-                            type="text"
-                            value={modalDocSearchQuery}
-                            onChange={(e) => setModalDocSearchQuery(e.target.value)}
-                            placeholder="Search your library materials..."
-                            className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-indigo-400 focus:bg-white"
-                          />
-                        </div>
-                      )}
-
-                      {uniqueUserDocuments.length === 0 ? (
-                        <div className="p-8 rounded-3xl bg-slate-50 border-2 border-dashed border-slate-200 text-center">
-                          <BookOpen size={28} className="text-slate-400 mx-auto mb-2 opacity-60" />
-                          <p className="text-sm font-bold text-slate-700 mb-1">No previously uploaded materials found</p>
-                          <p className="text-xs text-slate-400 mb-3">Upload your first PDF textbook or chapter notes to get started.</p>
-                          <button
-                            type="button"
-                            onClick={() => setMaterialSourceMode('upload')}
-                            className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition cursor-pointer"
-                          >
-                            Upload Study PDF Now →
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
-                          {filteredModalDocuments.map((doc: any) => {
-                            const isSelected = selectedDocumentId === doc.id
-                            return (
-                              <div
-                                key={doc.id}
-                                onClick={() => setSelectedDocumentId(doc.id)}
-                                className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between gap-3 text-left ${
-                                  isSelected
-                                    ? 'bg-indigo-50/90 border-indigo-500 text-indigo-950 shadow-sm'
-                                    : 'bg-slate-50/70 border-slate-200/80 text-slate-700 hover:bg-white hover:border-slate-300'
-                                }`}
-                              >
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <div
-                                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
-                                      isSelected
-                                        ? 'bg-indigo-600 text-white border-indigo-600'
-                                        : 'bg-white text-indigo-600 border-slate-200'
-                                    }`}
-                                  >
-                                    <FileText size={16} />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <h4 className="text-xs font-bold truncate text-slate-900 max-w-[170px]" title={doc.file_name}>
-                                      {doc.file_name}
-                                    </h4>
-                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                      <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-100/70 px-1.5 py-0.2 rounded-md">
-                                        {doc.detected_subject || 'General Study'}
-                                      </span>
-                                      {doc.key_topics?.length > 0 && (
-                                        <span className="text-[10px] text-slate-400 truncate">
-                                          • {doc.key_topics.length} topics
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="shrink-0">
-                                  {isSelected ? (
-                                    <div className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-xs">
-                                      <Check size={12} strokeWidth={3} />
-                                    </div>
-                                  ) : (
-                                    <div className="w-5 h-5 rounded-full border-2 border-slate-300" />
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Mode B: Upload New File */}
-                  {materialSourceMode === 'upload' && (
-                    <div>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.docx,.doc,.csv,.xlsx,.xls,.pptx,.ppt,.html,.json,.txt,.md"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (file) {
-                            setSelectedFile(file)
-                          }
-                        }}
-                      />
+              <form onSubmit={handleGeneratePlan} className="space-y-5">
+                {/* Step 1: Material Source Selector */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-[#8C8479]">
+                    1. Study Material Source
+                  </label>
+                  <div className="grid grid-cols-3 gap-2 p-1 bg-stone-100 rounded-lg">
+                    {(['library', 'upload', 'session'] as const).map((mode) => (
                       <button
+                        key={mode}
                         type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className={`w-full p-6 border-2 border-dashed rounded-3xl text-xs font-semibold flex flex-col items-center justify-center gap-2.5 transition-all cursor-pointer ${
-                          selectedFile
-                            ? 'bg-indigo-50/80 border-indigo-400 text-indigo-950'
-                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100/80 hover:border-slate-300 text-slate-600'
+                        onClick={() => setMaterialSourceMode(mode)}
+                        className={`py-1.5 px-2 text-xs font-medium rounded-md transition cursor-pointer ${
+                          materialSourceMode === mode
+                            ? 'bg-white text-[#1C1A17] shadow-2xs font-semibold'
+                            : 'text-[#5C564E] hover:text-[#1C1A17]'
                         }`}
                       >
-                        <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
-                          <UploadCloud size={24} />
-                        </div>
-                        <div className="text-center">
-                          <span className="font-bold text-sm text-slate-900 block truncate max-w-xs">
-                            {selectedFile ? selectedFile.name : 'Click to select study PDF / Document'}
-                          </span>
-                          <span className="text-[11px] text-slate-400 font-normal">
-                            Supports PDF, DOCX, Markdown, Lecture Slides, and Images
-                          </span>
-                        </div>
+                        {mode === 'library' && 'From Library'}
+                        {mode === 'upload' && 'Upload File'}
+                        {mode === 'session' && 'Chat Room'}
                       </button>
+                    ))}
+                  </div>
+
+                  {materialSourceMode === 'library' && (
+                    <div className="space-y-2 pt-1">
+                      {uniqueUserDocuments.length === 0 ? (
+                        <p className="text-xs text-stone-400 italic">No library documents found. You can upload a file instead.</p>
+                      ) : (
+                        <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1 border border-stone-200 rounded-lg p-2 bg-[#FAF8F5]">
+                          {uniqueUserDocuments.map((doc) => (
+                            <button
+                              key={doc.id}
+                              type="button"
+                              onClick={() => setSelectedDocumentId(doc.id)}
+                              className={`w-full text-left p-2 rounded text-xs transition cursor-pointer flex items-center justify-between ${
+                                selectedDocumentId === doc.id
+                                  ? 'bg-[#1C1A17] text-[#FAF8F5]'
+                                  : 'hover:bg-stone-200/60 text-[#1C1A17]'
+                              }`}
+                            >
+                              <span className="truncate">{doc.file_name || doc.title || 'Document'}</span>
+                              <span className="text-[10px] opacity-70 ml-2 font-mono">
+                                {doc.page_count ? `${doc.page_count}p` : ''}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* Mode C: Pick Chat Room */}
+                  {materialSourceMode === 'upload' && (
+                    <div className="pt-1">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                        accept=".pdf,.txt,.docx"
+                        className="w-full text-xs text-stone-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-stone-100 file:text-[#1C1A17] hover:file:bg-stone-200 cursor-pointer"
+                      />
+                    </div>
+                  )}
+
                   {materialSourceMode === 'session' && (
-                    <div>
-                      {sessions.length === 0 ? (
-                        <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-400">
-                          No active chat notebooks found.
-                        </div>
-                      ) : (
-                        <select
-                          value={selectedSessionId}
-                          onChange={(e) => setSelectedSessionId(e.target.value)}
-                          className="w-full bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 text-xs font-semibold text-slate-900 rounded-2xl px-4 py-3.5 focus:outline-none focus:border-indigo-500"
-                        >
-                          <option value="">Choose an active chat notebook...</option>
-                          {sessions.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.session_title || `Chat Notebook #${s.id.slice(-4)}`}
-                            </option>
-                          ))}
-                        </select>
-                      )}
+                    <div className="pt-1">
+                      <select
+                        value={selectedSessionId}
+                        onChange={(e) => setSelectedSessionId(e.target.value)}
+                        className="w-full text-xs p-2.5 rounded-lg border border-stone-200 bg-white text-[#1C1A17] focus:outline-none focus:border-[#1C1A17]"
+                      >
+                        <option value="">Select a Chat Room Session</option>
+                        {sessions.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.session_title || `Session ${s.id.slice(0, 8)}`}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   )}
                 </div>
 
-                {/* ─── Step 2 & 3: Target Date & Daily Study Time Grid ─── */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-1">
-                  {/* Target Date Picker */}
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2">
-                      2. Target Completion Date
+                {/* Step 2: Target Date & Daily Hours */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-[#8C8479]">
+                      2. Target Date
                     </label>
                     <input
                       type="date"
-                      required
                       value={targetDate}
                       onChange={(e) => setTargetDate(e.target.value)}
-                      min={new Date().toISOString().split('T')[0]}
-                      className="w-full bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-900 font-bold focus:outline-none focus:border-indigo-500 transition-all shadow-2xs"
+                      className="w-full text-xs p-2.5 rounded-lg border border-stone-200 bg-white text-[#1C1A17] focus:outline-none focus:border-[#1C1A17]"
+                      required
                     />
-                    <p className="text-[11px] text-slate-400 mt-1.5 font-medium">
-                      Remaining days are automatically calculated for your schedule.
-                    </p>
                   </div>
 
-                  {/* Daily Study Time */}
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2">
-                      3. Daily Study Time
-                    </label>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {[1.0, 2.0, 3.0, 4.0].map((hrs) => (
-                        <button
-                          key={hrs}
-                          type="button"
-                          onClick={() => setHoursPerDay(hrs)}
-                          className={`py-3 rounded-2xl text-xs font-bold border transition-all cursor-pointer flex flex-col items-center justify-center ${
-                            hoursPerDay === hrs
-                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200 scale-[1.02]'
-                              : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200/80'
-                          }`}
-                        >
-                          <span className="text-sm font-black">{hrs}h</span>
-                          <span className="text-[9px] opacity-80 uppercase font-semibold">/day</span>
-                        </button>
-                      ))}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-[#8C8479]">
+                      <span>3. Hours / Day</span>
+                      <span className="text-[#1C1A17] font-mono">{hoursPerDay} hrs</span>
                     </div>
+                    <input
+                      type="range"
+                      min="1.0"
+                      max="6.0"
+                      step="0.5"
+                      value={hoursPerDay}
+                      onChange={(e) => setHoursPerDay(parseFloat(e.target.value))}
+                      className="w-full accent-[#1C1A17] cursor-pointer mt-2"
+                    />
                   </div>
                 </div>
 
-                {/* ─── Footer Action Buttons ─── */}
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                {/* Action Buttons */}
+                <div className="pt-3 border-t border-stone-100 flex items-center justify-end gap-3">
                   <button
                     type="button"
                     onClick={() => setShowCreateModal(false)}
-                    className="py-3 px-5 rounded-2xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer"
+                    className="px-4 py-2 text-xs font-medium text-stone-600 hover:text-stone-900 cursor-pointer"
                   >
                     Cancel
                   </button>
-
                   <button
                     type="submit"
-                    disabled={
-                      generating ||
-                      (materialSourceMode === 'library' && !selectedDocumentId && uniqueUserDocuments.length > 0) ||
-                      (materialSourceMode === 'upload' && !selectedFile)
-                    }
-                    className="py-3 px-7 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/25 transition-all cursor-pointer disabled:opacity-50"
+                    disabled={generating}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#1C1A17] text-[#FAF8F5] text-xs font-semibold hover:bg-[#332F2A] disabled:opacity-60 transition shadow-xs cursor-pointer"
                   >
                     {generating ? (
                       <>
-                        <RefreshCw size={15} className="animate-spin" />
-                        <span>Building Your Schedule...</span>
+                        <RefreshCw size={14} className="animate-spin text-[#9E6B38]" />
+                        <span>Architecting Roadmap...</span>
                       </>
                     ) : (
                       <>
-                        <Sparkles size={15} />
-                        <span>Generate Schedule</span>
+                        <Sparkles size={14} className="text-[#9E6B38]" />
+                        <span>Generate Roadmap</span>
                       </>
                     )}
                   </button>
@@ -1021,74 +1035,47 @@ export default function StudyPlanPage() {
       {/* ─── AI STUDY NOTES MODAL ─── */}
       <AnimatePresence>
         {activeNotesModal && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 bg-[#1C1A17]/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="w-full max-w-2xl bg-white rounded-[2rem] p-7 shadow-2xl border border-border relative overflow-hidden flex flex-col max-h-[85vh]"
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              className="w-full max-w-3xl max-h-[85vh] bg-white rounded-2xl p-6 sm:p-8 border border-stone-200 shadow-2xl flex flex-col space-y-4"
             >
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-[1.5rem] bg-[#111111] text-white flex items-center justify-center font-black">
-                    {activeNotesModal.dayNum}
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-black uppercase text-indigo-600 tracking-wider bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
-                      Day {activeNotesModal.dayNum} AI Study Notes
-                    </span>
-                    <h3 className="text-lg font-black text-slate-900 leading-snug">
-                      {activeNotesModal.topic}
-                    </h3>
-                  </div>
+              {/* Modal Top Bar */}
+              <div className="flex items-center justify-between pb-3 border-b border-stone-200">
+                <div>
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#9E6B38]">
+                    Day {activeNotesModal.dayNum} Briefing
+                  </span>
+                  <h3 className="text-lg sm:text-xl font-serif font-semibold text-[#1C1A17]">
+                    {activeNotesModal.topic}
+                  </h3>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => {
-                      const dayItem = currentPlan?.schedule.find((s) => s.day === activeNotesModal.dayNum)
-                      if (dayItem) handleOpenStudyNotes(dayItem, true)
-                    }}
-                    disabled={activeNotesModal.loading}
-                    className="p-2 rounded-[1.25rem] text-slate-500 hover:text-[#1CB0F6] hover:bg-[#DDF4FF] transition-colors disabled:opacity-40"
-                    title="Regenerate Full Study Brief"
+                    onClick={() => copyNotes(activeNotesModal.notes)}
+                    className="p-1.5 rounded-lg text-stone-500 hover:text-[#1C1A17] hover:bg-stone-100 cursor-pointer"
+                    title="Copy to Clipboard"
                   >
-                    <Sparkles size={18} />
+                    {copied ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}
+                  </button>
+
+                  <button
+                    onClick={() => downloadMarkdown(activeNotesModal.notes, activeNotesModal.topic)}
+                    className="p-1.5 rounded-lg text-stone-500 hover:text-[#1C1A17] hover:bg-stone-100 cursor-pointer"
+                    title="Download as Markdown"
+                  >
+                    <Download size={16} />
                   </button>
 
                   <button
                     onClick={() => speakNotes(activeNotesModal.notes)}
-                    className="p-2 rounded-[1.25rem] text-slate-500 hover:bg-black/10 transition-colors"
-                    title="Audio Reader"
+                    className="p-1.5 rounded-lg text-stone-500 hover:text-[#1C1A17] hover:bg-stone-100 cursor-pointer"
+                    title={isSpeaking ? 'Stop Read Aloud' : 'Read Aloud'}
                   >
-                    <Volume2 size={18} className={isSpeaking ? 'text-indigo-600 animate-pulse' : ''} />
-                  </button>
-
-                  <button
-                    onClick={() => copyNotes(activeNotesModal.notes)}
-                    className="p-2 rounded-[1.25rem] text-slate-500 hover:bg-black/10 transition-colors"
-                    title="Copy Notes"
-                  >
-                    {copied ? <Check size={18} className="text-emerald-600" /> : <Copy size={18} />}
-                  </button>
-
-                  <button
-                    onClick={() => downloadMarkdown(activeNotesModal.notes, `${activeNotesModal.topic}_Day_${activeNotesModal.dayNum}_Study_Notes`)}
-                    disabled={activeNotesModal.loading || !activeNotesModal.notes}
-                    className="p-2 rounded-[1.25rem] text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-40"
-                    title="Download as Markdown (.md)"
-                  >
-                    <Download size={18} />
-                  </button>
-
-                  <button
-                    onClick={() => window.print()}
-                    disabled={activeNotesModal.loading || !activeNotesModal.notes}
-                    className="p-2 rounded-[1.25rem] text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-40"
-                    title="Print Study Notes"
-                  >
-                    <Printer size={18} />
+                    {isSpeaking ? <VolumeX size={16} className="text-rose-600" /> : <Volume2 size={16} />}
                   </button>
 
                   <button
@@ -1097,87 +1084,63 @@ export default function StudyPlanPage() {
                       setIsSpeaking(false)
                       setActiveNotesModal(null)
                     }}
-                    className="p-2 rounded-[1.25rem] text-slate-400 hover:text-slate-700 hover:bg-black/10 transition-colors"
+                    className="p-1.5 rounded-lg text-stone-400 hover:text-[#1C1A17] hover:bg-stone-100 cursor-pointer"
                   >
-                    <X size={20} />
+                    <X size={18} />
                   </button>
                 </div>
               </div>
 
-              {/* Notes Body Content */}
-              <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+              {/* Notes Body Content with Markdown & KaTeX */}
+              <div className="flex-1 overflow-y-auto pr-2 space-y-3">
                 {activeNotesModal.loading ? (
-                  <div className="py-12 text-center space-y-3">
-                    <RefreshCw size={24} className="animate-spin text-indigo-600 mx-auto" />
-                    <p className="text-xs font-bold text-slate-500">Generating AI Study Notes from PDF...</p>
+                  <div className="py-16 text-center space-y-3">
+                    <RefreshCw size={24} className="animate-spin text-[#9E6B38] mx-auto" />
+                    <p className="text-xs font-semibold text-[#5C564E]">Synthesizing AI Study Notes...</p>
                   </div>
                 ) : (
-                  <div className="prose prose-sm max-w-none text-slate-800 space-y-3">
+                  <div className="prose prose-sm max-w-none text-[#1C1A17]">
                     <ReactMarkdown
                       remarkPlugins={[remarkMath, remarkGfm]}
                       rehypePlugins={[rehypeKatex]}
                       components={{
                         h1: ({ children }) => (
-                          <h1 className="text-xl font-black text-slate-900 mt-6 mb-3 pb-2 border-b border-slate-200">
+                          <h1 className="text-xl font-serif font-semibold text-[#1C1A17] mt-4 mb-2 pb-1 border-b border-stone-200">
                             {children}
                           </h1>
                         ),
                         h2: ({ children }) => (
-                          <h2 className="text-base font-bold text-slate-900 mt-6 mb-2.5 flex items-center gap-2">
+                          <h2 className="text-base font-serif font-semibold text-[#1C1A17] mt-5 mb-2 flex items-center gap-2">
                             {children}
                           </h2>
                         ),
                         h3: ({ children }) => (
-                          <h3 className="text-sm font-bold text-slate-800 mt-4 mb-2">
+                          <h3 className="text-sm font-semibold text-[#1C1A17] mt-3 mb-1">
                             {children}
                           </h3>
                         ),
                         p: ({ children }) => (
-                          <p className="text-xs sm:text-sm text-slate-700 leading-relaxed mb-3 font-normal">
+                          <p className="text-xs sm:text-sm text-[#5C564E] leading-relaxed mb-3">
                             {children}
                           </p>
                         ),
                         ul: ({ children }) => (
-                          <ul className="list-disc pl-5 space-y-1.5 text-xs sm:text-sm text-slate-700 mb-3">
+                          <ul className="list-disc pl-5 space-y-1 text-xs sm:text-sm text-[#5C564E] mb-3">
                             {children}
                           </ul>
                         ),
-                        ol: ({ children }) => (
-                          <ol className="list-decimal pl-5 space-y-1.5 text-xs sm:text-sm text-slate-700 mb-3">
-                            {children}
-                          </ol>
-                        ),
-                        li: ({ children }) => (
-                          <li className="leading-relaxed">
-                            {children}
-                          </li>
-                        ),
+                        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
                         blockquote: ({ children }) => (
-                          <blockquote className="border-l-4 border-indigo-500 pl-4 py-2 my-3 bg-indigo-50/60 rounded-r-xl text-xs sm:text-sm text-slate-800 italic">
+                          <blockquote className="border-l-2 border-[#9E6B38] pl-3 py-1 my-2 bg-[#9E6B38]/5 text-xs text-[#1C1A17] italic">
                             {children}
                           </blockquote>
                         ),
-                        table: ({ children }) => (
-                          <div className="overflow-x-auto my-4 rounded-xl border border-slate-200 shadow-2xs">
-                            <table className="w-full text-xs border-collapse">{children}</table>
-                          </div>
-                        ),
-                        th: ({ children }) => (
-                          <th className="border-b border-slate-200 bg-slate-100/80 p-2.5 font-bold text-left text-slate-800">
-                            {children}
-                          </th>
-                        ),
-                        td: ({ children }) => (
-                          <td className="border-b border-slate-100 p-2.5 text-left text-slate-700">
-                            {children}
-                          </td>
-                        ),
-                        code({ className, children, ...props }: any) {
+                        code({ className, children }: any) {
                           const match = /language-(\w+)/.exec(className || '')
                           const isMermaid = match && match[1] === 'mermaid'
                           const isInline = !match
-
                           const codeStr = String(children).replace(/\n$/, '')
+
                           if (isMermaid) {
                             return <MermaidDiagram chart={codeStr} />
                           }
@@ -1186,41 +1149,32 @@ export default function StudyPlanPage() {
                           }
                           if (isInline) {
                             return (
-                              <code className="bg-slate-100 text-indigo-700 px-1.5 py-0.5 rounded-md text-xs font-mono font-semibold border border-slate-200">
+                              <code className="bg-stone-100 text-[#1C1A17] px-1.5 py-0.5 rounded text-xs font-mono font-semibold">
                                 {children}
                               </code>
                             )
                           }
                           return (
-                            <pre className="bg-slate-900 text-slate-100 p-4 rounded-2xl overflow-x-auto text-xs font-mono my-3 shadow-inner">
+                            <pre className="bg-[#1C1A17] text-[#FAF8F5] p-3.5 rounded-xl overflow-x-auto text-xs font-mono my-2">
                               <code>{children}</code>
                             </pre>
                           )
                         },
                       }}
                     >
-                      {(() => {
-                        const raw = activeNotesModal.notes || ''
-                        let cleaned = raw
-                        // 1. Convert standalone single-line formulas wrapped in $...$ into display math $$\n...\n$$
-                        cleaned = cleaned.replace(/^\s*\$(?!\$)([^\$\n]{5,})\$\s*$/gm, '$$\n$1\n$$')
-                        // 2. Inline math delimiter normalization: $$ var $$ on same line -> $var$
-                        cleaned = cleaned.replace(/(?<!\$)\$\$\s*([^\$\n]+?)\s*\$\$(?!\$)/g, (_m: string, p1: string) => `$${p1.trim()}$`)
-                        // 3. Ensure display math blocks have newlines around them
-                        cleaned = cleaned.replace(/([^\n])\s*\$\$\s*\n/g, '$1\n\n$$\n')
-                        cleaned = cleaned.replace(/\n\s*\$\$\s*([^\n])/g, '\n$$\n\n$1')
-                        // 4. Bullet un-bulleted paradigm lists like "Reinforcement Learning (RL): ..." -> "- **Reinforcement Learning (RL)**: ..."
-                        cleaned = cleaned.replace(/^(?!(?:[-*#>]|\d+\.))\s*([A-Za-z0-9\s()/\-]{3,45}):\s+([A-Z])/gm, '- **$1**: $2')
-                        return cleaned
-                      })()}
+                      {activeNotesModal.notes}
                     </ReactMarkdown>
                   </div>
                 )}
               </div>
 
-              <div className="border-t border-slate-100 pt-4 mt-4 flex items-center justify-between">
-                <span className="text-xs text-slate-400 font-medium">Derived from your uploaded PDF text</span>
+              {/* Bottom Trigger to Quiz */}
+              <div className="pt-3 border-t border-stone-200 flex items-center justify-between">
+                <span className="text-[11px] text-[#8C8479]">
+                  Finished reading? Complete the check to verify mastery.
+                </span>
                 <button
+                  type="button"
                   onClick={() => {
                     if (isSpeaking) window.speechSynthesis.cancel()
                     setIsSpeaking(false)
@@ -1235,9 +1189,10 @@ export default function StudyPlanPage() {
                       setDayQuizModal({ dayNum, topic })
                     }
                   }}
-                  className="btn-primary flex items-center gap-2 px-6 py-2.5 text-xs elevation-2 cursor-pointer"
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-[#1C1A17] text-[#FAF8F5] hover:bg-[#332F2A] cursor-pointer shadow-xs"
                 >
-                  Done Reading — Take Day Quiz <Target size={14} />
+                  <span>Take Day Quiz</span>
+                  <Target size={14} />
                 </button>
               </div>
             </motion.div>
@@ -1245,6 +1200,7 @@ export default function StudyPlanPage() {
         )}
       </AnimatePresence>
 
+      {/* ─── DAY MASTERY QUIZ MODAL ─── */}
       {dayQuizModal && (
         <GamifiedQuizGame
           isOpen={!!dayQuizModal}
@@ -1254,6 +1210,7 @@ export default function StudyPlanPage() {
         />
       )}
 
+      {/* ─── UPGRADE MODAL ─── */}
       <UpgradeModal
         isOpen={upgradeModalInfo.open}
         exceededFileName={upgradeModalInfo.fileName}

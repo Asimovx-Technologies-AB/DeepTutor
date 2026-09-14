@@ -9,8 +9,9 @@ from app.storage.local_storage import default_storage
 class PyMuPDFParser:
     """Stage 2: High-fidelity PyMuPDF Parser extracting spans, fonts, bboxes, and page images."""
 
-    def __init__(self, render_dpi: int = 100):
+    def __init__(self, render_dpi: int = 100, render_images: bool = False):
         self.render_dpi = render_dpi
+        self.render_images = render_images
 
     def parse_document(self, file_bytes: bytes, doc_id: str) -> List[Dict[str, Any]]:
         """
@@ -26,13 +27,15 @@ class PyMuPDFParser:
             rect = page.rect
             width, height = rect.width, rect.height
 
-            # 1. Render page image to object storage for visual reference & VLM fallback
-            pix = page.get_pixmap(dpi=self.render_dpi)
-            img_bytes = pix.tobytes("png")
-            img_filename = f"{doc_id}_page_{page_number}.png"
-            image_storage_path = default_storage.store_file(
-                img_bytes, img_filename, subfolder="page_images"
-            )
+            # 1. Render page image to object storage only when explicitly requested (avoids 30s disk I/O on large PDFs)
+            image_storage_path = None
+            if self.render_images:
+                pix = page.get_pixmap(dpi=self.render_dpi)
+                img_bytes = pix.tobytes("png")
+                img_filename = f"{doc_id}_page_{page_number}.png"
+                image_storage_path = default_storage.store_file(
+                    img_bytes, img_filename, subfolder="page_images"
+                )
 
             # 2. Extract structured text with spans, fonts, flags, and bounding boxes
             text_page = page.get_text("dict")

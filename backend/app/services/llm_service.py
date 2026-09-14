@@ -22,6 +22,16 @@ class LLMService:
         self.provider = settings.LLM_PROVIDER
         self.model = settings.LLM_MODEL
         self.temperature = settings.LLM_TEMPERATURE
+        self._gemini_client = None
+
+    def _get_gemini_client(self):
+        if self._gemini_client is None and settings.GEMINI_API_KEY:
+            try:
+                from google import genai
+                self._gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            except Exception as e:
+                logger.warning(f"Failed to initialize Gemini client: {e}")
+        return self._gemini_client
 
     def is_live_model_configured(self) -> bool:
         if self.provider == "gemini" and settings.GEMINI_API_KEY:
@@ -45,18 +55,19 @@ class LLMService:
         response due to safety / recitation block), retries by folding the system
         prompt into the user message so Gemini sees pure text content.
         """
+        client = self._get_gemini_client()
+        if not client:
+            return None
         from google import genai
-
-        client = genai.Client(api_key=settings.GEMINI_API_KEY)
         current_prompt = prompt
         current_sys = system_prompt
 
         candidate_models = [self.model]
         for fb in [
-            "gemini-3.5-flash",
-            "gemini-3.5-flash-lite",
-            "gemini-3.7-flash",
+            "gemini-3.1-flash-lite",
             "gemini-flash-lite-latest",
+            "gemini-3.5-flash-lite",
+            "gemini-3.5-flash",
             "gemini-3.6-flash",
         ]:
             if fb not in candidate_models:
@@ -145,18 +156,19 @@ class LLMService:
         Stream from Gemini; on empty-output / blocked response retries once
         with system prompt folded into user message.
         """
+        client = self._get_gemini_client()
+        if not client:
+            return
         from google import genai
-
-        client = genai.Client(api_key=settings.GEMINI_API_KEY)
         current_prompt = prompt
         current_sys = system_prompt
 
         candidate_models = [self.model]
         for fb in [
-            "gemini-3.5-flash",
-            "gemini-3.5-flash-lite",
-            "gemini-3.7-flash",
+            "gemini-3.1-flash-lite",
             "gemini-flash-lite-latest",
+            "gemini-3.5-flash-lite",
+            "gemini-3.5-flash",
             "gemini-3.6-flash",
         ]:
             if fb not in candidate_models:

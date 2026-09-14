@@ -21,7 +21,7 @@ class ContextIntegrator:
         session_id: Optional[str] = None,
         user_id: str = "default_user",
         topic_id: Optional[str] = None,
-        max_history_turns: int = 6
+        max_history_turns: int = 50
     ) -> Dict[str, Any]:
         context: Dict[str, Any] = {
             "session_id": session_id,
@@ -63,6 +63,13 @@ class ContextIntegrator:
             if latest_doc:
                 context["document_id"] = latest_doc.id
                 context["document_title"] = latest_doc.title or latest_doc.filename
+
+        # Sanitize document title if it contains path separators or source extensions
+        doc_title = context.get("document_title")
+        if doc_title and ("\\" in doc_title or "/" in doc_title or any(doc_title.lower().endswith(ext) for ext in [".pmd", ".pdf", ".indd", ".doc", ".docx"])):
+            from pathlib import Path
+            stem = Path(doc_title).stem
+            context["document_title"] = stem.replace("-", " ").replace("_", " ").title() if stem else "Subject Document"
 
         # 2. Fetch Student Profile & Mastery
         profile = session.query(StudentProfile).filter(StudentProfile.user_id == user_id).first()

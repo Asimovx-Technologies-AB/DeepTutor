@@ -221,6 +221,11 @@ export default function SubjectChatPage() {
           prev.map((m) => (m.id === assistantMsgId ? { ...m, sources } : m))
         )
       },
+      onFlashcardQuiz: (quizData) => {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantMsgId ? { ...m, flashcard_quiz: quizData } : m))
+        )
+      },
       onToken: (tokenChunk) => {
         setMessages((prev) =>
           prev.map((m) => (m.id === assistantMsgId ? { ...m, content: m.content + tokenChunk } : m))
@@ -485,6 +490,7 @@ export default function SubjectChatPage() {
                     role={m.role}
                     content={m.content}
                     sources={m.sources}
+                    flashcard_quiz={(m as any).flashcard_quiz}
                     isStreaming={isStreaming && m.id === messages[messages.length - 1]?.id}
                   />
                 </motion.div>

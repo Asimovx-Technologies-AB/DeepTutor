@@ -36,7 +36,16 @@ class MetadataExtractor:
             metadata["is_encrypted"] = doc.is_encrypted
 
             pdf_meta = doc.metadata or {}
-            metadata["title"] = pdf_meta.get("title") or Path(filename).stem
+            raw_title = (pdf_meta.get("title") or "").strip()
+            # Reject raw_title if empty or if it represents an authoring file path / source file (.pmd, .indd, etc.)
+            is_path_or_source = (
+                not raw_title
+                or "\\" in raw_title
+                or "/" in raw_title
+                or (len(raw_title) > 2 and raw_title[1] == ":" and raw_title[0].isalpha())
+                or any(raw_title.lower().endswith(ext) for ext in [".pmd", ".pdf", ".indd", ".doc", ".docx", ".qxd", ".tex"])
+            )
+            metadata["title"] = Path(filename).stem if is_path_or_source else raw_title
             metadata["author"] = pdf_meta.get("author")
             
             # Format creation date if present

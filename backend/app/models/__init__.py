@@ -4,6 +4,7 @@ from app.models.relationship import KnowledgeRelationship
 from app.models.assets import DocumentAsset
 from app.models.logs import ProcessingLog
 from app.models.session import StudySession, CurriculumTopic, ChatMessage, StudentProfile, StudentMastery
+from app.models.study_plan import StudyPlan
 
 __all__ = [
     "Document",
@@ -17,4 +18,6 @@ __all__ = [
     "ChatMessage",
     "StudentProfile",
     "StudentMastery",
+    "StudyPlan",
 ]
+

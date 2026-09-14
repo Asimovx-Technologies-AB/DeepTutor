@@ -8,24 +8,22 @@ import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 
 import {
-  BookOpen, Sparkles, Send, Mic, MicOff, Volume2, VolumeX,
-  Layers, GraduationCap, CheckCircle2, AlertCircle, ChevronDown,
-  ChevronRight, ArrowRight, Download, Printer, Copy, Check,
+  BookOpen, Mic, Volume2,
+  Layers, ChevronDown, ChevronRight, Download, Printer, Copy, Check,
   Trash2, Plus, FileText, UploadCloud, RefreshCw, PanelLeft,
-  Maximize2, Minimize2, Split, HelpCircle, Award,
-  Brain, FileSpreadsheet, Eye, Play, Pause, X, ArrowUp,
-  ThumbsUp, ThumbsDown, Search, FolderPlus, CheckSquare, Square,
+  Maximize2, Minimize2, Split, HelpCircle,
+  Brain, X, ArrowUp,
+  ThumbsUp, Search, CheckSquare, Square,
   Calculator, Globe, Cpu, Dna, FlaskConical, Zap, Landmark
 } from 'lucide-react'
 
-import { studyApi, documentsApi, streamTeacherLecture, teacherApi } from '../services/api'
+import { studyApi, documentsApi, streamAgentMessage } from '../services/api'
 import { exportNotesToPdf } from '../utils/pdfExport'
 import { useAuthStore } from '../stores/authStore'
-import confetti from 'canvas-confetti'
 import MermaidDiagram from '../components/MermaidDiagram'
 import InlineSVGDiagram from '../components/InlineSVGDiagram'
 import StudyNotesCard, { extractDocTitle, isStudyNotesContent } from '../components/StudyNotesCard'
-import FlashcardQuizCard from '../components/FlashcardQuizCard'
+import FlashcardQuizCard, { parseQuizDataFromContent } from '../components/FlashcardQuizCard'
 import ConfirmModal from '../components/ConfirmModal'
 import { SessionLoadingAnimation } from '../components/SessionLoadingAnimation'
 
@@ -72,47 +70,6 @@ interface ChatMessage {
   socratic_follow_up?: string
 }
 
-interface CoreIdeaData {
-  topic_id: string
-  topic_title: string
-  big_picture: string
-  core_principle: string
-  key_takeaways: string[]
-  common_pitfalls: string[]
-}
-
-interface ExamQuestion {
-  id: string
-  type: 'written' | 'mcq' | 'fill_in_the_blank'
-  question: string
-  options?: string[]
-  rubric_criteria?: string
-  sample_model_answer?: string
-  correct_answer?: string
-  explanation?: string
-}
-
-interface ExamEvaluation {
-  topic_id: string
-  total_questions: number
-  score: number
-  percentage: number
-  mastery_badge: string
-  mastery_level: string
-  evaluations: Array<{
-    id: string
-    type: string
-    question: string
-    student_answer: string
-    sample_model_answer?: string
-    correct_answer?: string
-    score_percentage: number
-    is_correct: boolean
-    feedback: string
-    explanation?: string
-  }>
-}
-
 interface SpeechToken {
   word: string
   charStart: number
@@ -123,8 +80,8 @@ function cleanTextForSpeech(raw: string): string {
   return raw
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/\$\$[\s\S]*?\$\$/g, ' ')
-    .replace(/\$[^\$]+?\$/g, ' ')
-    .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+    .replace(/\$[^$]+?\$/g, ' ')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     .replace(/[#*`_~>[\]()]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -143,8 +100,6 @@ function parseSpeechTokens(cleanText: string): SpeechToken[] {
   }
   return tokens
 }
-
-type ActiveTab = 'chat' | 'normal' | 'teacher' | 'exam' | 'artifact'
 
 const getSubjectVisual = (subjectOrTitle: string) => {
   const s = (subjectOrTitle || '').toLowerCase()
@@ -188,7 +143,7 @@ export default function LearnPage() {
   const [isSessionLoading, setIsSessionLoading] = useState<boolean>(false)
   const [activeSubject, setActiveSubject] = useState<string>('General Study')
   const [documentName, setDocumentName] = useState<string>('')
-  const [docStatus, setDocStatus] = useState<string>('text_ready')
+  const [_docStatus, setDocStatus] = useState<string>('text_ready')
   const [sessionDocuments, setSessionDocuments] = useState<any[]>([])
   const [selectedMaterialFilter, setSelectedMaterialFilter] = useState<string>('all')
   const [isMaterialsPopoverOpen, setIsMaterialsPopoverOpen] = useState(false)
@@ -279,9 +234,6 @@ export default function LearnPage() {
     }
   }, [isMaterialsPopoverOpen])
 
-  // Active Mode Tab
-  const [activeTab, setActiveTab] = useState<ActiveTab>('chat')
-
   // Curriculum Topics
   const [topics, setTopics] = useState<CurriculumTopic[]>([])
   const [activeTopic, setActiveTopic] = useState<CurriculumTopic | null>(null)
@@ -333,72 +285,6 @@ export default function LearnPage() {
   const [showScrollBottom, setShowScrollBottom] = useState(false)
   const [feedbackRatings, setFeedbackRatings] = useState<Record<string, 'good' | 'easier' | null>>({})
 
-  // Normal Mode 4-Step Cards
-  const [coreIdeaData, setCoreIdeaData] = useState<any | null>(null)
-  const [coreIdeaStep, setCoreIdeaStep] = useState(0)
-  const [isLoadingCoreIdea, setIsLoadingCoreIdea] = useState(false)
-  const [customNormalTopic, setCustomNormalTopic] = useState('')
-  const [topicDoubtInput, setTopicDoubtInput] = useState('')
-  const [_topicDoubtAnswer, setTopicDoubtAnswer] = useState<string | null>(null)
-  const [isLoadingDoubt, setIsLoadingDoubt] = useState(false)
-
-  // Teacher Mode Masterclass State
-  const [teacherLectureText, setTeacherLectureText] = useState('')
-  const [currentLecturePhase, setCurrentLecturePhase] = useState('Introduction')
-  const [isTeacherStreaming, setIsTeacherStreaming] = useState(false)
-  const teacherAbortControllerRef = useRef<AbortController | null>(null)
-  const [customTeacherTopic, setCustomTeacherTopic] = useState('')
-  const [outOfSyllabusAlert, setOutOfSyllabusAlert] = useState<{
-    topic: string
-    reason: string
-    suggested_topics: string[]
-  } | null>(null)
-  const [activeLectureId, setActiveLectureId] = useState<string | null>(null)
-  const [diagnosticData, setDiagnosticData] = useState<{
-    lecture_id: string
-    topic_title: string
-    diagnostic: {
-      prerequisite_concept: string
-      question: string
-      options: { id: string; text: string }[]
-      correct_option_id: string
-      explanation?: string
-    }
-  } | null>(null)
-  const [diagnosticSelectedOption, setDiagnosticSelectedOption] = useState<string | null>(null)
-  const [diagnosticResult, setDiagnosticResult] = useState<{
-    level: string
-    is_correct: boolean
-    reasoning: string
-    prerequisite_needed: boolean
-    prerequisite_summary?: string
-  } | null>(null)
-  const [isLoadingDiagnostic, setIsLoadingDiagnostic] = useState(false)
-  const [isEvaluatingDiagnostic, setIsEvaluatingDiagnostic] = useState(false)
-  
-  // Pause & Ask State
-  const [isPaused, setIsPaused] = useState(false)
-  const [pauseQuestion, setPauseQuestion] = useState('')
-  const [pauseAnswer, setPauseAnswer] = useState<string | null>(null)
-  const [isLoadingPause, setIsLoadingPause] = useState(false)
-
-  // Feynman Teach-Back State
-  const [teachBackPromptData, setTeachBackPromptData] = useState<{
-    prompt: string
-    topic_title: string
-    lecture_id?: string
-  } | null>(null)
-  const [teachBackInput, setTeachBackInput] = useState('')
-  const [teachBackResult, setTeachBackResult] = useState<any | null>(null)
-  const [isEvaluatingTeachBack, setIsEvaluatingTeachBack] = useState(false)
-
-  // Mixed Exam Engine
-  const [examQuestions, setExamQuestions] = useState<ExamQuestion[]>([])
-  const [examAnswers, setExamAnswers] = useState<Record<string, string>>({})
-  const [isLoadingExam, setIsLoadingExam] = useState(false)
-  const [examEvaluation, setExamEvaluation] = useState<ExamEvaluation | null>(null)
-  const [isSubmittingExam, setIsSubmittingExam] = useState(false)
-
   // Upload modal & drag drop
   const [isUploading, setIsUploading] = useState(false)
   const [_uploadingFileMeta, setUploadingFileMeta] = useState<{ name: string; sizeFormatted: string } | null>(null)
@@ -444,78 +330,50 @@ export default function LearnPage() {
           ? (list.find((s: any) => s.id === routeSessionId) || list[0])
           : (savedSid && list.find((s: any) => s.id === savedSid)) || list[0]
         setActiveSessionId(target.id)
+        activeSessionIdRef.current = target.id
         if (typeof window !== 'undefined') {
           localStorage.setItem('active_study_session_id', target.id)
         }
         setActiveSubject(target.subject || 'General Study')
         setDocumentName(target.document_name || '')
+
+        if (!routeSessionId) {
+          const basePath = location.pathname.startsWith('/learn') ? '/learn' : '/chat'
+          navigate(`${basePath}/${target.id}`, { replace: true })
+        }
       } else if (list.length === 0 && !activeSessionIdRef.current) {
         studyApi.createSession({ subject: 'General Study', title: 'Default Study Room' }).then((r) => {
           if (r.data && r.data.id) {
             setActiveSessionId(r.data.id)
+            activeSessionIdRef.current = r.data.id
             if (typeof window !== 'undefined') {
               localStorage.setItem('active_study_session_id', r.data.id)
             }
             setSessions([r.data])
+            const basePath = location.pathname.startsWith('/learn') ? '/learn' : '/chat'
+            navigate(`${basePath}/${r.data.id}`, { replace: true })
           }
         }).catch(() => { })
       }
     } catch (err) {
       console.error('Failed to load study sessions:', err)
     }
-  }, [routeSessionId])
+  }, [routeSessionId, location.pathname, navigate])
 
   useEffect(() => {
     fetchSessions()
   }, [fetchSessions])
 
-  // Sync activeSessionId whenever route URL parameter changes
+  // Sync activeSessionId whenever route URL parameter changes (e.g. browser back/forward or link navigation)
   useEffect(() => {
-    if (routeSessionId && routeSessionId !== activeSessionId) {
+    if (routeSessionId && routeSessionId !== activeSessionIdRef.current) {
+      activeSessionIdRef.current = routeSessionId
       setActiveSessionId(routeSessionId)
-      fetchSessions()
     }
-  }, [routeSessionId, activeSessionId, fetchSessions])
+  }, [routeSessionId])
 
-  // Reset Mode-Specific States (Normal, Teacher, Exam Mode, TTS)
+  // Reset Audio/TTS States on session switch
   const resetModeStates = useCallback(() => {
-    setCoreIdeaData(null)
-    setCoreIdeaStep(0)
-    setIsLoadingCoreIdea(false)
-    setCustomNormalTopic('')
-    setTopicDoubtInput('')
-    setTopicDoubtAnswer(null)
-    setIsLoadingDoubt(false)
-
-    setTeacherLectureText('')
-    setCurrentLecturePhase('Introduction')
-    setIsTeacherStreaming(false)
-    if (teacherAbortControllerRef.current) {
-      teacherAbortControllerRef.current.abort()
-    }
-    setCustomTeacherTopic('')
-    setOutOfSyllabusAlert(null)
-    setActiveLectureId(null)
-    setDiagnosticData(null)
-    setDiagnosticSelectedOption(null)
-    setDiagnosticResult(null)
-    setIsLoadingDiagnostic(false)
-    setIsEvaluatingDiagnostic(false)
-    setIsPaused(false)
-    setPauseQuestion('')
-    setPauseAnswer(null)
-    setIsLoadingPause(false)
-    setTeachBackPromptData(null)
-    setTeachBackInput('')
-    setTeachBackResult(null)
-    setIsEvaluatingTeachBack(false)
-
-    setExamQuestions([])
-    setExamAnswers({})
-    setIsLoadingExam(false)
-    setExamEvaluation(null)
-    setIsSubmittingExam(false)
-
     setSpeakingMsgId(null)
     setSpeakingWordIndex(null)
     setSpeakingTokens([])
@@ -576,7 +434,7 @@ export default function LearnPage() {
             source_type: 'textbook',
             snippet: c.snippet || ''
           })) || []),
-          quiz_data: m.quiz_data,
+          quiz_data: m.quiz_data || parseQuizDataFromContent(text),
           format: m.format,
           response_format: m.response_format,
           export_ready: isExport,
@@ -857,62 +715,106 @@ export default function LearnPage() {
     setInputQuery('')
     setIsAgentThinking(true)
 
-    try {
-      const res = await studyApi.sendMessage({
-        message: q.trim(),
-        session_id: currentSid,
-        user_id: user?.id || 'default-user',
-        subject: activeSubject,
-        difficulty: activeTopic?.difficulty || 'Intermediate',
-        history: messages.slice(-4).map((m) => ({ role: m.role, text: m.text }))
-      })
+    const assistantMsgId = `ast-${Date.now()}`
+    let accumulatedText = ''
+    let accumulatedSources: any[] = []
 
-      const isSyntheticTextbook = Boolean(
-        res.data.is_synthetic_textbook ||
-        (res.data.text && res.data.text.includes('Generated Study Textbook'))
-      )
-
-      const isExport = Boolean(
-        res.data.export_ready ?? isStudyNotesContent(res.data)
-      )
-
-      const assistantMsg: ChatMessage = {
-        id: res.data.id || `ast-${Date.now()}`,
+    // Append initial assistant placeholder
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: assistantMsgId,
         role: 'assistant',
-        text: res.data.text || res.data.content || '',
-        thought_process: res.data.thought_process,
-        sources: res.data.sources,
-        quiz_data: res.data.quiz_data,
-        format: res.data.format,
-        response_format: res.data.response_format || res.data.format,
-        export_ready: isExport,
-        is_synthetic_textbook: isSyntheticTextbook,
+        text: '',
+        sources: [],
         created_at: new Date().toISOString(),
-        suggested_questions: res.data.suggested_questions || [],
-        socratic_follow_up: res.data.socratic_follow_up || ''
-      }
+        suggested_questions: [],
+      },
+    ])
 
-      // ── Push assistant reply into the chat ──
-      setMessages((prev) => [...prev, assistantMsg])
-
-      // ONLY the first generated textbook auto-opens in the MD file viewer!
-      if (isSyntheticTextbook) {
-        setCurrentArtifactMarkdown(res.data.text)
-        setArtifactDockSide('right')
-        setArtifactViewerOpen(true)
-      } else if (isExport) {
-        setCurrentArtifactMarkdown(res.data.text)
-        setArtifactDockSide('right')
-        setArtifactViewerOpen(false)
-      } else if (res.data.text && res.data.text.length > 250) {
-        setCurrentArtifactMarkdown(
-          `# ${activeSubject} — Study Notes\n\n**Topic Focus**: ${activeTopic?.title || 'Course Material'}\n\n${res.data.text}`
-        )
-      }
+    try {
+      await streamAgentMessage({
+        message: q.trim(),
+        sessionId: currentSid,
+        subject: activeSubject,
+        topicId: activeTopic?.id,
+        onToken: (token: string) => {
+          setIsAgentThinking(false)
+          accumulatedText += token
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId ? { ...m, text: accumulatedText } : m
+            )
+          )
+        },
+        onSources: (sources: any[]) => {
+          accumulatedSources = sources
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId ? { ...m, sources } : m
+            )
+          )
+        },
+        onFlashcardQuiz: (quizData: any) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId ? { ...m, quiz_data: quizData } : m
+            )
+          )
+        },
+        onDone: () => {
+          setIsAgentThinking(false)
+          if (accumulatedText && accumulatedText.length > 250) {
+            setCurrentArtifactMarkdown(
+              `# ${activeSubject} — Study Notes\n\n**Topic Focus**: ${activeTopic?.title || 'Course Material'}\n\n${accumulatedText}`
+            )
+          }
+        },
+        onError: async (err: any) => {
+          console.warn('Streaming failed, falling back to standard endpoint:', err)
+          try {
+            const res = await studyApi.sendMessage({
+              message: q.trim(),
+              session_id: currentSid,
+              user_id: user?.id || 'default-user',
+              subject: activeSubject,
+              difficulty: activeTopic?.difficulty || 'Intermediate',
+              history: messages.slice(-4).map((m) => ({ role: m.role, text: m.text }))
+            })
+            const fallbackText = res.data.text || res.data.content || ''
+            const fallbackQuizData = res.data.quiz_data || res.data.flashcard_quiz || parseQuizDataFromContent(fallbackText)
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId
+                  ? {
+                      ...m,
+                      text: fallbackText,
+                      quiz_data: fallbackQuizData,
+                      sources: res.data.sources || accumulatedSources,
+                      suggested_questions: res.data.suggested_questions || [],
+                      socratic_follow_up: res.data.socratic_follow_up || '',
+                    }
+                  : m
+              )
+            )
+          } catch (fallbackErr) {
+            console.error('Fallback send failed:', fallbackErr)
+            setMessages((prev) => [
+              ...prev.filter((m) => m.id !== assistantMsgId),
+              {
+                id: `err-${Date.now()}`,
+                role: 'assistant',
+                text: 'I encountered an issue verifying the context chunks for this question. Please ensure your study material is uploaded and try again.',
+                thought_process: 'Retrieval or executor exception encountered.'
+              }
+            ])
+          }
+        }
+      })
     } catch (err) {
       console.error('Chat failed:', err)
       setMessages((prev) => [
-        ...prev,
+        ...prev.filter((m) => m.id !== assistantMsgId),
         {
           id: `err-${Date.now()}`,
           role: 'assistant',
@@ -1095,308 +997,16 @@ export default function LearnPage() {
     recognition.start()
   }
 
-  // ─── 7. Normal Mode Loader ───
-  const fetchCoreIdea = async (topic: CurriculumTopic) => {
-    if (!activeSessionId) return
-    setIsLoadingCoreIdea(true)
-    setCoreIdeaStep(0)
-    setTopicDoubtAnswer(null)
-    try {
-      const res = await studyApi.getCoreIdea({
-        session_id: activeSessionId,
-        topic_id: topic.id,
-        topic_title: topic.title,
-        topic_summary: topic.summary
-      })
-      setCoreIdeaData(res.data)
-      setCurrentArtifactMarkdown(
-        `# Core Idea: ${topic.title}\n\n## 1. The Big Picture\n${res.data.big_picture}\n\n## 2. Core Principle\n${res.data.core_principle}\n\n## 3. Key Takeaways\n${res.data.key_takeaways?.map((t: string) => `- ${t}`).join('\n')}\n\n## 4. Common Pitfalls\n${res.data.common_pitfalls?.map((p: string) => `- ${p}`).join('\n')}`
-      )
-    } catch (err) {
-      console.error('Failed to load core idea:', err)
-    } finally {
-      setIsLoadingCoreIdea(false)
-    }
-  }
-
-  const handleCustomTopicDistill = (topicOverride?: string) => {
-    const targetTitle = topicOverride || customNormalTopic.trim()
-    if (!targetTitle) return
-    setCustomNormalTopic('')
-    fetchCoreIdea({
-      id: `custom_${Date.now()}`,
-      title: targetTitle,
-      summary: `Custom requested distillation for ${targetTitle}`,
-      difficulty: 'Intermediate',
-      key_concepts: [targetTitle],
-      estimated_study_time: '15 mins'
-    })
-  }
-
-  const _handleAskTopicDoubt = async () => {
-    if (!topicDoubtInput.trim() || !activeTopic || !activeSessionId || isLoadingDoubt) return
-    setIsLoadingDoubt(true)
-    try {
-      const res = await studyApi.askDoubt({
-        session_id: activeSessionId,
-        topic_id: activeTopic.id,
-        topic_title: activeTopic.title,
-        question: topicDoubtInput.trim()
-      })
-      setTopicDoubtAnswer(res.data.answer)
-      setTopicDoubtInput('')
-    } catch (err) {
-      console.error('Topic doubt failed:', err)
-    } finally {
-      setIsLoadingDoubt(false)
-    }
-  }
-
-  // ─── 8. Teacher Mode Interactive Masterclass Engine ───
-  const handleInitiateTeacherLecture = async (topicTitleOverride?: string, forceOverrideSyllabus = false) => {
-    const targetTitle = topicTitleOverride || customTeacherTopic.trim() || activeTopic?.title
-    if (!targetTitle || !activeSessionId || isTeacherStreaming) return
-
-    setDiagnosticResult(null)
-    setDiagnosticSelectedOption(null)
-    setTeachBackResult(null)
-    setTeachBackPromptData(null)
-    setPauseAnswer(null)
-    setIsPaused(false)
-    setOutOfSyllabusAlert(null)
-    setIsLoadingDiagnostic(true)
-
-    const topicId = activeTopic?.id || 'custom-topic'
-
-    try {
-      const res = await teacherApi.startDiagnostic({
-        session_id: activeSessionId,
-        topic_id: topicId,
-        topic_title: targetTitle
-      })
-      setDiagnosticData(res.data)
-      setActiveLectureId(res.data.lecture_id)
-    } catch (err) {
-      console.error('Diagnostic start error, falling back to direct stream:', err)
-      handleStartDirectLecture(targetTitle, 'standard', undefined, forceOverrideSyllabus)
-    } finally {
-      setIsLoadingDiagnostic(false)
-    }
-  }
-
-  const handleConfirmDiagnostic = async () => {
-    if (!diagnosticData || !diagnosticSelectedOption || !activeSessionId) return
-    setIsEvaluatingDiagnostic(true)
-    const targetTitle = diagnosticData.topic_title
-    const topicId = activeTopic?.id || 'custom-topic'
-
-    try {
-      const evalRes = await teacherApi.submitDiagnostic({
-        session_id: activeSessionId,
-        topic_id: topicId,
-        topic_title: targetTitle,
-        question: diagnosticData.diagnostic.question,
-        student_answer: diagnosticSelectedOption,
-        lecture_id: diagnosticData.lecture_id
-      })
-      setDiagnosticResult(evalRes.data)
-      
-      // Auto-start stream after 1.2s to show calibration feedback
-      setTimeout(() => {
-        handleStartDirectLecture(
-          targetTitle,
-          evalRes.data.level || 'standard',
-          diagnosticData.lecture_id
-        )
-      }, 1200)
-    } catch (err) {
-      console.error('Failed to submit diagnostic:', err)
-      handleStartDirectLecture(targetTitle, 'standard', diagnosticData.lecture_id)
-    } finally {
-      setIsEvaluatingDiagnostic(false)
-    }
-  }
-
-  const handleStartDirectLecture = (
-    targetTitle: string,
-    diagnosticLevel = 'standard',
-    lectureId?: string,
-    forceOverrideSyllabus = false
-  ) => {
-    if (!activeSessionId) return
-    setTeacherLectureText('')
-    setIsTeacherStreaming(true)
-    setIsPaused(false)
-    setCurrentLecturePhase('Phase 1: First-Principles Intuition')
-
-    const topicId = activeTopic?.id || 'custom-topic'
-    const controller = new AbortController()
-    teacherAbortControllerRef.current = controller
-
-    let accumulatedText = ''
-
-    streamTeacherLecture({
-      sessionId: activeSessionId,
-      topicId,
-      topicTitle: targetTitle,
-      overrideSyllabus: forceOverrideSyllabus,
-      diagnosticLevel,
-      lectureId,
-      onOutOfSyllabus: (data) => {
-        setOutOfSyllabusAlert(data)
-        setIsTeacherStreaming(false)
-      },
-      onPhaseStart: (phase) => setCurrentLecturePhase(phase),
-      onToken: (token) => {
-        accumulatedText += token
-        setTeacherLectureText((prev) => prev + token)
-        setCurrentArtifactMarkdown(
-          `# University Masterclass: ${targetTitle}\n\n${accumulatedText}`
-        )
-      },
-      onTeachBackReady: async (data) => {
-        try {
-          const tbRes = await teacherApi.getTeachBackPrompt({
-            session_id: activeSessionId,
-            topic_id: topicId,
-            topic_title: targetTitle,
-            lecture_id: data.lecture_id || lectureId
-          })
-          setTeachBackPromptData(tbRes.data)
-        } catch (e) {
-          console.error('Teach-back prompt failed:', e)
-        }
-      },
-      onPhaseEnd: () => { },
-      onDone: () => {
-        setIsTeacherStreaming(false)
-      },
-      onError: (err) => {
-        console.error('Lecture stream error:', err)
-        setIsTeacherStreaming(false)
-      },
-      signal: controller.signal
-    })
-  }
-
-  const handleStopTeacherLecture = () => {
-    if (teacherAbortControllerRef.current) {
-      teacherAbortControllerRef.current.abort()
-      setIsTeacherStreaming(false)
-    }
-  }
-
-  const handlePauseLecture = () => {
-    if (isTeacherStreaming) {
-      teacherAbortControllerRef.current?.abort()
-      setIsTeacherStreaming(false)
-      setIsPaused(true)
-    }
-  }
-
-  const handleSubmitPauseQuestion = async () => {
-    if (!pauseQuestion.trim() || !activeSessionId) return
-    setIsLoadingPause(true)
-    const targetTitle = customTeacherTopic.trim() || activeTopic?.title || 'Course Material'
-
-    try {
-      const res = await teacherApi.pauseAndAsk({
-        session_id: activeSessionId,
-        topic_title: targetTitle,
-        current_phase: currentLecturePhase,
-        accumulated_context: teacherLectureText,
-        student_question: pauseQuestion.trim(),
-        lecture_id: activeLectureId || undefined
-      })
-      setPauseAnswer(res.data.answer)
-      setPauseQuestion('')
-    } catch (err) {
-      console.error('Pause Q&A error:', err)
-    } finally {
-      setIsLoadingPause(false)
-    }
-  }
-
-  const handleSubmitTeachBack = async () => {
-    if (!teachBackInput.trim() || !activeSessionId) return
-    setIsEvaluatingTeachBack(true)
-    const targetTitle = customTeacherTopic.trim() || activeTopic?.title || 'Course Material'
-    const topicId = activeTopic?.id || 'custom-topic'
-
-    try {
-      const res = await teacherApi.submitTeachBack({
-        session_id: activeSessionId,
-        topic_id: topicId,
-        topic_title: targetTitle,
-        submission_text: teachBackInput.trim(),
-        lecture_id: activeLectureId || undefined
-      })
-      setTeachBackResult(res.data.evaluation)
-      confetti({ particleCount: 60, spread: 55, origin: { y: 0.6 } })
-    } catch (err) {
-      console.error('Teach-back evaluation failed:', err)
-    } finally {
-      setIsEvaluatingTeachBack(false)
-    }
-  }
-
-  // ─── 9. Topic Mastery Exam Engine ───
-  const handleFetchExam = async (topic: CurriculumTopic) => {
-    if (!activeSessionId) return
-    setIsLoadingExam(true)
-    setExamAnswers({})
-    setExamEvaluation(null)
-    try {
-      const res = await studyApi.getExam({
-        session_id: activeSessionId,
-        topic_id: topic.id,
-        topic_title: topic.title
-      })
-      setExamQuestions(res.data.questions || [])
-    } catch (err) {
-      console.error('Failed to load exam:', err)
-    } finally {
-      setIsLoadingExam(false)
-    }
-  }
-
-  const handleSubmitExam = async () => {
-    if (!activeTopic || !activeSessionId || isSubmittingExam) return
-    setIsSubmittingExam(true)
-    try {
-      const res = await studyApi.evaluateExam({
-        session_id: activeSessionId,
-        topic_id: activeTopic.id,
-        questions: examQuestions,
-        answers: examAnswers
-      })
-      setExamEvaluation(res.data)
-      if (res.data.percentage >= 80) {
-        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } })
-      }
-    } catch (err) {
-      console.error('Exam evaluation failed:', err)
-    } finally {
-      setIsSubmittingExam(false)
-    }
-  }
-
-  // Auto-load mode data on tab or topic switch
-  useEffect(() => {
-    if (activeTab === 'normal' && activeTopic) {
-      fetchCoreIdea(activeTopic)
-    } else if (activeTab === 'exam' && activeTopic && examQuestions.length === 0) {
-      handleFetchExam(activeTopic)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, activeTopic?.id])
-
   // ─── Session Switching ───
   const handleSelectSession = (sid: string) => {
-    if (sid !== activeSessionId) {
-      setIsSessionLoading(true)
+    if (sid === activeSessionId) {
+      setWorkspaceOpen(false)
+      setCourseDropdownOpen(false)
+      return
     }
+    setIsSessionLoading(true)
     setActiveSessionId(sid)
+    activeSessionIdRef.current = sid
     if (typeof window !== 'undefined') {
       localStorage.setItem('active_study_session_id', sid)
     }
@@ -1408,6 +1018,9 @@ export default function LearnPage() {
     }
     setWorkspaceOpen(false)
     setCourseDropdownOpen(false)
+
+    const basePath = location.pathname.startsWith('/learn') ? '/learn' : '/chat'
+    navigate(`${basePath}/${sid}`)
   }
 
   const handleCreateNewSession = async () => {
@@ -1419,6 +1032,7 @@ export default function LearnPage() {
       })
       const newSid = res.data.id
       setActiveSessionId(newSid)
+      activeSessionIdRef.current = newSid
       if (typeof window !== 'undefined') {
         localStorage.setItem('active_study_session_id', newSid)
       }
@@ -1430,6 +1044,9 @@ export default function LearnPage() {
       setActiveTopic(null)
       setWorkspaceOpen(false)
       setCourseDropdownOpen(false)
+
+      const basePath = location.pathname.startsWith('/learn') ? '/learn' : '/chat'
+      navigate(`${basePath}/${newSid}`)
     } catch (err) {
       console.error('Create session failed:', err)
     }
@@ -1449,17 +1066,20 @@ export default function LearnPage() {
     const sid = sessionToDelete.id
     try {
       await studyApi.deleteSession(sid)
-      setSessions((prev) => prev.filter((s) => s.id !== sid))
+      const remaining = sessions.filter((s) => s.id !== sid)
+      setSessions(remaining)
       if (activeSessionId === sid) {
-        const remaining = sessions.filter((s) => s.id !== sid)
         if (remaining.length > 0) {
           handleSelectSession(remaining[0].id)
         } else {
           setActiveSessionId('')
+          activeSessionIdRef.current = ''
           resetModeStates()
           setMessages([])
           setTopics([])
           setActiveTopic(null)
+          const basePath = location.pathname.startsWith('/learn') ? '/learn' : '/chat'
+          navigate(basePath)
         }
       }
       setSessionToDelete(null)
@@ -1505,8 +1125,12 @@ export default function LearnPage() {
           handleSelectSession(remaining[0].id)
         } else {
           setActiveSessionId('')
+          activeSessionIdRef.current = ''
           setMessages([])
           setTopics([])
+          setActiveTopic(null)
+          const basePath = location.pathname.startsWith('/learn') ? '/learn' : '/chat'
+          navigate(basePath)
         }
       }
 
@@ -1581,7 +1205,14 @@ export default function LearnPage() {
       const child = React.Children.toArray(children)[0] as any
       const className = child?.props?.className || ''
       const childStr = String(child?.props?.children || '')
-      if (className.includes('language-mermaid') || className.includes('language-svg') || (childStr.includes('<svg') && childStr.includes('</svg>'))) {
+      if (
+        className.includes('language-mermaid') ||
+        className.includes('language-svg') ||
+        className.includes('flashcard') ||
+        className.includes('quiz') ||
+        (childStr.includes('<svg') && childStr.includes('</svg>')) ||
+        (childStr.includes('"questions"') && childStr.includes('"title"'))
+      ) {
         return <>{children}</>
       }
       return (
@@ -1599,6 +1230,12 @@ export default function LearnPage() {
       }
       if (!inline && (lang === 'svg' || (codeString.includes('<svg') && codeString.includes('</svg>')))) {
         return <InlineSVGDiagram svg={codeString} />
+      }
+      if (!inline && (lang.includes('flashcard') || lang.includes('quiz') || (codeString.includes('"questions"') && (codeString.includes('"title"') || codeString.includes('"topic"'))))) {
+        const parsedQuiz = parseQuizDataFromContent(codeString) || parseQuizDataFromContent(`\`\`\`json\n${codeString}\n\`\`\``)
+        if (parsedQuiz) {
+          return <FlashcardQuizCard quizData={parsedQuiz} />
+        }
       }
       return <code className={className} {...props}>{children}</code>
     },
@@ -2261,61 +1898,11 @@ export default function LearnPage() {
                 </AnimatePresence>
               </div>
 
-              {/* Mode Switcher Tabs (Responsive Centered Flex Pill Row) */}
-              <div className="flex items-center justify-center gap-1 sm:gap-1.5 shrink-0 py-0.5">
-                <button
-                  onClick={() => setActiveTab('chat')}
-                  className={`px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md ${activeTab === 'chat'
-                    ? 'bg-slate-900 text-white font-bold shadow-xs'
-                    : 'bg-slate-100/90 text-slate-700 hover:text-slate-900 hover:bg-slate-200/80 border border-slate-200/80 shadow-2xs'
-                    }`}
-                  title="Tutor Chat"
-                >
-                  <BookOpen size={13} className={activeTab === 'chat' ? 'text-white' : 'text-slate-500'} />
-                  <span className="hidden sm:inline">Tutor Chat</span>
-                </button>
 
-                <button
-                  onClick={() => setActiveTab('normal')}
-                  className={`px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md ${activeTab === 'normal'
-                    ? 'bg-slate-900 text-white font-bold shadow-xs'
-                    : 'bg-slate-100/90 text-slate-700 hover:text-slate-900 hover:bg-slate-200/80 border border-slate-200/80 shadow-2xs'
-                    }`}
-                  title="Normal Mode"
-                >
-                  <Sparkles size={13} className={activeTab === 'normal' ? 'text-white' : 'text-slate-500'} />
-                  <span className="hidden sm:inline">Normal Mode</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('teacher')}
-                  className={`px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md ${activeTab === 'teacher'
-                    ? 'bg-slate-900 text-white font-bold shadow-xs'
-                    : 'bg-slate-100/90 text-slate-700 hover:text-slate-900 hover:bg-slate-200/80 border border-slate-200/80 shadow-2xs'
-                    }`}
-                  title="Teacher Mode"
-                >
-                  <GraduationCap size={13} className={activeTab === 'teacher' ? 'text-white' : 'text-slate-500'} />
-                  <span className="hidden sm:inline">Teacher Mode</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('exam')}
-                  className={`px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md ${activeTab === 'exam'
-                    ? 'bg-slate-900 text-white font-bold shadow-xs'
-                    : 'bg-slate-100/90 text-slate-700 hover:text-slate-900 hover:bg-slate-200/80 border border-slate-200/80 shadow-2xs'
-                    }`}
-                  title="Topic Exam"
-                >
-                  <Award size={13} className={activeTab === 'exam' ? 'text-white' : 'text-slate-500'} />
-                  <span className="hidden sm:inline">Topic Exam</span>
-                </button>
-              </div>
             </header>
 
-            {/* TAB 1: GROUNDED TUTOR CHAT (IndTutor Cognitive Minimalist Experience) */}
-            {activeTab === 'chat' && (
-              <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-[#F9FAFB]">
+            {/* GROUNDED TUTOR CHAT (IndTutor Cognitive Minimalist Experience) */}
+            <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-[#F9FAFB]">
                 {isSessionLoading ? (
                   <div className="flex-1 flex items-center justify-center p-4 sm:p-8 bg-[#F9FAFB] overflow-y-auto">
                     <div className="max-w-2xl w-full">
@@ -2347,7 +1934,7 @@ export default function LearnPage() {
 
                   {(messages.length > 0 || isAgentThinking || isUploading) && (
                     <div className="max-w-3xl mx-auto w-full flex flex-col gap-6 pt-2 sm:pt-4">
-                      {messages.map((msg) => {
+                      {messages.map((msg, idx) => {
                         const isUser = msg.role === 'user'
                         const isThoughtExpanded = expandedThoughtIds[msg.id] ?? false
                         const isSyntheticTextbook = !isUser && (
@@ -2438,19 +2025,33 @@ export default function LearnPage() {
                                       )
                                     })}
                                   </div>
-                                ) : msg.quiz_data ? (
+                                ) : (msg.quiz_data || parseQuizDataFromContent(msg.text)) ? (
                                   /* Inline Dual-Mode Flashcard & Quiz Widget Response */
                                   <div className="w-full">
-                                    <div className="markdown-content mb-3">
-                                      <ReactMarkdown
-                                        remarkPlugins={[remarkGfm, remarkMath]}
-                                        rehypePlugins={[rehypeKatex]}
-                                        components={customMarkdownComponents}
-                                      >
-                                        {msg.text}
-                                      </ReactMarkdown>
-                                    </div>
-                                    <FlashcardQuizCard quizData={msg.quiz_data} />
+                                    {(() => {
+                                      const qd = msg.quiz_data || parseQuizDataFromContent(msg.text)
+                                      const cleanIntro = (msg.text || '').replace(/```(?:flashcard_quiz|flashcard-quiz)[\s\S]*?```/g, '').trim()
+                                      const isPlainCard = cleanIntro.includes('Front of Card') && cleanIntro.includes('Back of Card')
+                                      const introToDisplay = isPlainCard
+                                        ? cleanIntro.split('🗂️')[0].split('Front of Card')[0].trim()
+                                        : cleanIntro
+                                      return (
+                                        <>
+                                          {introToDisplay && (
+                                            <div className="markdown-content mb-3">
+                                              <ReactMarkdown
+                                                remarkPlugins={[remarkGfm, remarkMath]}
+                                                rehypePlugins={[rehypeKatex]}
+                                                components={customMarkdownComponents}
+                                              >
+                                                {introToDisplay}
+                                              </ReactMarkdown>
+                                            </div>
+                                          )}
+                                          <FlashcardQuizCard quizData={qd} />
+                                        </>
+                                      )
+                                    })()}
                                   </div>
                                 ) : isStudyNotes ? (
                                   /* Study Notes Response (Matching Claude design) */
@@ -2585,47 +2186,51 @@ export default function LearnPage() {
                                   </motion.div>
                                 )}
 
-                                {/* Action Footer: Listen + Feedback buttons */}
-                                <div className="mt-3 flex items-center gap-2 chat-reading font-serif text-slate-400">
-                                  <button
-                                    onClick={() => handleToggleVoice(msg.id, msg.text)}
-                                    className={`flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-100 transition cursor-pointer ${speakingMsgId === msg.id ? 'text-indigo-600' : 'hover:text-slate-600'
-                                      }`}
-                                    title="Read aloud"
-                                  >
-                                    <Volume2 size={15} />
-                                    <span>Listen</span>
-                                  </button>
+                                {/* Action Footer: Listen + Feedback buttons (Cleanly anchored to assistant response) */}
+                                {Boolean(msg.text && msg.text.trim().length > 0 && !(isAgentThinking && idx === messages.length - 1)) && (
+                                  <div className="mt-4 pt-2.5 border-t border-slate-200/60 w-full flex items-center justify-between text-xs text-slate-500 font-sans">
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => handleToggleVoice(msg.id, msg.text)}
+                                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition cursor-pointer ${speakingMsgId === msg.id ? 'text-indigo-600 bg-indigo-50 font-medium' : 'hover:bg-slate-100 text-slate-600'
+                                          }`}
+                                        title="Read aloud"
+                                      >
+                                        <Volume2 size={14} />
+                                        <span>Listen</span>
+                                      </button>
 
-                                  <span className="text-slate-200">|</span>
+                                      <span className="text-slate-300">|</span>
 
-                                  <button
-                                    onClick={() =>
-                                      setFeedbackRatings((p) => ({ ...p, [msg.id]: p[msg.id] === 'good' ? null : 'good' }))
-                                    }
-                                    className={`flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-100 transition cursor-pointer ${feedbackRatings[msg.id] === 'good' ? 'text-emerald-700 bg-emerald-50' : 'hover:text-slate-600'
-                                      }`}
-                                    title="Mark as helpful"
-                                  >
-                                    <ThumbsUp size={15} />
-                                    <span>Good</span>
-                                  </button>
+                                      <button
+                                        onClick={() =>
+                                          setFeedbackRatings((p) => ({ ...p, [msg.id]: p[msg.id] === 'good' ? null : 'good' }))
+                                        }
+                                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition cursor-pointer ${feedbackRatings[msg.id] === 'good' ? 'text-emerald-700 bg-emerald-50 font-medium' : 'hover:bg-slate-100 text-slate-600'
+                                          }`}
+                                        title="Mark as helpful"
+                                      >
+                                        <ThumbsUp size={14} />
+                                        <span>Good</span>
+                                      </button>
 
-                                  <span className="text-slate-200">|</span>
+                                      <span className="text-slate-300">|</span>
 
-                                  <button
-                                    onClick={() => {
-                                      setFeedbackRatings((p) => ({ ...p, [msg.id]: p[msg.id] === 'easier' ? null : 'easier' }))
-                                      handleSendMessage('Please explain that more simply with an everyday analogy and clearer terms.')
-                                    }}
-                                    className={`flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-100 transition cursor-pointer ${feedbackRatings[msg.id] === 'easier' ? 'text-amber-700 bg-amber-50' : 'hover:text-slate-600'
-                                      }`}
-                                    title="Simplify this explanation"
-                                  >
-                                    <ChevronDown size={15} />
-                                    <span>Make it easier</span>
-                                  </button>
-                                </div>
+                                      <button
+                                        onClick={() => {
+                                          setFeedbackRatings((p) => ({ ...p, [msg.id]: p[msg.id] === 'easier' ? null : 'easier' }))
+                                          handleSendMessage('Please explain that more simply with an everyday analogy and clearer terms.')
+                                        }}
+                                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition cursor-pointer ${feedbackRatings[msg.id] === 'easier' ? 'text-amber-700 bg-amber-50 font-medium' : 'hover:bg-slate-100 text-slate-600'
+                                          }`}
+                                        title="Simplify this explanation"
+                                      >
+                                        <ChevronDown size={14} />
+                                        <span>Make it easier</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </motion.div>
@@ -2828,802 +2433,6 @@ export default function LearnPage() {
                   </>
                 )}
               </div>
-            )}
-
-            {/* TAB 2: NORMAL MODE (4-STEP CORE IDEA) */}
-            {activeTab === 'normal' && (
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pt-4 sm:pt-6">
-                <div className="max-w-3xl mx-auto space-y-6">
-                  {/* Custom Topic Input Bar */}
-                  <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex items-center gap-3">
-                    <Search size={16} className="text-slate-400 flex-shrink-0 ml-1" />
-                    <input
-                      type="text"
-                      value={customNormalTopic}
-                      onChange={(e) => setCustomNormalTopic(e.target.value)}
-                      placeholder="Type any specific topic from your PDF to distill..."
-                      className="flex-1 text-xs px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:bg-white focus:border-indigo-400 font-sans"
-                      onKeyDown={(e) => e.key === 'Enter' && handleCustomTopicDistill()}
-                    />
-                    <button
-                      onClick={() => handleCustomTopicDistill()}
-                      disabled={!customNormalTopic.trim() || isLoadingCoreIdea}
-                      className="py-2.5 px-4.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold disabled:opacity-50 transition cursor-pointer flex items-center gap-1.5 shadow-xs"
-                    >
-                      <Sparkles size={13} className="text-amber-400" />
-                      Distill Topic
-                    </button>
-                  </div>
-
-                  {/* Topic Title Header */}
-                  <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between">
-                    <div>
-                      <span className="learn-caption font-bold uppercase tracking-wider text-slate-500">
-                        Normal Mode · 4-Phase Core Idea Distillation
-                      </span>
-                      <h2 className="text-xl font-black text-slate-900 mt-1 font-serif">
-                        {coreIdeaData?.topic_title || activeTopic?.title || 'Select a Topic'}
-                      </h2>
-                      <p className="text-xs text-slate-500 mt-1">{activeTopic?.summary}</p>
-                    </div>
-
-                    <button
-                      onClick={() => activeTopic && fetchCoreIdea(activeTopic)}
-                      disabled={isLoadingCoreIdea}
-                      className="p-2.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
-                      title="Refresh Core Idea"
-                    >
-                      <RefreshCw size={15} className={isLoadingCoreIdea ? 'animate-spin' : ''} />
-                    </button>
-                  </div>
-
-                  {isLoadingCoreIdea ? (
-                    <div className="p-12 text-center">
-                      <div className="w-8 h-8 border-2 border-slate-800 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                      <p className="text-xs font-medium text-slate-500">Distilling 4-Phase Core Mechanics...</p>
-                    </div>
-                  ) : coreIdeaData?.out_of_topic ? (
-                    <div className="p-7 rounded-3xl bg-amber-50/60 border border-amber-200/90 shadow-xs space-y-4 text-left">
-                      <div className="flex items-start gap-3">
-                        <div className="p-2.5 rounded-2xl bg-amber-100 text-amber-800 flex-shrink-0 mt-0.5">
-                          <AlertCircle size={20} />
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-bold text-amber-950 font-serif">
-                            Topic Out of Syllabus
-                          </h3>
-                          <p className="text-xs text-amber-900 mt-1 leading-relaxed">
-                            {coreIdeaData.reason}
-                          </p>
-                        </div>
-                      </div>
-
-                      {coreIdeaData.suggested_topics?.length > 0 && (
-                        <div className="pt-3 border-t border-amber-200/60 space-y-2">
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 block">
-                            Available Syllabus Topics to Distill:
-                          </span>
-                          <div className="flex flex-wrap gap-2">
-                            {coreIdeaData.suggested_topics.map((t: string, idx: number) => (
-                              <button
-                                key={idx}
-                                onClick={() => handleCustomTopicDistill(t)}
-                                className="px-3 py-1.5 rounded-xl bg-white border border-amber-300 text-amber-950 text-xs font-medium hover:bg-amber-100 transition cursor-pointer shadow-xs"
-                              >
-                                {t}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : coreIdeaData ? (
-                    <div className="space-y-4">
-                      {/* Step Indicator Tabs */}
-                      <div className="grid grid-cols-4 gap-2">
-                        {['1. The Big Picture', '2. Core Principle', '3. Key Takeaways', '4. Common Pitfalls'].map((title, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => setCoreIdeaStep(idx)}
-                            className={`p-3 rounded-2xl text-xs font-medium transition text-left border cursor-pointer ${coreIdeaStep === idx
-                              ? 'bg-indigo-50 text-indigo-950 border-indigo-300 font-bold shadow-xs'
-                              : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80'
-                              }`}
-                          >
-                            <span className={`block learn-caption ${coreIdeaStep === idx ? 'text-indigo-600' : 'text-slate-400'}`}>
-                              Phase {idx + 1}
-                            </span>
-                            <span className="truncate block mt-0.5 font-semibold">{title.split('. ')[1]}</span>
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Active Card Body */}
-                      <motion.div
-                        key={coreIdeaStep}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="p-7 rounded-3xl bg-white border border-slate-200/90 shadow-xs"
-                      >
-                        {coreIdeaStep === 0 && (
-                          <div>
-                            <span className="learn-caption font-bold uppercase tracking-wider text-slate-400">Fundamental Intuition</span>
-                            <h3 className="text-lg font-serif font-bold text-slate-900 mt-1 mb-3">The Big Picture</h3>
-                            <div className="markdown-content text-slate-800 leading-relaxed font-serif">
-                              <ReactMarkdown
-                                remarkPlugins={[remarkGfm, remarkMath]}
-                                rehypePlugins={[rehypeKatex]}
-                                components={customMarkdownComponents}
-                              >
-                                {coreIdeaData.big_picture}
-                              </ReactMarkdown>
-                            </div>
-                          </div>
-                        )}
-
-                        {coreIdeaStep === 1 && (
-                          <div>
-                            <span className="learn-caption font-bold uppercase tracking-wider text-slate-400">Governing Mechanics & Math</span>
-                            <h3 className="text-lg font-serif font-bold text-slate-900 mt-1 mb-3">Core Principle & Formulas</h3>
-                            <div className="markdown-content text-slate-800 leading-relaxed font-serif">
-                              <ReactMarkdown
-                                remarkPlugins={[remarkGfm, remarkMath]}
-                                rehypePlugins={[rehypeKatex]}
-                                components={customMarkdownComponents}
-                              >
-                                {coreIdeaData.core_principle}
-                              </ReactMarkdown>
-                            </div>
-                          </div>
-                        )}
-
-                        {coreIdeaStep === 2 && (
-                          <div>
-                            <span className="learn-caption font-bold uppercase tracking-wider text-emerald-600">High-Yield Revision</span>
-                            <h3 className="text-lg font-serif font-bold text-slate-900 mt-1 mb-3">Key Takeaways</h3>
-                            <ul className="space-y-3 font-serif">
-                              {coreIdeaData.key_takeaways?.map((item: string, i: number) => (
-                                <li key={i} className="flex items-start gap-2.5 text-sm text-slate-800">
-                                  <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0 mt-0.5" />
-                                  <div className="flex-1 min-w-0 markdown-content leading-relaxed">
-                                    <ReactMarkdown
-                                      remarkPlugins={[remarkGfm, remarkMath]}
-                                      rehypePlugins={[rehypeKatex]}
-                                      components={{
-                                        p: ({ children }) => <span className="inline">{children}</span>,
-                                      }}
-                                    >
-                                      {item}
-                                    </ReactMarkdown>
-                                  </div>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {coreIdeaStep === 3 && (
-                          <div>
-                            <span className="learn-caption font-bold uppercase tracking-wider text-amber-600">Exam Traps & Misconceptions</span>
-                            <h3 className="text-lg font-serif font-bold text-slate-900 mt-1 mb-3">Common Pitfalls</h3>
-                            <ul className="space-y-3 font-serif">
-                              {coreIdeaData.common_pitfalls?.map((item: string, i: number) => (
-                                <li key={i} className="flex items-start gap-2.5 text-sm text-slate-800">
-                                  <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
-                                  <div className="flex-1 min-w-0 markdown-content leading-relaxed">
-                                    <ReactMarkdown
-                                      remarkPlugins={[remarkGfm, remarkMath]}
-                                      rehypePlugins={[rehypeKatex]}
-                                      components={{
-                                        p: ({ children }) => <span className="inline">{children}</span>,
-                                      }}
-                                    >
-                                      {item}
-                                    </ReactMarkdown>
-                                  </div>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {/* Navigation stepper buttons */}
-                        <div className="mt-8 pt-5 border-t border-slate-100 flex items-center justify-between">
-                          <button
-                            onClick={() => setCoreIdeaStep((s) => Math.max(0, s - 1))}
-                            disabled={coreIdeaStep === 0}
-                            className="py-2 px-5 rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition cursor-pointer"
-                          >
-                            ← Previous
-                          </button>
-                          <span className="text-xs font-medium text-slate-400">Step {coreIdeaStep + 1} of 4</span>
-                          <button
-                            onClick={() => setCoreIdeaStep((s) => Math.min(3, s + 1))}
-                            disabled={coreIdeaStep === 3}
-                            className="py-2 px-5 rounded-full bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-40 transition shadow-xs cursor-pointer"
-                          >
-                            Next Step →
-                          </button>
-                        </div>
-                      </motion.div>
-
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            )}
-
-            {/* TAB 3: TEACHER MODE (SSE STREAMED LECTURE) */}
-            {activeTab === 'teacher' && (
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pt-4 sm:pt-6">
-                <div className="max-w-3xl mx-auto space-y-6">
-                  {/* Lecture Header */}
-                  <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between">
-                    <div>
-                      <span className="learn-caption font-bold uppercase tracking-wider text-slate-500">
-                        Teacher Mode · Immersive Live Masterclass
-                      </span>
-                      <h2 className="text-xl font-black text-slate-900 mt-1 font-serif">
-                        {customTeacherTopic.trim() || activeTopic?.title || 'Select a Topic'}
-                      </h2>
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="text-xs font-semibold px-3 py-1 rounded-full bg-slate-100 text-slate-800 border border-slate-200">
-                          {currentLecturePhase}
-                        </span>
-                        {isTeacherStreaming && (
-                          <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                            Live SSE Streaming
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          setArtifactViewerOpen(true)
-                          setArtifactTab('preview')
-                        }}
-                        className="py-2.5 px-3.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition flex items-center gap-1.5 border border-slate-200 cursor-pointer"
-                        title="View rendered notes in Academic LaTeX Markdown viewer"
-                      >
-                        <FileText size={13} /> Notes Preview
-                      </button>
-
-                      {isTeacherStreaming ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={handlePauseLecture}
-                            className="py-2 px-3.5 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold transition flex items-center gap-1.5 border border-amber-200 cursor-pointer"
-                            title="Pause lecture to ask a question inline"
-                          >
-                            <Pause size={13} /> Pause & Ask
-                          </button>
-                          <button
-                            onClick={handleStopTeacherLecture}
-                            className="py-2 px-3.5 rounded-full bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold transition flex items-center gap-1.5 border border-red-200 cursor-pointer"
-                          >
-                            Stop
-                          </button>
-                        </div>
-                      ) : isPaused ? (
-                        <button
-                          onClick={() => handleStartDirectLecture(customTeacherTopic.trim() || activeTopic?.title || 'Course Material', diagnosticResult?.level || 'standard', activeLectureId || undefined)}
-                          className="py-2.5 px-5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
-                        >
-                          <Play size={14} /> Resume Lecture
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleInitiateTeacherLecture()}
-                          disabled={isLoadingDiagnostic}
-                          className="py-2.5 px-5 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
-                        >
-                          {isLoadingDiagnostic ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />} Start Lecture
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Custom Topic Input & Switcher Bar */}
-                  <div className="p-4 rounded-3xl bg-white border border-slate-200/90 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                    <div className="flex-1">
-                      <input
-                        type="text"
-                        value={customTeacherTopic}
-                        onChange={(e) => setCustomTeacherTopic(e.target.value)}
-                        placeholder="Or type a custom topic to master (e.g., Backpropagation, Positional Encoding)..."
-                        className="w-full text-xs px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:bg-white focus:border-indigo-400"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && customTeacherTopic.trim()) {
-                            handleInitiateTeacherLecture(customTeacherTopic.trim())
-                          }
-                        }}
-                      />
-                    </div>
-                    <button
-                      onClick={() => customTeacherTopic.trim() && handleInitiateTeacherLecture(customTeacherTopic.trim())}
-                      disabled={!customTeacherTopic.trim() || isTeacherStreaming || isLoadingDiagnostic}
-                      className="py-2.5 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer whitespace-nowrap"
-                    >
-                      {isLoadingDiagnostic ? <RefreshCw size={13} className="animate-spin" /> : <Play size={13} />} Teach Custom Topic
-                    </button>
-                  </div>
-
-                  {/* ─── Diagnostic Open Card (Requirement 1) ─── */}
-                  {diagnosticData && !isTeacherStreaming && !teacherLectureText && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-6 rounded-3xl bg-white border-2 border-indigo-200 shadow-md space-y-4"
-                    >
-                      <div className="flex items-center justify-between border-b border-indigo-100 pb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse" />
-                          <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 font-sans">
-                            Diagnostic Baseline Probe
-                          </span>
-                        </div>
-                        <span className="text-xs px-3 py-1 rounded-full bg-indigo-50 text-indigo-800 font-semibold border border-indigo-200">
-                          Prerequisite: {diagnosticData.diagnostic.prerequisite_concept}
-                        </span>
-                      </div>
-
-                      <div className="space-y-3">
-                        <h4 className="text-base font-bold text-slate-900 font-serif leading-snug">
-                          {diagnosticData.diagnostic.question}
-                        </h4>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                          {diagnosticData.diagnostic.options.map((opt) => (
-                            <button
-                              key={opt.id}
-                              onClick={() => setDiagnosticSelectedOption(opt.id)}
-                              className={`p-3.5 rounded-2xl border text-left text-xs font-serif transition cursor-pointer flex items-start gap-2.5 ${
-                                diagnosticSelectedOption === opt.id
-                                  ? 'bg-indigo-50 border-indigo-500 text-indigo-950 font-semibold shadow-xs'
-                                  : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200 text-slate-800'
-                              }`}
-                            >
-                              <span className={`w-5 h-5 rounded-full border text-[11px] font-mono font-bold flex items-center justify-center shrink-0 mt-0.5 ${
-                                diagnosticSelectedOption === opt.id
-                                  ? 'bg-indigo-600 text-white border-indigo-600'
-                                  : 'bg-white text-slate-600 border-slate-300'
-                              }`}>
-                                {opt.id.toUpperCase()}
-                              </span>
-                              <span className="leading-snug">{opt.text}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Calibration feedback message */}
-                      {diagnosticResult && (
-                        <div className={`p-3.5 rounded-2xl text-xs font-serif leading-relaxed ${
-                          diagnosticResult.level === 'advanced'
-                            ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
-                            : diagnosticResult.level === 'novice'
-                            ? 'bg-amber-50 text-amber-900 border border-amber-200'
-                            : 'bg-indigo-50 text-indigo-900 border border-indigo-200'
-                        }`}>
-                          <strong>Calibration: {diagnosticResult.level.toUpperCase()} Mode.</strong> {diagnosticResult.reasoning}
-                          {diagnosticResult.prerequisite_summary && (
-                            <p className="mt-1 text-[11px] opacity-90">{diagnosticResult.prerequisite_summary}</p>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="flex items-center justify-between pt-2">
-                        <button
-                          onClick={() => setDiagnosticData(null)}
-                          className="text-xs text-slate-500 hover:text-slate-800 font-medium transition cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleConfirmDiagnostic}
-                          disabled={!diagnosticSelectedOption || isEvaluatingDiagnostic}
-                          className="py-2 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
-                        >
-                          {isEvaluatingDiagnostic ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />} Confirm & Begin Lecture
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* ─── Inline Pause & Ask Q&A Box (Requirement 4) ─── */}
-                  {isPaused && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.98 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="p-5 rounded-3xl bg-amber-50/90 border border-amber-200 shadow-sm space-y-3 text-slate-900"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Pause size={14} className="text-amber-600" />
-                          <span className="text-xs font-bold uppercase tracking-wider text-amber-800 font-sans">
-                            Masterclass Paused — Ask Professor Inline
-                          </span>
-                        </div>
-                        <span className="text-xs text-amber-700 font-medium">{currentLecturePhase}</span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={pauseQuestion}
-                          onChange={(e) => setPauseQuestion(e.target.value)}
-                          placeholder="Ask a clarifying question about this segment..."
-                          className="flex-1 text-xs px-4 py-2.5 rounded-2xl bg-white border border-amber-300 text-slate-900 focus:outline-none focus:border-amber-500"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSubmitPauseQuestion()
-                          }}
-                        />
-                        <button
-                          onClick={handleSubmitPauseQuestion}
-                          disabled={!pauseQuestion.trim() || isLoadingPause}
-                          className="py-2.5 px-4 rounded-2xl bg-amber-700 hover:bg-amber-800 disabled:opacity-50 text-white text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
-                        >
-                          {isLoadingPause ? <RefreshCw size={13} className="animate-spin" /> : <Send size={13} />} Ask
-                        </button>
-                      </div>
-
-                      {pauseAnswer && (
-                        <div className="p-4 rounded-2xl bg-white border border-amber-200 text-xs font-serif leading-relaxed text-slate-800 space-y-2">
-                          <div className="font-bold text-amber-900 font-sans flex items-center gap-1.5">
-                            <GraduationCap size={14} className="text-amber-700" /> Professor&apos;s Answer:
-                          </div>
-                          <div className="markdown-content">
-                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-                              {pauseAnswer}
-                            </ReactMarkdown>
-                          </div>
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-
-                  {/* Out-of-Syllabus Guardrail & Guidance Card */}
-                  {outOfSyllabusAlert && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-6 rounded-3xl bg-amber-50/90 border border-amber-200 shadow-xs text-amber-950 space-y-3"
-                    >
-                      <div className="flex items-start gap-3">
-                        <AlertCircle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-sm font-bold text-amber-900 font-serif">
-                              Topic Outside Syllabus: &ldquo;{outOfSyllabusAlert.topic}&rdquo;
-                            </h4>
-                            <button
-                              onClick={() => setOutOfSyllabusAlert(null)}
-                              className="text-amber-500 hover:text-amber-800 transition cursor-pointer"
-                              title="Dismiss"
-                            >
-                              <X size={15} />
-                            </button>
-                          </div>
-                          <p className="text-xs text-amber-800 mt-1 font-serif leading-relaxed">
-                            {outOfSyllabusAlert.reason}
-                          </p>
-
-                          {outOfSyllabusAlert.suggested_topics?.length > 0 && (
-                            <div className="mt-3">
-                              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700 block mb-1.5">
-                                Available Syllabus Topics in this Course:
-                              </span>
-                              <div className="flex flex-wrap gap-2">
-                                {outOfSyllabusAlert.suggested_topics.map((sug, i) => (
-                                  <button
-                                    key={i}
-                                    onClick={() => {
-                                      setCustomTeacherTopic(sug)
-                                      handleInitiateTeacherLecture(sug)
-                                    }}
-                                    className="text-xs px-3 py-1.5 rounded-full bg-white text-amber-900 border border-amber-300 hover:bg-amber-100 font-medium transition cursor-pointer"
-                                  >
-                                    {sug} →
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="mt-4 pt-3 border-t border-amber-200/80 flex items-center gap-3">
-                            <button
-                              onClick={() => handleStartDirectLecture(outOfSyllabusAlert.topic, 'standard', undefined, true)}
-                              className="text-xs px-4 py-2 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-semibold transition cursor-pointer"
-                            >
-                              Lecture Anyway (Foundational Prerequisite)
-                            </button>
-                            <button
-                              onClick={() => setOutOfSyllabusAlert(null)}
-                              className="text-xs text-amber-700 hover:underline cursor-pointer"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* Streamed Lecture Canvas */}
-                  <div className="p-8 rounded-3xl bg-white border border-slate-200/90 shadow-xs min-h-[50vh]">
-                    {teacherLectureText ? (
-                      <div className="space-y-6">
-                        <div className="markdown-content max-w-none text-slate-900 leading-relaxed font-serif">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm, remarkMath]}
-                            rehypePlugins={[rehypeKatex]}
-                            components={customMarkdownComponents}
-                          >
-                            {teacherLectureText}
-                          </ReactMarkdown>
-                        </div>
-
-                        {/* ─── Feynman Teach-Back Card (Requirement 5) ─── */}
-                        {teachBackPromptData && !isTeacherStreaming && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="mt-8 p-6 rounded-3xl bg-indigo-50/70 border border-indigo-200 shadow-xs space-y-4 text-slate-900 font-serif"
-                          >
-                            <div className="flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-wider text-indigo-700">
-                              <Brain size={16} />
-                              <span>Teach-Back Close (Feynman Technique)</span>
-                            </div>
-                            <p className="text-xs sm:text-sm text-slate-800 leading-relaxed">
-                              {teachBackPromptData.prompt}
-                            </p>
-
-                            {!teachBackResult ? (
-                              <div className="space-y-3">
-                                <textarea
-                                  value={teachBackInput}
-                                  onChange={(e) => setTeachBackInput(e.target.value)}
-                                  rows={4}
-                                  placeholder="Explain the concept in your own words (governing mechanism, intuition, common traps)..."
-                                  className="w-full text-xs p-3.5 rounded-2xl bg-white border border-indigo-200 text-slate-900 focus:outline-none focus:border-indigo-500 font-serif leading-relaxed"
-                                />
-                                <button
-                                  onClick={handleSubmitTeachBack}
-                                  disabled={!teachBackInput.trim() || isEvaluatingTeachBack}
-                                  className="py-2.5 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold font-sans transition flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                >
-                                  {isEvaluatingTeachBack ? <RefreshCw size={13} className="animate-spin" /> : <GraduationCap size={14} />} Submit Explanation for Grading
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="p-4 rounded-2xl bg-white border border-indigo-200 space-y-3 font-sans text-xs">
-                                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                                  <span className="font-bold text-slate-900 text-sm">
-                                    Mastery Score: {teachBackResult.score} / 100
-                                  </span>
-                                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                                    teachBackResult.score >= 85
-                                      ? 'bg-emerald-100 text-emerald-800'
-                                      : 'bg-indigo-100 text-indigo-800'
-                                  }`}>
-                                    {teachBackResult.mastery_verdict}
-                                  </span>
-                                </div>
-
-                                <p className="text-xs text-slate-700 font-serif leading-relaxed">
-                                  {teachBackResult.professor_critique}
-                                </p>
-
-                                {teachBackResult.strengths?.length > 0 && (
-                                  <div className="space-y-1">
-                                    <span className="font-bold text-emerald-800 text-[11px] uppercase tracking-wider block">
-                                      Key Strengths:
-                                    </span>
-                                    <ul className="list-disc pl-4 text-slate-700 space-y-0.5 font-serif">
-                                      {teachBackResult.strengths.map((s: string, idx: number) => (
-                                        <li key={idx}>{s}</li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </motion.div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-center py-16">
-                        <GraduationCap size={38} className="mx-auto text-slate-400 mb-3" />
-                        <h4 className="text-sm font-bold text-slate-800">Live University Lecture Stream</h4>
-                        <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto font-serif">
-                          Click &apos;Start Lecture&apos; to run an intelligent baseline diagnostic and begin real-time streaming of first-principles intuition, deep mechanics, worked derivations, and exam traps.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Seamless Exam Handoff Button */}
-                    {!isTeacherStreaming && teacherLectureText.length > 300 && (
-                      <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between">
-                        <p className="text-xs font-medium text-slate-500">Mastered this masterclass?</p>
-                        <button
-                          onClick={() => {
-                            setActiveTab('exam')
-                            if (activeTopic) handleFetchExam(activeTopic)
-                          }}
-                          className="py-2.5 px-5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition flex items-center gap-2 shadow-xs cursor-pointer"
-                        >
-                          Take Topic Mastery Exam →
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 4: TOPIC MASTERY EXAM ENGINE */}
-            {activeTab === 'exam' && (
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pt-4 sm:pt-6">
-                <div className="max-w-3xl mx-auto space-y-6">
-                  {/* Exam Header */}
-                  <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between">
-                    <div>
-                      <span className="learn-caption font-bold uppercase tracking-wider text-slate-500">
-                        Exam Engine · Written, MCQ & Fill-in-the-Blank
-                      </span>
-                      <h2 className="text-xl font-black text-slate-900 mt-1 font-serif">
-                        {activeTopic?.title || 'Mastery Exam'}
-                      </h2>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Automated rubric evaluation and grading for {activeTopic?.title}.
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={() => activeTopic && handleFetchExam(activeTopic)}
-                      disabled={isLoadingExam}
-                      className="py-2 px-4 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <RefreshCw size={13} className={isLoadingExam ? 'animate-spin' : ''} />
-                      Retake Exam
-                    </button>
-                  </div>
-
-                  {isLoadingExam ? (
-                    <div className="p-12 text-center">
-                      <div className="w-8 h-8 border-2 border-slate-800 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                      <p className="text-xs font-medium text-slate-500">Generating Mixed Exam Questions...</p>
-                    </div>
-                  ) : examEvaluation ? (
-                    /* Evaluation Report View */
-                    <div className="space-y-6">
-                      <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
-                        <div>
-                          <span className="learn-caption font-bold uppercase text-slate-400">Score Earned</span>
-                          <div className="text-3xl font-black text-slate-900 mt-0.5">
-                            {examEvaluation.percentage}%
-                          </div>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            {examEvaluation.score} of {examEvaluation.total_questions} Questions Earned
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-xs font-bold px-4 py-2 rounded-full bg-slate-100 text-slate-900 border border-slate-200 inline-block shadow-xs">
-                            {examEvaluation.mastery_badge}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Question Review Cards */}
-                      <div className="space-y-4">
-                        {examEvaluation.evaluations.map((ev, idx) => (
-                          <div
-                            key={ev.id}
-                            className={`p-6 rounded-3xl bg-white border shadow-xs ${ev.is_correct ? 'border-emerald-200' : 'border-amber-200'
-                              }`}
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-xs font-bold text-slate-500">
-                                Question {idx + 1} ({ev.type.toUpperCase()})
-                              </span>
-                              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${ev.is_correct ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'
-                                }`}>
-                                {ev.score_percentage}%
-                              </span>
-                            </div>
-                            <h4 className="text-sm font-serif font-bold text-slate-900 mb-2">{ev.question}</h4>
-                            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-xs text-slate-700 mb-2 font-serif">
-                              <span className="font-bold">Your Answer: </span>
-                              {ev.student_answer || '<Empty>'}
-                            </div>
-                            {ev.sample_model_answer && (
-                              <div className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs text-slate-900 mb-2 font-serif">
-                                <span className="font-bold">Model Answer: </span>
-                                {ev.sample_model_answer}
-                              </div>
-                            )}
-                            <p className="text-xs text-slate-600">
-                              <span className="font-bold">Feedback: </span>
-                              {ev.feedback}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    /* Question Answering Form */
-                    <div className="space-y-5">
-                      {examQuestions.map((q, idx) => (
-                        <div key={q.id} className="p-7 rounded-3xl bg-white border border-slate-200/90 shadow-xs">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="learn-caption font-bold uppercase tracking-wider text-slate-400">
-                              Question {idx + 1} · {q.type === 'written' ? 'Written Synthesis' : q.type === 'mcq' ? 'Multiple Choice' : 'Fill in the Blank'}
-                            </span>
-                          </div>
-                          <h3 className="text-base font-serif font-bold text-slate-900 mb-4">{q.question}</h3>
-
-                          {/* Written */}
-                          {q.type === 'written' && (
-                            <textarea
-                              rows={3}
-                              value={examAnswers[q.id] || ''}
-                              onChange={(e) => setExamAnswers({ ...examAnswers, [q.id]: e.target.value })}
-                              placeholder="Write your academic explanation..."
-                              className="w-full text-sm p-4 rounded-2xl bg-slate-50/70 border border-slate-200 text-slate-900 font-serif focus:bg-white focus:outline-none focus:border-slate-400 leading-relaxed"
-                            />
-                          )}
-
-                          {/* MCQ */}
-                          {q.type === 'mcq' && q.options && (
-                            <div className="space-y-2">
-                              {q.options.map((opt, oIdx) => {
-                                const isSelected = examAnswers[q.id] === opt
-                                return (
-                                  <button
-                                    key={oIdx}
-                                    onClick={() => setExamAnswers({ ...examAnswers, [q.id]: opt })}
-                                    className={`w-full text-left p-3.5 rounded-xl text-xs font-medium transition border cursor-pointer ${isSelected
-                                      ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                                      }`}
-                                  >
-                                    {opt}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          )}
-
-                          {/* Fill-in-the-Blank */}
-                          {q.type === 'fill_in_the_blank' && (
-                            <input
-                              type="text"
-                              value={examAnswers[q.id] || ''}
-                              onChange={(e) => setExamAnswers({ ...examAnswers, [q.id]: e.target.value })}
-                              placeholder="Type exact term or formula..."
-                              className="w-full text-xs px-4 py-2.5 rounded-full bg-slate-50/70 border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:border-slate-400"
-                            />
-                          )}
-                        </div>
-                      ))}
-
-                      {examQuestions.length > 0 && (
-                        <button
-                          onClick={handleSubmitExam}
-                          disabled={isSubmittingExam}
-                          className="w-full py-3.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition shadow-xs disabled:opacity-50 cursor-pointer"
-                        >
-                          {isSubmittingExam ? 'Grading Submission via Rubrics...' : 'Submit Exam for Automated Grading'}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </main>
 
           {/* Right Docked Artifact Viewer (Default) */}

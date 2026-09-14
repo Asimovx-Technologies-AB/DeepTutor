@@ -7,6 +7,8 @@ from app.api.study import router as study_router
 from app.api.chat import router as chat_router
 from app.api.dashboard import router as dashboard_router
 from app.api.auth import router as auth_router
+from app.api.study_plan import router as study_plan_router
+from app.api.tracking import router as tracking_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -17,5 +19,8 @@ api_router.include_router(chunks_router)
 api_router.include_router(search_router)
 api_router.include_router(study_router)
 api_router.include_router(chat_router)
+api_router.include_router(study_plan_router)
+api_router.include_router(tracking_router)
 
 __all__ = ["api_router"]
+

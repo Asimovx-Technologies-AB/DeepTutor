@@ -154,7 +154,7 @@ def stream_chat_message(
             if evt_type == "token":
                 token_str = event.get("data") or event.get("token") or ""
                 yield f"data: {json.dumps({'type': 'token', 'data': token_str})}\n\n"
-            elif evt_type in ("sources", "grounding", "done", "phase_start", "phase_end"):
+            elif evt_type in ("sources", "grounding", "done", "phase_start", "phase_end", "flashcard_quiz"):
                 yield f"data: {json.dumps(event)}\n\n"
 
     return StreamingResponse(
@@ -184,6 +184,8 @@ def send_chat_message(
     return {
         "role": "assistant",
         "content": result["content"],
-        "citations": result["citations"],
-        "grounding_score": result["grounding_score"],
+        "type": result.get("type", "chat_message"),
+        "flashcard_quiz": result.get("flashcard_quiz"),
+        "citations": result.get("citations", []),
+        "grounding_score": result.get("grounding_score", 1.0),
     }

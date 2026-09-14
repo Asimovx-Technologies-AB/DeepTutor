@@ -9,6 +9,7 @@ import {
   HelpCircle, CheckCircle2, AlertCircle, ChevronLeft, ChevronRight,
   Layers, Check, RotateCw, Trophy, ArrowRight, RotateCcw, BookOpen
 } from 'lucide-react'
+import { trackingApi } from '../services/api'
 
 interface Option {
   id: string
@@ -62,9 +63,16 @@ export const MarkdownText: React.FC<{ content: string; className?: string; inlin
   )
 }
 
+export function getOptionLetter(id: string, index: number): string {
+  if (!id) return String.fromCharCode(65 + index)
+  const clean = id.replace(/^(?:opt_?|option_?)/i, '').trim().toUpperCase()
+  if (clean && clean.length === 1 && clean >= 'A' && clean <= 'Z') return clean
+  return String.fromCharCode(65 + index)
+}
+
 export const FlashcardQuizCard: React.FC<FlashcardQuizCardProps> = ({ quizData, className = '' }) => {
   const questions = quizData?.questions || []
-  const [mode, setMode] = useState<'flashcards' | 'quiz'>(quizData?.initial_mode || 'flashcards')
+  const [mode, setMode] = useState<'flashcards' | 'quiz'>((quizData as any)?.mode || quizData?.initial_mode || 'flashcards')
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
   const [showHint, setShowHint] = useState(false)
@@ -94,10 +102,27 @@ export const FlashcardQuizCard: React.FC<FlashcardQuizCardProps> = ({ quizData, 
     setCurrentIndex((prev) => (prev - 1 + totalCards) % totalCards)
   }
 
-  const handleSelectOption = (optionId: string) => {
+  const handleSelectOption = async (optionId: string) => {
     if (userAnswers[currentQ.id]) return
     const updated = { ...userAnswers, [currentQ.id]: optionId }
     setUserAnswers(updated)
+
+    // Emit event to Tracking Agent
+    try {
+      const isCorrect = optionId.toLowerCase() === currentQ.correct_option_id.toLowerCase()
+      const studentId = localStorage.getItem('student_id') || 'default_user'
+      await trackingApi.emitAnswerEvent({
+        topic: (quizData as any).topic || quizData.title || 'General',
+        is_correct: isCorrect,
+        student_id: studentId,
+        question_id: currentQ.id,
+        timestamp: new Date().toISOString(),
+        mode: 'quiz',
+      })
+    } catch (err) {
+      console.warn('[FlashcardQuizCard] Failed to emit tracking event:', err)
+    }
+
     // If this was the last question answered and all questions are done, prompt results
     if (Object.keys(updated).length === totalCards && currentIndex === totalCards - 1) {
       setTimeout(() => setShowResults(true), 1200)
@@ -430,7 +455,7 @@ export const FlashcardQuizCard: React.FC<FlashcardQuizCardProps> = ({ quizData, 
 
           {/* Options */}
           <div className="space-y-2.5 pt-1">
-            {currentQ.options?.map((opt) => {
+            {currentQ.options?.map((opt, optIdx) => {
               const selectedOption = userAnswers[currentQ.id]
               const isSelected = selectedOption === opt.id
               const isCorrectOpt = opt.id.toLowerCase() === currentQ.correct_option_id.toLowerCase()
@@ -452,10 +477,10 @@ export const FlashcardQuizCard: React.FC<FlashcardQuizCardProps> = ({ quizData, 
                   key={opt.id}
                   onClick={() => handleSelectOption(opt.id)}
                   disabled={!!selectedOption}
-                  className={`w-full p-3.5 rounded-xl border text-left text-xs sm:text-sm transition flex items-center justify-between cursor-pointer font-serif ${buttonStyle}`}
+                  className={`w-full p-3.5 sm:p-4 rounded-xl border text-left text-xs sm:text-sm transition flex items-start justify-between gap-3.5 cursor-pointer font-serif ${buttonStyle}`}
                 >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <span className={`w-6 h-6 rounded-full border text-xs font-mono font-medium flex items-center justify-center shrink-0 ${
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <span className={`w-7 h-7 rounded-full border text-xs font-mono font-bold flex items-center justify-center shrink-0 mt-0.5 ${
                       isSelected && isCorrectOpt
                         ? 'bg-[#2E7D32] text-white border-[#2E7D32]'
                         : isSelected
@@ -464,23 +489,24 @@ export const FlashcardQuizCard: React.FC<FlashcardQuizCardProps> = ({ quizData, 
                         ? 'bg-[#2E7D32] text-white border-[#2E7D32]'
                         : 'bg-[#F0EFEA] text-[#4A4843] border-[#DCD9CE]'
                     }`}>
-                      {opt.id.toUpperCase()}
+                      {getOptionLetter(opt.id, optIdx)}
                     </span>
-                    <div className="leading-normal flex-1 min-w-0">
+                    <div className="leading-relaxed flex-1 min-w-0 pt-0.5 text-[#1F1E1D]">
                       <MarkdownText content={opt.text} inline={true} />
                     </div>
                   </div>
 
                   {selectedOption && isCorrectOpt && (
-                    <CheckCircle2 size={16} className="text-[#2E7D32] shrink-0 ml-2" />
+                    <CheckCircle2 size={18} className="text-[#2E7D32] shrink-0 ml-2 mt-0.5" />
                   )}
                   {selectedOption && isSelected && !isCorrectOpt && (
-                    <AlertCircle size={16} className="text-[#C62828] shrink-0 ml-2" />
+                    <AlertCircle size={18} className="text-[#C62828] shrink-0 ml-2 mt-0.5" />
                   )}
                 </button>
               )
             })}
           </div>
+
 
           {/* Explanation Callout in Quiz Mode */}
           {userAnswers[currentQ.id] && (
@@ -564,5 +590,86 @@ export const FlashcardQuizCard: React.FC<FlashcardQuizCardProps> = ({ quizData, 
 }
 
 export default FlashcardQuizCard
+
+/**
+ * Resiliently parses flashcard / quiz deck data from raw message text,
+ * including fenced flashcard_quiz blocks and structured "Front of Card / Back of Card" markdown.
+ */
+export function parseQuizDataFromContent(content: string): QuizData | null {
+  if (!content) return null
+
+  // 1. Check for fenced flashcard_quiz or json block
+  const jsonMatch = content.match(/```(?:flashcard_quiz|flashcard-quiz|json)?\s*[\r\n]+([\s\S]*?)(?:[\r\n]+```|$)/)
+  if (jsonMatch && jsonMatch[1]) {
+    try {
+      const parsed = JSON.parse(jsonMatch[1].trim())
+      if (parsed && parsed.questions && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+        return parsed
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 1b. Check for raw JSON object with questions array
+  const braceStart = content.indexOf('{')
+  const braceEnd = content.lastIndexOf('}')
+  if (braceStart !== -1 && braceEnd !== -1 && braceEnd > braceStart) {
+    const candidate = content.substring(braceStart, braceEnd + 1)
+    if (candidate.includes('"questions"') && (candidate.includes('"title"') || candidate.includes('"topic"'))) {
+      try {
+        const parsed = JSON.parse(candidate)
+        if (parsed && parsed.questions && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+          return parsed
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  // 2. Check for "Front of Card" and "Back of Card" (matching plain text tutor responses)
+  if (content.includes('Front of Card') && content.includes('Back of Card')) {
+    try {
+      const titleMatch = content.match(/(?:Flashcard:\s*|flashcard for\s+)(.*?)(?:\n|\*|$)/i)
+      const deckTitle = titleMatch ? titleMatch[1].replace(/[*#_]/g, '').trim() : 'Study Flashcards'
+
+      const frontPart = content.split(/Front of Card/i)[1]?.split(/Back of Card/i)[0] || ''
+      const promptMatch = frontPart.match(/(?:Concept:\s*|\-\s*)([^\n]+)/i)
+      const promptText = promptMatch ? promptMatch[1].replace(/[*_]/g, '').trim() : frontPart.trim()
+
+      const backPart = content.split(/Back of Card/i)[1] || ''
+      const defMatch = backPart.match(/Definition:\s*([^\n]+)/i)
+      const objMatch = backPart.match(/Core Objective:\s*([^\n]+)/i)
+      const correctText = defMatch ? defMatch[1].replace(/[*_]/g, '').trim() : (objMatch ? objMatch[1].replace(/[*_]/g, '').trim() : 'Core principle of this concept')
+
+      return {
+        title: deckTitle,
+        description: 'Interactive Study Deck',
+        initial_mode: 'flashcards',
+        questions: [
+          {
+            id: 'card_1',
+            question_type: 'concept',
+            prompt: promptText || 'What is the primary concept and objective of this topic?',
+            options: [
+              { id: 'opt_a', text: correctText },
+              { id: 'opt_b', text: 'An empirical heuristic that avoids finding hyperplanes' },
+              { id: 'opt_c', text: 'An unsupervised clustering algorithm that groups arbitrary points' },
+              { id: 'opt_d', text: 'None of the above options' }
+            ],
+            correct_option_id: 'opt_a',
+            explanation: backPart.trim(),
+            hint: 'Focus on finding the optimal decision boundary that maximizes margin.'
+          }
+        ]
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return null
+}
 
 

@@ -198,6 +198,28 @@ def get_study_session(
     topics = db.query(CurriculumTopic).filter(CurriculumTopic.session_id == session_id).order_by(CurriculumTopic.order_index).all()
     msgs = db.query(ChatMessage).filter(ChatMessage.session_id == session_id).order_by(ChatMessage.created_at).all()
 
+    def _extract_quiz_data(content: str):
+        if not content:
+            return None
+        match = re.search(r"```(?:flashcard_quiz|flashcard-quiz|json)?\s*[\r\n]+([\s\S]*?)(?:[\r\n]+```|$)", content)
+        if match:
+            try:
+                data = json.loads(match.group(1).strip())
+                if isinstance(data, dict) and "questions" in data:
+                    return data
+            except Exception:
+                pass
+        b_start = content.find('{')
+        b_end = content.rfind('}')
+        if b_start != -1 and b_end != -1 and b_end > b_start:
+            try:
+                data = json.loads(content[b_start:b_end + 1])
+                if isinstance(data, dict) and "questions" in data:
+                    return data
+            except Exception:
+                pass
+        return None
+
     formatted_messages = [
         {
             "id": m.id,
@@ -205,6 +227,8 @@ def get_study_session(
             "text": m.content,
             "content": m.content,
             "intent": m.intent,
+            "quiz_data": _extract_quiz_data(m.content),
+            "flashcard_quiz": _extract_quiz_data(m.content),
             "sources": [
                 {
                     "chunk_id": c.get("chunk_id", ""),
@@ -444,6 +468,39 @@ def generate_topic_exam(
     }
 
 
+@router.post("/agent/message/stream")
+def stream_agent_message(
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db)
+):
+    """Real-time SSE token streaming endpoint for LearnPage chat."""
+    message = payload.get("message") or payload.get("query") or ""
+    session_id = payload.get("session_id")
+    subject = payload.get("subject")
+    topic_id = payload.get("topic_id")
+
+    def event_generator():
+        gen = TutoringQueryOrchestrator.stream_query_response(
+            session=db,
+            raw_query=message,
+            session_id=session_id,
+            topic_id=topic_id,
+            topic_title=subject
+        )
+        for event in gen:
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+
 @router.post("/agent/message")
 def send_agent_message(
     payload: Dict[str, Any],
@@ -485,6 +542,8 @@ def send_agent_message(
         "thought_process": f"Verified {len(citations)} context chunks. Grounding score: {result.get('grounding_score', 0.95):.2f}.",
         "grounding_score": result.get("grounding_score", 0.95),
         "intent": result.get("intent", "DOCUMENT_QA"),
+        "quiz_data": result.get("flashcard_quiz"),
+        "flashcard_quiz": result.get("flashcard_quiz"),
         "socratic_follow_up": result.get("socratic_follow_up"),
         "suggested_questions": result.get("suggested_questions", []),
         "status": "success"

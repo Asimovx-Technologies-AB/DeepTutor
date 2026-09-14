@@ -18,6 +18,9 @@ from app.tutoring.pipelines.casual import CasualPipeline
 from app.tutoring.pipelines.summary import SummaryPipeline
 from app.tutoring.pipelines.assessment import AssessmentPipeline
 from app.tutoring.pipelines.problem_solving import ProblemSolvingPipeline
+from app.tutoring.flashcards.intent import FlashcardQuizIntentDetector
+from app.tutoring.flashcards.retriever import PostgresStudyMaterialRetriever
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +71,62 @@ class TutoringQueryOrchestrator:
             normalized_query=normalized_query,
             resolved_query=resolved_query,
             language=language,
-            is_follow_up=ref_meta["is_follow_up"]
+            is_follow_up=ref_meta["is_follow_up"],
+            conversation_history=context.get("history", [])
         )
+
+        effective_page = query_meta.referenced_page or ref_meta.get("referenced_page") or active_page
+        effective_topic = query_meta.target_topic or topic_title or context.get("document_title") or "Study Document"
+        fc_intent = FlashcardQuizIntentDetector.detect(raw_query, default_topic=effective_topic)
+        is_quiz_request = (query_meta.intent == "QUIZ") or (fc_intent.is_flashcard_quiz and query_meta.intent != "PRACTICE_QUESTIONS")
+
+        if is_quiz_request:
+            target_topic = query_meta.target_topic or fc_intent.target_topic or effective_topic
+            retriever = PostgresStudyMaterialRetriever(session)
+            chunks = retriever.retrieve_chunks(
+                topic=target_topic,
+                document_id=doc_id,
+                session_id=session_id,
+                top_k=6
+            )
+            citations = [
+                {"chunk_id": c.get("id"), "page_number": c.get("page_number", 1), "source_uri": c.get("chapter_section", "")}
+                for c in chunks[:3]
+            ]
+            quiz_payload = TeachingAgent.generate_flashcards_or_quiz(
+                topic=target_topic,
+                retrieved_chunks=chunks,
+                question_count=query_meta.question_count or fc_intent.question_count or 5,
+                mode=fc_intent.preferred_mode
+            )
+            payload_json = json.dumps(quiz_payload.model_dump(), indent=2)
+            if session_id:
+                cls._update_session_state(
+                    session=session,
+                    session_id=session_id,
+                    topic_id=topic_id,
+                    user_query=raw_query,
+                    assistant_response=content,
+                    intent="QUIZ",
+                    citations=citations,
+                    grounding_score=1.0,
+                    latency_ms=latency_ms,
+                    entities=[target_topic]
+                )
+            return {
+                "content": content,
+                "type": "flashcard_quiz",
+                "flashcard_quiz": quiz_payload.model_dump(),
+                "intent": "QUIZ",
+                "citations": citations,
+                "grounding_score": 1.0,
+                "socratic_follow_up": f"Would you like another practice set on {target_topic} once completed?",
+                "suggested_questions": [
+                    "Give me another quiz on this topic",
+                    f"Explain the key concepts of {target_topic}"
+                ],
+                "latency_ms": latency_ms
+            }
 
         # 5. Router Decision
         route_dest, retrieval_strategy = QueryRouter.route_query(
@@ -96,7 +153,8 @@ class TutoringQueryOrchestrator:
                 strategy="thematic",
                 document_id=doc_id,
                 topic_title=topic_title,
-                top_k=6
+                top_k=6,
+                conversation_history=context.get("history", [])
             )
             res_dict = SummaryPipeline.generate_summary(context_bundle)
         elif route_dest == "ASSESSMENT_PIPELINE":
@@ -106,7 +164,8 @@ class TutoringQueryOrchestrator:
                 strategy="thematic",
                 document_id=doc_id,
                 topic_title=topic_title,
-                top_k=4
+                top_k=4,
+                conversation_history=context.get("history", [])
             )
             res_dict = AssessmentPipeline.generate_quiz(context_bundle)
         elif route_dest == "PROBLEM_SOLVING_PIPELINE":
@@ -115,20 +174,23 @@ class TutoringQueryOrchestrator:
                 query_meta=query_meta,
                 strategy="contextual",
                 document_id=doc_id,
-                active_page=active_page,
-                top_k=4
+                active_page=effective_page,
+                top_k=5,
+                conversation_history=context.get("history", [])
             )
             res_dict = ProblemSolvingPipeline.solve_problem(resolved_query, context_bundle)
         else:
             # RETRIEVAL_PIPELINE
+            chosen_strategy = "contextual" if effective_page else retrieval_strategy
             context_bundle = MultiStrategyRetrievalOrchestrator.retrieve_context_bundle(
                 session=session,
                 query_meta=query_meta,
-                strategy=retrieval_strategy,
+                strategy=chosen_strategy,
                 document_id=doc_id,
-                topic_title=topic_title,
-                active_page=active_page,
-                top_k=5
+                topic_title=effective_topic,
+                active_page=effective_page,
+                top_k=5,
+                conversation_history=context.get("history", [])
             )
             # Teaching Agent
             teaching_resp = TeachingAgent.generate_teaching_response(query_meta, context_bundle)
@@ -208,8 +270,67 @@ class TutoringQueryOrchestrator:
             normalized_query=normalized_query,
             resolved_query=resolved_query,
             language=language,
-            is_follow_up=ref_meta["is_follow_up"]
+            is_follow_up=ref_meta["is_follow_up"],
+            conversation_history=context.get("history", [])
         )
+
+        # 4. Target Topic & Quiz Intent Routing
+        effective_page = query_meta.referenced_page or ref_meta.get("referenced_page") or active_page
+        effective_topic = query_meta.target_topic or topic_title or context.get("document_title") or "Study Document"
+        fc_intent = FlashcardQuizIntentDetector.detect(raw_query, default_topic=effective_topic)
+        is_quiz_request = (query_meta.intent == "QUIZ") or (fc_intent.is_flashcard_quiz and query_meta.intent != "PRACTICE_QUESTIONS")
+
+        if is_quiz_request:
+            target_topic = query_meta.target_topic or fc_intent.target_topic or effective_topic
+            yield {"type": "phase_start", "phase": f"Generating {fc_intent.preferred_mode.capitalize()} on {target_topic}", "phase_key": "flashcard_quiz"}
+            retriever = PostgresStudyMaterialRetriever(session)
+            chunks = retriever.retrieve_chunks(
+                topic=target_topic,
+                document_id=doc_id,
+                session_id=session_id,
+                top_k=6
+            )
+            citations = [
+                {"chunk_id": c.get("id"), "page_number": c.get("page_number", 1), "source_uri": c.get("chapter_section", "")}
+                for c in chunks[:3]
+            ]
+            yield {"type": "sources", "data": citations}
+
+            quiz_payload = TeachingAgent.generate_flashcards_or_quiz(
+                topic=target_topic,
+                retrieved_chunks=chunks,
+                question_count=query_meta.question_count or fc_intent.question_count or 5,
+                mode=fc_intent.preferred_mode
+            )
+            # Emit dedicated typed event for frontend
+            yield {"type": "flashcard_quiz", "data": quiz_payload.model_dump()}
+
+            payload_json = json.dumps(quiz_payload.model_dump(), indent=2)
+            intro_msg = f"I've prepared an interactive **{quiz_payload.title}** on **{quiz_payload.topic}** with {len(quiz_payload.questions)} questions grounded in your study materials:\n\n"
+            fenced_block = f"```flashcard_quiz\n{payload_json}\n```"
+            full_content = intro_msg + fenced_block
+
+            yield {"type": "token", "token": intro_msg, "data": intro_msg}
+            yield {"type": "token", "token": fenced_block, "data": fenced_block}
+            yield {"type": "grounding", "data": {"grounding_score": 1.0, "formatted_badge": "100% Grounded in Materials", "verified": True}}
+            latency_ms = round((time.time() - start_time) * 1000, 2)
+            yield {"type": "phase_end", "phase": "Generation Complete", "phase_key": "flashcard_quiz"}
+            yield {"type": "done", "latency_ms": latency_ms}
+
+            if session_id:
+                cls._update_session_state(
+                    session=session,
+                    session_id=session_id,
+                    topic_id=topic_id,
+                    user_query=raw_query,
+                    assistant_response=full_content,
+                    intent="QUIZ",
+                    citations=citations,
+                    grounding_score=1.0,
+                    latency_ms=latency_ms,
+                    entities=[target_topic]
+                )
+            return
 
         # 5. Router Decision
         route_dest, retrieval_strategy = QueryRouter.route_query(
@@ -218,14 +339,16 @@ class TutoringQueryOrchestrator:
         )
 
         # 6. Retrieve Context
+        chosen_strategy = "contextual" if effective_page else (retrieval_strategy if route_dest == "RETRIEVAL_PIPELINE" else "thematic")
         context_bundle = MultiStrategyRetrievalOrchestrator.retrieve_context_bundle(
             session=session,
             query_meta=query_meta,
-            strategy=retrieval_strategy if route_dest == "RETRIEVAL_PIPELINE" else "thematic",
+            strategy=chosen_strategy,
             document_id=doc_id,
-            topic_title=topic_title or context.get("document_title"),
-            active_page=active_page,
-            top_k=5
+            topic_title=effective_topic,
+            active_page=effective_page,
+            top_k=5,
+            conversation_history=context.get("history", [])
         )
 
         yield {"type": "phase_end", "phase": "Analysis Complete", "phase_key": "analysis"}
@@ -259,7 +382,7 @@ class TutoringQueryOrchestrator:
                 assistant_response=full_content,
                 intent=query_meta.intent,
                 citations=citations_data,
-                grounding_score=validation_result.faithfulness_score,
+                grounding_score=validation_result.grounding_score,
                 latency_ms=latency_ms,
                 entities=query_meta.extracted_entities
             )

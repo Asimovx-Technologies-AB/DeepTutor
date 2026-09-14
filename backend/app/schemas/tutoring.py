@@ -24,9 +24,15 @@ class QueryMetadata(BaseModel):
         "CASUAL",
         "SUMMARY",
         "QUIZ",
-        "PROBLEM_SOLVING"
+        "PROBLEM_SOLVING",
+        "PRACTICE_QUESTIONS"
     ] = "DOCUMENT_QA"
     
+    target_topic: Optional[str] = None
+    question_count: Optional[int] = None
+    referenced_page: Optional[int] = None
+    referenced_table: Optional[str] = None
+    format_directives: Optional[Dict[str, Any]] = None
     extracted_entities: List[str] = Field(default_factory=list)
     learning_objective: str = "understand" # recall, understand, apply, analyze, evaluate
     difficulty_level: str = "Intermediate" # Beginner, Intermediate, Advanced

@@ -78,12 +78,12 @@ class DocumentPipelineOrchestrator:
         stage_durations["CLASSIFICATION"] = round((time.time() - t0) * 1000, 2)
         is_scanned_doc = doc_classification.get("overall_classification") in ("scanned", "hybrid")
 
-        # 5. Dual Pipeline Execution (Text Pipeline + Visual Pipeline)
+        # 5. Dual Pipeline Execution (Text Pipeline + Visual Pipeline) - Parallelized across CPU threads
         t0 = time.time()
         all_tables = []
         all_formulas = []
 
-        for page in pages_data:
+        def _process_page_worker(page):
             page_num = page["page_number"]
             raw_text = page["raw_text"]
             blocks = page["blocks"]
@@ -92,8 +92,6 @@ class DocumentPipelineOrchestrator:
             q_score, decision = TextQualityChecker.evaluate_quality(raw_text)
             page["quality_score"] = q_score
 
-            # Only trigger VLM fallback if document is scanned/hybrid or page has zero text.
-            # Prevents 5-10s network latency on clean digital pages.
             has_no_text = not raw_text or not raw_text.strip()
             if (decision == "POOR" and is_scanned_doc) or has_no_text:
                 normalized_text = VLMFallbackExtractor.process_scanned_page(page)
@@ -105,18 +103,21 @@ class DocumentPipelineOrchestrator:
             page["normalized_text"] = normalized_text
 
             # Branch B: Visual & Image Processing Pipeline
-            # 1. Layout Analysis (columns & reading order)
             blocks = LayoutAnalyzer.analyze_page_layout(blocks, page["width"], page["height"])
-
-            # 2. Table Detection & Extraction (Markdown / HTML)
             page_tables, blocks = TableDetector.detect_tables(blocks, page_num)
-            all_tables.extend(page_tables)
-
-            # 3. Formula Detection & Recognition (LaTeX)
             page_formulas, blocks = FormulaDetector.detect_formulas(blocks, page_num)
-            all_formulas.extend(page_formulas)
-
             page["blocks"] = blocks
+            return page, page_tables, page_formulas
+
+        import concurrent.futures
+        max_workers = min(8, max(2, len(pages_data)))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            processed_results = list(executor.map(_process_page_worker, pages_data))
+
+        pages_data = [r[0] for r in processed_results]
+        for r in processed_results:
+            all_tables.extend(r[1])
+            all_formulas.extend(r[2])
 
         stage_durations["DUAL_PIPELINE"] = round((time.time() - t0) * 1000, 2)
 
@@ -189,3 +190,34 @@ class DocumentPipelineOrchestrator:
         )
 
         return canonical_doc
+
+    @classmethod
+    def process_document_background(
+        cls,
+        doc_id: str,
+        file_bytes: bytes,
+        filename: str
+    ):
+        """
+        Executes the deep parallel pipeline (tables, formulas, 14-dimension chunks,
+        graph relationships) in the background without blocking the user.
+        """
+        from app.core.database import SessionLocal
+        db = SessionLocal()
+        try:
+            logger.info(f"[BackgroundPipeline] Starting parallel deep processing for {filename} (ID: {doc_id})...")
+            cls.process_document(
+                session=db,
+                file_bytes=file_bytes,
+                filename=filename,
+                existing_doc_id=doc_id
+            )
+            logger.info(f"[BackgroundPipeline] Completed deep processing for {filename} (ID: {doc_id}).")
+        except Exception as e:
+            logger.error(f"[BackgroundPipeline] Deep processing failed for {filename}: {e}", exc_info=True)
+            db_doc = db.query(Document).filter(Document.id == doc_id).first()
+            if db_doc:
+                db_doc.status = "INDEXED"
+                db.commit()
+        finally:
+            db.close()

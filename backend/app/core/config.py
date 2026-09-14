@@ -33,7 +33,7 @@ class Settings(BaseSettings):
 
     # LLM (Language Model) Settings
     LLM_PROVIDER: Literal["gemini", "openai", "groq", "azure_openai", "anthropic", "mock"] = "mock"
-    LLM_MODEL: str = "gemini-3.5-flash"
+    LLM_MODEL: str = "gemini-3.1-flash-lite"
     LLM_TEMPERATURE: float = 0.8
 
     # Embedding Settings

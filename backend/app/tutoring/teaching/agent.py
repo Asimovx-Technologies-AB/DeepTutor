@@ -24,7 +24,8 @@ Key Capabilities:
 import re
 import time
 import logging
-from typing import Generator, List, Optional, Tuple
+from pathlib import Path
+from typing import Generator, List, Optional, Tuple, Dict, Any
 
 from app.schemas.tutoring import ContextBundle, TeachingResponse, QueryMetadata
 from app.core.config import settings
@@ -71,10 +72,26 @@ Before answering, analyze the student's question intent and choose the optimal p
      * Final Result Box / Takeaway.
      * End with an Interactive Checkpoint question testing an edge case.
 
-5. CURRICULUM ROADMAP & MAIN TOPICS (e.g. "what are the main topics", "syllabus", "overview"):
+5. PRACTICE & EXAM QUESTIONS (e.g. "give me questions", "5 questions on this", "practice questions", "only need questions"):
+   - High-yield, exam-grade inquiry based strictly on the study material.
+   - USER FORMAT RESPECT:
+     * If the student asks for "only questions", "just questions", or wants to test themselves:
+       Present ONLY the clean numbered questions with clear problem descriptions and scenarios.
+       DO NOT include answers, solution keys, or hints! Let the student work through them first.
+     * If the student asks for questions with solutions or answers:
+       Include the model answer and reasoning beneath each question.
+     * If question count is requested, output exactly that many numbered questions.
+
+6. TABLE PROBLEM SOLVING (e.g. "solve the table", "solve the table in page 22", "table 1.2"):
    - Structure:
-     * Structured module roadmap breakdown: Core themes, what each covers, and why it matters.
-     * End with an Interactive Checkpoint asking which area they'd like to explore first.
+     * Table Identification: Identify the table from the verified context excerpts or tables.
+     * Method & Formula: State the formula or principle (e.g. arithmetic sequence common difference $d = x_2 - x_1$, divisibility rule, etc.).
+     * Step-by-Step Walkthrough: Calculate each row/cell systematically.
+     * Complete Solved Table: Render the ENTIRE, fully solved/filled Markdown table.
+
+=== MULTI-TURN CONVERSATION MEMORY ===
+- You have full access to the previous conversation history in this study session.
+- If the student asks about something you explained earlier, or asks a follow-up referencing ANY prior response, answer, or question, refer accurately and coherently to what you previously taught or answered in this session.
 
 === CRITICAL MARKDOWN & TYPOGRAPHY CONSTRAINTS ===
 - NO MONOLITHIC WALLS OF TEXT: Keep paragraphs short (maximum 2-3 sentences per paragraph).
@@ -96,13 +113,14 @@ Before answering, analyze the student's question intent and choose the optimal p
 
 === CITATION & PAGE NUMBER RULES ===
 - Ground all facts strictly in the verified context excerpts provided.
-- CRITICAL CONSTRAINT: Do NOT mention or cite page numbers anywhere (never say "Page 5", "On page X", etc.).
+- Do NOT add citation footnotes or say "as seen on Page 5", but you may address the student's referenced page or table naturally.
 
-=== SINGLE ACTIVE RECALL QUESTION ===
-- If the question is in-scope, end your response with:
+=== INTERACTIVE CHECKPOINT ===
+- For conceptual explanations or lectures, end your response with:
   ### 💡 Interactive Checkpoint
   **Active Recall Question**: exactly ONE thought-provoking question that ends in a question mark (`?`).
-  Never append a "Hint:" line after the question mark. Never provide a multi-branch "how would you like to proceed" menu."""
+  Never append a "Hint:" line after the question mark.
+- If the response is ALREADY a set of practice questions, an exam sheet, or a solved table, do NOT append an artificial Interactive Checkpoint; let the solution stand cleanly."""
 
 _VISUAL_KEYWORDS = (
     "table", "diagram", "figure", "chart", "compare", "comparison",
@@ -180,8 +198,33 @@ class TeachingAgent:
         return bool(context_bundle.related_tables)
 
     @classmethod
+    def _clean_topic_title(cls, topic_title: Optional[str]) -> str:
+        if not topic_title:
+            return "this concept"
+        raw = str(topic_title).strip()
+        has_path_separators = "\\" in raw or "/" in raw
+        has_drive_letter = len(raw) > 2 and raw[1] == ":" and raw[0].isalpha()
+        has_file_extension = any(
+            raw.lower().endswith(ext)
+            for ext in [".pmd", ".pdf", ".indd", ".doc", ".docx", ".txt", ".qxd", ".tex"]
+        )
+
+        if has_path_separators or has_drive_letter or has_file_extension:
+            stem = Path(raw).stem
+            if stem and len(stem) > 2 and not any(stem.lower().endswith(ext) for ext in [".pmd", ".pdf"]):
+                cleaned = stem.replace("-", " ").replace("_", " ").strip()
+                if cleaned.lower() not in ["prelims", "final", "untitled", "document", "cover", "final prelims"]:
+                    return cleaned.title()
+            return "this concept"
+
+        if raw.lower() in ["academic studies", "subject lesson", "document overview", "prelims", "final prelims"]:
+            return "this concept"
+        return raw
+
+    @classmethod
     def _default_follow_up(cls, topic_title: str) -> str:
-        return f"In your own words, why does {topic_title} work the way it does?"
+        clean = cls._clean_topic_title(topic_title)
+        return f"In your own words, why does {clean} work the way it does?"
 
     # ------------------------------------------------------------------
     # Prompt Construction
@@ -236,11 +279,75 @@ class TeachingAgent:
 
         wants_visual = cls._wants_visual(query_meta.resolved_query, context_bundle)
 
+        history_lines = []
+        if context_bundle.conversation_history:
+            for turn in context_bundle.conversation_history:
+                role = "Student" if turn.get("role") == "user" else "Assistant (You)"
+                text = (turn.get("content") or turn.get("text") or "").strip()
+                if text:
+                    snip = text if len(text) <= 650 else text[:650] + "..."
+                    history_lines.append(f"{role}: {snip}")
+
+        history_str = (
+            "=== FULL DIALOGUE HISTORY IN THIS STUDY SESSION ===\n"
+            + "\n".join(history_lines)
+            + "\n===================================================\n\n"
+            if history_lines
+            else ""
+        )
+
+        count_str = f"Requested Question Count: {query_meta.question_count}\n" if query_meta.question_count else ""
+        topic_spec_str = f"Specific Target Topic: {query_meta.target_topic}\n" if query_meta.target_topic else ""
+
+        # Format directives check
+        format_dirs = query_meta.format_directives or {}
+        is_questions_only = bool(format_dirs.get("questions_only", False))
+        target_count = query_meta.question_count or 5
+        effective_concept = query_meta.target_topic or context_bundle.topic_title or "this subject"
+
+        # Table solving instruction
+        is_solve_table = bool(format_dirs.get("solve_table")) or bool(query_meta.referenced_table) or (
+            "table" in query_meta.resolved_query.lower()
+            and any(w in query_meta.resolved_query.lower() for w in ["solve", "fill", "calculate", "complete", "check"])
+        )
+
+        if is_solve_table:
+            ref_spec = f"'{query_meta.referenced_table}'" if query_meta.referenced_table else "the table"
+            page_spec = f"on page {query_meta.referenced_page}" if query_meta.referenced_page else ""
+            task_instruction = (
+                f"3. TABLE SOLVING REQUEST: The student is asking to solve/complete {ref_spec} {page_spec}. "
+                f"Check the VERIFIED STUDY CONTEXT excerpts and tables above. "
+                f"If the table or its sequence data appears in the context: "
+                f"(a) State clearly what the table asks to do. "
+                f"(b) Explain the step-by-step mathematical method or formulas used to check/solve each entry (e.g. arithmetic sequence formula, difference test). "
+                f"(c) Present the COMPLETE solved table in clean, valid Markdown with all columns filled and verified. "
+                f"If the specific table is NOT found in the provided context excerpts, politely state that the table was not found on that page in the uploaded document and summarize what is there.\n"
+            )
+        elif is_questions_only or query_meta.intent == "PRACTICE_QUESTIONS":
+            if is_questions_only:
+                task_instruction = (
+                    f"3. PRACTICE QUESTIONS (QUESTIONS ONLY): The student explicitly requested ONLY questions (no answers, no solution keys, no hints). "
+                    f"Generate EXACTLY {target_count} rigorous, numbered exam preparation questions on {effective_concept}. "
+                    f"Provide clear, numbered questions with real academic substance so the student can solve them. "
+                    f"DO NOT include answers, solution keys, hints, or options. DO NOT output a multiple-choice quiz or code boxes.\n"
+                )
+            else:
+                task_instruction = (
+                    f"3. PRACTICE QUESTIONS: Generate EXACTLY {target_count} high-yield exam preparation questions on {effective_concept}. "
+                    f"Number them cleanly (Question 1, Question 2, ...). "
+                    f"If the student requested explanations or answers, provide clear explanations. DO NOT output an interactive multiple-choice quiz.\n"
+                )
+        else:
+            task_instruction = ""
+
         user_prompt = (
             f"Subject Focus / Document Title: {context_bundle.topic_title or 'Academic Studies'}\n"
             f"Student Question: \"{query_meta.resolved_query}\"\n"
             f"Learning Intent: {query_meta.intent}\n"
+            f"{count_str}"
+            f"{topic_spec_str}"
             f"Visual aid requested/warranted: {'yes' if wants_visual else 'no'}\n\n"
+            f"{history_str}"
             f"=== VERIFIED STUDY CONTEXT (from the student's uploaded document) ===\n"
             f"{context_str}\n"
             f"{formulas_str}\n"
@@ -248,9 +355,11 @@ class TeachingAgent:
             f"======================================================================\n\n"
             f"Instructions:\n"
             f"1. Check if the question is within the scope of this study material. If completely unrelated, apply the Out-of-Material Guardrail and decline politely.\n"
-            f"2. Adapt your response format to the query intent (e.g. roadmap for 'main topics', intuitive explanation with analogy for 'explain', table for comparisons, clean LaTeX for math).\n"
-            f"3. Do NOT output raw HTML (<br>) or ASCII-art. Use native Markdown only.\n"
-            f"4. End with an Interactive Checkpoint active recall question that ends in a question mark (?). Do NOT place a 'Hint:' line after the question.\n"
+            f"2. Check DIALOGUE HISTORY: If the student asks about ANY of your previous responses or explanations in this session, answer directly and accurately referencing that prior response.\n"
+            f"{task_instruction}"
+            f"4. Adapt your response format to the query intent (e.g. roadmap for 'main topics', intuitive explanation with analogy for 'explain', table for comparisons, clean LaTeX for math).\n"
+            f"5. Do NOT output raw HTML (<br>) or ASCII-art. Use native Markdown only.\n"
+            f"6. End with an Interactive Checkpoint active recall question ending in a question mark (?) ONLY for conceptual explanations or lectures. If this response is already a list of practice questions, an exam sheet, or a solved table, do NOT append an Interactive Checkpoint.\n"
             f"Teach the student now:"
         )
 
@@ -260,8 +369,15 @@ class TeachingAgent:
     # Contract Enforcement
     # ------------------------------------------------------------------
 
+    _STRIP_MENU_PATTERN = re.compile(
+        r"(?i)(?:would you like to|where should we go next|next steps\??|options:).*?(?:\n\s*[-*0-9]+[.)]\s+.*)+",
+        re.DOTALL,
+    )
+
     @classmethod
-    def _enforce_response_contract(cls, content: str, topic_title: str) -> str:
+    def _enforce_response_contract(
+        cls, content: str, topic_title: str, query_meta: Optional[QueryMetadata] = None
+    ) -> str:
         """
         Guarantees clean formatting:
         1. Converts raw HTML breaks (<br>, <br/>, <br />) into Markdown newlines.
@@ -298,15 +414,11 @@ class TeachingAgent:
         content = re.sub(r"(?m)^[ \t]*-{3,}[ \t]*$", "\n---\n", content)
         # Ensure Markdown headers (##, ###, ####) have empty lines before them
         content = re.sub(r"(?<=\S)\n(#{1,4}\s+)", r"\n\n\1", content)
-        # If headers were squished inline after text, separate them
-        content = re.sub(r"(?<=\S)\s+(#{1,4}\s+)", r"\n\n\1", content)
-        # Separate bullet items if squished inline after text
-        content = re.sub(r"(?<=\S)\s+(\*|-)\s+([A-Z])", r"\n\n\1 \2", content)
-        # Normalize excessive newlines
-        content = re.sub(r"\n{3,}", "\n\n", content)
+        # 3. Strip multi-branch navigation menus
+        content = _STRIP_MENU_PATTERN.sub("", content)
 
-        # 5. Remove trailing "Hint:" or "*Hint:*" lines at the very end
-        lines = [ln.rstrip() for ln in content.split("\n")]
+        # 4. Strip trailing "Hint: ..." lines so response ends naturally
+        lines = content.split("\n")
         while lines:
             last = lines[-1].strip().lower()
             if not last:
@@ -323,7 +435,17 @@ class TeachingAgent:
                 break
         content = "\n".join(lines).strip()
 
-        # 6. Ensure Interactive Checkpoint exists for teaching explanations
+        # If this is practice questions, student requested only questions, or table solving, do not append artificial checkpoint
+        is_exempt = query_meta and (
+            query_meta.intent == "PRACTICE_QUESTIONS"
+            or (query_meta.format_directives and query_meta.format_directives.get("questions_only"))
+            or (query_meta.format_directives and query_meta.format_directives.get("solve_table"))
+            or query_meta.referenced_table is not None
+        )
+        if is_exempt:
+            return content
+
+        # 5. Ensure Interactive Checkpoint exists for teaching explanations
         if "### 💡 Interactive Checkpoint" not in content and not content.endswith("?"):
             content += (
                 f"\n\n### 💡 Interactive Checkpoint\n"
@@ -332,16 +454,6 @@ class TeachingAgent:
         else:
             # Ensure it is cleanly separated with double newlines
             content = re.sub(r"(?<!\n\n)###\s*💡\s*Interactive Checkpoint", "\n\n### 💡 Interactive Checkpoint", content)
-
-        # 7. Ensure the entire response strictly ends with a question mark '?'
-        content = content.strip()
-        if not content.endswith("?"):
-            if content.endswith("."):
-                content = content[:-1] + "?"
-            elif content.endswith("!"):
-                content = content[:-1] + "?"
-            else:
-                content += "?"
 
         return content
 
@@ -427,7 +539,8 @@ class TeachingAgent:
         ContextBundle. Adapts dynamically to query intent and enforces out-of-scope guardrail.
         """
         query = query_meta.resolved_query
-        topic_title = context_bundle.topic_title or "Academic Studies"
+        topic_title = cls._clean_topic_title(context_bundle.topic_title)
+        question_subject = topic_title if topic_title != "this concept" else "this concept"
 
         system_prompt, user_prompt = cls._build_prompts(query_meta, context_bundle)
 
@@ -437,7 +550,7 @@ class TeachingAgent:
                     prompt=user_prompt, system_prompt=system_prompt
                 )
                 if llm_content and len(llm_content.strip()) > _MIN_LIVE_RESPONSE_CHARS:
-                    content = cls._enforce_response_contract(llm_content.strip(), topic_title)
+                    content = cls._enforce_response_contract(llm_content.strip(), topic_title, query_meta)
                     is_refusal = "outside the scope of your uploaded" in content.lower()
                     return TeachingResponse(
                         content=content,
@@ -446,7 +559,7 @@ class TeachingAgent:
                         grounding_score=0.3 if is_refusal else 0.98,
                         socratic_follow_up="" if is_refusal else cls._default_follow_up(topic_title),
                         suggested_questions=[] if is_refusal else [
-                            f"How does {topic_title} apply to practical problems?",
+                            f"How does {question_subject} apply to practical problems?",
                             "What are the key mechanisms and assumptions?",
                             "Can you walk me through a worked example?",
                         ],
@@ -485,7 +598,7 @@ class TeachingAgent:
         context-grounded excerpt stream.
         """
         query = query_meta.resolved_query
-        topic_title = context_bundle.topic_title or "Academic Studies"
+        topic_title = cls._clean_topic_title(context_bundle.topic_title)
         system_prompt, user_prompt = cls._build_prompts(query_meta, context_bundle)
 
         if default_llm_service.is_live_model_configured():
@@ -508,3 +621,22 @@ class TeachingAgent:
         for i, word in enumerate(words):
             yield word if i == 0 else " " + word
             time.sleep(0.005)
+
+    @classmethod
+    def generate_flashcards_or_quiz(
+        cls,
+        topic: str,
+        retrieved_chunks: List[Dict[str, Any]],
+        question_count: int = 5,
+        mode: str = "quiz"
+    ):
+        """
+        Self-contained flashcard/quiz capability callable by the teaching agent.
+        """
+        from app.tutoring.flashcards.generator import FlashcardQuizGenerator
+        return FlashcardQuizGenerator.generate(
+            topic=topic,
+            retrieved_chunks=retrieved_chunks,
+            question_count=question_count,
+            mode=mode
+        )

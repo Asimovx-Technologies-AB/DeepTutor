@@ -88,6 +88,7 @@ export const streamChatMessage = async ({
   onSources,
   onGraphContext,
   onGrounding,
+  onFlashcardQuiz,
   onDone,
   onError,
   signal,
@@ -100,6 +101,7 @@ export const streamChatMessage = async ({
   onSources: (sources: any[]) => void
   onGraphContext: (graph: any) => void
   onGrounding?: (grounding: any) => void
+  onFlashcardQuiz?: (quizData: any) => void
   onDone: () => void
   onError: (err: any) => void
   signal?: AbortSignal
@@ -170,6 +172,8 @@ export const streamChatMessage = async ({
             onGraphContext(evt.data)
           } else if (evt.type === 'grounding' && onGrounding) {
             onGrounding(evt.data)
+          } else if (evt.type === 'flashcard_quiz' && onFlashcardQuiz) {
+            onFlashcardQuiz(evt.data)
           } else if (evt.type === 'done') {
             isCompleted = true
             onDone()
@@ -524,6 +528,106 @@ export const streamTeacherLecture = async ({
     if (signal?.aborted || err?.name === 'AbortError') return
     onError(err)
   }
+}
+
+export const streamAgentMessage = async ({
+  message,
+  sessionId,
+  subject,
+  topicId,
+  onSources,
+  onToken,
+  onFlashcardQuiz,
+  onDone,
+  onError,
+  signal,
+}: {
+  message: string
+  sessionId: string
+  subject?: string
+  topicId?: string
+  onSources?: (sources: any[]) => void
+  onToken: (token: string) => void
+  onFlashcardQuiz?: (quizData: any) => void
+  onDone: () => void
+  onError: (err: any) => void
+  signal?: AbortSignal
+}) => {
+  const baseUrl = getApiBaseUrl()
+  const url = `${baseUrl}/study/agent/message/stream`
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+      },
+      body: JSON.stringify({
+        message,
+        session_id: sessionId,
+        subject,
+        topic_id: topicId,
+      }),
+      signal,
+    })
+
+    if (!res.ok || !res.body) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    }
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed.startsWith('data: ')) continue
+        const raw = trimmed.slice(6)
+        try {
+          const evt = JSON.parse(raw)
+          if (evt.type === 'token') {
+            onToken(evt.token || evt.data || '')
+          } else if (evt.type === 'sources' && onSources) {
+            onSources(evt.data || [])
+          } else if (evt.type === 'flashcard_quiz' && onFlashcardQuiz) {
+            onFlashcardQuiz(evt.data)
+          } else if (evt.type === 'done') {
+            onDone()
+            return
+          }
+        } catch {
+          // ignore partial JSON parse error
+        }
+      }
+    }
+    onDone()
+  } catch (err: any) {
+    if (signal?.aborted || err?.name === 'AbortError') return
+    onError(err)
+  }
+}
+
+export interface AnswerEvent {
+  topic: string
+  is_correct: boolean
+  timestamp?: string
+  student_id: string
+  question_id?: string
+  mode?: string
+}
+
+export const trackingApi = {
+  emitAnswerEvent: (event: AnswerEvent) => api.post('/tracking/events', event),
+  getSummary: (studentId: string) => api.get(`/tracking/summary/${studentId}`),
 }
 
 export default api

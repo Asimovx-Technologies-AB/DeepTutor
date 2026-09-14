@@ -4,12 +4,13 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
-import { Bot, User, Copy, Check, Image, Lightbulb, HelpCircle } from 'lucide-react'
+import { Bot, User, Copy, Check, Image, Lightbulb, HelpCircle, Sparkles } from 'lucide-react'
 import { motion } from 'framer-motion'
 import SourceCard, { type Source } from './SourceCard'
 import MermaidDiagram from './MermaidDiagram'
 import InlineSVGDiagram from './InlineSVGDiagram'
 import StudyNotesCard, { isStudyNotesContent } from './StudyNotesCard'
+import FlashcardQuizCard, { parseQuizDataFromContent } from './FlashcardQuizCard'
 
 interface Props {
   role: 'user' | 'assistant'
@@ -23,6 +24,7 @@ interface Props {
   }
   export_ready?: boolean
   response_format?: string
+  flashcard_quiz?: any
   suggestedQuestions?: string[]
   socraticFollowUp?: string
   onSuggestionClick?: (question: string) => void
@@ -36,6 +38,7 @@ const ChatMessageComponent = ({
   grounding,
   export_ready,
   response_format,
+  flashcard_quiz,
   suggestedQuestions,
   socraticFollowUp,
   onSuggestionClick,
@@ -100,16 +103,32 @@ const ChatMessageComponent = ({
                 <StudyNotesCard markdown={content} className="mb-3" />
               )}
 
+              {/* Flashcard & Quiz Direct Prop Renderer or Parsed Plain Text */}
+              {(() => {
+                const quizToRender = flashcard_quiz || parseQuizDataFromContent(content)
+                if (quizToRender) {
+                  return <FlashcardQuizCard quizData={quizToRender} className="mb-3" />
+                }
+                return null
+              })()}
+
               {/* Grounding Badge (only for substantive answers) */}
               {grounding && grounding.formatted_badge && !content.includes("Topic Not Found") && (
                 <div className="mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-success-soft text-success border border-success/30">
                   <span>{grounding.formatted_badge}</span>
                 </div>
               )}
-              <ReactMarkdown
-                remarkPlugins={[remarkMath, remarkGfm]}
-                rehypePlugins={[rehypeKatex]}
-                components={{
+              {(() => {
+                const isPlainFlashcard = content.includes('Front of Card') && content.includes('Back of Card')
+                const displayContent = isPlainFlashcard
+                  ? (content.split('🗂️')[0].split('Front of Card')[0].trim() || 'Here is your interactive study flashcard deck:')
+                  : content
+
+                return (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkMath, remarkGfm]}
+                    rehypePlugins={[rehypeKatex]}
+                    components={{
                   h3({ node, children, ...props }: any) {
                     const text = React.Children.toArray(children).join('')
                     if (text.includes('Interactive Checkpoint') || text.includes('💡')) {
@@ -142,7 +161,13 @@ const ChatMessageComponent = ({
                     const child = React.Children.toArray(children)[0] as any
                     const className = child?.props?.className || ''
                     const childStr = String(child?.props?.children || '')
-                    if (className.includes('language-mermaid') || className.includes('language-svg') || (childStr.includes('<svg') && childStr.includes('</svg>'))) {
+                    if (
+                      className.includes('language-mermaid') ||
+                      className.includes('language-svg') ||
+                      className.includes('language-flashcard_quiz') ||
+                      className.includes('language-flashcard-quiz') ||
+                      (childStr.includes('<svg') && childStr.includes('</svg>'))
+                    ) {
                       return <>{children}</>
                     }
                     return <pre {...props}>{children}</pre>
@@ -156,6 +181,19 @@ const ChatMessageComponent = ({
                     }
                     if (language === 'svg' || (codeStr.includes('<svg') && codeStr.includes('</svg>'))) {
                       return <InlineSVGDiagram svg={codeStr} />
+                    }
+                    if (language === 'flashcard_quiz' || language === 'flashcard-quiz') {
+                      try {
+                        const quizData = JSON.parse(codeStr)
+                        return <FlashcardQuizCard quizData={quizData} />
+                      } catch {
+                        return (
+                          <div className="my-3 p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex items-center gap-3 text-xs font-semibold text-indigo-700 animate-pulse">
+                            <Sparkles size={16} className="text-indigo-600 animate-spin" />
+                            <span>Synthesizing your interactive practice quiz & flashcards...</span>
+                          </div>
+                        )
+                      }
                     }
                     return (
                       <code className={className} {...props}>
@@ -189,6 +227,8 @@ const ChatMessageComponent = ({
               >
                 {displayContent}
               </ReactMarkdown>
+                )
+              })()}
               {isStreaming && (
                 <span className="inline-flex gap-1.5 ml-1.5 align-middle">
                   <span className="typing-dot" />

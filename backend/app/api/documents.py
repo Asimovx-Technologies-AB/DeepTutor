@@ -28,14 +28,16 @@ from app.models.session import StudySession, CurriculumTopic
 
 @router.post("/upload")
 async def upload_and_process_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     topic_id: Optional[str] = Form(None),
     section_id: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     """
-    Uploads a PDF document, executes the end-to-end data processing and storage pipeline,
-    and initializes an associated StudySession with curriculum topics.
+    Uploads a PDF document, performs fast in-memory extraction for immediate (< 1s) access,
+    initializes the StudySession and curriculum topics, and schedules deep pipeline
+    processing (tables, formulas, 14-dimension chunks) in the background.
     """
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are currently supported.")
@@ -45,6 +47,10 @@ async def upload_and_process_document(
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
     import hashlib
+    import uuid
+    import fitz
+    from app.storage.local_storage import default_storage
+
     file_hash = hashlib.sha256(file_bytes).hexdigest()
     existing_doc = db.query(Document).filter(Document.file_hash == file_hash).first()
     if existing_doc:
@@ -110,15 +116,44 @@ async def upload_and_process_document(
             }
 
     try:
-        canonical_doc = DocumentPipelineOrchestrator.process_document(
-            session=db,
-            file_bytes=file_bytes,
-            filename=file.filename
-        )
-        doc_id = canonical_doc.metadata.id
-        doc_title = canonical_doc.metadata.title or file.filename
+        # Fast synchronous ingestion phase (< 500ms):
+        # 1. Save raw PDF to storage
+        raw_storage_path = default_storage.store_file(file_bytes, file.filename, subfolder="raw_documents")
 
-        # Create or update StudySession for this document
+        # 2. In-memory fast PDF metadata and TOC extraction
+        from app.pipeline.metadata_extractor import MetadataExtractor
+        meta_dict = MetadataExtractor.extract_pdf_metadata(file_bytes, file.filename)
+        doc_id = existing_doc.id if existing_doc else str(uuid.uuid4())
+        pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
+        page_count = meta_dict["page_count"] or len(pdf_doc)
+        doc_title = meta_dict["title"] or file.filename
+
+        # 3. Create or update Document record
+        if not existing_doc:
+            db_doc = Document(
+                id=doc_id,
+                file_hash=file_hash,
+                filename=file.filename,
+                file_path=raw_storage_path,
+                file_size_bytes=len(file_bytes),
+                mime_type="application/pdf",
+                page_count=page_count,
+                title=doc_title,
+                author=meta_dict.get("author") or "Unknown",
+                creation_date=meta_dict.get("creation_date"),
+                pdf_version=meta_dict.get("pdf_version") or "1.4",
+                status="PROCESSING",
+                current_stage="PARSING",
+            )
+            db.add(db_doc)
+        else:
+            existing_doc.status = "PROCESSING"
+            existing_doc.current_stage = "PARSING"
+            existing_doc.page_count = page_count
+            existing_doc.title = doc_title
+        db.flush()
+
+        # 4. Create StudySession
         study_sess = StudySession(
             document_id=doc_id,
             subject="Uploaded PDF Study",
@@ -129,51 +164,84 @@ async def upload_and_process_document(
         db.add(study_sess)
         db.flush()
 
-        # Generate Curriculum Topics
-        order_idx = 0
-        def create_topics(nodes, prefix=""):
-            nonlocal order_idx
-            for n in nodes:
-                path = f"{prefix} > {n.title}" if prefix else n.title
-                topic = CurriculumTopic(
-                    session_id=study_sess.id,
-                    document_id=doc_id,
-                    title=n.title,
-                    summary=f"Pages {n.page_start} - {n.page_end}",
-                    order_index=order_idx,
-                    structural_path=path,
-                    page_start=n.page_start,
-                    page_end=n.page_end,
-                )
-                db.add(topic)
-                order_idx += 1
-                if n.children:
-                    create_topics(n.children, path)
+        # 5. Extract Table of Contents / Topics
+        toc = pdf_doc.get_toc()
+        topics_list = []
+        if toc:
+            for item in toc:
+                lvl, t_title, p_num = item[0], item[1].strip(), item[2]
+                if t_title and (lvl == 1 or (lvl <= 2 and len(topics_list) < 20)):
+                    topics_list.append((t_title, p_num))
 
-        if canonical_doc.structure_tree:
-            create_topics(canonical_doc.structure_tree)
-        else:
+        if not topics_list:
+            step = max(5, page_count // 5) if page_count > 10 else page_count
+            for start_p in range(1, page_count + 1, step):
+                end_p = min(start_p + step - 1, page_count)
+                topics_list.append((f"Section {len(topics_list)+1}: Pages {start_p}-{end_p}", start_p))
+
+        for idx, (t_title, p_start) in enumerate(topics_list):
+            next_p = topics_list[idx + 1][1] if idx + 1 < len(topics_list) else page_count
+            p_end = max(p_start, next_p if idx + 1 < len(topics_list) else page_count)
             db.add(CurriculumTopic(
                 session_id=study_sess.id,
                 document_id=doc_id,
-                title="Chapter Overview",
-                summary="Full document curriculum",
-                order_index=0,
-                page_start=1,
-                page_end=canonical_doc.metadata.page_count
+                title=t_title,
+                summary=f"Pages {p_start} - {p_end}",
+                order_index=idx,
+                structural_path=t_title,
+                page_start=p_start,
+                page_end=p_end
             ))
+
+        # 6. Extract immediate initial knowledge chunks from pages (for immediate querying)
+        initial_chunks = []
+        max_preview_pages = min(page_count, 100)
+        for p_idx in range(max_preview_pages):
+            page = pdf_doc[p_idx]
+            p_text = page.get_text().strip()
+            if p_text and len(p_text) > 30:
+                assigned_topic = topics_list[0][0] if topics_list else "General"
+                for t_title, p_start in topics_list:
+                    if p_idx + 1 >= p_start:
+                        assigned_topic = t_title
+
+                chunk_id = str(uuid.uuid4())
+                initial_chunks.append(KnowledgeChunk(
+                    id=chunk_id,
+                    document_id=doc_id,
+                    page_number=p_idx + 1,
+                    chunk_index=len(initial_chunks),
+                    content=p_text[:2500],
+                    chunk_type="text",
+                    topic=assigned_topic,
+                    chapter_section=assigned_topic,
+                    confidence=1.0,
+                    search_text=p_text[:1200]
+                ))
+
+        if initial_chunks:
+            db.bulk_save_objects(initial_chunks)
 
         db.commit()
 
+        # 7. Add deep processing to BackgroundTasks
+        background_tasks.add_task(
+            DocumentPipelineOrchestrator.process_document_background,
+            doc_id,
+            file_bytes,
+            file.filename
+        )
+
+        # 8. Return immediately in < 1 second!
         return {
             "status": "success",
             "document_id": doc_id,
             "session_id": study_sess.id,
             "filename": file.filename,
             "title": doc_title,
-            "page_count": canonical_doc.metadata.page_count,
-            "chunks_count": len(canonical_doc.knowledge_chunks),
-            "canonical": canonical_doc
+            "page_count": page_count,
+            "chunks_count": len(initial_chunks),
+            "canonical": None
         }
     except Exception as e:
         logger.error(f"Error processing uploaded document: {e}", exc_info=True)
