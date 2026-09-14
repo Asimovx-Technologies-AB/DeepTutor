@@ -26,14 +26,8 @@ vlm_cache/
 **/vlm_cache/
 image_search_cache/
 **/image_search_cache/
-faiss_data/
-**/faiss_data/
-lightrag_data/
-**/lightrag_data/
-vlm_cache/
-**/vlm_cache/
-image_search_cache/
-**/image_search_cache/
+storage_vault/
+**/storage_vault/
 uploads/
 **/uploads/
 !**/uploads/.gitkeep
@@ -44,6 +38,16 @@ backend/raw_resp_dump.txt
 backend/parsed_result.json
 backend/test.pdf
 backend/test.txt
+
+# Images & Media
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.ico
+*.bmp
+*.tiff
 
 # Python Cache & Build
 __pycache__/
