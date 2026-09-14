@@ -70,7 +70,7 @@ class DataStoragePipeline:
             session.flush()
 
             # 2. Persist Page & Layout Metadata
-            for p in canonical_doc.pages:
+            for i, p in enumerate(canonical_doc.pages):
                 page_record = DocumentPage(
                     document_id=doc_id,
                     page_number=p.page_number,
@@ -82,6 +82,8 @@ class DataStoragePipeline:
                     layout_data={"blocks_count": len(p.blocks)},
                 )
                 session.add(page_record)
+                if (i + 1) % 25 == 0:
+                    session.flush()
 
             session.flush()
 
@@ -92,37 +94,39 @@ class DataStoragePipeline:
 
             for i, chunk_data in enumerate(canonical_doc.knowledge_chunks):
                 emb = chunk_embs[i] if i < len(chunk_embs) else None
+                if emb is not None:
+                    emb = [float(x) for x in emb]
+
                 chunk_record = KnowledgeChunk(
                     id=chunk_data.id,
                     document_id=doc_id,
                     page_number=chunk_data.page_number,
                     chunk_index=chunk_data.chunk_index,
                     content=chunk_data.content,
-                    chunk_type=chunk_data.chunk_type,
+                    chunk_type=chunk_data.chunk_type or "text",
                     topic=chunk_data.topic,
                     chapter_section=chunk_data.chapter_section,
                     prev_chunk_id=chunk_data.prev_chunk_id,
                     next_chunk_id=chunk_data.next_chunk_id,
                     parent_id=chunk_data.parent_id,
-                    child_ids=chunk_data.child_ids,
-                    related_concepts=chunk_data.related_concepts,
-                    keywords_entities=chunk_data.keywords_entities,
-                    formulas=chunk_data.formulas,
-                    examples=chunk_data.examples,
+                    child_ids=chunk_data.child_ids if chunk_data.child_ids is not None else [],
+                    related_concepts=chunk_data.related_concepts if chunk_data.related_concepts is not None else [],
+                    keywords_entities=chunk_data.keywords_entities if chunk_data.keywords_entities is not None else [],
+                    formulas=chunk_data.formulas if chunk_data.formulas is not None else [],
+                    examples=chunk_data.examples if chunk_data.examples is not None else [],
                     source_uri=chunk_data.source_uri,
                     bbox_coordinates=chunk_data.bbox_coordinates,
-                    confidence=chunk_data.confidence,
-                    provenance=chunk_data.provenance,
-                    relationship_metadata=chunk_data.relationship_metadata,
+                    confidence=chunk_data.confidence if chunk_data.confidence is not None else 1.0,
+                    provenance=chunk_data.provenance if chunk_data.provenance is not None else {},
+                    relationship_metadata=chunk_data.relationship_metadata if chunk_data.relationship_metadata is not None else {},
                     search_text=chunk_data.search_text,
                     embedding=emb,
                 )
                 session.add(chunk_record)
-
-            session.flush()
+                session.flush()
 
             # 4. Persist Tables & Formulas Assets
-            for t in canonical_doc.tables:
+            for i, t in enumerate(canonical_doc.tables):
                 asset_record = DocumentAsset(
                     document_id=doc_id,
                     page_number=t.page_number,
@@ -134,8 +138,10 @@ class DataStoragePipeline:
                     confidence=t.confidence,
                 )
                 session.add(asset_record)
+                if (i + 1) % 20 == 0:
+                    session.flush()
 
-            for f in canonical_doc.formulas:
+            for i, f in enumerate(canonical_doc.formulas):
                 asset_record = DocumentAsset(
                     document_id=doc_id,
                     page_number=f.page_number,
@@ -145,20 +151,26 @@ class DataStoragePipeline:
                     confidence=f.confidence,
                 )
                 session.add(asset_record)
+                if (i + 1) % 20 == 0:
+                    session.flush()
 
             session.flush()
 
             # 5. Persist Semantic Knowledge Relationships (Graph)
-            for r in canonical_doc.relationships:
+            for i, r in enumerate(canonical_doc.relationships):
                 rel_record = KnowledgeRelationship(
                     document_id=doc_id,
                     source_chunk_id=r.source_chunk_id,
                     target_chunk_id=r.target_chunk_id,
                     relation_type=r.relation_type,
                     weight=r.weight,
-                    edge_metadata=r.edge_metadata,
+                    edge_metadata=r.edge_metadata if r.edge_metadata is not None else {},
                 )
                 session.add(rel_record)
+                if (i + 1) % 25 == 0:
+                    session.flush()
+
+            session.flush()
 
             # 6. Persist Processing Stage Metrics & Logs
             if stage_durations:
@@ -171,6 +183,7 @@ class DataStoragePipeline:
                         metrics={"duration_ms": duration_ms},
                     )
                     session.add(log_record)
+                session.flush()
 
             session.commit()
             logger.info(f"[DataStoragePipeline] Successfully persisted document {doc_id} to database.")

@@ -13,12 +13,34 @@ mermaid.initialize({
     secondaryColor: '#FFFFFF',
     tertiaryColor: '#FFFFFF',
     fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-    fontSize: '13.5px',
+    fontSize: '13px',
     nodeBorder: '1.5px',
     clusterBkg: 'transparent',
     clusterBorder: '#CBD5E1',
-    titleColor: '#64748B',
+    titleColor: '#475569',
     edgeLabelBackground: '#FFFFFF',
+    
+    // Mindmap branch theme variables
+    git0: '#EEF2FF',
+    git1: '#ECFDF5',
+    git2: '#F5F3FF',
+    git3: '#F0F9FF',
+    git4: '#FFFBEB',
+    git5: '#FFF1F2',
+    git6: '#FDF4FF',
+    git7: '#F8FAFC',
+    gitBranchLabel0: '#312E81',
+    gitBranchLabel1: '#064E3B',
+    gitBranchLabel2: '#4C1D95',
+    gitBranchLabel3: '#0C4A6E',
+    gitBranchLabel4: '#78350F',
+    gitBranchLabel5: '#881337',
+    gitBranchLabel6: '#701A75',
+    gitBranchLabel7: '#1E293B',
+  },
+  mindmap: {
+    padding: 16,
+    useMaxWidth: true,
   },
   flowchart: {
     htmlLabels: true,
@@ -90,6 +112,39 @@ function wrapMermaidNodeLabels(code: string, maxCharsPerLine: number = 48): stri
   return res
 }
 
+/**
+ * Normalizes and sanitizes Mindmap syntax for Mermaid.js:
+ * Wraps raw quoted lines and lines with special characters (&, (), :, etc.) in standard [ ... ] brackets.
+ */
+function sanitizeMindmapCode(code: string): string {
+  if (!code.trim().startsWith('mindmap')) return code
+  const lines = code.split('\n')
+  const sanitized = lines.map((line) => {
+    const indentMatch = line.match(/^(\s*)(.*)$/)
+    if (!indentMatch) return line
+    const indent = indentMatch[1]
+    const content = indentMatch[2].trim()
+    if (!content || content.startsWith('mindmap') || content.startsWith('root')) {
+      return line
+    }
+    // If content is already enclosed in brackets, e.g. [ ... ], ( ... ), (( ... )), ) ... (, etc.
+    if (/^(\[.*\]|\(.*\)|[\]\)\(].*[\]\)\(])$/.test(content)) {
+      return line
+    }
+    // If content starts and ends with quotes: "Decision Trees & Ensembles" -> ["Decision Trees & Ensembles"]
+    if (/^"[^"]+"$/.test(content)) {
+      return `${indent}[${content}]`
+    }
+    // If content contains special characters like &, :, (), wrap safely in ["..."]
+    if (/[&():,]/.test(content)) {
+      const cleanContent = content.replace(/^["']+|["']+$/g, '')
+      return `${indent}["${cleanContent}"]`
+    }
+    return line
+  })
+  return sanitized.join('\n')
+}
+
 interface Props {
   chart: string
 }
@@ -146,10 +201,14 @@ export default function MermaidDiagram({ chart }: Props) {
           cleanCode = `flowchart TD\n${cleanCode}`
         }
 
+        if (cleanCode.startsWith('mindmap')) {
+          cleanCode = sanitizeMindmapCode(cleanCode)
+        }
+
         let svgResult = ''
         try {
-          const wrappedCode = wrapMermaidNodeLabels(cleanCode, 48)
-          const res = await mermaid.render(uniqueId, wrappedCode)
+          const formattedCode = cleanCode.startsWith('mindmap') ? cleanCode : wrapMermaidNodeLabels(cleanCode, 48)
+          const res = await mermaid.render(uniqueId, formattedCode)
           svgResult = res.svg
         } catch {
           cleanupMermaidErrorDOM()
@@ -197,13 +256,13 @@ export default function MermaidDiagram({ chart }: Props) {
   }
 
   return (
-    <div className="my-4 w-full flex items-center justify-center overflow-x-auto relative group bg-transparent py-2">
-      {/* Subtle Copy Button in corner on hover */}
-      <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+    <div className="my-4 w-full flex flex-col items-center justify-center overflow-x-auto relative group bg-gradient-to-b from-slate-50/70 via-white to-slate-50/50 rounded-2xl border border-slate-200/80 shadow-xs p-4 sm:p-6 transition-all duration-300 hover:shadow-md hover:border-indigo-100">
+      {/* Subtle floating Copy Button in corner on hover */}
+      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
         <button
           onClick={handleCopyCode}
           title="Copy Diagram Code"
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-xs font-medium text-slate-600 hover:text-slate-900 shadow-xs cursor-pointer transition"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 border border-slate-200/80 text-xs font-medium text-slate-600 hover:text-slate-900 shadow-xs cursor-pointer transition"
         >
           {copied ? (
             <>
@@ -219,7 +278,7 @@ export default function MermaidDiagram({ chart }: Props) {
         </button>
       </div>
 
-      {/* Pure Seamless Flowchart SVG */}
+      {/* Pure Seamless Flowchart / Mindmap SVG */}
       <div
         ref={containerRef}
         className="mermaid-wrapper w-full flex items-center justify-center select-none overflow-x-auto"
@@ -231,6 +290,211 @@ export default function MermaidDiagram({ chart }: Props) {
           overflow: visible !important;
           background: transparent !important;
         }
+
+        /* ══════════════════════════════════════════════════════════════════════
+           MINDMAP ULTRA-PREMIUM STYLING (VIBRANT BRANCHES, GLOWS, PILL BADGES)
+           ══════════════════════════════════════════════════════════════════════ */
+
+        /* ── Mindmap Base Nodes ── */
+        .mermaid-wrapper .mindmap-node rect,
+        .mermaid-wrapper .mindmap-node path,
+        .mermaid-wrapper .mindmap-node polygon,
+        .mermaid-wrapper g[class*="section-"] rect,
+        .mermaid-wrapper g[class*="section-"] path {
+          rx: 12px !important;
+          ry: 12px !important;
+          stroke-width: 1.75px !important;
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+          cursor: pointer !important;
+        }
+
+        .mermaid-wrapper .mindmap-node text,
+        .mermaid-wrapper .mindmap-node tspan,
+        .mermaid-wrapper g[class*="section-"] text {
+          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+          font-weight: 600 !important;
+          font-size: 12.5px !important;
+          line-height: 1.3 !important;
+          text-anchor: middle !important;
+          transition: fill 0.2s ease !important;
+        }
+
+        /* ── Root Node: Glowing Indigo / Violet Core Badge ── */
+        .mermaid-wrapper .mindmap-node.section-root rect,
+        .mermaid-wrapper .mindmap-node.section-root circle,
+        .mermaid-wrapper .mindmap-node.section-root path,
+        .mermaid-wrapper g.section-root rect,
+        .mermaid-wrapper g.section-root circle,
+        .mermaid-wrapper g.section-root path {
+          fill: #FFFFFF !important;
+          stroke: #6366F1 !important;
+          stroke-width: 2.5px !important;
+          filter: drop-shadow(0 4px 14px rgba(99, 102, 241, 0.22)) !important;
+          rx: 20px !important;
+          ry: 20px !important;
+        }
+
+        .mermaid-wrapper .mindmap-node.section-root text,
+        .mermaid-wrapper g.section-root text {
+          fill: #312E81 !important;
+          font-weight: 700 !important;
+          font-size: 13.5px !important;
+        }
+
+        /* ── Branch 0: Vibrant Indigo ── */
+        .mermaid-wrapper .mindmap-node.section-0 rect,
+        .mermaid-wrapper .mindmap-node.section-0 path,
+        .mermaid-wrapper g.section-0 rect,
+        .mermaid-wrapper g.section-0 path {
+          fill: #EEF2FF !important;
+          stroke: #6366F1 !important;
+          filter: drop-shadow(0 2px 8px rgba(99, 102, 241, 0.12)) !important;
+        }
+        .mermaid-wrapper .mindmap-node.section-0 text,
+        .mermaid-wrapper g.section-0 text {
+          fill: #312E81 !important;
+        }
+        .mermaid-wrapper path.section-edge-0,
+        .mermaid-wrapper .section-lines-0 path,
+        .mermaid-wrapper line.section-edge-0 {
+          stroke: #6366F1 !important;
+          stroke-width: 2px !important;
+        }
+
+        /* ── Branch 1: Emerald & Mint ── */
+        .mermaid-wrapper .mindmap-node.section-1 rect,
+        .mermaid-wrapper .mindmap-node.section-1 path,
+        .mermaid-wrapper g.section-1 rect,
+        .mermaid-wrapper g.section-1 path {
+          fill: #ECFDF5 !important;
+          stroke: #10B981 !important;
+          filter: drop-shadow(0 2px 8px rgba(16, 185, 129, 0.12)) !important;
+        }
+        .mermaid-wrapper .mindmap-node.section-1 text,
+        .mermaid-wrapper g.section-1 text {
+          fill: #064E3B !important;
+        }
+        .mermaid-wrapper path.section-edge-1,
+        .mermaid-wrapper .section-lines-1 path,
+        .mermaid-wrapper line.section-edge-1 {
+          stroke: #10B981 !important;
+          stroke-width: 2px !important;
+        }
+
+        /* ── Branch 2: Royal Violet & Lavender ── */
+        .mermaid-wrapper .mindmap-node.section-2 rect,
+        .mermaid-wrapper .mindmap-node.section-2 path,
+        .mermaid-wrapper g.section-2 rect,
+        .mermaid-wrapper g.section-2 path {
+          fill: #F5F3FF !important;
+          stroke: #8B5CF6 !important;
+          filter: drop-shadow(0 2px 8px rgba(139, 92, 246, 0.12)) !important;
+        }
+        .mermaid-wrapper .mindmap-node.section-2 text,
+        .mermaid-wrapper g.section-2 text {
+          fill: #4C1D95 !important;
+        }
+        .mermaid-wrapper path.section-edge-2,
+        .mermaid-wrapper .section-lines-2 path,
+        .mermaid-wrapper line.section-edge-2 {
+          stroke: #8B5CF6 !important;
+          stroke-width: 2px !important;
+        }
+
+        /* ── Branch 3: Sky Blue & Cyan ── */
+        .mermaid-wrapper .mindmap-node.section-3 rect,
+        .mermaid-wrapper .mindmap-node.section-3 path,
+        .mermaid-wrapper g.section-3 rect,
+        .mermaid-wrapper g.section-3 path {
+          fill: #F0F9FF !important;
+          stroke: #0EA5E9 !important;
+          filter: drop-shadow(0 2px 8px rgba(14, 165, 233, 0.12)) !important;
+        }
+        .mermaid-wrapper .mindmap-node.section-3 text,
+        .mermaid-wrapper g.section-3 text {
+          fill: #0C4A6E !important;
+        }
+        .mermaid-wrapper path.section-edge-3,
+        .mermaid-wrapper .section-lines-3 path,
+        .mermaid-wrapper line.section-edge-3 {
+          stroke: #0EA5E9 !important;
+          stroke-width: 2px !important;
+        }
+
+        /* ── Branch 4: Amber & Warm Gold ── */
+        .mermaid-wrapper .mindmap-node.section-4 rect,
+        .mermaid-wrapper .mindmap-node.section-4 path,
+        .mermaid-wrapper g.section-4 rect,
+        .mermaid-wrapper g.section-4 path {
+          fill: #FFFBEB !important;
+          stroke: #F59E0B !important;
+          filter: drop-shadow(0 2px 8px rgba(245, 158, 11, 0.12)) !important;
+        }
+        .mermaid-wrapper .mindmap-node.section-4 text,
+        .mermaid-wrapper g.section-4 text {
+          fill: #78350F !important;
+        }
+        .mermaid-wrapper path.section-edge-4,
+        .mermaid-wrapper .section-lines-4 path,
+        .mermaid-wrapper line.section-edge-4 {
+          stroke: #F59E0B !important;
+          stroke-width: 2px !important;
+        }
+
+        /* ── Branch 5: Rose & Coral Pink ── */
+        .mermaid-wrapper .mindmap-node.section-5 rect,
+        .mermaid-wrapper .mindmap-node.section-5 path,
+        .mermaid-wrapper g.section-5 rect,
+        .mermaid-wrapper g.section-5 path {
+          fill: #FFF1F2 !important;
+          stroke: #F43F5E !important;
+          filter: drop-shadow(0 2px 8px rgba(244, 63, 94, 0.12)) !important;
+        }
+        .mermaid-wrapper .mindmap-node.section-5 text,
+        .mermaid-wrapper g.section-5 text {
+          fill: #881337 !important;
+        }
+        .mermaid-wrapper path.section-edge-5,
+        .mermaid-wrapper .section-lines-5 path,
+        .mermaid-wrapper line.section-edge-5 {
+          stroke: #F43F5E !important;
+          stroke-width: 2px !important;
+        }
+
+        /* ── Branch 6: Fuchsia & Magenta ── */
+        .mermaid-wrapper .mindmap-node.section-6 rect,
+        .mermaid-wrapper .mindmap-node.section-6 path,
+        .mermaid-wrapper g.section-6 rect,
+        .mermaid-wrapper g.section-6 path {
+          fill: #FDF4FF !important;
+          stroke: #D946EF !important;
+          filter: drop-shadow(0 2px 8px rgba(217, 70, 239, 0.12)) !important;
+        }
+        .mermaid-wrapper .mindmap-node.section-6 text,
+        .mermaid-wrapper g.section-6 text {
+          fill: #701A75 !important;
+        }
+        .mermaid-wrapper path.section-edge-6,
+        .mermaid-wrapper .section-lines-6 path,
+        .mermaid-wrapper line.section-edge-6 {
+          stroke: #D946EF !important;
+          stroke-width: 2px !important;
+        }
+
+        /* ── Mindmap Node Hover Animation ── */
+        .mermaid-wrapper .mindmap-node:hover rect,
+        .mermaid-wrapper .mindmap-node:hover path,
+        .mermaid-wrapper .mindmap-node:hover circle,
+        .mermaid-wrapper g[class*="section-"]:hover rect,
+        .mermaid-wrapper g[class*="section-"]:hover path {
+          transform: translateY(-2px);
+          filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.14)) !important;
+          stroke-width: 2.25px !important;
+        }
+
+        /* ══════════════════════════════════════════════════════════════════════
+           FLOWCHART & GRAPH ULTRA-PREMIUM CARD STYLING
+           ══════════════════════════════════════════════════════════════════════ */
 
         /* ── Clusters / Subgraph Boxes: Transparent background with clean soft dashed outline ── */
         .mermaid-wrapper .cluster rect {

@@ -64,9 +64,12 @@ class VLMService:
                             err_str = str(me).lower()
                             if "404" in err_str or "not found" in err_str or "no longer available" in err_str:
                                 break
+                            if "503" in err_str or "unavailable" in err_str or "high demand" in err_str:
+                                logger.info(f"VLM model {model_name} is under high demand (503). Switching to fallback model.")
+                                break
                             if "429" in err_str or "quota" in err_str or "resource_exhausted" in err_str:
                                 if attempt == 0:
-                                    time.sleep(1.5)
+                                    time.sleep(1.0)
                                     continue
                                 break
                             if attempt == 1:

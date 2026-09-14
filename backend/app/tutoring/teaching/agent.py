@@ -50,7 +50,11 @@ Before answering, analyze the student's question intent and choose the optimal p
      * In Plain English: Start with a crisp, 1-sentence simple definition (e.g. "In simple terms, **[Concept]** is...").
      * Relatable Everyday Analogy: Provide a simple real-world analogy that builds an instant mental anchor (e.g. comparing servers to an apartment building, RAM to a desk, an algorithm to a kitchen recipe). Keep it clean, intuitive, and jargon-free.
      * Core Building Blocks: 3-4 clean bullet points explaining how it works with plain, everyday words. Bold each key part.
-     * Visual Diagram (if requested or beneficial): A clean Mermaid flowchart or SVG diagram illustrating the structure.
+     * Visual Diagram + Visual Breakdown (if requested or beneficial):
+       - A clean Mermaid flowchart or SVG diagram illustrating the concept/structure.
+       - Followed IMMEDIATELY by a 3-4 bullet-point visual guide:
+         `#### 🔍 Visual Breakdown (How to Read this Diagram)`
+         explaining the colors, shapes, lines, boundaries, and components in simple terms.
      * Real-World Benefits / Why it Matters: 2-3 practical points on why this exists in the real world.
      * Concluding Interactive Checkpoint: MUST ALWAYS conclude with the `### 💡 Interactive Checkpoint` active recall question!
 
@@ -65,6 +69,7 @@ Before answering, analyze the student's question intent and choose the optimal p
    - Structure:
      * High-Level Mental Model: 1-2 sentence overview of the mechanism.
      * Step-by-Step Flow: Numbered phases (`#### Step 1: ...`, `#### Step 2: ...`) explaining what happens at each stage in simple language.
+     * Visual Diagram + Visual Breakdown (if beneficial): Clean Mermaid/SVG diagram followed immediately by `#### 🔍 Visual Breakdown (How to Read this Diagram)`.
      * Mathematical Formula or Flow Summary (clean LaTeX).
      * End with an Interactive Checkpoint trace question.
 
@@ -115,7 +120,7 @@ Before answering, analyze the student's question intent and choose the optimal p
   Politely decline with:
   "I am your dedicated tutor for this study material. Your question is outside the scope of your uploaded document on **[Topic / Subject]**. To keep your learning focused and productive, please ask questions related to this study material, or upload documents for that subject!"
 - MANDATORY IN-SCOPE EXCEPTIONS (NEVER REFUSE):
-  1. Main Topics & Curriculum Overview: Questions asking "what are the main topics", "what does this document cover", "give me a summary", "overview", "what chapters are there", "learning roadmap", or "syllabus" are ALWAYS 100% IN-SCOPE. Synthesize a structured, engaging curriculum breakdown and learning roadmap from the verified context and topics.
+  1. Main Topics & Curriculum Overview: Questions asking "what are the main topics", "what does this document cover", "give me a summary", "overview", "what chapters are there", "learning roadmap", or "syllabus" are ALWAYS 100% IN-SCOPE. Synthesize a structured, engaging curriculum breakdown and learning roadmap from the verified curriculum and topics.
   2. Questions Grounded in Verified Excerpts: If the student asks about ANY concept, term, chapter, classification, or phenomenon mentioned in the verified study context excerpts below (such as specific types, functions, examples, or distribution), answer it thoroughly, grounded strictly in those excerpts.
   3. Academic Domain Questions: If the question relates to the general academic subject of the uploaded document (e.g. Geography, Environmental Science, History, Mathematics), answer it authoritatively using the context.
   4. Pedagogical & Dialogue Requests: Requests for practice questions, quizzes, problem solving, explaining simpler, or asking about earlier conversation turns in this session are ALWAYS IN-SCOPE.
@@ -150,7 +155,14 @@ When a visual aid, image, or diagram is requested or beneficial:
      ```
    - Always include a responsive `viewBox` (e.g. `viewBox="0 0 600 350"`).
    - Do NOT use external script tags or foreignObject.
-3. The visual diagram should be placed right after the intuition / mechanism, and the response MUST ALWAYS conclude with the `### 💡 Interactive Checkpoint`!
+3. MANDATORY VISUAL BREAKDOWN (Below Every Diagram/Image):
+   - Immediately below ANY generated ```mermaid or ```svg diagram, you MUST include a simple, student-friendly explanation breakdown:
+     #### 🔍 Visual Breakdown (How to Read this Diagram)
+     - 🔵 **[Component / Shape 1]**: Plain English explanation of what this element represents.
+     - 🔴 **[Component / Line 2]**: Plain English explanation of what this line/boundary/arrow represents.
+     - 🎯 **[Key Insight]**: One sentence explaining the main takeaway shown in the image.
+   - Never output a diagram in isolation without explaining how to read its shapes, colors, or arrows.
+4. The visual diagram and breakdown should be placed right after the intuition / mechanism, and the response MUST ALWAYS conclude with the `### 💡 Interactive Checkpoint`!
 
 === INTERACTIVE CHECKPOINT ===
 - EVERY conceptual explanation or lecture MUST END with the Interactive Checkpoint.
@@ -397,11 +409,20 @@ class TeachingAgent:
 
         visual_directive = ""
         if query_meta.visual_modality == "mermaid":
-            visual_directive = f"5. VISUAL GENERATION: The student requested a diagram or visual. Generate a clear, valid Mermaid diagram (```mermaid ... ```) representing {query_meta.visual_prompt_focus or query_meta.resolved_query}. Quote all node text with special characters.\n"
+            visual_directive = (
+                f"5. VISUAL GENERATION: The student requested a diagram or visual. Generate a clear, valid Mermaid diagram (```mermaid ... ```) representing {query_meta.visual_prompt_focus or query_meta.resolved_query}. "
+                f"Quote all node text with special characters. Immediately beneath the diagram, include a '#### 🔍 Visual Breakdown (How to Read this Diagram)' section with 3-4 bullet points explaining what each part and arrow means in simple English.\n"
+            )
         elif query_meta.visual_modality == "svg":
-            visual_directive = f"5. VISUAL GENERATION: The student requested an image or visual. Generate a beautiful, responsive Inline SVG vector diagram (```svg <svg viewBox=\"0 0 600 350\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```) illustrating {query_meta.visual_prompt_focus or query_meta.resolved_query}. Use modern colors and clear text labels.\n"
+            visual_directive = (
+                f"5. VISUAL GENERATION: The student requested an image or visual. Generate a beautiful, responsive Inline SVG vector diagram (```svg <svg viewBox=\"0 0 600 350\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```) illustrating {query_meta.visual_prompt_focus or query_meta.resolved_query}. "
+                f"Use modern colors and clear text labels. Immediately beneath the SVG, include a '#### 🔍 Visual Breakdown (How to Read this Diagram)' section with 3-4 bullet points explaining what each color, shape, line, and boundary represents in simple English.\n"
+            )
         elif wants_visual:
-            visual_directive = "5. VISUAL GENERATION: A visual aid is beneficial here. Provide a Mermaid flowchart (for hierarchies/processes) or an Inline SVG diagram (for shapes/anatomy) to enhance student intuition.\n"
+            visual_directive = (
+                "5. VISUAL GENERATION: A visual aid is beneficial here. Provide a Mermaid flowchart (for hierarchies/processes) or an Inline SVG diagram (for shapes/anatomy) to enhance student intuition. "
+                "Immediately beneath the diagram, include a '#### 🔍 Visual Breakdown (How to Read this Diagram)' section explaining the visual elements in simple words.\n"
+            )
 
         user_prompt = (
             f"Subject Focus / Document Title: {context_bundle.topic_title or 'Academic Studies'}\n"

@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, BackgroundTasks
 from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.orm import Session
-from app.core.database import get_db
+from app.core.database import get_db, SessionLocal
 from app.models.document import Document
 from app.models.chunk import KnowledgeChunk
 from app.models.session import StudySession, CurriculumTopic, ChatMessage
@@ -737,15 +737,17 @@ def stream_agent_message(
     topic_id = payload.get("topic_id")
 
     def event_generator():
-        gen = TutoringQueryOrchestrator.stream_query_response(
-            session=db,
-            raw_query=message,
-            session_id=session_id,
-            topic_id=topic_id,
-            topic_title=subject
-        )
-        for event in gen:
-            yield f"data: {json.dumps(event)}\n\n"
+        # Dedicated session ensures active DB connection throughout stream completion
+        with SessionLocal() as stream_db:
+            gen = TutoringQueryOrchestrator.stream_query_response(
+                session=stream_db,
+                raw_query=message,
+                session_id=session_id,
+                topic_id=topic_id,
+                topic_title=subject
+            )
+            for event in gen:
+                yield f"data: {json.dumps(event)}\n\n"
 
     return StreamingResponse(
         event_generator(),

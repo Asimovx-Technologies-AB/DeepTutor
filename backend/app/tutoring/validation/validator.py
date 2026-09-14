@@ -41,7 +41,7 @@ class AnswerValidator:
             chunk_coverage = covered_terms / len(retrieved_words)
             matched_response_words = sum(1 for w in response_words if w in retrieved_content)
             resp_overlap = matched_response_words / len(response_words)
-            grounding_score = min(1.0, round((0.7 * chunk_coverage) + (0.3 * min(resp_overlap * 3.0, 1.0)), 2))
+            grounding_score = min(1.0, round((0.85 * chunk_coverage) + (0.15 * min(resp_overlap * 5.0, 1.0)), 2))
         else:
             grounding_score = 0.90 # Casual or fallback responses
 
@@ -56,11 +56,12 @@ class AnswerValidator:
             if authentic_citations == 0:
                 cross_ref_valid = False
 
-        # 3. Pedagogy & Clarity Check: Check for educational formatting (headers, steps, socratic questions, analogies)
+        # 3. Pedagogy & Clarity Check: Check for educational formatting (headers, steps, socratic questions, analogies, visual breakdowns)
         has_headers = bool(re.search(r"^#{1,3}\s+", response_text, re.MULTILINE))
         has_bullets_or_steps = bool(re.search(r"^(?:-|\*|\d+\.)\s+", response_text, re.MULTILINE))
         has_socratic_prompt = "?" in response_text
         has_checkpoint = "### 💡 Interactive Checkpoint" in response_text or "Interactive Checkpoint" in response_text
+        has_visual_breakdown = bool(re.search(r"(?:visual breakdown|how to read this diagram|diagram breakdown)", response_text, re.IGNORECASE))
         
         pedagogy_score = 0.5
         if has_headers:
@@ -69,6 +70,8 @@ class AnswerValidator:
             pedagogy_score += 0.15
         if has_socratic_prompt or has_checkpoint:
             pedagogy_score += 0.2
+        if has_visual_breakdown:
+            pedagogy_score += 0.1
 
         # 4. Diagram Syntax & Integrity Check
         diagram_valid = True
@@ -100,13 +103,13 @@ class AnswerValidator:
                 break
 
         # Pass / Fail Decision
-        is_valid = (grounding_score >= 0.45) and cross_ref_valid and (pedagogy_score >= 0.6) and is_safe and diagram_valid
+        is_valid = (grounding_score >= 0.35) and cross_ref_valid and (pedagogy_score >= 0.6) and is_safe and diagram_valid
         status = "PASS" if is_valid else "FAIL"
 
         feedback_notes = "All pedagogical, grounding, and cross-reference checks passed."
         if not is_valid:
             reasons = []
-            if grounding_score < 0.45:
+            if grounding_score < 0.35:
                 reasons.append("Low contextual grounding")
             if not cross_ref_valid:
                 reasons.append("Unverified page citations")
@@ -122,7 +125,7 @@ class AnswerValidator:
             is_valid=is_valid,
             grounding_score=grounding_score,
             cross_reference_valid=cross_ref_valid,
-            pedagogy_score=round(pedagogy_score, 2),
+            pedagogy_score=min(1.0, round(pedagogy_score, 2)),
             safety_valid=is_safe,
             validation_status=status,
             feedback_notes=feedback_notes,

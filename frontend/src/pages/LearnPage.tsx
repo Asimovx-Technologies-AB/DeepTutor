@@ -746,16 +746,31 @@ export default function LearnPage() {
       await handleFileUpload(fileToUpload)
     }
 
-    let currentSid = activeSessionId
+    let currentSid = activeSessionIdRef.current || activeSessionId
     if (!currentSid) {
       try {
         const createRes = await studyApi.createSession({ subject: activeSubject, title: 'Default Study Room' })
         currentSid = createRes.data.id
         setActiveSessionId(currentSid)
+        activeSessionIdRef.current = currentSid
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('active_study_session_id', currentSid)
+        }
         fetchSessions()
       } catch {
         currentSid = `session_${Date.now()}`
         setActiveSessionId(currentSid)
+        activeSessionIdRef.current = currentSid
+      }
+    }
+
+    if (currentSid) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('active_study_session_id', currentSid)
+      }
+      if (!routeSessionId || routeSessionId !== currentSid) {
+        const basePath = location.pathname.startsWith('/learn') ? '/learn' : '/chat'
+        navigate(`${basePath}/${currentSid}`, { replace: true })
       }
     }
 

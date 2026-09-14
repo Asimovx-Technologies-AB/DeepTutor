@@ -1,4 +1,5 @@
 import time
+from datetime import datetime, timezone
 import logging
 from typing import List, Dict, Any, Optional, Generator
 from sqlalchemy.orm import Session
@@ -477,18 +478,22 @@ class TutoringQueryOrchestrator:
         try:
             # 1. Ensure Study Session exists
             sess = session.query(StudySession).filter(StudySession.id == session_id).first()
+            now_utc = datetime.now(timezone.utc)
             if not sess:
                 sess = StudySession(
                     id=session_id,
                     title="Study Session",
                     subject="General Study",
                     message_count=2,
-                    status="active"
+                    status="active",
+                    created_at=now_utc,
+                    last_active=now_utc
                 )
                 session.add(sess)
                 session.flush()
             else:
                 sess.message_count = (sess.message_count or 0) + 2
+                sess.last_active = now_utc
 
             # 2. Record User & Assistant Messages
             user_msg = ChatMessage(
@@ -496,7 +501,8 @@ class TutoringQueryOrchestrator:
                 topic_id=topic_id,
                 role="user",
                 content=user_query,
-                intent=intent
+                intent=intent,
+                created_at=now_utc
             )
             asst_msg = ChatMessage(
                 session_id=session_id,
@@ -506,31 +512,40 @@ class TutoringQueryOrchestrator:
                 intent=intent,
                 citations=citations,
                 grounding_score=grounding_score,
-                latency_ms=latency_ms
+                latency_ms=latency_ms,
+                created_at=now_utc
             )
             session.add_all([user_msg, asst_msg])
-
-            # 4. Update Student Mastery progression
-            for ent in entities[:3]:
-                mastery = session.query(StudentMastery).filter(
-                    StudentMastery.user_id == sess.user_id if sess else "default_user",
-                    StudentMastery.concept == ent
-                ).first()
-                if not mastery:
-                    mastery = StudentMastery(
-                        user_id=sess.user_id if sess else "default_user",
-                        concept=ent,
-                        mastery_score=0.6,
-                        practice_attempts=1,
-                        successful_attempts=1
-                    )
-                    session.add(mastery)
-                else:
-                    mastery.practice_attempts += 1
-                    mastery.successful_attempts += 1
-                    mastery.mastery_score = min(1.0, mastery.mastery_score + 0.05)
-
             session.commit()
+
+            # 3. Update Student Mastery progression (isolated so it cannot roll back messages)
+            try:
+                effective_user_id = sess.user_id if (sess and sess.user_id) else "default_user"
+                for ent in (entities or [])[:3]:
+                    if not ent or not isinstance(ent, str):
+                        continue
+                    mastery = session.query(StudentMastery).filter(
+                        StudentMastery.user_id == effective_user_id,
+                        StudentMastery.concept == ent
+                    ).first()
+                    if not mastery:
+                        mastery = StudentMastery(
+                            user_id=effective_user_id,
+                            concept=ent,
+                            mastery_score=0.6,
+                            practice_attempts=1,
+                            successful_attempts=1
+                        )
+                        session.add(mastery)
+                    else:
+                        mastery.practice_attempts += 1
+                        mastery.successful_attempts += 1
+                        mastery.mastery_score = min(1.0, (mastery.mastery_score or 0.6) + 0.05)
+                session.commit()
+            except Exception as mastery_err:
+                session.rollback()
+                logger.warning(f"Non-critical mastery progression update skipped: {mastery_err}")
+
         except Exception as e:
             session.rollback()
             logger.error(f"Error persisting conversation state: {e}")

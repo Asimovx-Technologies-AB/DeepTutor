@@ -88,3 +88,51 @@ def test_teaching_agent_prompt_injection_svg():
 
     assert "INLINE SVG DIAGRAMS" in sys_prompt
     assert "Inline SVG vector diagram" in user_prompt
+    assert "Visual Breakdown" in user_prompt
+
+
+def test_teaching_agent_prompt_includes_visual_breakdown_contract():
+    """Verify that TeachingAgent system prompt explicitly requires Visual Breakdown below diagrams."""
+    meta = QueryMetadata(
+        raw_query="draw SVM hyperplane",
+        normalized_query="draw SVM hyperplane",
+        resolved_query="draw SVM hyperplane",
+        intent="EXPLANATION",
+        visual_modality="svg",
+        visual_prompt_focus="Support Vector Machine maximum margin hyperplane",
+    )
+    bundle = ContextBundle(topic_title="Machine Learning")
+    sys_prompt, user_prompt = TeachingAgent._build_prompts(meta, bundle)
+
+    assert "MANDATORY VISUAL BREAKDOWN" in sys_prompt
+    assert "#### 🔍 Visual Breakdown (How to Read this Diagram)" in sys_prompt
+    assert "Visual Breakdown" in user_prompt
+
+
+def test_answer_validator_visual_breakdown_scoring():
+    """Verify that AnswerValidator awards pedagogy score for visual breakdowns."""
+    from app.tutoring.validation.validator import AnswerValidator
+
+    response_with_breakdown = (
+        "### Support Vector Machines\n\n"
+        "In simple terms, an SVM finds the widest decision street between two classes.\n\n"
+        "```svg\n"
+        "<svg viewBox=\"0 0 600 350\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\">\n"
+        "<line x1=\"50\" y1=\"300\" x2=\"550\" y2=\"50\" stroke=\"#EF4444\" stroke-width=\"3\" />\n"
+        "</svg>\n"
+        "```\n\n"
+        "#### 🔍 Visual Breakdown (How to Read this Diagram)\n"
+        "- 🔴 **Red Line (Hyperplane)**: The optimal decision boundary separating the two classes.\n"
+        "- 🔵 **Blue Dots**: Class A data points.\n"
+        "- 🟢 **Green Dots**: Class B data points.\n\n"
+        "### 💡 Interactive Checkpoint\n"
+        "What happens to the margin if we remove a non-support vector point?"
+    )
+
+    bundle = ContextBundle(topic_title="Machine Learning")
+    result = AnswerValidator.validate_response(response_with_breakdown, bundle)
+
+    assert result.is_valid is True
+    assert result.validation_status == "PASS"
+    assert result.pedagogy_score >= 0.8
+

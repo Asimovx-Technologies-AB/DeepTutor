@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from app.core.database import get_db
+from app.core.database import get_db, SessionLocal
 from app.models.session import StudySession, ChatMessage
 from app.models.relationship import KnowledgeRelationship
 from app.tutoring.orchestrator import TutoringQueryOrchestrator
@@ -41,11 +41,11 @@ def create_chat_session(
 ):
     """Creates a new chat session."""
     topic_id = payload.get("topic_id")
-    title = payload.get("session_title", "New Chat")
+    title = payload.get("session_title", "General Tutoring")
     
     sess = StudySession(
         title=title,
-        subject="Chat Topic",
+        subject=title,
         status="active"
     )
     db.add(sess)
@@ -54,8 +54,11 @@ def create_chat_session(
     return {
         "id": sess.id,
         "session_title": sess.title,
-        "topic_id": topic_id or sess.id,
+        "topic_id": sess.id,
+        "document_name": sess.document_name,
         "created_at": sess.created_at.isoformat(),
+        "updated_at": sess.last_active.isoformat() if sess.last_active else sess.created_at.isoformat(),
+        "message_count": sess.message_count or 0,
     }
 
 
@@ -64,14 +67,18 @@ def get_chat_session(
     session_id: str,
     db: Session = Depends(get_db)
 ):
+    """Gets details of a single chat session."""
     sess = db.query(StudySession).filter(StudySession.id == session_id).first()
     if not sess:
-        raise HTTPException(status_code=404, detail="Chat session not found.")
+        raise HTTPException(status_code=404, detail="Session not found.")
     return {
         "id": sess.id,
         "session_title": sess.title,
+        "topic_id": sess.id,
         "document_name": sess.document_name,
         "created_at": sess.created_at.isoformat(),
+        "updated_at": sess.last_active.isoformat() if sess.last_active else sess.created_at.isoformat(),
+        "message_count": sess.message_count or 0,
     }
 
 
@@ -80,12 +87,13 @@ def delete_chat_session(
     session_id: str,
     db: Session = Depends(get_db)
 ):
+    """Deletes a chat session."""
     sess = db.query(StudySession).filter(StudySession.id == session_id).first()
     if not sess:
-        raise HTTPException(status_code=404, detail="Chat session not found.")
+        raise HTTPException(status_code=404, detail="Session not found.")
     db.delete(sess)
     db.commit()
-    return {"status": "deleted", "id": session_id}
+    return {"status": "success"}
 
 
 @router.get("/sessions/{session_id}/messages")
@@ -144,18 +152,19 @@ def stream_chat_message(
         # Emit graph_context event early
         yield f"data: {json.dumps({'type': 'graph_context', 'data': graph_data})}\n\n"
 
-        # Stream pipeline events and tokens live from orchestrator
-        for event in TutoringQueryOrchestrator.stream_query_response(
-            session=db,
-            raw_query=prompt,
-            session_id=session_id
-        ):
-            evt_type = event.get("type")
-            if evt_type == "token":
-                token_str = event.get("data") or event.get("token") or ""
-                yield f"data: {json.dumps({'type': 'token', 'data': token_str})}\n\n"
-            elif evt_type in ("sources", "grounding", "done", "phase_start", "phase_end", "flashcard_quiz"):
-                yield f"data: {json.dumps(event)}\n\n"
+        # Dedicated session ensures active DB connection throughout stream completion
+        with SessionLocal() as stream_db:
+            for event in TutoringQueryOrchestrator.stream_query_response(
+                session=stream_db,
+                raw_query=prompt,
+                session_id=session_id
+            ):
+                evt_type = event.get("type")
+                if evt_type == "token":
+                    token_str = event.get("data") or event.get("token") or ""
+                    yield f"data: {json.dumps({'type': 'token', 'data': token_str})}\n\n"
+                elif evt_type in ("sources", "grounding", "done", "phase_start", "phase_end", "flashcard_quiz"):
+                    yield f"data: {json.dumps(event)}\n\n"
 
     return StreamingResponse(
         event_generator(),
