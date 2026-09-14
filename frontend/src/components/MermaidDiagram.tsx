@@ -12,7 +12,7 @@ mermaid.initialize({
     lineColor: '#6366F1',
     secondaryColor: '#FFFFFF',
     tertiaryColor: '#FFFFFF',
-    fontFamily: "'CMU Serif', 'Latin Modern Roman', 'Computer Modern Roman', 'Computer Modern Serif', Georgia, serif",
+    fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     fontSize: '13.5px',
     nodeBorder: '1.5px',
     clusterBkg: 'transparent',
@@ -32,10 +32,10 @@ mermaid.initialize({
 })
 
 /**
- * Universal text wrapper that inserts `<br/>` into all Mermaid node shapes
+ * Universal text wrapper that inserts `<br/>` into long Mermaid node shapes
  * (quoted or unquoted, square, rounded, stadium, diamond, circle).
  */
-function wrapMermaidNodeLabels(code: string, maxCharsPerLine: number = 28): string {
+function wrapMermaidNodeLabels(code: string, maxCharsPerLine: number = 48): string {
   const wrapText = (text: string): string => {
     if (!text || !text.trim()) return text
     // Don't modify if it contains html tags other than simple br
@@ -123,6 +123,14 @@ export default function MermaidDiagram({ chart }: Props) {
           .replace(/```$/, '')
           .trim()
 
+        // Normalize unicode arrows and dashes that LLMs sometimes output instead of ASCII '-->'
+        cleanCode = cleanCode
+          .replace(/[\u27F6\u2192\u2794\u279C\u279D\u279E⟶→➔➜➝➞]/g, '-->')
+          .replace(/[\u27F9\u21D2⟹⇒]/g, '==>')
+          .replace(/[\u27F5\u2190⟵←]/g, '<--')
+          .replace(/--\s*>/g, '-->')
+          .replace(/[\u2010\u2013\u2014\u2212]/g, '-')
+
         if (
           !cleanCode.startsWith('graph') &&
           !cleanCode.startsWith('flowchart') &&
@@ -140,7 +148,7 @@ export default function MermaidDiagram({ chart }: Props) {
 
         let svgResult = ''
         try {
-          const wrappedCode = wrapMermaidNodeLabels(cleanCode, 26)
+          const wrappedCode = wrapMermaidNodeLabels(cleanCode, 48)
           const res = await mermaid.render(uniqueId, wrappedCode)
           svgResult = res.svg
         } catch {
@@ -235,6 +243,7 @@ export default function MermaidDiagram({ chart }: Props) {
         }
 
         .mermaid-wrapper .cluster text {
+          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
           font-size: 11.5px !important;
           font-weight: 600 !important;
           fill: #64748B !important;
@@ -279,8 +288,8 @@ export default function MermaidDiagram({ chart }: Props) {
           height: 100% !important;
           padding: 4px 8px !important;
           box-sizing: border-box !important;
-          font-family: 'CMU Serif', 'Latin Modern Roman', 'Computer Modern Roman', 'Computer Modern Serif', Georgia, serif !important;
-          font-size: 13.5px !important;
+          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+          font-size: 13px !important;
           font-weight: 500 !important;
           line-height: 1.35 !important;
           color: #1E293B !important;
@@ -289,8 +298,8 @@ export default function MermaidDiagram({ chart }: Props) {
         }
 
         .mermaid-wrapper .node text {
-          font-family: 'CMU Serif', 'Latin Modern Roman', 'Computer Modern Roman', 'Computer Modern Serif', Georgia, serif !important;
-          font-size: 13.5px !important;
+          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+          font-size: 13px !important;
           line-height: 1.35 !important;
           text-anchor: middle !important;
         }

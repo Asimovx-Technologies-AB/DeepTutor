@@ -39,6 +39,8 @@ class QueryMetadata(BaseModel):
     response_requirements: Dict[str, bool] = Field(
         default_factory=lambda: {"needs_latex": False, "needs_table": False, "needs_steps": False, "needs_socratic": True}
     )
+    visual_modality: Literal["none", "mermaid", "svg"] = "none"
+    visual_prompt_focus: Optional[str] = None
     question_complexity: Literal["simple", "multi_hop", "comparative", "evaluative"] = "simple"
 
 
@@ -59,7 +61,7 @@ class ContextBundle(BaseModel):
     document_id: Optional[str] = None
     topic_id: Optional[str] = None
     topic_title: Optional[str] = None
-    resolved_query: str
+    resolved_query: str = ""
     
     conversation_history: List[Dict[str, str]] = Field(default_factory=list)
     student_mastery_context: Dict[str, float] = Field(default_factory=dict)

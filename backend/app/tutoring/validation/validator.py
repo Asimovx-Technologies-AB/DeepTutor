@@ -56,20 +56,42 @@ class AnswerValidator:
             if authentic_citations == 0:
                 cross_ref_valid = False
 
-        # 3. Pedagogy Check: Check for educational formatting (headers, steps, socratic questions)
+        # 3. Pedagogy & Clarity Check: Check for educational formatting (headers, steps, socratic questions, analogies)
         has_headers = bool(re.search(r"^#{1,3}\s+", response_text, re.MULTILINE))
-        has_bullets_or_steps = bool(re.search(r"^(?:-|\d+\.)\s+", response_text, re.MULTILINE))
+        has_bullets_or_steps = bool(re.search(r"^(?:-|\*|\d+\.)\s+", response_text, re.MULTILINE))
         has_socratic_prompt = "?" in response_text
+        has_checkpoint = "### 💡 Interactive Checkpoint" in response_text or "Interactive Checkpoint" in response_text
         
         pedagogy_score = 0.5
         if has_headers:
-            pedagogy_score += 0.2
+            pedagogy_score += 0.15
         if has_bullets_or_steps:
+            pedagogy_score += 0.15
+        if has_socratic_prompt or has_checkpoint:
             pedagogy_score += 0.2
-        if has_socratic_prompt:
-            pedagogy_score += 0.1
 
-        # 4. Safety & Tone Check
+        # 4. Diagram Syntax & Integrity Check
+        diagram_valid = True
+        refined_text = response_text
+        
+        # Check Mermaid blocks
+        mermaid_blocks = re.findall(r"```mermaid(.*?)```", response_text, re.DOTALL | re.IGNORECASE)
+        for block in mermaid_blocks:
+            # Check for illegal unicode arrows
+            if re.search(r"[⟶→➔➜➝➞⟹⇒⟵←]", block):
+                # Auto-repair unicode arrows in refined text
+                repaired_block = re.sub(r"[⟶→➔➜➝➞]", "-->", block)
+                repaired_block = re.sub(r"[⟹⇒]", "==>", repaired_block)
+                repaired_block = re.sub(r"[⟵←]", "<--", repaired_block)
+                refined_text = refined_text.replace(block, repaired_block)
+        
+        # Check SVG blocks
+        svg_blocks = re.findall(r"```svg(.*?)```", response_text, re.DOTALL | re.IGNORECASE)
+        for sblock in svg_blocks:
+            if "<svg" not in sblock or "</svg>" not in sblock:
+                diagram_valid = False
+
+        # 5. Safety & Tone Check
         is_safe = True
         unsafe_patterns = [r"\b(harmful|exploit|illegal|hack|bypass)\b"]
         for pat in unsafe_patterns:
@@ -78,7 +100,7 @@ class AnswerValidator:
                 break
 
         # Pass / Fail Decision
-        is_valid = (grounding_score >= 0.45) and cross_ref_valid and (pedagogy_score >= 0.6) and is_safe
+        is_valid = (grounding_score >= 0.45) and cross_ref_valid and (pedagogy_score >= 0.6) and is_safe and diagram_valid
         status = "PASS" if is_valid else "FAIL"
 
         feedback_notes = "All pedagogical, grounding, and cross-reference checks passed."
@@ -90,6 +112,8 @@ class AnswerValidator:
                 reasons.append("Unverified page citations")
             if pedagogy_score < 0.6:
                 reasons.append("Insufficient educational structure")
+            if not diagram_valid:
+                reasons.append("Malformed diagram syntax")
             if not is_safe:
                 reasons.append("Safety check triggered")
             feedback_notes = f"Validation failed: {', '.join(reasons)}."
@@ -102,5 +126,5 @@ class AnswerValidator:
             safety_valid=is_safe,
             validation_status=status,
             feedback_notes=feedback_notes,
-            refined_response=response_text if is_valid else None
+            refined_response=refined_text if is_valid else None
         )

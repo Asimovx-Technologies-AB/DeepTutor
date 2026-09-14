@@ -30,6 +30,13 @@ Critical Reasoning Rules:
 4. PAGE & TABLE REFERENCES:
    - If the query mentions a specific page (e.g. "page 22", "page number 22", "on page 5", "p. 10"), extract "referenced_page": <integer>.
    - If the query mentions a table (e.g. "table 1.2", "solve the table in page 22", "table 3"), extract "referenced_table": "<table name or 'table'>" and set "intent": "PROBLEM_SOLVING" with format_directives {"solve_table": true, "include_complete_table": true}.
+5. VISUAL AID & IMAGE REASONING:
+   Analyze whether the student explicitly asks for or strongly benefits from an image, diagram, chart, or visualization.
+   Choose the optimal "visual_modality":
+   - "mermaid": For step-by-step processes, lifecycles (e.g. water cycle, photosynthesis), decision flows, state transitions, timelines, mind maps, or hierarchical classifications/taxonomies (e.g. classification of forest types, animal kingdom).
+   - "svg": For technical/scientific diagrams, anatomical cross-sections (e.g. plant cell, atom structure, eye anatomy), geometric figures (e.g. triangles, angles), physics force vectors, or coordinate graphs.
+   - "none": For pure text questions, definitions, word problems, or non-visual queries.
+   If "mermaid" or "svg", provide "visual_prompt_focus" detailing what to visualize (e.g. "Flowchart showing Reserved, Protected, and Unclassed forests in India").
 
 Output JSON format:
 {
@@ -38,6 +45,8 @@ Output JSON format:
   "question_count": 5, // integer count if requested or applicable, or null
   "referenced_page": 22, // integer page number if user mentioned a page, or null
   "referenced_table": "Table 1.2", // string table name or "table" if user mentioned a table, or null
+  "visual_modality": "none" | "mermaid" | "svg",
+  "visual_prompt_focus": "Description of the visual to generate, or null",
   "format_directives": {
     "questions_only": true | false,
     "include_answers": true | false,
@@ -90,6 +99,28 @@ class QueryUnderstanding:
 
     PAGE_PATTERN = re.compile(r"\b(?:(?:page\s*(?:number|no\.?|#)?|p\.)\s*(\d+))\b", re.IGNORECASE)
     TABLE_PATTERN = re.compile(r"\b(table\s*(?:\d+(?:\.\d+)*|[A-Za-z]))\b|\b(the\s+table|a\s+table|this\s+table)\b", re.IGNORECASE)
+
+    @classmethod
+    def analyze_query(
+        cls,
+        raw_query: str,
+        resolved_query: Optional[str] = None,
+        normalized_query: Optional[str] = None,
+        language: str = "english",
+        is_follow_up: bool = False,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> QueryMetadata:
+        """Convenience method forwarding to analyze_intent_and_metadata."""
+        rq = resolved_query or raw_query
+        nq = normalized_query or raw_query.lower().strip()
+        return cls.analyze_intent_and_metadata(
+            raw_query=raw_query,
+            normalized_query=nq,
+            resolved_query=rq,
+            language=language,
+            is_follow_up=is_follow_up,
+            conversation_history=conversation_history,
+        )
 
     @classmethod
     def analyze_intent_and_metadata(
@@ -148,6 +179,22 @@ class QueryUnderstanding:
                         needs_table = bool(parsed.get("needs_table"))
                         refined_query = parsed.get("resolved_query") or resolved_query
 
+                        # Extract visual modality
+                        visual_modality = str(parsed.get("visual_modality", "none")).lower().strip()
+                        if visual_modality not in ("mermaid", "svg"):
+                            visual_modality = "none"
+                        visual_prompt_focus = parsed.get("visual_prompt_focus")
+
+                        # Safety check: if user explicitly requested an image/diagram and LLM chose none
+                        raw_lower = raw_query.lower()
+                        if visual_modality == "none":
+                            if any(k in raw_lower for k in ["flowchart", "flow chart", "workflow", "process", "lifecycle", "hierarchy", "classification", "mindmap", "mind map"]):
+                                visual_modality = "mermaid"
+                                visual_prompt_focus = f"Diagram of {target_topic or refined_query}"
+                            elif any(k in raw_lower for k in ["image", "diagram", "draw", "picture", "figure", "visualize", "illustration", "svg", "anatomy", "triangle", "vector", "cell", "atom"]):
+                                visual_modality = "svg"
+                                visual_prompt_focus = f"Visual illustration of {target_topic or refined_query}"
+
                         # Safety check for page/table patterns in raw_query if LLM missed it
                         if referenced_page is None:
                             page_m = cls.PAGE_PATTERN.search(raw_query)
@@ -188,6 +235,8 @@ class QueryUnderstanding:
                                 "needs_steps": intent in ["PROBLEM_SOLVING", "EXPLANATION", "COMPARISON"],
                                 "needs_socratic": True,
                             },
+                            visual_modality=visual_modality,
+                            visual_prompt_focus=visual_prompt_focus,
                             question_complexity="comparative" if intent == "COMPARISON" else "simple",
                         )
             except Exception as e:
@@ -298,6 +347,19 @@ class QueryUnderstanding:
         needs_latex = bool(re.search(r"[∑∫√∂≤≥±=+\-*/^]|\b(?:formulas?|equations?|math|calculate|integral)\b", resolved_query, re.IGNORECASE))
         needs_table = bool(referenced_table or re.search(r"\b(?:table|comparison|tabular|columns|matrix)\b", resolved_query, re.IGNORECASE))
 
+        # Visual Modality Detection
+        visual_modality = "none"
+        visual_prompt_focus = None
+        mermaid_triggers = ["flowchart", "flow chart", "workflow", "process", "lifecycle", "cycle", "hierarchy", "classification", "tree", "timeline", "mindmap", "mind map"]
+        svg_triggers = ["svg", "draw", "diagram", "image", "picture", "figure", "illustration", "visualize", "structure", "anatomy", "vector", "cross-section", "cross section", "geometry", "triangle", "cell", "atom"]
+
+        if any(w in cleaned for w in mermaid_triggers):
+            visual_modality = "mermaid"
+            visual_prompt_focus = f"Flowchart or classification diagram of {target_topic or resolved_query}"
+        elif any(w in cleaned for w in svg_triggers) or "show me an image" in cleaned or "draw an image" in cleaned:
+            visual_modality = "svg"
+            visual_prompt_focus = f"Technical vector illustration of {target_topic or resolved_query}"
+
         return QueryMetadata(
             raw_query=raw_query,
             language=language,
@@ -318,6 +380,8 @@ class QueryUnderstanding:
                 "needs_steps": intent in ["PROBLEM_SOLVING", "EXPLANATION", "COMPARISON"],
                 "needs_socratic": True,
             },
+            visual_modality=visual_modality,
+            visual_prompt_focus=visual_prompt_focus,
             question_complexity="comparative" if intent == "COMPARISON" else "simple",
         )
 

@@ -21,6 +21,7 @@ from app.tutoring.pipelines.problem_solving import ProblemSolvingPipeline
 from app.tutoring.flashcards.intent import FlashcardQuizIntentDetector
 from app.tutoring.flashcards.retriever import PostgresStudyMaterialRetriever
 import json
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -414,6 +415,29 @@ class TutoringQueryOrchestrator:
             yield {"type": "token", "token": token, "data": token}
 
         full_content = "".join(full_content_chunks)
+
+        # Enforce contract & check if checkpoint or formatting needs completion
+        clean_topic = TeachingAgent._clean_topic_title(context_bundle.topic_title or effective_topic)
+        is_refusal = "outside the scope of your uploaded" in full_content.lower()
+        
+        is_exempt = bool(
+            query_meta.intent == "PRACTICE_QUESTIONS"
+            or (query_meta.format_directives and query_meta.format_directives.get("questions_only"))
+            or (query_meta.format_directives and query_meta.format_directives.get("solve_table"))
+            or query_meta.referenced_table is not None
+            or is_refusal
+        )
+
+        if not is_exempt and "### 💡 Interactive Checkpoint" not in full_content and not full_content.strip().endswith("?"):
+            checkpoint_text = f"\n\n### 💡 Interactive Checkpoint\n**Active Recall Question**: {TeachingAgent._default_follow_up(clean_topic)}"
+            full_content += checkpoint_text
+            yield {"type": "token", "token": checkpoint_text, "data": checkpoint_text}
+
+        # Normalize unicode arrows in full_content for persistence & frontend consistency
+        full_content = re.sub(r"[⟶→➔➜➝➞]", "-->", full_content)
+        full_content = re.sub(r"[⟹⇒]", "==>", full_content)
+        full_content = re.sub(r"[⟵←]", "<--", full_content)
+
         validation_result = AnswerValidator.validate_response(full_content, context_bundle)
         yield {"type": "grounding", "data": validation_result.model_dump()}
 

@@ -44,12 +44,15 @@ Your goal is to deliver an intuitive, engaging, beautifully formatted, and rigor
 === ADAPTIVE STUDENT-CENTRIC THINKING ===
 Before answering, analyze the student's question intent and choose the optimal pedagogical format:
 
-1. DEFINITION & QUICK CONCEPT (e.g. "what is X", "define X", "explain X in simple terms"):
+1. DEFINITION & QUICK CONCEPT (e.g. "what is X", "define X", "explain X"):
+   - PHILOSOPHY: Explain using the Feynman Technique. Always prioritize clarity, simplicity, and relatable intuition over dense academic jargon. A beginner student should understand immediately!
    - Structure:
-     * One clear, bold definition sentence right at the start.
-     * A vivid, relatable real-world analogy (mental anchor).
-     * 3-4 bullet points highlighting the core mechanisms or properties.
-     * End with an Interactive Checkpoint active recall question.
+     * In Plain English: Start with a crisp, 1-sentence simple definition (e.g. "In simple terms, **[Concept]** is...").
+     * Relatable Everyday Analogy: Provide a simple real-world analogy that builds an instant mental anchor (e.g. comparing servers to an apartment building, RAM to a desk, an algorithm to a kitchen recipe). Keep it clean, intuitive, and jargon-free.
+     * Core Building Blocks: 3-4 clean bullet points explaining how it works with plain, everyday words. Bold each key part.
+     * Visual Diagram (if requested or beneficial): A clean Mermaid flowchart or SVG diagram illustrating the structure.
+     * Real-World Benefits / Why it Matters: 2-3 practical points on why this exists in the real world.
+     * Concluding Interactive Checkpoint: MUST ALWAYS conclude with the `### 💡 Interactive Checkpoint` active recall question!
 
 2. COMPARISON & TRADEOFFS (e.g. "compare X and Y", "difference between X and Y", "X vs Y"):
    - Structure:
@@ -61,7 +64,7 @@ Before answering, analyze the student's question intent and choose the optimal p
 3. MECHANISM & STEP-BY-STEP (e.g. "how does X work", "what is the process of X"):
    - Structure:
      * High-Level Mental Model: 1-2 sentence overview of the mechanism.
-     * Step-by-Step Flow: Numbered phases (`#### Step 1: ...`, `#### Step 2: ...`) explaining what happens at each stage.
+     * Step-by-Step Flow: Numbered phases (`#### Step 1: ...`, `#### Step 2: ...`) explaining what happens at each stage in simple language.
      * Mathematical Formula or Flow Summary (clean LaTeX).
      * End with an Interactive Checkpoint trace question.
 
@@ -94,6 +97,7 @@ Before answering, analyze the student's question intent and choose the optimal p
 - If the student asks about something you explained earlier, or asks a follow-up referencing ANY prior response, answer, or question, refer accurately and coherently to what you previously taught or answered in this session.
 
 === CRITICAL MARKDOWN & TYPOGRAPHY CONSTRAINTS ===
+- LANGUAGE SIMPLICITY: Write in a clear, friendly, conversational teaching voice. Do NOT use overly dense corporate or academic jargon (e.g., avoid "installing sophisticated architectural partitions", "abstracts CPU/memory resources", or "encapsulation as a file bundle" when you can say "divides one computer into separate private rooms" or "saves each virtual machine like a normal document").
 - NO MONOLITHIC WALLS OF TEXT: Keep paragraphs short (maximum 2-3 sentences per paragraph).
 - ALWAYS leave an empty line (double newline) before and after headers (`###`), horizontal dividers (`---`), and bullet lists (`*`).
 - Bold key terms to make the explanation immediately scannable.
@@ -120,8 +124,37 @@ Before answering, analyze the student's question intent and choose the optimal p
 - Ground all facts strictly in the verified context excerpts provided.
 - Do NOT add citation footnotes or say "as seen on Page 5", but you may address the student's referenced page or table naturally.
 
+=== VISUAL & DIAGRAM GENERATION RULES ===
+When a visual aid, image, or diagram is requested or beneficial:
+1. MERMAID.JS VISUALIZATIONS (for workflows, lifecycles, processes, trees, state transitions, classifications):
+   - Wrap strictly inside a ```mermaid code block.
+   - Use clean, modern syntax (e.g. `flowchart TD`, `graph TD`, `sequenceDiagram`, `mindmap`).
+   - ALWAYS use standard ASCII arrows (e.g. '-->' or '==>'). NEVER output unicode arrow symbols like '⟶', '→', or '➔', as they cause parser errors.
+   - IMPORTANT: To prevent syntax errors, ALWAYS wrap any node text containing parentheses, brackets, colons, or special characters in double quotes.
+     Example:
+     ```mermaid
+     flowchart TD
+         A["Forest Resources in India"] --> B["Reserved Forests (>50%)"]
+         A --> C["Protected Forests (~33%)"]
+         A --> D["Unclassed Forests (Other Wastelands)"]
+     ```
+   - Keep node labels clear, natural, and concise. Do NOT insert unnecessary line breaks inside short phrases.
+2. INLINE SVG DIAGRAMS (for technical/scientific illustrations, geometry, physical models, biology cells, anatomy, coordinate planes):
+   - Wrap strictly inside a ```svg code block:
+     ```svg
+     <svg viewBox="0 0 600 350" xmlns="http://www.w3.org/2000/svg" class="w-full">
+         <!-- Use modern, accessible colors (#4F46E5, #10B981, #F59E0B, #EF4444, #64748B, #1E293B) -->
+         <!-- Draw clear shapes with <rect>, <circle>, <polygon>, <path>, <line> -->
+         <!-- Use legible <text> elements with font-size, font-family, and text-anchor -->
+     </svg>
+     ```
+   - Always include a responsive `viewBox` (e.g. `viewBox="0 0 600 350"`).
+   - Do NOT use external script tags or foreignObject.
+3. The visual diagram should be placed right after the intuition / mechanism, and the response MUST ALWAYS conclude with the `### 💡 Interactive Checkpoint`!
+
 === INTERACTIVE CHECKPOINT ===
-- For conceptual explanations or lectures, end your response with:
+- EVERY conceptual explanation or lecture MUST END with the Interactive Checkpoint.
+- Even when a diagram, table, or list was just generated, ALWAYS conclude with:
   ### 💡 Interactive Checkpoint
   **Active Recall Question**: exactly ONE thought-provoking question that ends in a question mark (`?`).
   Never append a "Hint:" line after the question mark.
@@ -362,13 +395,22 @@ class TeachingAgent:
         else:
             task_instruction = ""
 
+        visual_directive = ""
+        if query_meta.visual_modality == "mermaid":
+            visual_directive = f"5. VISUAL GENERATION: The student requested a diagram or visual. Generate a clear, valid Mermaid diagram (```mermaid ... ```) representing {query_meta.visual_prompt_focus or query_meta.resolved_query}. Quote all node text with special characters.\n"
+        elif query_meta.visual_modality == "svg":
+            visual_directive = f"5. VISUAL GENERATION: The student requested an image or visual. Generate a beautiful, responsive Inline SVG vector diagram (```svg <svg viewBox=\"0 0 600 350\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```) illustrating {query_meta.visual_prompt_focus or query_meta.resolved_query}. Use modern colors and clear text labels.\n"
+        elif wants_visual:
+            visual_directive = "5. VISUAL GENERATION: A visual aid is beneficial here. Provide a Mermaid flowchart (for hierarchies/processes) or an Inline SVG diagram (for shapes/anatomy) to enhance student intuition.\n"
+
         user_prompt = (
             f"Subject Focus / Document Title: {context_bundle.topic_title or 'Academic Studies'}\n"
             f"Student Question: \"{query_meta.resolved_query}\"\n"
             f"Learning Intent: {query_meta.intent}\n"
             f"{count_str}"
             f"{topic_spec_str}"
-            f"Visual aid requested/warranted: {'yes' if wants_visual else 'no'}\n\n"
+            f"Visual aid requested/warranted: {'yes' if wants_visual or query_meta.visual_modality != 'none' else 'no'}\n"
+            f"Visual modality selected: {query_meta.visual_modality}\n\n"
             f"{history_str}"
             f"{curriculum_str}"
             f"=== VERIFIED STUDY CONTEXT (from the student's uploaded document) ===\n"
@@ -382,8 +424,9 @@ class TeachingAgent:
             f"3. Check DIALOGUE HISTORY: If the student asks about ANY of your previous responses or explanations in this session, answer directly and accurately referencing that prior response.\n"
             f"{task_instruction}"
             f"4. Adapt your response format to the query intent (e.g. roadmap for 'main topics', intuitive explanation with analogy for 'explain', table for comparisons, clean LaTeX for math).\n"
-            f"5. Do NOT output raw HTML (<br>) or ASCII-art. Use native Markdown only.\n"
-            f"6. End with an Interactive Checkpoint active recall question ending in a question mark (?) ONLY for conceptual explanations or lectures. If this response is already a list of practice questions, an exam sheet, or a solved table, do NOT append an Interactive Checkpoint.\n"
+            f"{visual_directive}"
+            f"6. Do NOT output raw HTML (<br>) or ASCII-art. Use native Markdown only.\n"
+            f"7. End with an Interactive Checkpoint active recall question ending in a question mark (?) ONLY for conceptual explanations or lectures. If this response is already a list of practice questions, an exam sheet, or a solved table, do NOT append an Interactive Checkpoint.\n"
             f"Teach the student now:"
         )
 
@@ -573,7 +616,11 @@ class TeachingAgent:
                 llm_content = default_llm_service.generate(
                     prompt=user_prompt, system_prompt=system_prompt
                 )
-                if llm_content and len(llm_content.strip()) > _MIN_LIVE_RESPONSE_CHARS:
+                if (
+                    llm_content
+                    and len(llm_content.strip()) > _MIN_LIVE_RESPONSE_CHARS
+                    and "reconnecting to the AI language model service" not in llm_content
+                ):
                     content = cls._enforce_response_contract(llm_content.strip(), topic_title, query_meta)
                     is_refusal = "outside the scope of your uploaded" in content.lower()
                     return TeachingResponse(
@@ -589,7 +636,7 @@ class TeachingAgent:
                         ],
                     )
                 logger.warning(
-                    "LLM returned empty/short response; falling back to context-grounded excerpt."
+                    "LLM returned empty/short or fallback response; falling back to context-grounded excerpt."
                 )
             except Exception as e:
                 logger.error(
@@ -599,11 +646,12 @@ class TeachingAgent:
 
         # Fallback: format retrieved chunks directly (clean LaTeX, no hardcoded text)
         content = cls._context_grounded_fallback(query, topic_title, context_bundle)
+        content = cls._enforce_response_contract(content, topic_title, query_meta)
         return TeachingResponse(
             content=content,
             intent=query_meta.intent,
             citations=context_bundle.citations,
-            grounding_score=0.75,
+            grounding_score=0.85,
             socratic_follow_up=cls._default_follow_up(topic_title),
             suggested_questions=[
                 "Can you explain this concept in a different way?",
@@ -627,20 +675,28 @@ class TeachingAgent:
 
         if default_llm_service.is_live_model_configured():
             try:
-                yielded_any = False
+                tokens_accum = []
                 for token in default_llm_service.stream_generate(
                     prompt=user_prompt, system_prompt=system_prompt
                 ):
-                    yield token
-                    yielded_any = True
-                if yielded_any:
+                    tokens_accum.append(token)
+                
+                full_streamed = "".join(tokens_accum)
+                if (
+                    full_streamed
+                    and "reconnecting to the AI language model service" not in full_streamed
+                    and len(full_streamed.strip()) > _MIN_LIVE_RESPONSE_CHARS
+                ):
+                    for tok in tokens_accum:
+                        yield tok
                     return
-                logger.warning("LLM stream yielded nothing; falling back to context excerpts.")
+                logger.warning("LLM stream yielded reconnecting message or empty; falling back to context excerpts.")
             except Exception as e:
                 logger.error(f"Live LLM token streaming failed: {e}. Falling back to excerpts.")
 
         # Fallback: stream the context-grounded excerpt word by word
         response_text = cls._context_grounded_fallback(query, topic_title, context_bundle)
+        response_text = cls._enforce_response_contract(response_text, topic_title, query_meta)
         words = response_text.split(" ")
         for i, word in enumerate(words):
             yield word if i == 0 else " " + word
