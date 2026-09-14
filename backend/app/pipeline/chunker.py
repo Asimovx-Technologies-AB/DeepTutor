@@ -48,7 +48,32 @@ class KnowledgeChunker:
         # 1. Process regular text & layout blocks page by page
         for page in pages_data:
             page_num = page.get("page_number", 1)
-            blocks: List[LayoutBlock] = page.get("blocks", [])
+            blocks: List[LayoutBlock] = list(page.get("blocks", []))
+            is_scanned = page.get("classification") == "scanned"
+            provenance = "vlm_transcription" if is_scanned else "pymupdf_normalized"
+
+            # If blocks are empty but normalized_text or raw_text exists, synthesize blocks
+            if not blocks:
+                fallback_text = (page.get("normalized_text") or page.get("raw_text") or "").strip()
+                if fallback_text:
+                    paragraphs = [p.strip() for p in fallback_text.split("\n\n") if p.strip()]
+                    w = float(page.get("width", 612.0))
+                    h = float(page.get("height", 792.0))
+                    y_gap = h / max(1, len(paragraphs))
+                    for b_idx, p in enumerate(paragraphs):
+                        is_h = p.startswith("#") or (len(p) < 60 and b_idx == 0)
+                        clean_p = p.lstrip("#").strip() if is_h else p
+                        blocks.append(
+                            LayoutBlock(
+                                block_index=b_idx,
+                                block_type="heading" if is_h else "text",
+                                reading_order=b_idx,
+                                bbox=[0.0, round(b_idx * y_gap, 2), w, round((b_idx + 1) * y_gap, 2)],
+                                text=clean_p,
+                                spans=[],
+                                confidence=0.9,
+                            )
+                        )
 
             # Match page with active chapter/section from structure tree
             chapter_section = cls._find_chapter_section_for_page(structure_tree, page_num)
@@ -76,7 +101,7 @@ class KnowledgeChunker:
                             chapter_section=chapter_section,
                             bbox=current_bbox,
                             formulas=formulas_by_page.get(page_num, []),
-                            provenance_source="pymupdf_normalized",
+                            provenance_source=provenance,
                         )
                         raw_chunks.append(chunk_dict)
                         chunk_counter += 1
@@ -104,7 +129,7 @@ class KnowledgeChunker:
                         chapter_section=chapter_section,
                         bbox=current_bbox,
                         formulas=formulas_by_page.get(page_num, []),
-                        provenance_source="pymupdf_normalized",
+                        provenance_source=provenance,
                     )
                     raw_chunks.append(chunk_dict)
                     chunk_counter += 1
@@ -124,7 +149,7 @@ class KnowledgeChunker:
                     chapter_section=chapter_section,
                     bbox=current_bbox,
                     formulas=formulas_by_page.get(page_num, []),
-                    provenance_source="pymupdf_normalized",
+                    provenance_source=provenance,
                 )
                 raw_chunks.append(chunk_dict)
                 chunk_counter += 1

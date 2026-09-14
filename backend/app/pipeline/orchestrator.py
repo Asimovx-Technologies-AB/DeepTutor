@@ -86,7 +86,6 @@ class DocumentPipelineOrchestrator:
         def _process_page_worker(page):
             page_num = page["page_number"]
             raw_text = page["raw_text"]
-            blocks = page["blocks"]
 
             # Branch A: Text Quality Check
             q_score, decision = TextQualityChecker.evaluate_quality(raw_text)
@@ -102,7 +101,8 @@ class DocumentPipelineOrchestrator:
 
             page["normalized_text"] = normalized_text
 
-            # Branch B: Structure, Table & Formula Extraction
+            # Branch B: Structure, Table & Formula Extraction (Refresh blocks updated by VLM if applicable)
+            blocks = page.get("blocks", [])
             blocks = LayoutAnalyzer.analyze_page_layout(blocks, page["width"], page["height"])
             page_tables, blocks = TableDetector.detect_tables(blocks, page_num, native_tables=page.get("native_tables"))
             page_formulas, blocks = FormulaDetector.detect_formulas(blocks, page_num)
@@ -110,7 +110,9 @@ class DocumentPipelineOrchestrator:
             return page, page_tables, page_formulas
 
         import concurrent.futures
-        max_workers = min(8, max(2, len(pages_data)))
+        # Limit worker concurrency for scanned docs to avoid VLM API quota exhaustion
+        pool_limit = 4 if is_scanned_doc else 8
+        max_workers = min(pool_limit, max(1, len(pages_data)))
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             processed_results = list(executor.map(_process_page_worker, pages_data))
 

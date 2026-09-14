@@ -71,3 +71,10 @@ A task is only complete when:
 3. The code follows advanced/production-quality conventions.
 4. The code has been executed and verified to work, including at least one
    edge case.
+
+## Resources & Helpers
+
+- **Checklist**: See [references/checklist.md](references/checklist.md) for pre-flight and definition-of-done checks.
+- **Pattern Guide**: See [examples/patterns.md](examples/patterns.md) for anti-pattern vs. production-grade code snippets.
+- **Audit Script**: Run `python scripts/check_no_hardcoding.py <file-or-dir>` to scan for hardcoded patterns.
+

@@ -4,14 +4,15 @@ import fitz  # PyMuPDF
 from PIL import Image
 from app.schemas.layout import LayoutBlock, TextSpan, BoundingBox
 from app.storage.local_storage import default_storage
+from app.core.config import settings
 
 
 class PyMuPDFParser:
     """Stage 2: High-fidelity PyMuPDF Parser extracting spans, fonts, bboxes, and page images."""
 
-    def __init__(self, render_dpi: int = 100, render_images: bool = False):
+    def __init__(self, render_dpi: int = 150, render_images: bool = False):
         self.render_dpi = render_dpi
-        self.render_images = False  # Enforce pure text/table extraction with no image writes
+        self.render_images = render_images
 
     def parse_document(self, file_bytes: bytes, doc_id: str) -> List[Dict[str, Any]]:
         """
@@ -127,6 +128,21 @@ class PyMuPDFParser:
             char_count = len(page_full_text)
             char_density = char_count / (width * height / 10000.0) if (width * height) > 0 else 0.0
 
+            # 3. Automatic page image rendering for low-density/scanned pages or when requested
+            image_storage_path = None
+            page_image_bytes = None
+            if self.render_images or char_count < settings.MIN_TEXT_DENSITY_CHARS_PER_PAGE:
+                try:
+                    pix = page.get_pixmap(dpi=self.render_dpi)
+                    page_image_bytes = pix.tobytes("png")
+                    image_storage_path = default_storage.store_file(
+                        page_image_bytes,
+                        f"{doc_id}_p{page_number}.png",
+                        subfolder="page_images"
+                    )
+                except Exception:
+                    pass
+
             parsed_pages.append({
                 "page_number": page_number,
                 "width": round(width, 2),
@@ -138,7 +154,8 @@ class PyMuPDFParser:
                 "raw_text": page_full_text,
                 "blocks": blocks,
                 "native_tables": native_tables,
-                "image_storage_path": None,
+                "image_storage_path": image_storage_path,
+                "image_bytes": page_image_bytes,
             })
 
         pdf_doc.close()
