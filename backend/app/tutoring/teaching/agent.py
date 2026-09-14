@@ -415,7 +415,7 @@ class TeachingAgent:
         # Ensure Markdown headers (##, ###, ####) have empty lines before them
         content = re.sub(r"(?<=\S)\n(#{1,4}\s+)", r"\n\n\1", content)
         # 3. Strip multi-branch navigation menus
-        content = _STRIP_MENU_PATTERN.sub("", content)
+        content = cls._STRIP_MENU_PATTERN.sub("", content)
 
         # 4. Strip trailing "Hint: ..." lines so response ends naturally
         lines = content.split("\n")
