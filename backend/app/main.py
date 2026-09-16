@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.database import init_db
 from app.api import api_router
+from app.api import topic_analysis
 
 # Configure logging
 logging.basicConfig(
@@ -56,6 +57,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Mount API routers under API_V1_STR
 app.include_router(api_router, prefix=settings.API_V1_STR)
+app.include_router(topic_analysis.router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")

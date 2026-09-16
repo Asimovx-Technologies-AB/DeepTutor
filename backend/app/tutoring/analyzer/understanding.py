@@ -2,95 +2,128 @@ import re
 import json
 import logging
 from typing import List, Dict, Any, Optional, Tuple
-from app.schemas.tutoring import QueryMetadata, PreGenerationPlan
+from app.schemas.tutoring import (
+    QueryMetadata,
+    PreGenerationPlan,
+    QueryUnderstandingResult,
+    ActionPlan,
+    UserIntent,
+    RetrievalDecisionEnum,
+    RetrievalScopeEnum,
+    ResponseTypeEnum,
+    ActionTypeEnum,
+    DecisionStateEnum
+)
 from app.services.llm_service import default_llm_service
 from app.tutoring.analyzer.pre_gen_classifier import PreGenerationClassifier
 
 logger = logging.getLogger(__name__)
 
-_UNDERSTANDING_SYSTEM_PROMPT = """You are the cognitive Query Understanding & Reasoning module for DeepTutor, an elite AI Professor.
-Analyze the student's message in the context of the recent study dialogue and return ONLY a valid JSON object.
+_UNDERSTANDING_SYSTEM_PROMPT = """You are DeepTutor's Query Understanding and Decision Engine.
+
+Your task is NOT to answer the user's question.
+
+Your task is to understand what the user wants, resolve references using
+conversation context, determine the correct material scope, evaluate
+whether enough evidence exists, and decide what DeepTutor should do next.
+
+Analyze:
+1. User intent
+2. Requested action
+3. Topics/entities
+4. References to previous conversation
+5. Document scope
+6. Whether retrieval is needed
+7. Whether complete-document analysis is needed
+8. Whether the query is ambiguous
+9. Whether sufficient evidence exists
+10. Whether clarification is required
+11. What action should be executed
+
+IMPORTANT:
+- Never guess when multiple interpretations are plausible.
+- If the meaning is clear from context, resolve it automatically.
+- If the meaning cannot be reliably determined, choose CLARIFY.
+- Do not invent missing context or material content.
+- Do not use retrieval results to redefine the user's intent. Retrieval is evidence, not intent.
+- For document-level requests (identifying important topics, generating questions from the material, summarizing), do not treat Top-K retrieval as sufficient evidence. Use DOCUMENT_ANALYSIS.
+- If the user asks for questions and answers, explicitly determine whether answers are requested and extract the requested number.
+- If ambiguity exists, generate a concise, specific clarification question using the available context. Do not be vague (e.g., "Do you mean land-use types or soil types?").
+
+Decision States:
+- ANSWER: Clear query, normal RAG or fact answering.
+- CLARIFY: Ambiguous query, needs clarification.
+- RETRIEVE: Direct search query.
+- DOCUMENT_ANALYSIS: Analyze whole document (topics, summarize).
+- GENERATE: Generate questions, quizzes, flashcards.
+- FOLLOW_UP: Contextual follow-up to previous turn.
+- INSUFFICIENT_CONTEXT: Pronouns/references cannot be resolved.
+- OUT_OF_SCOPE: Irrelevant.
+
+Answerability States:
+- ANSWERABLE: Ready to answer.
+- AMBIGUOUS: Could mean multiple things.
+- INSUFFICIENT_EVIDENCE: Needs more context.
 
 Intent Taxonomy:
-- "PRACTICE_QUESTIONS": Student asks for questions, exercises, or exam preparation problems to study/practice (e.g. "give me 5 questions in svm", "i have exam tomorrow give me questions on chapter 2", "only need questions", "practice questions").
-- "STUDY_NOTES": Student explicitly asks for study notes, revision notes, topic notes, cheat sheets, or a study guide (e.g. "give me notes", "make study notes", "prepare revision notes for chapter 2", "summary notes"). CRITICAL: NEVER classify requests for notes as "QUIZ" or flashcards! Flashcards ("QUIZ") are ONLY for explicit requests like "quiz me", "flashcard deck", "make an interactive test".
-- "QUIZ": ONLY when the student explicitly wants an interactive multiple-choice quiz or flashcard cards widget (e.g. "quiz me", "generate flashcard deck", "make an interactive quiz", "give me an MCQ test").
-- "EXPLANATION": Student asks to explain, define, or teach a concept (e.g. "what is SVM?", "how does backprop work?").
-- "COMPARISON": Comparing two concepts (e.g. "SVM vs Random Forest", "difference between X and Y").
-- "PROBLEM_SOLVING": Asking to solve a problem, compute, or derive a formula.
-- "SUMMARY": Summary, roadmap, or syllabus overview.
-- "CASUAL": Greetings or pleasantries.
-- "FOLLOW_UP": Directly asking about, correcting, or following up on previous assistant responses.
-- "DOCUMENT_QA": General question grounded in textbook facts.
+- ANSWER_QUESTION, EXPLAIN_TOPIC, TEACH_TOPIC, SUMMARIZE, SIMPLIFY, GENERATE_EXAMPLES, GENERATE_QUESTIONS, GENERATE_QUIZ, GENERATE_FLASHCARDS, CREATE_STUDY_PLAN, MODIFY_STUDY_PLAN, SEARCH_MATERIAL, ASK_FROM_MATERIAL, COMPARE_CONCEPTS, SOLVE_PROBLEM, CHECK_ANSWER, GENERATE_NOTES, DOCUMENT_TOPIC_ANALYSIS, CONTINUE_LEARNING, CLARIFY_CONCEPT, FOLLOW_UP, GREETING, CONFIRMATION, OUT_OF_SCOPE
 
-Critical Reasoning Rules:
-1. DIALOGUE CONTINUITY: If the query is short or implicit (e.g. "only need questions", "give me 3 more", "solve question 2"), identify the active concept from the recent conversation history (e.g. "Support Vector Machines (SVM)").
-2. USER CONSTRAINTS & FORMAT:
-   - If the student specifies "only need questions", "just questions", "no answers", or wants to test themselves, set "questions_only": true and "include_answers": false.
-   - If the student requests explanations, walk-throughs, or solutions, set "questions_only": false and "include_answers": true.
-3. COUNT: Extract question count if specified, or default to 5 for practice questions if not specified.
-4. PAGE & TABLE REFERENCES:
-   - If the query mentions a specific page (e.g. "page 22", "page number 22", "on page 5", "p. 10"), extract "referenced_page": <integer>.
-   - If the query mentions a table (e.g. "table 1.2", "solve the table in page 22", "table 3"), extract "referenced_table": "<table name or 'table'>" and set "intent": "PROBLEM_SOLVING" with format_directives {"solve_table": true, "include_complete_table": true}.
-5. VISUAL AID & DIAGRAM REASONING:
-   Analyze whether the student asks for or strongly benefits from an image, diagram, chart, or visualization.
-   PRIORITIZE RICH INLINE SVG DIAGRAMS FOR ALGORITHMS, DATA STRUCTURES & TECHNICAL ILLUSTRATIONS:
-   - "svg" (visual_modality: "svg"): HIGHEST PRIORITY FOR ALGORITHMS & DATA STRUCTURES (e.g. "Binary search with low/mid/high pointers", "Quicksort partition step", "Merge sort recursion tree", "Dijkstra shortest path weights", "BFS/DFS exploration", "Gradient descent loss curve", "Neural network layers & weights", "Dynamic programming table", "Array, Stack, Queue, Linked List, Heap, Hashmap, Tree visualizations"). ALSO for spatial, physical, anatomical, geometric, optical, or mathematical coordinate systems (e.g. "Plant cell anatomy", "Forces on an inclined plane", "Right-angled triangle Pythagoras theorem", "Ray optics"). SVG gives rich colored boxes, pointers, and memory states that standard text boxes cannot match.
-   - "flowchart_lr" (visual_modality: "mermaid"): For non-algorithmic chronological progressions, evolutions across historical eras or phases, pipelines, and life-cycles (e.g. "Evolution of the Internet (Phases 1-4)", "SDLC stages", "Photosynthesis stages"). NEVER use a mindmap for sequential phases.
-   - "concept_graph" (visual_modality: "mermaid"): For IMPORTANT QUESTIONS, EXAM TOPICS, or TOPIC MASTERY queries. When student asks for important questions or key concepts, generate a conceptual relationship graph (flowchart TD/graph TD) mapping core topics and question themes.
-   - "sequence" (visual_modality: "mermaid"): For multi-actor communication, network protocols, client-server exchanges (e.g. "TCP 3-way handshake", "OAuth2 authorization flow", "DNS resolution").
-   - "state_diagram" (visual_modality: "mermaid"): For finite state machines, state lifecycles, and status transitions (e.g. "Process lifecycle states", "Thread states").
-   - "mindmap" (visual_modality: "mermaid"): ONLY for broad, non-sequential syllabus pillars, chapter outlines, or unranked brainstorming where order does not matter.
-   - "flowchart_td" (visual_modality: "mermaid"): For hierarchical classifications and organizational trees (e.g. "Classification of Forest Types in India").
-   - "none" (visual_modality: "none"): For pure text definitions, simple arithmetic, or casual greetings.
-    If not "none", provide "visual_prompt_focus" detailing what to visualize (e.g. "Step-by-step vector illustration of Binary Search with low, mid, high pointers", "Horizontal flowchart of Internet evolution across Phases 1 to 4").
-6. PASTED MULTIPLE-CHOICE QUESTIONS (MCQS) & BATCH QUESTIONS (STRICT VISUAL SUPPRESSION):
-   - If the student pastes an external multiple-choice question with options (e.g. A, B, C, D or Options: A. ... B. ...):
-     Set "is_pasted_mcq": true, "intent": "PROBLEM_SOLVING", "visual_modality": "none", "visual_diagram_type": "none".
-     MCQs require step-by-step reasoning, bold correct answer identification, and distractor breakdown — NEVER visual diagrams.
-   - If the student pastes a batch of 2 or more questions to solve at once (e.g. 1. ... 2. ... or Q1 ... Q2 ...):
-     Set "is_batch_questions": true, "batch_question_count": <count>, "intent": "PROBLEM_SOLVING", "visual_modality": "none", "visual_diagram_type": "none".
-     Multi-question batches require full sequential answers for each question — NEVER visual diagrams.
-7. QUERY SCOPE REASONING (WHOLE MATERIAL VS. CHAT TOPIC VS. AMBIGUITY):
-   - "global_material": When the student asks for questions, summary, or topics from the ENTIRE document or across all topics (e.g. "from this material", "from the whole material", "cover all the topics", "from all chapters", "entire syllabus", "overall"):
-     Set "query_scope": "global_material", "target_topic": null.
-     CRITICAL: NEVER lock onto the previous discussion topic (e.g. Ensemble Learning) when the student asked to cover all topics or the whole material!
-   - "current_topic": When the student explicitly continues the ongoing discussion topic (e.g. "tell me more about this", "step 2 of this algorithm", "give 3 more questions on bagging").
-   - "specific_topic": When the student explicitly introduces or names a distinct topic (e.g. "what is SVM?", "questions on Random Forest").
-   - "ambiguous_scope": When the student asks an open request (e.g. "give me 5 questions", "quiz me", "important questions") immediately after discussing a specific topic, and it is ambiguous whether they want questions on that specific topic or from the entire study material:
-     Set "query_scope": "ambiguous_scope", and formulate "scope_clarification_prompt" asking whether they want questions on the previous topic or across all topics.
-8. CONTEXT SOURCE REASONING (DIALOGUE HISTORY VS. STUDY MATERIAL):
-   - "dialogue_history": Set "context_source": "dialogue_history" when the student asks about the chat conversation itself, previous tutor explanations, or past turns (e.g. "summarize our chat", "what did we discuss before?", "repeat your previous answer", "explain line 2 of what you said").
-   - "study_material": Set "context_source": "study_material" for queries asking about document textbook concepts, formulas, algorithms, exam practice problems, or general course facts.
-
-Output JSON format:
+Output JSON Schema:
 {
-  "intent": "PRACTICE_QUESTIONS" | "QUIZ" | "STUDY_NOTES" | "EXPLANATION" | "COMPARISON" | "PROBLEM_SOLVING" | "SUMMARY" | "CASUAL" | "FOLLOW_UP" | "DOCUMENT_QA",
-  "context_source": "dialogue_history" | "study_material",
-  "target_topic": "The exact subject concept (e.g. 'Support Vector Machines (SVM)'). Ground in conversation history if query is an implicit follow-up, BUT set to null if query_scope is 'global_material'.",
-  "query_scope": "global_material" | "current_topic" | "specific_topic" | "ambiguous_scope",
-  "scope_clarification_prompt": null, // string clarification question if scope is ambiguous, or null
-  "question_count": 5, // integer count if requested or applicable, or null
-  "referenced_page": 22, // integer page number if user mentioned a page, or null
-  "referenced_table": "Table 1.2", // string table name or "table" if user mentioned a table, or null
+  "original_query": "<exact raw query>",
+  "resolved_query": "<resolved standalone academic search query>",
+  "intent": "EXPLAIN_TOPIC",
+  "sub_intent": "CONCEPTUAL_OVERVIEW",
+  "subject": "Machine Learning",
+  "topic": "Backpropagation",
+  "subtopic": null,
+  "topics": ["Backpropagation"],
+  "entities": ["neural networks", "gradient descent"],
+  "language": "en",
+  "difficulty": "beginner" | "intermediate" | "advanced",
+  "requires_context": true | false,
+  "requires_retrieval": true | false,
+  "retrieval_scope": "USER_MATERIAL" | "CURRENT_TOPIC" | "GLOBAL_KNOWLEDGE" | "NONE",
+  "retrieval_query": "backpropagation algorithm neural networks",
+  "requires_document_analysis": true | false,
+  "analysis_scope": "COMPLETE_DOCUMENT" | null,
+  "action": "EXPLAIN_TOPIC",
+  "decision": "ANSWER" | "CLARIFY" | "DOCUMENT_ANALYSIS" | "GENERATE" | "INSUFFICIENT_CONTEXT" | "OUT_OF_SCOPE",
+  "answerability": {
+    "status": "ANSWERABLE" | "AMBIGUOUS" | "INSUFFICIENT_EVIDENCE",
+    "confidence": 0.95,
+    "evidence_available": true
+  },
+  "clarification_needed": false,
+  "clarification_question": null,
+  "missing_information": [],
+  "requested_count": null,
+  "include_answers": false,
+  "source_scope": null,
+  "conversation_reference": null,
+  "resolved_reference": null,
+  "response_type": "DETAILED_EXPLANATION" | "STEP_BY_STEP" | "COMPARISON" | "QUIZ" | "SIMPLE_EXPLANATION" | "TABLE",
+  "requires_tool": false,
+  "tool_name": null,
+  "requires_example": true | false,
+  "confidence": 0.95,
+  "clarification_prompt": null,
+  "question_count": null,
+  "referenced_page": null,
+  "referenced_table": null,
+  "referenced_figure": null,
   "visual_modality": "none" | "mermaid" | "svg",
   "visual_diagram_type": "none" | "flowchart_lr" | "flowchart_td" | "concept_graph" | "sequence" | "state_diagram" | "mindmap" | "svg",
-  "visual_prompt_focus": "Description of the visual to generate, or null",
-  "is_pasted_mcq": true | false,
-  "is_batch_questions": true | false,
-  "batch_question_count": null, // integer count if batch of questions, or null
-  "format_directives": {
-    "questions_only": true | false,
-    "include_answers": true | false,
-    "solve_table": true | false,
-    "include_complete_table": true | false,
-    "special_instructions": "Clear instruction for the teaching agent"
-  },
-  "entities": ["SVM", "Support Vector Machines"],
+  "visual_prompt_focus": null,
+  "is_pasted_mcq": false,
+  "is_batch_questions": false,
+  "batch_question_count": null,
+  "format_directives": {},
   "needs_latex": false,
-  "needs_table": false,
-  "resolved_query": "Clean, focused academic query for textbook search"
-}"""
+  "needs_table": false
+}
+
+Return ONLY valid JSON. No conversational text."""
 
 
 class QueryUnderstanding:
@@ -116,6 +149,16 @@ class QueryUnderstanding:
     SUMMARY_PATTERNS = [
         re.compile(r"\b(?:summarize|summary|overview|key\s+takeaways|briefly\s+describe)\b", re.IGNORECASE)
     ]
+
+    DOCUMENT_TOPIC_ANALYSIS_PATTERN = re.compile(
+        r"^(?:what are|show me|list|identify|give me)(?:\s+the)?\s+(?:important|key|major|main|critical|core)\s+(?:topics?|concepts?|chapters?|subjects?)\b|"
+        r"^(?:important|key|major|main|critical)\s+(?:topics?|concepts?)\b|"
+        r"\b(?:what|which)\s+(?:topics?\s+|concepts?\s+)?(?:should\s+I|do\s+I\s+need\s+to|to)\s+"
+        r"(?:study|focus|learn|prepare|review|cover)\b|"
+        r"\bidentify\s+(?:the\s+)?(?:important|key|major)\b|"
+        r"^(?:topic|concept)\s+(?:map|analysis|overview)\b",
+        re.IGNORECASE
+    )
 
     QUIZ_PATTERNS = [
         re.compile(r"\b(?:quiz\s+me|generate\s+a\s+quiz|create\s+a\s+quiz|mcq\s+quiz|flashcards?|flshcards?)\b", re.IGNORECASE)
@@ -276,6 +319,198 @@ class QueryUnderstanding:
         )
 
     @classmethod
+    def analyze_query_structured(
+        cls,
+        raw_query: str,
+        normalized_query: Optional[str] = None,
+        resolved_query: Optional[str] = None,
+        language: str = "en",
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+        current_subject: Optional[str] = None,
+        current_topic: Optional[str] = None,
+        available_materials: Optional[List[Dict[str, Any]]] = None,
+        available_tools: Optional[List[str]] = None,
+    ) -> QueryUnderstandingResult:
+        """
+        Unified entry point producing a strongly-typed QueryUnderstandingResult.
+        Executes Fast-Path -> LLM Analyzer -> Heuristic Fallback.
+        """
+        norm_q = normalized_query or raw_query.strip()
+        res_q = resolved_query or norm_q
+
+        # 1. Fast Path
+        from app.tutoring.analyzer.fast_path import QueryFastPath
+        fast_res = QueryFastPath.evaluate(
+            normalized_query=norm_q,
+            original_query=raw_query,
+            language=language,
+            current_subject=current_subject,
+            current_topic=current_topic
+        )
+        if fast_res:
+            return fast_res
+
+        # 2. Query Understanding (LLM or Heuristic)
+        meta = cls.analyze_intent_and_metadata(
+            raw_query=raw_query,
+            normalized_query=norm_q,
+            resolved_query=res_q,
+            language=language,
+            conversation_history=conversation_history
+        )
+        if meta.understanding_result:
+            return meta.understanding_result
+
+        # Fallback structured construction
+        return cls._build_structured_result_from_meta(meta, raw_query, norm_q, res_q, language, current_subject, current_topic)
+
+    @classmethod
+    def _build_structured_result_from_meta(
+        cls,
+        meta: QueryMetadata,
+        raw_query: str,
+        normalized_query: str,
+        resolved_query: str,
+        language: str,
+        current_subject: Optional[str] = None,
+        current_topic: Optional[str] = None,
+        ref_meta: Optional[Dict[str, Any]] = None
+    ) -> QueryUnderstandingResult:
+        print("DEBUG inside _map_to_understanding_result, ref_meta=", ref_meta)
+        intent = meta.intent
+        # Action planning
+        requires_tool = False
+        tool_name = None
+        action = ActionTypeEnum.ANSWER_QUESTION.value
+        decision = DecisionStateEnum.ANSWER
+
+        if intent in ("CREATE_STUDY_PLAN", "MODIFY_STUDY_PLAN"):
+            action = intent
+            requires_tool = True
+            tool_name = "study_plan_service"
+            response_type = ResponseTypeEnum.STUDY_PLAN.value
+            decision = DecisionStateEnum.GENERATE
+        elif intent in ("QUIZ", "GENERATE_QUIZ", "GENERATE_FLASHCARDS", "GENERATE_QUESTIONS"):
+            action = ActionTypeEnum.GENERATE_QUIZ.value
+            requires_tool = True
+            tool_name = "quiz_generator"
+            response_type = ResponseTypeEnum.QUIZ.value
+            decision = DecisionStateEnum.GENERATE
+        elif intent in ("SUMMARY", "STUDY_NOTES", "GENERATE_NOTES"):
+            action = ActionTypeEnum.GENERATE_SUMMARY.value
+            response_type = ResponseTypeEnum.NOTES.value if "notes" in raw_query.lower() else ResponseTypeEnum.SUMMARY.value
+            decision = DecisionStateEnum.DOCUMENT_ANALYSIS
+        elif intent in ("PROBLEM_SOLVING", "SOLVE_PROBLEM"):
+            action = ActionTypeEnum.SOLVE_PROBLEM.value
+            response_type = ResponseTypeEnum.STEP_BY_STEP.value
+        elif intent in ("COMPARISON", "COMPARE_CONCEPTS"):
+            action = ActionTypeEnum.EXPLAIN_TOPIC.value
+            response_type = ResponseTypeEnum.COMPARISON.value
+        elif intent in ("CASUAL", "GREETING", "CONFIRMATION", "OUT_OF_SCOPE"):
+            action = ActionTypeEnum.CASUAL_REPLY.value
+            response_type = ResponseTypeEnum.DIRECT_ANSWER.value
+            decision = DecisionStateEnum.OUT_OF_SCOPE if intent == "OUT_OF_SCOPE" else DecisionStateEnum.ANSWER
+        elif intent == "DOCUMENT_TOPIC_ANALYSIS":
+            action = ActionTypeEnum.ANALYZE_IMPORTANT_TOPICS.value
+            requires_tool = False
+            response_type = ResponseTypeEnum.DETAILED_EXPLANATION.value
+            decision = DecisionStateEnum.DOCUMENT_ANALYSIS
+        elif intent == "CLARIFY_CONCEPT":
+            action = ActionTypeEnum.CLARIFY_QUERY.value
+            response_type = ResponseTypeEnum.DIRECT_ANSWER.value
+            decision = DecisionStateEnum.CLARIFY
+        else:
+            action = ActionTypeEnum.EXPLAIN_TOPIC.value if intent == "EXPLANATION" else ActionTypeEnum.ANSWER_QUESTION.value
+            response_type = ResponseTypeEnum.DETAILED_EXPLANATION.value
+
+        if ref_meta and ref_meta.get("reference_type") in ("GENERATED_QUESTION", "GENERATED_QUIZ", "GENERATED_FLASHCARD"):
+            action = ActionTypeEnum.EXPLAIN_GENERATED_QUESTION.value
+            intent = UserIntent.EXPLAIN_TOPIC.value
+            response_type = ResponseTypeEnum.DETAILED_EXPLANATION.value
+            requires_tool = False
+            decision = DecisionStateEnum.ANSWER
+
+        if "simple" in raw_query.lower() or "beginner" in raw_query.lower() or "easy" in raw_query.lower():
+            difficulty = "beginner"
+            if response_type == ResponseTypeEnum.DETAILED_EXPLANATION.value:
+                response_type = ResponseTypeEnum.SIMPLE_EXPLANATION.value
+        else:
+            difficulty = meta.difficulty_level.lower() if meta.difficulty_level else "intermediate"
+
+        requires_retrieval = intent not in ("CASUAL", "GREETING", "CONFIRMATION", "DOCUMENT_TOPIC_ANALYSIS")
+        retrieval_scope = (
+            RetrievalScopeEnum.NONE.value if not requires_retrieval
+            else (RetrievalScopeEnum.USER_MATERIAL.value if meta.query_scope == "global_material" or "chapter" in raw_query.lower() or "material" in raw_query.lower()
+                  else (RetrievalScopeEnum.CURRENT_TOPIC.value if meta.target_topic else RetrievalScopeEnum.USER_MATERIAL.value))
+        )
+
+        requires_example = bool(re.search(r"\b(?:example|examples|instance|sample)\b", raw_query, re.IGNORECASE))
+
+        # Extract topics for comparison
+        topics = []
+        if meta.target_topic:
+            topics.append(meta.target_topic)
+        if intent in ("COMPARISON", "COMPARE_CONCEPTS"):
+            comp_m = re.search(r"\b(?:between|compare)\s+([a-zA-Z0-9_\s-]+?)\s+(?:and|vs\.?|versus)\s+([a-zA-Z0-9_\s-]+)", raw_query, re.IGNORECASE)
+            if comp_m:
+                t1 = comp_m.group(1).strip().title()
+                t2 = comp_m.group(2).strip().title()
+                topics = [t1, t2]
+
+        action_plan = ActionPlan(
+            action=action,
+            decision=decision,
+            topic=meta.target_topic or (topics[0] if topics else current_topic),
+            subtopic=None,
+            topics=topics,
+            retrieval_required=requires_retrieval,
+            retrieval_scope=retrieval_scope,
+            retrieval_query=meta.resolved_query,
+            response_type=response_type,
+            requires_tool=requires_tool,
+            tool_name=tool_name,
+            confidence=0.92,
+            clarification_prompt=meta.scope_clarification_prompt
+        )
+
+        return QueryUnderstandingResult(
+            original_query=raw_query,
+            normalized_query=normalized_query,
+            resolved_query=resolved_query,
+            language=language,
+            intent=intent,
+            sub_intent=None,
+            subject=current_subject,
+            topic=meta.target_topic or (topics[0] if topics else current_topic),
+            subtopic=None,
+            topics=topics,
+            entities=meta.extracted_entities,
+            difficulty=difficulty,
+            response_type=response_type,
+            requires_context=bool(meta.context_source == "dialogue_history" or meta.target_topic is not None),
+            requires_retrieval=requires_retrieval,
+            retrieval_scope=retrieval_scope,
+            retrieval_query=meta.resolved_query,
+            action=action,
+            decision=decision,
+            action_plan=action_plan,
+            requires_tool=requires_tool,
+            tool_name=tool_name,
+            confidence=0.92,
+            requires_example=requires_example,
+            clarification_prompt=meta.scope_clarification_prompt,
+            is_fast_path=False,
+            requires_document_analysis=(intent == "DOCUMENT_TOPIC_ANALYSIS"),
+            analysis_scope="COMPLETE_DOCUMENT" if intent == "DOCUMENT_TOPIC_ANALYSIS" else None,
+            reference_type=ref_meta.get("reference_type", "NONE") if ref_meta else "NONE",
+            reference_target=ref_meta.get("reference_target") if ref_meta else None,
+            reference_index=ref_meta.get("reference_index") if ref_meta else None,
+            artifact_id=ref_meta.get("artifact_id") if ref_meta else None,
+            artifact_item_id=ref_meta.get("artifact_item_id") if ref_meta else None,
+            ambiguity_status=ref_meta.get("ambiguity_status", "CLEAR") if ref_meta else "CLEAR"
+        )
+
+    @classmethod
     def analyze_intent_and_metadata(
         cls,
         raw_query: str,
@@ -283,7 +518,8 @@ class QueryUnderstanding:
         resolved_query: str,
         language: str,
         is_follow_up: bool = False,
-        conversation_history: Optional[List[Dict[str, Any]]] = None
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+        ref_meta: Optional[Dict[str, Any]] = None
     ) -> QueryMetadata:
         """
         Uses live LLM with conversation history for query understanding; falls back to heuristic patterns if LLM unavailable.
@@ -293,6 +529,8 @@ class QueryUnderstanding:
         is_casual_match = any(pat.search(normalized_query) for pat in cls.CASUAL_PATTERNS) or any(pat.search(raw_lower.strip()) for pat in cls.CASUAL_PATTERNS)
         has_academic_keywords = any(w in raw_lower for w in ["what", "how", "why", "explain", "solve", "give", "question", "quiz", "page", "table", "figure", "diagram", "compare"])
         if is_casual_match and len(raw_lower.strip().split()) <= 6 and not has_academic_keywords:
+            from app.tutoring.analyzer.fast_path import QueryFastPath
+            fast_res = QueryFastPath.evaluate(normalized_query, raw_query, language)
             pre_gen_plan = PreGenerationClassifier.classify(
                 raw_query=raw_query,
                 resolved_query=resolved_query,
@@ -330,6 +568,7 @@ class QueryUnderstanding:
                 query_scope="specific_topic",
                 scope_clarification_prompt=None,
                 pre_gen_plan=pre_gen_plan,
+                understanding_result=fast_res
             )
 
         # 1. Attempt LLM-Powered Query Understanding
@@ -354,20 +593,45 @@ class QueryUnderstanding:
                     f"Analyze this query in dialogue context and return the JSON object:"
                 )
 
-                llm_response = default_llm_service.generate(
+                resp = default_llm_service.generate(
                     prompt=prompt,
                     system_prompt=_UNDERSTANDING_SYSTEM_PROMPT
                 )
-                if llm_response:
-                    cleaned_json = re.sub(r"```(?:json)?", "", llm_response).strip().strip("`").strip()
-                    parsed = json.loads(cleaned_json)
+                if resp:
+                    json_str = resp.strip()
+                    if "```json" in json_str:
+                        json_str = json_str.split("```json")[1].split("```")[0].strip()
+                    elif "```" in json_str:
+                        json_str = json_str.split("```")[1].split("```")[0].strip()
+
+                    parsed = json.loads(json_str)
                     if isinstance(parsed, dict) and "intent" in parsed:
-                        intent = parsed.get("intent", "DOCUMENT_QA")
+                        raw_intent = str(parsed.get("intent", "DOCUMENT_QA")).upper()
+                        # Map extended intent to canonical pipeline intent if needed
+                        legacy_intent = raw_intent
+                        if raw_intent in ("EXPLAIN_TOPIC", "TEACH_TOPIC", "SIMPLIFY", "CLARIFY_CONCEPT"):
+                            legacy_intent = "EXPLANATION"
+                        elif raw_intent in ("COMPARE_CONCEPTS",):
+                            legacy_intent = "COMPARISON"
+                        elif raw_intent in ("GENERATE_QUIZ", "GENERATE_FLASHCARDS"):
+                            legacy_intent = "QUIZ"
+                        elif raw_intent in ("GENERATE_QUESTIONS", "GENERATE_EXAMPLES"):
+                            legacy_intent = "PRACTICE_QUESTIONS"
+                        elif raw_intent in ("SUMMARIZE", "GENERATE_NOTES"):
+                            legacy_intent = "SUMMARY" if "SUMMARIZE" in raw_intent else "STUDY_NOTES"
+                        elif raw_intent in ("SOLVE_PROBLEM", "CHECK_ANSWER"):
+                            legacy_intent = "PROBLEM_SOLVING"
+                        elif raw_intent in ("GREETING", "CONFIRMATION"):
+                            legacy_intent = "CASUAL"
+                        elif raw_intent in ("ANSWER_QUESTION", "SEARCH_MATERIAL", "ASK_FROM_MATERIAL"):
+                            legacy_intent = "DOCUMENT_QA"
+
+                        intent = legacy_intent
                         context_source = str(parsed.get("context_source", "study_material")).lower().strip()
                         if context_source not in ("dialogue_history", "study_material"):
                             context_source = "study_material"
 
-                        target_topic = parsed.get("target_topic")
+                        target_topic = parsed.get("target_topic") or parsed.get("topic")
                         question_count = parsed.get("question_count")
                         referenced_page = parsed.get("referenced_page")
                         referenced_table = parsed.get("referenced_table")
@@ -382,8 +646,8 @@ class QueryUnderstanding:
                         if target_topic and target_topic not in entities:
                             entities.insert(0, target_topic)
 
-                        needs_latex = bool(parsed.get("needs_latex"))
-                        needs_table = bool(parsed.get("needs_table"))
+                        needs_latex = bool(parsed.get("needs_latex", False)) or any(w in raw_query.lower() for w in ["formula", "equation", "math", "derive"])
+                        needs_table = bool(parsed.get("needs_table", False))
                         refined_query = parsed.get("resolved_query") or resolved_query
 
                         # Extract visual modality and cognitive diagram type
@@ -580,7 +844,7 @@ class QueryUnderstanding:
                             visual_diagram_type = "none"
                             visual_prompt_focus = None
 
-                        return QueryMetadata(
+                        meta_res = QueryMetadata(
                             raw_query=raw_query,
                             language=language,
                             normalized_query=normalized_query,
@@ -613,11 +877,37 @@ class QueryUnderstanding:
                             scope_clarification_prompt=scope_clarification_prompt,
                             pre_gen_plan=pre_gen_plan,
                         )
+                        meta_res.understanding_result = cls._build_structured_result_from_meta(
+                            meta_res, raw_query, normalized_query, refined_query, language
+                        )
+                        # Override with explicitly generated fields if provided
+                        if "decision" in parsed:
+                            meta_res.understanding_result.decision = parsed["decision"]
+                            meta_res.understanding_result.action_plan.decision = parsed["decision"]
+                        if "answerability" in parsed:
+                            from app.schemas.tutoring import AnswerabilityCheck
+                            meta_res.understanding_result.answerability = AnswerabilityCheck(**parsed["answerability"])
+                        if "clarification_needed" in parsed:
+                            meta_res.understanding_result.clarification_needed = parsed["clarification_needed"]
+                        if "clarification_question" in parsed:
+                            meta_res.understanding_result.clarification_question = parsed["clarification_question"]
+                        if "missing_information" in parsed:
+                            meta_res.understanding_result.missing_information = parsed["missing_information"]
+                        if ref_meta and ref_meta.get("reference_type") in ("GENERATED_QUESTION", "GENERATED_QUIZ", "GENERATED_FLASHCARD"):
+                            meta_res.understanding_result.action = "EXPLAIN_GENERATED_QUESTION"
+                            meta_res.understanding_result.intent = "EXPLAIN_TOPIC"
+                            meta_res.understanding_result.requires_tool = False
+                            meta_res.understanding_result.reference_type = ref_meta["reference_type"]
+                            meta_res.understanding_result.reference_index = ref_meta.get("reference_index")
+                            meta_res.understanding_result.artifact_id = ref_meta.get("artifact_id")
+                            meta_res.understanding_result.artifact_item_id = ref_meta.get("artifact_item_id")
+                            meta_res.understanding_result.topic = ref_meta.get("resolved_topic") or meta_res.understanding_result.topic
+                        return meta_res
             except Exception as e:
                 logger.warning(f"[QueryUnderstanding] LLM understanding pass failed, falling back to heuristics: {e}")
 
         # 2. Heuristic Fallback
-        return cls._heuristic_analysis(
+        meta_fallback = cls._heuristic_analysis(
             raw_query=raw_query,
             normalized_query=normalized_query,
             resolved_query=resolved_query,
@@ -625,6 +915,19 @@ class QueryUnderstanding:
             is_follow_up=is_follow_up,
             conversation_history=conversation_history
         )
+        meta_fallback.understanding_result = cls._build_structured_result_from_meta(
+            meta_fallback, raw_query, normalized_query, resolved_query, language
+        )
+        if ref_meta and ref_meta.get("reference_type") in ("GENERATED_QUESTION", "GENERATED_QUIZ", "GENERATED_FLASHCARD"):
+            meta_fallback.understanding_result.action = "EXPLAIN_GENERATED_QUESTION"
+            meta_fallback.understanding_result.intent = "EXPLAIN_TOPIC"
+            meta_fallback.understanding_result.requires_tool = False
+            meta_fallback.understanding_result.reference_type = ref_meta["reference_type"]
+            meta_fallback.understanding_result.reference_index = ref_meta.get("reference_index")
+            meta_fallback.understanding_result.artifact_id = ref_meta.get("artifact_id")
+            meta_fallback.understanding_result.artifact_item_id = ref_meta.get("artifact_item_id")
+            meta_fallback.understanding_result.topic = ref_meta.get("resolved_topic") or meta_fallback.understanding_result.topic
+        return meta_fallback
 
     @classmethod
     def _heuristic_analysis(
@@ -731,8 +1034,14 @@ class QueryUnderstanding:
             format_directives["whole_material"] = True
 
         # Intent Detection
-        if is_pasted_mcq or is_batch_questions:
+        if cls.DOCUMENT_TOPIC_ANALYSIS_PATTERN.search(cleaned):
+            intent = "DOCUMENT_TOPIC_ANALYSIS"
+        elif is_pasted_mcq or is_batch_questions:
             intent = "PROBLEM_SOLVING"
+        elif any(w in cleaned for w in ["study plan", "study-plan", "study schedule", "learning schedule", "create plan", "make a plan"]):
+            intent = "CREATE_STUDY_PLAN"
+        elif any(w in cleaned for w in ["study notes", "revision notes", "make notes", "give me notes", "cheat sheet"]):
+            intent = "STUDY_NOTES"
         elif any(pat.search(cleaned) for pat in cls.CASUAL_PATTERNS) and len(cleaned.split()) <= 4:
             intent = "CASUAL"
         elif any(pat.search(cleaned) for pat in cls.QUIZ_PATTERNS):
@@ -741,10 +1050,10 @@ class QueryUnderstanding:
             intent = "PROBLEM_SOLVING"
         elif any(pat.search(cleaned) for pat in cls.PRACTICE_QUESTIONS_PATTERNS) and ("question" in cleaned or "problem" in cleaned):
             intent = "PRACTICE_QUESTIONS"
-        elif any(pat.search(cleaned) for pat in cls.SUMMARY_PATTERNS):
-            intent = "SUMMARY"
         elif any(pat.search(cleaned) for pat in cls.COMPARISON_PATTERNS):
             intent = "COMPARISON"
+        elif any(pat.search(cleaned) for pat in cls.SUMMARY_PATTERNS):
+            intent = "SUMMARY"
         elif any(pat.search(cleaned) for pat in cls.PROBLEM_SOLVING_PATTERNS):
             intent = "PROBLEM_SOLVING"
         elif is_follow_up:
@@ -942,5 +1251,44 @@ class QueryUnderstanding:
             query_scope=query_scope,
             scope_clarification_prompt=scope_clarification_prompt,
             pre_gen_plan=pre_gen_plan,
+            understanding_result=cls._build_structured_result_from_meta(
+                meta=QueryMetadata(
+                    raw_query=raw_query,
+                    language=language,
+                    normalized_query=normalized_query,
+                    resolved_query=resolved_query,
+                    intent=intent,
+                    context_source=context_source,
+                    target_topic=target_topic,
+                    question_count=question_count,
+                    referenced_page=referenced_page,
+                    referenced_table=referenced_table,
+                    referenced_figure=referenced_figure,
+                    format_directives=format_directives,
+                    extracted_entities=list(dict.fromkeys(entities))[:10],
+                    learning_objective="analyze" if intent == "COMPARISON" else ("apply" if intent in ["PRACTICE_QUESTIONS", "PROBLEM_SOLVING"] else "understand"),
+                    difficulty_level="Intermediate",
+                    response_requirements={
+                        "needs_latex": needs_latex,
+                        "needs_table": needs_table,
+                        "needs_steps": intent in ["PROBLEM_SOLVING", "EXPLANATION", "COMPARISON"],
+                        "needs_socratic": True,
+                    },
+                    visual_modality=visual_modality,
+                    visual_diagram_type=visual_diagram_type,
+                    visual_prompt_focus=visual_prompt_focus,
+                    question_complexity="comparative" if intent == "COMPARISON" else "simple",
+                    is_pasted_mcq=is_pasted_mcq,
+                    is_batch_questions=is_batch_questions,
+                    batch_question_count=batch_question_count,
+                    query_scope=query_scope,
+                    scope_clarification_prompt=scope_clarification_prompt,
+                    pre_gen_plan=pre_gen_plan,
+                ),
+                raw_query=raw_query,
+                normalized_query=normalized_query,
+                resolved_query=resolved_query,
+                language=language
+            )
         )
 

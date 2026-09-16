@@ -1,5 +1,7 @@
 import re
 from typing import List, Dict, Any, Tuple, Optional
+from sqlalchemy.orm import Session
+from app.models.artifact import GeneratedArtifact, GeneratedArtifactItem
 
 
 class ReferenceResolver:
@@ -79,9 +81,9 @@ class ReferenceResolver:
         return None
 
     @classmethod
-    def resolve_references(cls, query: str, conversation_history: List[Dict[str, str]]) -> Tuple[str, Dict[str, Any]]:
+    def resolve_references(cls, query: str, conversation_history: List[Dict[str, str]], db_session: Optional[Session] = None, session_id: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:
         """
-        Resolves ambiguous conversational references using prior turns.
+        Resolves ambiguous conversational references using prior turns or structured artifact memory.
         Returns: (resolved_query, resolution_meta)
         """
         resolved = query
@@ -122,26 +124,81 @@ class ReferenceResolver:
                         idx_val = int(val_str)
                     elif val_str in cls.WORD_TO_INDEX:
                         idx_val = cls.WORD_TO_INDEX[val_str]
-                if idx_val and conversation_history:
-                    q_text = cls._extract_question_from_history(conversation_history, idx_val)
+                if idx_val:
                     meta["referenced_question_index"] = idx_val
-                    if q_text:
-                        meta["referenced_question_text"] = q_text
-                        resolved = f"{query}: {q_text}"
+                    # Attempt DB Artifact Resolution first
+                    if db_session and session_id:
+                        recent_artifact = db_session.query(GeneratedArtifact).filter(
+                            GeneratedArtifact.session_id == session_id
+                        ).order_by(GeneratedArtifact.created_at.desc()).first()
+                        
+                        if recent_artifact:
+                            item = db_session.query(GeneratedArtifactItem).filter(
+                                GeneratedArtifactItem.artifact_id == recent_artifact.id,
+                                GeneratedArtifactItem.item_index == idx_val
+                            ).first()
+                            
+                            if item:
+                                resolved = f"Explain the following generated practice question:\n\n{item.content}"
+                                meta["reference_type"] = "GENERATED_QUESTION" if recent_artifact.artifact_type in ("PRACTICE_QUESTION_SET", "QUIZ") else recent_artifact.artifact_type
+                                meta["reference_index"] = idx_val
+                                meta["artifact_id"] = recent_artifact.id
+                                meta["artifact_item_id"] = item.id
+                                meta["resolved_topic"] = item.topic or recent_artifact.topic
+                                meta["ambiguity_status"] = "RESOLVED_FROM_CONTEXT"
+                                return resolved, meta
+                                
+                    # Fallback to chat history parsing if DB lookup failed or unavailable
+                    if conversation_history:
+                        q_text = cls._extract_question_from_history(conversation_history, idx_val)
+                        if q_text:
+                            meta["referenced_question_text"] = q_text
+                            resolved = f"{query}: {q_text}"
                 break
 
-        # 2. Check if query is an immediate follow-up (e.g. 'why?', 'how?', 'tell me more')
+        # 2. Check if query is an immediate follow-up (e.g. 'why?', 'how?', 'tell me more', 'give me an example')
         trimmed = query.strip().lower()
+
+        # Find active concept from history
+        active_concept = cls._extract_active_concept(conversation_history)
+
+        # 2a. Ellipsis / Partial follow-up patterns
+        what_about_match = re.match(r"^(?:what\s+about|how\s+about)\s+(.+?)[?!.]*$", trimmed, re.IGNORECASE)
+        if what_about_match and active_concept:
+            sub_concept = what_about_match.group(1).strip()
+            # If the sub_concept doesn't already mention active_concept
+            if active_concept.lower() not in sub_concept.lower():
+                resolved = f"What is {sub_concept} in {active_concept}?"
+                meta["is_follow_up"] = True
+                meta["resolved_concept"] = active_concept
+                meta["resolved_subconcept"] = sub_concept
+                return resolved, meta
+
+        example_match = re.match(r"^(?:give\s+(?:me\s+)?(?:an\s+|another\s+)?example|provide\s+an\s+example|show\s+an\s+example)[?!.]*$", trimmed, re.IGNORECASE)
+        if example_match and active_concept:
+            resolved = f"Give an example of {active_concept}."
+            meta["is_follow_up"] = True
+            meta["resolved_concept"] = active_concept
+            return resolved, meta
+
+        simplify_match = re.match(r"^(?:simplify(?:\s+this)?|explain\s+simply|explain\s+like\s+i'm\s+(?:a\s+)?beginner|make\s+it\s+simpler)[?!.]*$", trimmed, re.IGNORECASE)
+        if simplify_match and active_concept:
+            resolved = f"Simplify the explanation of {active_concept}."
+            meta["is_follow_up"] = True
+            meta["resolved_concept"] = active_concept
+            return resolved, meta
+
         if any(pat.match(trimmed) for pat in cls.FOLLOW_UP_PATTERNS):
             meta["is_follow_up"] = True
             
             # Find the most recent distinct context turn
-            last_context = ""
-            for msg in reversed(conversation_history):
-                c = msg.get("content", "").strip()
-                if c and c.lower() != trimmed:
-                    last_context = c[:120]
-                    break
+            last_context = active_concept
+            if not last_context:
+                for msg in reversed(conversation_history):
+                    c = msg.get("content", "").strip()
+                    if c and c.lower() != trimmed:
+                        last_context = c[:120]
+                        break
 
             if last_context:
                 resolved = f"{query} regarding {last_context}"
@@ -159,50 +216,102 @@ class ReferenceResolver:
 
         pronoun_match = cls.PRONOUN_PATTERN.search(query)
         if pronoun_match and conversation_history and not is_container_specifier and meta.get("scope") != "global":
-            # Check the most recent turn (assistant or user) for the context being referenced
-            last_msg = ""
-            for m in reversed(conversation_history):
-                c = (m.get("content") or "").strip()
-                if c and c.lower() != trimmed:
-                    last_msg = c
-                    break
+            target_noun = active_concept
+            if not target_noun:
+                # Fallback to scanning last message
+                last_msg = ""
+                for m in reversed(conversation_history):
+                    c = (m.get("content") or "").strip()
+                    if c and c.lower() != trimmed:
+                        last_msg = c
+                        break
+                skip_words = {"Tell", "Explain", "What", "How", "Why", "Show", "Can", "Please", "Describe", "Define", "Discuss", "Is", "Are", "Assistant", "Student"}
+                bold_nouns = re.findall(r"\*\*([^*]+)\*\*", last_msg)
+                valid_nouns = [b.strip() for b in bold_nouns if len(b.strip()) > 2 and b.strip() not in skip_words]
+                if valid_nouns:
+                    target_noun = valid_nouns[0]
 
-            skip_words = {"Tell", "Explain", "What", "How", "Why", "Show", "Can", "Please", "Describe", "Define", "Discuss", "Is", "Are", "Assistant", "Student"}
-
-            # 1. Check for bold concepts in assistant response (e.g. **Quadratic Equation**)
-            bold_nouns = re.findall(r"\*\*([^*]+)\*\*", last_msg)
-            valid_nouns = [b.strip() for b in bold_nouns if len(b.strip()) > 2 and b.strip() not in skip_words]
-
-            # 2. Check for capitalized noun phrases
-            if not valid_nouns:
-                key_nouns = re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b", last_msg)
-                valid_nouns = [n for n in key_nouns if n not in skip_words]
-
-            # 3. Check for concept in previous user queries
-            if not valid_nouns:
-                last_user_msg = next((m.get("content", "") for m in reversed(conversation_history) if m.get("role") == "user"), "")
-                user_nouns = re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b", last_user_msg)
-                valid_nouns = [n for n in user_nouns if n not in skip_words]
-                if not valid_nouns:
-                    concept_match = re.search(r"(?:what is|define|explain|about)\s+(?:a\s+|an\s+|the\s+)?([a-zA-Z\s]{3,40}?)(?:\?|$)", last_user_msg, re.IGNORECASE)
-                    if concept_match and concept_match.group(1).strip():
-                        valid_nouns = [concept_match.group(1).strip().title()]
-
-            if valid_nouns:
-                valid_nouns.sort(key=len, reverse=True)
-                target_noun = valid_nouns[0]
+            if target_noun:
                 resolved = cls.PRONOUN_PATTERN.sub(target_noun, query, count=1)
                 meta["resolved_pronouns"].append({"pronoun": pronoun_match.group(0), "resolved_to": target_noun})
 
         return resolved, meta
+
+    @classmethod
+    def _extract_active_concept(cls, conversation_history: List[Dict[str, str]]) -> Optional[str]:
+        if not conversation_history:
+            return None
+
+        skip_words = {
+            "tell", "explain", "what", "how", "why", "show", "can", "please",
+            "describe", "define", "discuss", "is", "are", "assistant", "student",
+            "user", "tutor", "yes", "no", "ok", "okay", "thanks", "hello", "hi"
+        }
+
+        # 1. Look for user queries with "what is X", "explain X", "tell me about X"
+        for m in reversed(conversation_history):
+            if m.get("role") == "user":
+                txt = m.get("content", "").strip()
+                # Pattern: explain / what is / tell me about / about X
+                match = re.search(
+                    r"(?:explain|what is|tell me about|about|teach me|study|notes on|questions on|compare)\s+(?:a\s+|an\s+|the\s+)?([a-zA-Z0-9_\-\s]{2,50}?)(?:\?|\.|$)",
+                    txt,
+                    re.IGNORECASE
+                )
+                if match:
+                    concept = match.group(1).strip()
+                    if concept.lower() not in skip_words and len(concept) > 1:
+                        return concept
+
+        # 2. Check for bold concepts in assistant responses (e.g. **Support Vector Machines**)
+        for m in reversed(conversation_history):
+            if m.get("role") in ("assistant", "tutor"):
+                txt = m.get("content", "").strip()
+                bolds = re.findall(r"\*\*([^*]+)\*\*", txt)
+                valid = [b.strip() for b in bolds if len(b.strip()) > 2 and b.strip().lower() not in skip_words]
+                if valid:
+                    return valid[0]
+
+        return None
+
+    @classmethod
+    def build_compact_context(
+        cls,
+        conversation_history: List[Dict[str, str]],
+        current_subject: Optional[str] = None,
+        current_topic: Optional[str] = None,
+        max_turns: int = 4
+    ) -> Dict[str, Any]:
+        """
+        Produces a compact, token-efficient representation of recent dialogue context
+        for the Query Analyzer LLM.
+        """
+        recent_turns = []
+        for msg in conversation_history[-max_turns:]:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            # Truncate assistant content to preserve token budget
+            if role in ("assistant", "tutor") and len(content) > 200:
+                content = content[:200] + "..."
+            recent_turns.append({"role": role, "content": content})
+
+        active_concept = cls._extract_active_concept(conversation_history) or current_topic
+
+        return {
+            "recent_turns": recent_turns,
+            "active_concept": active_concept,
+            "current_subject": current_subject,
+            "current_topic": current_topic,
+            "total_turns_count": len(conversation_history)
+        }
 
 
 class CoreferencePronounResolver:
     """Convenience wrapper for ReferenceResolver with dictionary return structure."""
 
     @classmethod
-    def resolve(cls, query: str, conversation_history: List[Dict[str, str]]) -> Dict[str, Any]:
-        resolved_text, meta = ReferenceResolver.resolve_references(query, conversation_history)
+    def resolve(cls, query: str, conversation_history: List[Dict[str, str]], db_session: Optional[Session] = None, session_id: Optional[str] = None) -> Dict[str, Any]:
+        resolved_text, meta = ReferenceResolver.resolve_references(query, conversation_history, db_session, session_id)
         return {
             "resolved_query": resolved_text,
             "meta": meta,

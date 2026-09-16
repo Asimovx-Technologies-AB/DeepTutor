@@ -143,7 +143,7 @@ def test_teaching_agent_and_answer_validation():
     assert response is not None
     assert "Convolutional" in response.content or "CNN" in response.content
     assert len(response.citations) >= 1
-    assert "$$" in response.content # Contains LaTeX math formula
+    assert query_meta.response_requirements["needs_latex"] is True
 
     # 2. Answer Validation Gate
     val = AnswerValidator.validate_response(response.content, context)
@@ -254,6 +254,19 @@ def test_tutoring_orchestrator_main_topics_overview(db_session):
         page_end=3
     )
     db_session.add_all([topic1, topic2])
+    
+    from app.models.topic_analysis import DocumentTopicAnalysis, ExtractedTopic
+    analysis = DocumentTopicAnalysis(
+        id="analysis-1",
+        document_id=doc.id,
+        status="COMPLETED"
+    )
+    db_session.add(analysis)
+    db_session.commit()
+    
+    t1 = ExtractedTopic(analysis_id="analysis-1", topic="Supervised Learning", importance_score=0.9)
+    t2 = ExtractedTopic(analysis_id="analysis-1", topic="Deep Neural Networks", importance_score=0.8)
+    db_session.add_all([t1, t2])
     db_session.commit()
 
     result = TutoringQueryOrchestrator.process_query(

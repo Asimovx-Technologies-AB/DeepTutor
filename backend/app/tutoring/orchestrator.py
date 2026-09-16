@@ -1,9 +1,10 @@
 import time
 from datetime import datetime, timezone
 import logging
-from typing import List, Dict, Any, Optional, Generator
+from typing import List, Dict, Any, Optional, Generator, Tuple
 from sqlalchemy.orm import Session
 from app.models.session import StudySession, ChatMessage, StudentMastery
+from app.models.artifact import GeneratedArtifact, GeneratedArtifactItem
 from app.schemas.tutoring import (
     QueryMetadata, ContextBundle, TeachingResponse, AnswerValidationResult
 )
@@ -11,6 +12,8 @@ from app.tutoring.analyzer.preprocessor import QueryPreprocessor
 from app.tutoring.analyzer.context import ContextIntegrator
 from app.tutoring.analyzer.resolver import ReferenceResolver
 from app.tutoring.analyzer.understanding import QueryUnderstanding
+from app.tutoring.analyzer.service import QueryUnderstandingService
+from app.tutoring.analyzer.fast_path import QueryFastPath
 from app.tutoring.router.query_router import QueryRouter
 from app.tutoring.retrieval.orchestrator import MultiStrategyRetrievalOrchestrator
 from app.tutoring.teaching.agent import TeachingAgent
@@ -95,7 +98,9 @@ class TutoringQueryOrchestrator:
         # 3. Reference Resolution
         resolved_query, ref_meta = ReferenceResolver.resolve_references(
             query=normalized_query,
-            conversation_history=context["history"]
+            conversation_history=context["history"],
+            db_session=session,
+            session_id=session_id
         )
 
         # 4. Query Understanding
@@ -105,7 +110,8 @@ class TutoringQueryOrchestrator:
             resolved_query=resolved_query,
             language=language,
             is_follow_up=ref_meta["is_follow_up"],
-            conversation_history=context.get("history", [])
+            conversation_history=context.get("history", []),
+            ref_meta=ref_meta
         )
 
         effective_page = query_meta.referenced_page or ref_meta.get("referenced_page") or active_page
@@ -133,6 +139,17 @@ class TutoringQueryOrchestrator:
                 mode=fc_intent.preferred_mode
             )
             payload_json = json.dumps(quiz_payload.model_dump(), indent=2)
+            
+            # Persist artifact
+            if session_id:
+                cls._persist_generated_artifact(
+                    session=session,
+                    session_id=session_id,
+                    artifact_type="GENERATED_" + fc_intent.preferred_mode.upper(),
+                    topic=target_topic,
+                    items=[(idx + 1, item.front if hasattr(item, "front") else item.question) for idx, item in enumerate(getattr(quiz_payload, "items", getattr(quiz_payload, "questions", [])))]
+                )
+                
             if session_id:
                 cls._update_session_state(
                     session=session,
@@ -176,8 +193,25 @@ class TutoringQueryOrchestrator:
             conversation_history=context["history"],
         )
 
-        if route_dest == "CASUAL_PIPELINE":
+        if route_dest == "CASUAL_PIPELINE" or route_dest == "DIRECT_LLM_PIPELINE":
             res_dict = CasualPipeline.generate_response(raw_query)
+        elif route_dest == "STUDY_PLAN_PIPELINE":
+            target_topic = query_meta.target_topic or effective_topic or "General Studies"
+            res_dict = {
+                "content": (
+                    f"📅 **Personalized Study Plan for {target_topic}**\n\n"
+                    f"I can help you build and customize a targeted study plan for **{target_topic}** based on your timeline and daily study goals.\n\n"
+                    f"To generate a full daily schedule with mastery checkpoints, navigate to the **Study Plan** dashboard or specify your available days (e.g. *'Generate a 5-day plan for {target_topic}'*)."
+                ),
+                "intent": "CREATE_STUDY_PLAN",
+                "citations": [],
+                "grounding_score": 1.0,
+                "socratic_follow_up": f"What is your target completion date or exam timeline for {target_topic}?",
+                "suggested_questions": [
+                    f"Generate a 5-day study plan for {target_topic}",
+                    f"What are the core topics to cover in {target_topic}?"
+                ]
+            }
         elif route_dest == "SUMMARY_PIPELINE":
             # Retrieve broad context for summary
             context_bundle = MultiStrategyRetrievalOrchestrator.retrieve_context_bundle(
@@ -201,6 +235,14 @@ class TutoringQueryOrchestrator:
                 conversation_history=context.get("history", [])
             )
             res_dict = AssessmentPipeline.generate_quiz(context_bundle)
+            if session_id and res_dict.get("quiz_data"):
+                cls._persist_generated_artifact(
+                    session=session,
+                    session_id=session_id,
+                    artifact_type="GENERATED_QUIZ",
+                    topic=topic_title or "General Topic",
+                    items=[(idx + 1, q.get("question", "")) for idx, q in enumerate(res_dict["quiz_data"])]
+                )
         elif route_dest == "PROBLEM_SOLVING_PIPELINE":
             context_bundle = MultiStrategyRetrievalOrchestrator.retrieve_context_bundle(
                 session=session,
@@ -212,6 +254,63 @@ class TutoringQueryOrchestrator:
                 conversation_history=context.get("history", [])
             )
             res_dict = ProblemSolvingPipeline.solve_problem(resolved_query, context_bundle)
+        elif route_dest == "DOCUMENT_TOPIC_ANALYSIS_PIPELINE":
+            from app.services.topic_analyzer import TopicAnalysisService
+            analysis = TopicAnalysisService.get_or_run_analysis(session, doc_id)
+            if analysis and analysis.status == "COMPLETED":
+                content = TopicAnalysisService.format_analysis_for_chat(session, analysis)
+                # Persist as artifact for follow-up reference resolution
+                if session_id:
+                    from app.models.topic_analysis import ExtractedTopic
+                    topics = session.query(ExtractedTopic).filter(ExtractedTopic.analysis_id == analysis.id).order_by(ExtractedTopic.importance_score.desc()).all()
+                    cls._persist_generated_artifact(
+                        session=session,
+                        session_id=session_id,
+                        artifact_type="GENERATED_TOPIC_ANALYSIS",
+                        topic=topic_title or "Document Analysis",
+                        items=[(idx + 1, t.topic) for idx, t in enumerate(topics)]
+                    )
+            elif analysis and analysis.status == "PROCESSING":
+                content = "⏳ Topic analysis is currently in progress. Please wait..."
+            else:
+                content = "Could not analyze topics. Please ensure a document is uploaded."
+            
+            res_dict = {
+                "content": content,
+                "intent": "DOCUMENT_TOPIC_ANALYSIS",
+                "citations": [],
+                "grounding_score": 1.0,
+                "socratic_follow_up": "Which of these topics would you like to explore first?",
+                "suggested_questions": ["Explain the first topic", "Tell me more about the second one"]
+            }
+        elif route_dest == "CLARIFY_PIPELINE":
+            clarify_msg = "Could you please clarify what you mean?"
+            if query_meta.understanding_result and query_meta.understanding_result.clarification_question:
+                clarify_msg = query_meta.understanding_result.clarification_question
+            elif query_meta.scope_clarification_prompt:
+                clarify_msg = query_meta.scope_clarification_prompt
+            
+            res_dict = {
+                "content": clarify_msg,
+                "intent": "CLARIFY_CONCEPT",
+                "citations": [],
+                "grounding_score": 1.0,
+                "socratic_follow_up": None,
+                "suggested_questions": []
+            }
+        elif route_dest == "INSUFFICIENT_EVIDENCE_PIPELINE":
+            evidence_msg = "I couldn't find enough information in the uploaded materials to accurately answer this question."
+            if query_meta.understanding_result and query_meta.understanding_result.missing_information:
+                evidence_msg += f" Missing information: {query_meta.understanding_result.missing_information}"
+                
+            res_dict = {
+                "content": evidence_msg,
+                "intent": "INSUFFICIENT_EVIDENCE",
+                "citations": [],
+                "grounding_score": 1.0,
+                "socratic_follow_up": None,
+                "suggested_questions": []
+            }
         else:
             # RETRIEVAL_PIPELINE
             chosen_strategy = "contextual" if effective_page else retrieval_strategy
@@ -237,8 +336,16 @@ class TutoringQueryOrchestrator:
             }
 
         # 7. Answer Validation Gate
-        validation_result = AnswerValidator.validate_response(res_dict["content"], context_bundle)
-        res_dict["validation"] = validation_result.model_dump()
+        if res_dict["intent"] in ("CLARIFY_CONCEPT", "INSUFFICIENT_EVIDENCE", "DOCUMENT_TOPIC_ANALYSIS"):
+            # Skip pedagogical validation for system messages/prompts
+            res_dict["validation"] = {
+                "is_valid": True,
+                "validation_status": "PASS",
+                "feedback_notes": "Validation skipped for system-generated conversational response."
+            }
+        else:
+            validation_result = AnswerValidator.validate_response(res_dict["content"], context_bundle)
+            res_dict["validation"] = validation_result.model_dump()
 
         latency_ms = round((time.time() - start_time) * 1000, 2)
         res_dict["latency_ms"] = latency_ms
@@ -253,7 +360,7 @@ class TutoringQueryOrchestrator:
                 assistant_response=res_dict["content"],
                 intent=query_meta.intent,
                 citations=res_dict["citations"],
-                grounding_score=validation_result.grounding_score,
+                grounding_score=res_dict.get("grounding_score", 1.0),
                 latency_ms=latency_ms,
                 entities=query_meta.extracted_entities
             )
@@ -396,6 +503,55 @@ class TutoringQueryOrchestrator:
             has_active_document=bool(doc_id)
         )
 
+        # Handle Casual & Study Plan non-retrieval routes early in streaming
+        if route_dest in ("CASUAL_PIPELINE", "DIRECT_LLM_PIPELINE"):
+            casual_resp = CasualPipeline.generate_response(raw_query)
+            c_text = casual_resp.get("content", "Hello! How can I help you with your studies today?")
+            yield {"type": "phase_end", "phase": "Analysis Complete", "phase_key": "analysis"}
+            yield {"type": "token", "token": c_text, "data": c_text}
+            yield {"type": "grounding", "data": {"validation_status": "PASS", "grounding_score": 1.0, "cross_reference_valid": True, "is_valid": True}}
+            if session_id:
+                cls._update_session_state(
+                    session=session,
+                    session_id=session_id,
+                    topic_id=topic_id,
+                    user_query=raw_query,
+                    assistant_response=c_text,
+                    intent=query_meta.intent,
+                    citations=[],
+                    grounding_score=1.0,
+                    latency_ms=round((time.time() - start_time) * 1000, 2),
+                    entities=query_meta.extracted_entities
+                )
+            yield {"type": "done", "latency_ms": round((time.time() - start_time) * 1000, 2)}
+            return
+
+        if route_dest == "STUDY_PLAN_PIPELINE":
+            target_topic = query_meta.target_topic or effective_topic or "General Studies"
+            plan_text = (
+                f"📅 **Personalized Study Plan for {target_topic}**\n\n"
+                f"I can help you build and customize a targeted study plan for **{target_topic}** based on your timeline and daily study goals.\n\n"
+                f"To generate a full daily schedule with mastery checkpoints, navigate to the **Study Plan** dashboard or specify your available days (e.g. *'Generate a 5-day plan for {target_topic}'*)."
+            )
+            yield {"type": "phase_end", "phase": "Analysis Complete", "phase_key": "analysis"}
+            yield {"type": "token", "token": plan_text, "data": plan_text}
+            yield {"type": "grounding", "data": {"validation_status": "PASS", "grounding_score": 1.0, "cross_reference_valid": True, "is_valid": True}}
+            if session_id:
+                cls._update_session_state(
+                    session=session,
+                    session_id=session_id,
+                    topic_id=topic_id,
+                    user_query=raw_query,
+                    assistant_response=plan_text,
+                    intent=query_meta.intent,
+                    citations=[],
+                    grounding_score=1.0,
+                    latency_ms=round((time.time() - start_time) * 1000, 2),
+                    entities=query_meta.extracted_entities
+                )
+            yield {"type": "done", "latency_ms": round((time.time() - start_time) * 1000, 2)}
+            return
+
         # 6. Retrieve Context
         chosen_strategy = "contextual" if effective_page else (retrieval_strategy if route_dest == "RETRIEVAL_PIPELINE" else "thematic")
         context_bundle = MultiStrategyRetrievalOrchestrator.retrieve_context_bundle(
@@ -469,6 +625,29 @@ class TutoringQueryOrchestrator:
             )
 
         yield {"type": "done", "latency_ms": latency_ms}
+
+    @classmethod
+    def _persist_generated_artifact(cls, session: Session, session_id: str, artifact_type: str, topic: str, items: List[Tuple[int, str]]) -> None:
+        """Helper to save structured items into GeneratedArtifact."""
+        if not items:
+            return
+        
+        artifact = GeneratedArtifact(
+            session_id=session_id,
+            artifact_type=artifact_type,
+            topic=topic
+        )
+        session.add(artifact)
+        session.flush()
+        
+        for idx, text in items:
+            session.add(GeneratedArtifactItem(
+                artifact_id=artifact.id,
+                item_index=idx,
+                content=text,
+                topic=topic
+            ))
+        session.commit()
 
     @classmethod
     def _update_session_state(

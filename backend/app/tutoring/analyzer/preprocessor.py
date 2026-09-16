@@ -85,12 +85,25 @@ class QueryPreprocessor:
 
         final_normalized = " ".join(corrected_words)
 
+        # 5. Reference and follow-up markers check
+        ref_markers = []
+        lower_norm = final_normalized.lower()
+        for marker in ["this", "that", "these", "those", "above", "previous topic", "explain more", "what about", "give another example", "give me an example", "tell me more"]:
+            if marker in lower_norm:
+                ref_markers.append(marker)
+
+        tech_terms_found = [term for term in cls.COMMON_MATH_TERMS if term in lower_norm]
+
         validation_meta = {
+            "raw_query": raw_query,
             "raw_length": len(raw_query),
             "normalized_length": len(final_normalized),
             "has_typos_fixed": has_typos_fixed,
             "language": language,
             "token_count_approx": len(final_normalized.split()),
+            "reference_markers": ref_markers,
+            "has_reference_markers": len(ref_markers) > 0,
+            "technical_terms_found": tech_terms_found,
         }
 
         return final_normalized, language, validation_meta

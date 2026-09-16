@@ -17,11 +17,15 @@ export default function InlineSVGDiagram({ svg }: Props) {
   const sanitizedSvg = useMemo(() => {
     if (!svg || !svg.trim()) return ''
 
-    // Strip any surrounding markdown fences if present
+    // Extract the actual SVG tag, ignoring any surrounding markdown text
     let raw = svg
-      .replace(/^```svg\s*/i, '')
-      .replace(/```$/, '')
-      .trim()
+    const svgMatch = raw.match(/<svg[\s\S]*?<\/svg>/i)
+    if (svgMatch) {
+      raw = svgMatch[0]
+    } else {
+      // Fallback cleanup if regex fails for some reason
+      raw = raw.replace(/^```svg\s*/i, '').replace(/```$/, '').trim()
+    }
 
     // DOMPurify with SVG-safe configuration
     const clean = DOMPurify.sanitize(raw, {

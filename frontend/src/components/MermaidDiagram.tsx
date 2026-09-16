@@ -155,14 +155,7 @@ export default function MermaidDiagram({ chart, onNodeClick }: Props) {
   const [svgContent, setSvgContent] = useState<string>('')
   const [error, setError] = useState<boolean>(false)
   const [copied, setCopied] = useState<boolean>(false)
-  const [fitScale, setFitScale] = useState<number>(1)
-  const [scale, setScale] = useState<number>(1)
-  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [intrinsicSize, setIntrinsicSize] = useState<{ width: number; height: number }>({ width: 650, height: 420 })
-  const isUserInteracted = useRef<boolean>(false)
-  const [isDragging, setIsDragging] = useState<boolean>(false)
-  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(false)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [popoverPos, setPopoverPos] = useState<{ x: number; y: number } | null>(null)
   const rawId = useId().replace(/:/g, '')
@@ -175,40 +168,6 @@ export default function MermaidDiagram({ chart, onNodeClick }: Props) {
       }
     })
   }
-
-  // Calculate the optimal Best-Fit scale for the container
-  const calculateFitScale = useCallback((w: number, h: number, isFs: boolean) => {
-    if (!containerRef.current) return 1
-    const rect = containerRef.current.getBoundingClientRect()
-    // Give pleasant side margins (56px total)
-    const availableW = Math.max(320, (rect.width || 750) - 56)
-    
-    // Comfortable available height
-    const availableH = isFs
-      ? Math.max(400, window.innerHeight * 0.78)
-      : Math.max(340, Math.min(560, availableW * 0.58))
-
-    const scaleX = availableW / w
-    const scaleY = availableH / h
-
-    // Optimal fit to view: fits both dimensions comfortably
-    let bestFit = Math.min(scaleX, scaleY)
-    // Clamp so small diagrams scale up legibly, and very wide diagrams scale down
-    bestFit = Math.max(0.6, Math.min(1.9, bestFit))
-    return +bestFit.toFixed(2)
-  }, [])
-
-  // Keyboard escape listener for fullscreen
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isFullscreen) {
-        setIsFullscreen(false)
-        setSelectedNode(null)
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isFullscreen])
 
   useEffect(() => {
     let isMounted = true
@@ -300,93 +259,11 @@ export default function MermaidDiagram({ chart, onNodeClick }: Props) {
     }
   }, [chart, rawId])
 
-  // Initial and responsive Best-Fit calibration
-  useEffect(() => {
-    if (!svgContent || !containerRef.current) return
-    const frame = requestAnimationFrame(() => {
-      const initialFit = calculateFitScale(intrinsicSize.width, intrinsicSize.height, isFullscreen)
-      setFitScale(initialFit)
-      setScale(initialFit)
-      setPan({ x: 0, y: 0 })
-      isUserInteracted.current = false
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [svgContent, intrinsicSize, isFullscreen, calculateFitScale])
-
-  // ResizeObserver to adaptively refit when container width changes (unless user zoomed manually)
-  useEffect(() => {
-    if (!containerRef.current) return
-    const observer = new ResizeObserver(() => {
-      if (!isUserInteracted.current) {
-        const newFit = calculateFitScale(intrinsicSize.width, intrinsicSize.height, isFullscreen)
-        setFitScale(newFit)
-        setScale(newFit)
-        setPan({ x: 0, y: 0 })
-      }
-    })
-    observer.observe(containerRef.current)
-    return () => observer.disconnect()
-  }, [intrinsicSize, isFullscreen, calculateFitScale])
-
   const handleCopyCode = (e?: React.MouseEvent) => {
     e?.stopPropagation()
     navigator.clipboard.writeText(chart.replace(/^```mermaid\s*/i, '').replace(/```$/, '').trim())
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }
-
-  const handleZoomIn = (e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    isUserInteracted.current = true
-    setScale((s) => Math.min(fitScale * 3.0, +(s * 1.2).toFixed(2)))
-  }
-
-  const handleZoomOut = (e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    isUserInteracted.current = true
-    setScale((s) => Math.max(fitScale * 0.35, +(s / 1.2).toFixed(2)))
-  }
-
-  const handleReset = (e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    isUserInteracted.current = false
-    setScale(fitScale)
-    setPan({ x: 0, y: 0 })
-    setSelectedNode(null)
-  }
-
-  const toggleFullscreen = (e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    setIsFullscreen((prev) => !prev)
-    setSelectedNode(null)
-  }
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('button, .node-popover')) return
-    setIsDragging(true)
-    isUserInteracted.current = true
-    setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
-  }
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isDragging) return
-    setPan({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y,
-    })
-  }
-
-  const handleMouseUp = () => {
-    setIsDragging(false)
-  }
-
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    if (e.ctrlKey || isFullscreen) {
-      e.preventDefault()
-      isUserInteracted.current = true
-      const delta = e.deltaY < 0 ? 1.15 : 0.85
-      setScale((s) => Math.min(fitScale * 3.0, Math.max(fitScale * 0.35, +(s * delta).toFixed(2))))
-    }
   }
 
   const handleDiagramClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -421,47 +298,10 @@ export default function MermaidDiagram({ chart, onNodeClick }: Props) {
     )
   }
 
-  const zoomPercent = Math.round((scale / (fitScale || 1)) * 100)
-  const isAtBestFit = Math.abs(scale - fitScale) < 0.03 && Math.abs(pan.x) < 3 && Math.abs(pan.y) < 3
-
   const diagramContent = (
     <div className="relative w-full h-full flex flex-col items-center justify-center">
       {/* Floating Interactive Controls Toolbar */}
       <div className="absolute top-3 right-3 flex items-center gap-1 p-1 rounded-xl bg-white/95 backdrop-blur-sm border border-slate-200/90 shadow-sm z-20">
-        <button
-          onClick={handleZoomIn}
-          title="Zoom In (+)"
-          className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer"
-        >
-          <ZoomIn size={14} />
-        </button>
-        <button
-          onClick={handleZoomOut}
-          title="Zoom Out (-)"
-          className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer"
-        >
-          <ZoomOut size={14} />
-        </button>
-        <button
-          onClick={handleReset}
-          title={isAtBestFit ? "Diagram is in optimal Best-Fit view" : `Reset to Best Fit (${zoomPercent}%)`}
-          className={`px-2.5 py-1 rounded-lg transition cursor-pointer text-[11px] font-semibold flex items-center gap-1.5 ${
-            isAtBestFit
-              ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200/60'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <RotateCcw size={12} className={isAtBestFit ? 'text-indigo-600' : ''} />
-          <span>{isAtBestFit ? 'Best Fit' : `${zoomPercent}%`}</span>
-        </button>
-        <div className="h-3.5 w-px bg-slate-200 my-auto" />
-        <button
-          onClick={toggleFullscreen}
-          title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen View'}
-          className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer"
-        >
-          {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-        </button>
         <button
           onClick={handleCopyCode}
           title="Copy Diagram Code"
@@ -522,62 +362,15 @@ export default function MermaidDiagram({ chart, onNodeClick }: Props) {
       <div
         ref={containerRef}
         onClick={handleDiagramClick}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
-        className={`mermaid-wrapper w-full flex items-center justify-center select-none overflow-hidden relative ${
-          isDragging ? 'cursor-grabbing' : 'cursor-grab'
-        }`}
-        style={{
-          height: isFullscreen
-            ? '78vh'
-            : `${Math.max(320, Math.min(560, Math.round(intrinsicSize.height * fitScale + 48)))}px`,
-        }}
+        className="mermaid-wrapper w-full overflow-auto relative rounded-xl"
       >
         <div
-          style={{
-            width: `${intrinsicSize.width}px`,
-            height: `${intrinsicSize.height}px`,
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
-            transformOrigin: 'center center',
-            transition: isDragging ? 'none' : 'transform 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
+          className="flex justify-center min-w-max p-4"
           dangerouslySetInnerHTML={{ __html: svgContent }}
         />
       </div>
     </div>
   )
-
-  if (isFullscreen) {
-    return (
-      <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md p-4 sm:p-8 flex flex-col justify-center items-center animate-in fade-in duration-200">
-        <div className="w-full h-full max-w-6xl max-h-[90vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col relative overflow-hidden p-6 sm:p-8">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-2">
-            <div className="text-sm font-bold text-slate-800 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse" />
-              <span>Interactive Diagram Explorer</span>
-            </div>
-            <button
-              onClick={toggleFullscreen}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition cursor-pointer"
-            >
-              <X size={14} />
-              <span>Exit Fullscreen</span>
-            </button>
-          </div>
-          <div className="flex-1 w-full h-full overflow-hidden relative flex items-center justify-center">
-            {diagramContent}
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="my-4 w-full flex flex-col items-center justify-center overflow-hidden relative group bg-gradient-to-b from-slate-50/70 via-white to-slate-50/50 rounded-2xl border border-slate-200/80 shadow-xs p-4 sm:p-6 transition-all duration-300 hover:shadow-md hover:border-indigo-100">

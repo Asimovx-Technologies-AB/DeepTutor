@@ -38,6 +38,7 @@ class StudySession(Base):
     document = relationship("Document")
     curriculum_topics = relationship("CurriculumTopic", back_populates="session", cascade="all, delete-orphan")
     messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
+    generated_artifacts = relationship("GeneratedArtifact", back_populates="session", cascade="all, delete-orphan")
 
 
 class CurriculumTopic(Base):
