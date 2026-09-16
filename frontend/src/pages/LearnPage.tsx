@@ -11,7 +11,7 @@ import {
   BookOpen, Mic, Volume2,
   Layers, ChevronDown, ChevronRight, Download, Printer, Copy, Check,
   Trash2, Plus, FileText, UploadCloud, RefreshCw, PanelLeft,
-  Maximize2, Minimize2, Split, HelpCircle,
+  Maximize2, Minimize2, Split,
   Brain, X, ArrowUp,
   ThumbsUp, Search, CheckSquare, Square,
   Calculator, Globe, Cpu, Dna, FlaskConical, Zap, Landmark
@@ -2358,10 +2358,12 @@ export default function LearnPage() {
                       )}
                     </AnimatePresence>
 
-                    {/* ChatInputForm Pill */}
-                    <div className={`rounded-full bg-white border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.07)] focus-within:ring-2 focus-within:ring-slate-800/10 focus-within:border-slate-800 transition-all px-2.5 py-1.5 sm:px-3.5 sm:py-2 flex items-center gap-2 ${isDocProcessing ? 'bg-slate-50/80 opacity-80 cursor-not-allowed' : ''}`}>
+                    {/* ChatInputForm Dynamic Pill */}
+                    <div className={`transition-all duration-200 border border-slate-200/90 bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)] focus-within:ring-2 focus-within:ring-slate-800/10 focus-within:border-slate-800 px-2.5 py-1.5 sm:px-3 sm:py-2 flex items-end gap-2.5 ${
+                      (inputQuery.includes('\n') || inputQuery.length > 50) ? 'rounded-2xl' : 'rounded-[26px]'
+                    } ${isDocProcessing ? 'bg-slate-50/80 opacity-80 cursor-not-allowed' : ''}`}>
                       {/* ① [+] Attach Button & Popover */}
-                      <div className="relative shrink-0" ref={attachMenuRef}>
+                      <div className="relative shrink-0 mb-0.5" ref={attachMenuRef}>
                         <button
                           type="button"
                           onClick={() => !isDocProcessing && setIsAttachMenuOpen(!isAttachMenuOpen)}
@@ -2431,7 +2433,7 @@ export default function LearnPage() {
                         accept=".pdf,.txt,.md,.docx,.png,.jpg"
                       />
 
-                      {/* ② Textarea with auto-resize and serif font */}
+                      {/* ② Textarea with dynamic auto-resize, custom scrollbar, and clean padding */}
                       <textarea
                         ref={textareaRef}
                         rows={1}
@@ -2441,7 +2443,7 @@ export default function LearnPage() {
                           setInputQuery(e.target.value)
                           if (textareaRef.current) {
                             textareaRef.current.style.height = 'auto'
-                            textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px'
+                            textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 180) + 'px'
                           }
                         }}
                         onKeyDown={(e) => {
@@ -2458,38 +2460,40 @@ export default function LearnPage() {
                             ? "⚡ Processing document text & topics... Please wait"
                             : `Ask questions about ${activeTopic?.title || 'your uploaded course notes'}...`
                         }
-                        className={`flex-1 bg-transparent border-0 border-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 ring-0 chat-reading font-serif text-slate-900 placeholder-slate-400 resize-none max-h-[120px] py-1 px-1.5 shadow-none ${isDocProcessing ? 'cursor-not-allowed opacity-60' : ''}`}
+                        className={`flex-1 bg-transparent border-0 border-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 ring-0 chat-reading font-serif text-slate-900 placeholder-slate-400 resize-none max-h-[180px] py-1 px-1.5 custom-input-scrollbar leading-relaxed ${isDocProcessing ? 'cursor-not-allowed opacity-60' : ''}`}
                         style={{ outline: 'none', boxShadow: 'none', border: 'none' }}
                       />
 
                       {/* ③ Mic / Send Button */}
-                      {(inputQuery.trim() || attachedFile) ? (
-                        <button
-                          onClick={() => {
-                            if (!isDocProcessing && !isAgentThinking) {
-                              handleSendMessage()
-                              if (textareaRef.current) textareaRef.current.style.height = 'auto'
-                            }
-                          }}
-                          disabled={isAgentThinking || isUploading || isDocProcessing}
-                          className="w-8 h-8 rounded-full bg-[#000000] hover:bg-slate-800 text-white flex items-center justify-center transition shrink-0 cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                          title={isDocProcessing ? "Document is processing..." : (attachedFile ? "Upload and analyze document" : "Send message")}
-                        >
-                          <ArrowUp size={16} />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => !isDocProcessing && handleToggleMic()}
-                          disabled={isDocProcessing}
-                          className={`w-8 h-8 rounded-full flex items-center justify-center transition shrink-0 cursor-pointer ${isListeningVoice
-                            ? 'bg-red-500 text-white animate-pulse'
-                            : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
-                            }`}
-                          title={isDocProcessing ? "Processing in progress..." : "Voice input"}
-                        >
-                          <Mic size={17} />
-                        </button>
-                      )}
+                      <div className="shrink-0 mb-0.5">
+                        {(inputQuery.trim() || attachedFile) ? (
+                          <button
+                            onClick={() => {
+                              if (!isDocProcessing && !isAgentThinking) {
+                                handleSendMessage()
+                                if (textareaRef.current) textareaRef.current.style.height = 'auto'
+                              }
+                            }}
+                            disabled={isAgentThinking || isUploading || isDocProcessing}
+                            className="w-8 h-8 rounded-full bg-[#000000] hover:bg-slate-800 text-white flex items-center justify-center transition shrink-0 cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={isDocProcessing ? "Document is processing..." : (attachedFile ? "Upload and analyze document" : "Send message")}
+                          >
+                            <ArrowUp size={16} />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => !isDocProcessing && handleToggleMic()}
+                            disabled={isDocProcessing}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center transition shrink-0 cursor-pointer ${isListeningVoice
+                              ? 'bg-red-500 text-white animate-pulse'
+                              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
+                              }`}
+                            title={isDocProcessing ? "Processing in progress..." : "Voice input"}
+                          >
+                            <Mic size={17} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

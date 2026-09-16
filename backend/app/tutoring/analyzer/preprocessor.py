@@ -38,14 +38,9 @@ class QueryPreprocessor:
         Processes raw user input.
         Returns: (normalized_query, language, validation_metadata)
         """
-        if not raw_query or not raw_query.strip():
+        cleaned = (raw_query or "").strip()
+        if not cleaned:
             raise ValueError("Query cannot be empty.")
-
-        cleaned = raw_query.strip()
-        
-        # 1. Input Validation
-        if len(cleaned) < 2:
-            raise ValueError("Query is too short.")
         if len(cleaned) > 2000:
             cleaned = cleaned[:2000]
 

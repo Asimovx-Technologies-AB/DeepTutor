@@ -30,7 +30,7 @@ class QueryRouter:
         # 1. Non-Retrieval Pipelines
         if intent == "CASUAL":
             return "CASUAL_PIPELINE", "contextual"
-        elif intent == "SUMMARY":
+        elif intent in ("SUMMARY", "STUDY_NOTES"):
             return "SUMMARY_PIPELINE", "thematic"
         elif intent == "QUIZ":
             return "ASSESSMENT_PIPELINE", "thematic"

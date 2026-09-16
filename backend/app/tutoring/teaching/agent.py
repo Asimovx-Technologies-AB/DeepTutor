@@ -97,6 +97,20 @@ Before answering, analyze the student's question intent and choose the optimal p
      * Step-by-Step Walkthrough: Calculate each row/cell systematically.
      * Complete Solved Table: Render the ENTIRE, fully solved/filled Markdown table.
 
+7. PASTED MULTIPLE-CHOICE QUESTIONS (MCQs) WITH OPTIONS:
+   - When the student pastes an external MCQ with options (A, B, C, D) or steps:
+     * Concept Grounding: Identify and explain the core topic or algorithmic mechanism being tested.
+     * Step-by-Step Verification: Systematically evaluate each statement or step in the question to prove why each is true or false.
+     * Clear Correct Answer: State the correct option prominently in bold, e.g. **Correct Answer: Option [Letter] ([Explanation/Sequence])**.
+     * Distractor Breakdown: Explain clearly why the other options are incorrect or incomplete.
+     * Strict Visual Suppression: Do NOT generate diagrams, SVGs, or flowcharts for pasted MCQs.
+
+8. BATCH MULTI-QUESTION SOLVING (e.g. pasting 2 to 10 assignment/exam questions at once):
+   - When the student pastes multiple questions:
+     * Structure: Use clear section headers (`### Question 1: [Brief Title]`, `### Question 2: [Brief Title]`, etc.).
+     * Detailed Sequential Answers: Address every single question in order with rigorous, direct explanations and solutions.
+     * No Diagrams: Suppress diagrams/SVGs to preserve tokens and keep answers clean.
+
 === MULTI-TURN CONVERSATION MEMORY ===
 - You have full access to the previous conversation history in this study session.
 - If the student asks about something you explained earlier, or asks a follow-up referencing ANY prior response, answer, or question, refer accurately and coherently to what you previously taught or answered in this session.
@@ -125,44 +139,129 @@ Before answering, analyze the student's question intent and choose the optimal p
   3. Academic Domain Questions: If the question relates to the general academic subject of the uploaded document (e.g. Geography, Environmental Science, History, Mathematics), answer it authoritatively using the context.
   4. Pedagogical & Dialogue Requests: Requests for practice questions, quizzes, problem solving, explaining simpler, or asking about earlier conversation turns in this session are ALWAYS IN-SCOPE.
 
+=== STRICT ANTI-HALLUCINATION GUARDRAILS FOR TABLES & FIGURES ===
+- If the student asks about a specific table, figure, or image (or claims a table/figure exists in the material):
+  * Check the VERIFIED STUDY CONTEXT and table/figure assets provided below.
+  * If the specific table, data values, or figure are NOT found in the verified excerpts, DO NOT GUESS OR INVENT DATA, NUMBERS, OR COLUMNS.
+  * Honestly tell the student:
+    "I couldn't locate this specific table/figure in the indexed material for this chapter. Could you please provide the exact page number, table title/caption, or chapter? Once you provide that, I'll examine that exact page and explain it without guessing."
+  * Never hallucinate columns, numbers, or visual features that do not exist in the context.
+
+=== STRICT ANTI-HALLUCINATION GUARDRAILS FOR PERSONA & UNCLEAR QUERIES ===
+- 🚫 **STRICT PERSONA NON-HALLUCINATION**: NEVER invent, assume, or attribute fictional user roles, backgrounds, or personas (e.g. NEVER say *"As a parent teaching this material..."* or *"As an engineer working on..."*). Address the student naturally, directly, and encouragingly.
+- 🚫 **STRICT NO TOPIC HIJACKING / FAKE PREVIOUS REQUESTS**: NEVER claim the student requested a specific figure, chapter, or topic (e.g. *"Since you mentioned wanting to explore Figure 2-9..."*) unless explicitly requested in the student's message or ongoing session history!
+- ❓ **UNCLEAR OR AMBIGUOUS QUERY CLARIFICATION**: If the student's request is unclear, fragmented, incomplete, or ambiguous, DO NOT GUESS OR GENERATE A RANDOM UNREQUESTED LECTURE! Politely ask the student what specific topic, question, figure, or concept they want to explore or solve.
+
 === CITATION & PAGE NUMBER RULES ===
 - Ground all facts strictly in the verified context excerpts provided.
-- Do NOT add citation footnotes or say "as seen on Page 5", but you may address the student's referenced page or table naturally.
+- Do NOT add unsolicited citation footnotes like "as seen on Page 5", but when clarifying or asking for a missing table or figure (or addressing the student's referenced page or table), you MAY naturally mention and ask for the exact page number or table title.
 
-=== VISUAL & DIAGRAM GENERATION RULES ===
-When a visual aid, image, or diagram is requested or beneficial:
-1. MERMAID.JS VISUALIZATIONS (for workflows, lifecycles, processes, trees, state transitions, classifications):
-   - Wrap strictly inside a ```mermaid code block.
-   - Use clean, modern syntax (e.g. `flowchart TD`, `graph TD`, `sequenceDiagram`, `mindmap`).
-   - ALWAYS use standard ASCII arrows (e.g. '-->' or '==>'). NEVER output unicode arrow symbols like '⟶', '→', or '➔', as they cause parser errors.
-   - IMPORTANT: To prevent syntax errors, ALWAYS wrap any node text containing parentheses, brackets, colons, or special characters in double quotes.
-     Example:
+=== COGNITIVE VISUAL & DIAGRAM GENERATION RULES ===
+When a visual aid, image, or diagram is requested or pedagogically beneficial:
+DO NOT default to a radial mindmap! You must cognitively reason about the structural topology of the subject matter and select the exact diagram type matching the concept:
+
+1. SEQUENTIAL PROGRESSIONS / EVOLUTIONS / PHASES / PIPELINES / TIMELINES:
+   - Use a HORIZONTAL FLOWCHART (`flowchart LR`).
+   - ⚠️ STRICT PROHIBITION: NEVER use a radial `mindmap` for chronological phases, evolutions, or sequential workflows! Radial mindmaps scatter phases randomly in a circle, destroying the student's timeline.
+   - Example:
+     ```mermaid
+     flowchart LR
+         P1["Phase 1: Connectivity<br/>(Emails & Basic Web)"] --> P2["Phase 2: Economy<br/>(E-commerce & Web 2.0)"]
+         P2 --> P3["Phase 3: Experience<br/>(Social & Mobile Apps)"]
+         P3 --> P4["Phase 4: IoT & AI<br/>(Smart Devices & M2M)"]
+     ```
+
+2. CONCEPT RELATIONSHIPS FOR IMPORTANT QUESTIONS / EXAM PREPARATION:
+   - When the student asks for important questions, exam topics, or key concepts, generate a CONCEPT RELATIONSHIP GRAPH (`flowchart TD` or `graph TD`).
+   - Map the core topics, questions themes, and their relationships/dependencies so the student can grasp the conceptual network before or alongside the questions:
+     ```mermaid
+     flowchart TD
+         Core["Core Subject: Machine Learning"] --> T1["Supervised Learning"]
+         Core --> T2["Unsupervised Learning"]
+         T1 --> Q1["Important Exam Area: SVM & Margins"]
+         T1 --> Q2["Important Exam Area: Decision Trees & Pruning"]
+         T2 --> Q3["Important Exam Area: K-Means Clustering"]
+         Q1 -.->|"Mathematical Foundation"| Q2
+     ```
+
+3. DECISION TREES / HIERARCHIES / ALGORITHMS / CAUSAL WORKFLOWS:
+   - Use a TOP-DOWN FLOWCHART (`flowchart TD`).
+   - Example:
      ```mermaid
      flowchart TD
          A["Forest Resources in India"] --> B["Reserved Forests (>50%)"]
          A --> C["Protected Forests (~33%)"]
          A --> D["Unclassed Forests (Other Wastelands)"]
      ```
-   - Keep node labels clear, natural, and concise. Do NOT insert unnecessary line breaks inside short phrases.
-2. INLINE SVG DIAGRAMS (for technical/scientific illustrations, geometry, physical models, biology cells, anatomy, coordinate planes):
+
+4. PROTOCOLS / CLIENT-SERVER / MULTI-PARTY EXCHANGES:
+   - Use a SEQUENCE DIAGRAM (`sequenceDiagram`).
+   - Example:
+     ```mermaid
+     sequenceDiagram
+         Client->>Server: SYN (seq = x)
+         Server-->>Client: SYN-ACK (seq = y, ack = x + 1)
+         Client->>Server: ACK (ack = y + 1)
+     ```
+
+5. STATE MACHINES & LIFECYCLES:
+   - Use a STATE DIAGRAM (`stateDiagram-v2`).
+   - Example:
+     ```mermaid
+     stateDiagram-v2
+         [*] --> Ready
+         Ready --> Running: Dispatched
+         Running --> Waiting: I/O Request
+         Waiting --> Ready: I/O Complete
+         Running --> Terminated: Exit
+     ```
+
+6. UNORDERED SYLLABUS PILLARS & BRAINSTORMING:
+   - ONLY when the query is an unordered textbook outline, high-level syllabus overview, or brainstorming branches where there is NO sequence, direction, or chronology, you may use a clean Mermaid `mindmap`:
+     ```mermaid
+     mindmap
+       root(("Contemporary India II"))
+         Economy
+           ["Manufacturing and Industrial Location"]
+           ["Lifelines of National Economy"]
+         Resources
+           ["Resources and Sustainable Development"]
+           ["Mineral and Energy Resources"]
+     ```
+
+7. INLINE SVG DIAGRAMS (HIGH PRIORITY FOR ALGORITHMS, DATA STRUCTURES, PHYSICS, GEOMETRY, SCIENCE):
+   - ALWAYS prioritize a rich Inline SVG diagram for ALGORITHMS & DATA STRUCTURES:
+     SVG enables visual elements like array boxes with indices, pointers (`low`, `mid`, `high`), partition boundaries, recursion trees, memory slots, stack/queue push-pop states, neural net layer connections, and loss curves with distinct modern colors.
+   - ALSO for PHYSICAL, SPATIAL, GEOMETRIC, ANATOMICAL, VECTOR CONCEPTS: Always use Inline SVG.
    - Wrap strictly inside a ```svg code block:
      ```svg
-     <svg viewBox="0 0 600 350" xmlns="http://www.w3.org/2000/svg" class="w-full">
-         <!-- Use modern, accessible colors (#4F46E5, #10B981, #F59E0B, #EF4444, #64748B, #1E293B) -->
-         <!-- Draw clear shapes with <rect>, <circle>, <polygon>, <path>, <line> -->
-         <!-- Use legible <text> elements with font-size, font-family, and text-anchor -->
+     <svg viewBox="0 0 650 320" xmlns="http://www.w3.org/2000/svg" class="w-full">
+         <defs>
+             <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                 <path d="M 0 0 L 10 5 L 0 10 z" fill="#6366F1" />
+             </marker>
+         </defs>
+         <!-- Modern curated palette: Indigo #6366F1, Emerald #10B981, Amber #F59E0B, Rose #EF4444, Slate #64748B, Background #F8FAFC -->
+         <!-- Draw clear, rounded elements: <rect rx="6">, <circle>, <line marker-end="url(#arrow)">, <text font-family="Inter, sans-serif"> -->
      </svg>
      ```
-   - Always include a responsive `viewBox` (e.g. `viewBox="0 0 600 350"`).
+   - Always include a responsive `viewBox` (e.g. `viewBox="0 0 650 320"`).
    - Do NOT use external script tags or foreignObject.
-3. MANDATORY VISUAL BREAKDOWN (Below Every Diagram/Image):
+
+8. MANDATORY VISUAL BREAKDOWN (Below Every Diagram/Image):
    - Immediately below ANY generated ```mermaid or ```svg diagram, you MUST include a simple, student-friendly explanation breakdown:
      #### 🔍 Visual Breakdown (How to Read this Diagram)
      - 🔵 **[Component / Shape 1]**: Plain English explanation of what this element represents.
      - 🔴 **[Component / Line 2]**: Plain English explanation of what this line/boundary/arrow represents.
      - 🎯 **[Key Insight]**: One sentence explaining the main takeaway shown in the image.
    - Never output a diagram in isolation without explaining how to read its shapes, colors, or arrows.
-4. The visual diagram and breakdown should be placed right after the intuition / mechanism, and the response MUST ALWAYS conclude with the `### 💡 Interactive Checkpoint`!
+
+GENERAL SYNTAX RULES FOR MERMAID:
+- Wrap strictly inside a ```mermaid code block.
+- ALWAYS use standard ASCII arrows (e.g. '-->' or '==>'). NEVER output unicode arrow symbols like '⟶', '→', or '➔'.
+- ALWAYS wrap any node text containing parentheses, brackets, colons, or special characters in double quotes (e.g. `A["Phase 1: Connectivity (1990s)"]`).
+- Keep node labels clear, natural, and concise. Do NOT insert unnecessary line breaks inside short phrases.
+- The visual diagram and breakdown should be placed right after the intuition / mechanism, and the response MUST ALWAYS conclude with the `### 💡 Interactive Checkpoint`!
 
 === INTERACTIVE CHECKPOINT ===
 - EVERY conceptual explanation or lecture MUST END with the Interactive Checkpoint.
@@ -195,9 +294,8 @@ class TeachingAgent:
 
     @classmethod
     def _clean_page_refs(cls, text: str) -> str:
-        """Strip any page-number references from text while strictly preserving all newlines and markdown structure."""
+        """Strip raw citation artifact noise like '(Page 5)' while preserving readable text."""
         text = re.sub(r"\s*\(Page\s+\d+\)", "", text, flags=re.IGNORECASE)
-        text = re.sub(r"\bPage\s+\d+\b", "", text, flags=re.IGNORECASE)
         lines = [re.sub(r"[ \t]+", " ", ln).rstrip() for ln in text.split("\n")]
         return "\n".join(lines).strip()
 
@@ -243,9 +341,12 @@ class TeachingAgent:
     @classmethod
     def _wants_visual(cls, query: str, context_bundle: ContextBundle) -> bool:
         q_lower = query.lower()
-        if any(k in q_lower for k in _VISUAL_KEYWORDS):
+        if any(k in q_lower for k in _VISUAL_KEYWORDS) or any(k in q_lower for k in [
+            "important topic", "important topics", "key topics", "syllabus", "roadmap",
+            "pillars", "mindmap", "mind map", "overview", "curriculum"
+        ]):
             return True
-        return bool(context_bundle.related_tables)
+        return bool(context_bundle.related_tables) or bool(context_bundle.related_figures)
 
     @classmethod
     def _clean_topic_title(cls, topic_title: Optional[str]) -> str:
@@ -289,10 +390,109 @@ class TeachingAgent:
         The user prompt includes the full retrieved context so the model
         answers strictly from the database content with adaptive formatting.
         """
+        plan = getattr(query_meta, "pre_gen_plan", None)
+        hard_constraints_block = ""
+        if plan:
+            depth_instruction = ""
+            if plan.depth == "answer_only":
+                depth_instruction = (
+                    "DEPTH CONSTRAINT [answer_only]: Output ONLY the direct answer/result. "
+                    "DO NOT output any background explanation, intuition, sub-topics, examples, reasoning steps, or follow-up questions."
+                )
+            elif plan.depth == "short":
+                depth_instruction = (
+                    "DEPTH CONSTRAINT [short]: Keep the answer extremely brief and concise, capped at 1–3 short sentences. "
+                    "DO NOT provide multi-topic breakdowns or long explanations."
+                )
+            elif plan.depth == "detailed":
+                depth_instruction = (
+                    "DEPTH CONSTRAINT [detailed]: Provide a thorough, in-depth explanation with intuitive concepts, "
+                    "step-by-step mechanism, concrete examples, and key insights."
+                )
+            else:
+                depth_instruction = (
+                    "DEPTH CONSTRAINT [default]: Provide a balanced, medium-length explanation (1 sentence definition, "
+                    "relatable analogy, up to 3 core bullet points). DO NOT drift into full mathematical derivations "
+                    "or exhaustive enumeration unless explicitly asked."
+                )
+
+            format_instruction = ""
+            if plan.format == "bullets":
+                format_instruction = "FORMAT CONSTRAINT [bullets]: Structure the response using clean bullet points (* or -)."
+            elif plan.format == "table":
+                format_instruction = "FORMAT CONSTRAINT [table]: Render the response data / comparison in a clear Markdown table (`| Column 1 | Column 2 |`)."
+            elif plan.format == "stepwise":
+                format_instruction = "FORMAT CONSTRAINT [stepwise]: Structure the response as clear, numbered sequential steps (`#### Step 1: ...`, `#### Step 2: ...`)."
+            else:
+                format_instruction = "FORMAT CONSTRAINT [prose]: Format the answer in clear, natural prose paragraphs."
+
+            visual_constraint_str = ""
+            if plan.visual == "none":
+                visual_constraint_str = "VISUAL CONSTRAINT [none]: STRICT NO-IMAGE/DIAGRAM RULE. Do NOT generate any Mermaid diagrams, SVG blocks, or ASCII charts."
+            elif plan.visual == "required":
+                visual_constraint_str = "VISUAL CONSTRAINT [required]: You MUST generate a visual diagram (Mermaid or Inline SVG) matching the concept structure."
+            else:
+                visual_constraint_str = "VISUAL CONSTRAINT [conditional]: Include a diagram (Mermaid or Inline SVG) only if it significantly enhances student understanding."
+
+            followup_constraint_str = ""
+            if plan.skip_followup_question or plan.depth == "answer_only":
+                followup_constraint_str = "INTERACTIVE CHECKPOINT CONSTRAINT: DO NOT include the `### 💡 Interactive Checkpoint` follow-up question. End the response cleanly after the answer."
+            else:
+                followup_constraint_str = "INTERACTIVE CHECKPOINT CONSTRAINT: Conclude with the `### 💡 Interactive Checkpoint` active recall question."
+
+            hard_constraints_block = (
+                "=== PRE-GENERATION HARD CONSTRAINTS (MANDATORY TO OBEY) ===\n"
+                f"- {depth_instruction}\n"
+                f"- {format_instruction}\n"
+                f"- {visual_constraint_str}\n"
+                f"- {followup_constraint_str}\n"
+                f"- Strategy Reasoning: {plan.reasoning}\n"
+                "===========================================================\n\n"
+            )
+
+        is_study_notes_request = (
+            query_meta.intent == "STUDY_NOTES"
+            or bool((query_meta.format_directives or {}).get("generate_study_notes"))
+            or ("notes" in query_meta.raw_query.lower() and not any(w in query_meta.raw_query.lower() for w in ["quiz", "flashcard"]))
+        )
+        study_notes_block = ""
+        if is_study_notes_request:
+            study_notes_block = (
+                "=== PUBLICATION-GRADE STUDY NOTES CONTRACT (MANDATORY TO OBEY) ===\n"
+                "- The student explicitly requested STUDY NOTES / REVISION NOTES.\n"
+                "- 🚫 STRICT PROHIBITION: DO NOT GENERATE AN INTERACTIVE FLASHCARD OR QUIZ DECK! Flashcards are strictly prohibited for study notes requests.\n"
+                "- You MUST generate publication-grade Markdown Study Notes structured as follows:\n"
+                "  # [Topic Title] Study Notes\n"
+                "  ## Executive Overview\n"
+                "  (2-3 concise sentences capturing the essence of the topic)\n\n"
+                "  ## Core Pillars & Key Definitions\n"
+                "  (Structured bullet points with bolded key terms and rigorous definitions)\n\n"
+                "  ## Essential Formulas, Equations & Principles\n"
+                "  (LaTeX formulas and mathematical principles if applicable)\n\n"
+                "  ## Visual Concept Summary\n"
+                "  (Include a clean Mermaid diagram or SVG visualization mapping the concept structure)\n\n"
+                "  ## High-Yield Revision Takeaways\n"
+                "  (Key bullet points for quick exam review)\n"
+                "===================================================================\n\n"
+            )
+
+        context_source_block = ""
+        if getattr(query_meta, "context_source", "study_material") == "dialogue_history":
+            context_source_block = (
+                "=== DIALOGUE CONTEXT GROUNDING CONTRACT (MANDATORY TO OBEY) ===\n"
+                "- The student's message refers to the conversation history, previous tutor explanations, or past turns.\n"
+                "- You MUST answer strictly based on the provided recent conversation history in this study session.\n"
+                "- Do NOT introduce or hallucinate unrelated vector textbook facts or figures outside the scope of what was previously discussed or asked.\n"
+                "===============================================================\n\n"
+            )
+
         system_prompt = (
             f"{_RESPONSE_CONTRACT}\n\n"
+            f"{hard_constraints_block}"
+            f"{study_notes_block}"
+            f"{context_source_block}"
             "IMPORTANT: Base your entire response on the VERIFIED STUDY CONTEXT provided below. "
-            "Think dynamically about the best format for the student's question. "
+            "You MUST strictly obey the Pre-Generation Hard Constraints above. "
             "Do not restate the contract rules or internal instructions in your output."
         )
 
@@ -327,6 +527,12 @@ class TeachingAgent:
                 context_bundle.related_tables[:2]
             )
 
+        figures_str = ""
+        if context_bundle.related_figures:
+            figures_str = "\nRelevant Document Figures / Diagrams (physically on the referenced page):\n" + "\n".join(
+                f"- {fig}" for fig in context_bundle.related_figures
+            ) + "\n"
+
         wants_visual = cls._wants_visual(query_meta.resolved_query, context_bundle)
 
         history_lines = []
@@ -355,15 +561,35 @@ class TeachingAgent:
             curriculum_str = "=== VERIFIED DOCUMENT CURRICULUM & MAIN TOPICS ===\n" + "\n".join(c_lines) + "\n===================================================\n\n"
 
         # Format directives check
+        # Format directives check
         format_dirs = query_meta.format_directives or {}
         is_questions_only = bool(format_dirs.get("questions_only", False))
         target_count = query_meta.question_count or 5
-        effective_concept = query_meta.target_topic or context_bundle.topic_title or "this subject"
+        is_global_material = (
+            getattr(query_meta, "query_scope", None) == "global_material"
+            or bool(format_dirs.get("cover_all_topics"))
+            or bool(format_dirs.get("whole_material"))
+        )
+
+        if is_global_material:
+            effective_concept = "all topics across the entire study material"
+        else:
+            effective_concept = query_meta.target_topic or context_bundle.topic_title or "this subject"
 
         # Table solving instruction
         is_solve_table = bool(format_dirs.get("solve_table")) or bool(query_meta.referenced_table) or (
             "table" in query_meta.resolved_query.lower()
             and any(w in query_meta.resolved_query.lower() for w in ["solve", "fill", "calculate", "complete", "check"])
+        )
+
+        # Figure / Diagram explanation check
+        is_figure_query = (
+            bool(query_meta.referenced_figure)
+            or bool(context_bundle.related_figures)
+            or (
+                any(w in query_meta.resolved_query.lower() for w in ["figure", "diagram", "illustration", "image", "drawing", "picture"])
+                and ("page" in query_meta.resolved_query.lower() or query_meta.referenced_page is not None)
+            )
         )
 
         # Overview & Main topics check
@@ -372,18 +598,125 @@ class TeachingAgent:
             for w in ["main topic", "topics", "summary", "overview", "syllabus", "roadmap", "chapters", "table of content", "curriculum"]
         )
 
-        if is_solve_table:
+        is_pasted_mcq = getattr(query_meta, "is_pasted_mcq", False)
+        is_batch_questions = getattr(query_meta, "is_batch_questions", False)
+
+        if getattr(query_meta, "query_scope", None) == "ambiguous_scope" and getattr(query_meta, "scope_clarification_prompt", None):
+            task_instruction = (
+                "3. CLARIFICATION ON SCOPE NEEDED (PREVIOUS TOPIC VS. COMPLETE MATERIAL):\n"
+                "The student asked for questions or a quiz without explicitly specifying whether they want to focus solely on the previous discussion topic or cover the complete study material.\n"
+                f"Politely ask the student to clarify: '{query_meta.scope_clarification_prompt}'\n"
+                "Provide two quick, clear choices:\n"
+                "  1. Focus questions strictly on the topic we just discussed.\n"
+                "  2. Provide questions covering all core topics across the entire study material.\n"
+                "Do NOT assume or generate questions yet. Keep your tone encouraging, concise, and helpful.\n"
+            )
+        elif format_dirs.get("referenced_question_text"):
+            ref_q_text = format_dirs.get("referenced_question_text")
+            ref_q_idx = format_dirs.get("referenced_question_index")
+            idx_str = f" #{ref_q_idx}" if ref_q_idx else ""
+            task_instruction = (
+                f"3. EXPLAINING SPECIFIC PREVIOUS QUESTION{idx_str.upper()}:\n"
+                f"The student is specifically asking to explain/answer Question{idx_str} from the previous question list in dialogue history:\n"
+                f"Target Question: \"{ref_q_text}\"\n"
+                f"CRITICAL INSTRUCTION: Focus your entire response on providing a comprehensive, step-by-step detailed explanation and complete solution strictly for this question (\"{ref_q_text}\").\n"
+                f"Structure your response clearly:\n"
+                f"  (a) **Question Statement**: Repeat the exact question statement.\n"
+                f"  (b) **Core Concept**: Explain the underlying theory and principles.\n"
+                f"  (c) **Step-by-Step Solution & Explanation**: Provide a detailed, clear breakdown answering the question.\n"
+                f"  (d) **Key Takeaway**: Highlight the main takeaway for exam preparation.\n"
+                f"DO NOT invent a different question. Ground your answer in the verified study material.\n"
+            )
+        elif is_pasted_mcq:
+            task_instruction = (
+                "3. PASTED MULTIPLE-CHOICE QUESTION (MCQ) SOLVING:\n"
+                "The student has pasted an external exam / test / practice multiple-choice question with options.\n"
+                "Provide a complete, pedagogical, step-by-step solution following this exact structure:\n"
+                "(a) Subject Context: Briefly state what concept/algorithm this question tests (grounded in the verified material if related).\n"
+                "(b) Step-by-Step Analysis: Systematically analyze each premise, step, or statement given in the question (e.g. evaluate Step 1, Step 2, Step 3, etc.) explaining clearly why it is correct or incorrect.\n"
+                "(c) Prominent Correct Answer: State the correct option clearly and prominently in bold (e.g. '**Correct Answer: Option A (1 -> 4)**').\n"
+                "(d) Distractor Breakdown: Explain why the remaining options are incorrect, incomplete, or invalid sequences.\n"
+                "(e) STRICT NO-IMAGE RULE: Do NOT generate any diagrams, SVGs, or flowcharts. Focus purely on clear, step-by-step logical reasoning.\n"
+            )
+        elif is_batch_questions:
+            batch_count = getattr(query_meta, "batch_question_count", None) or "all"
+            task_instruction = (
+                f"3. BATCH MULTI-QUESTION SOLVING:\n"
+                f"The student has pasted a batch of {batch_count} questions to solve. Answer EVERY question sequentially and thoroughly.\n"
+                "Format each question clearly with a bold heading (e.g., `### Question 1: [Brief Title]`, `### Question 2: [Brief Title]`, etc.).\n"
+                "Under each heading, provide a rigorous, clear, and complete explanation and direct answer.\n"
+                "Do NOT skip or combine any questions. Address all questions in the pasted batch.\n"
+                "STRICT NO-IMAGE RULE: Do NOT generate any diagrams, SVGs, or charts. Preserving tokens and providing comprehensive answers for all questions is the highest priority.\n"
+            )
+        elif is_solve_table:
             ref_spec = f"'{query_meta.referenced_table}'" if query_meta.referenced_table else "the table"
             page_spec = f"on page {query_meta.referenced_page}" if query_meta.referenced_page else ""
-            task_instruction = (
-                f"3. TABLE SOLVING REQUEST: The student is asking to solve/complete {ref_spec} {page_spec}. "
-                f"Check the VERIFIED STUDY CONTEXT excerpts and tables above. "
-                f"If the table or its sequence data appears in the context: "
-                f"(a) State clearly what the table asks to do. "
-                f"(b) Explain the step-by-step mathematical method or formulas used to check/solve each entry (e.g. arithmetic sequence formula, difference test). "
-                f"(c) Present the COMPLETE solved table in clean, valid Markdown with all columns filled and verified. "
-                f"If the specific table is NOT found in the provided context excerpts, politely state that the table was not found on that page in the uploaded document and summarize what is there.\n"
+            if context_bundle.missing_table_requested or (not context_bundle.related_tables and not any("table" in c.content.lower() for c in context_bundle.retrieved_chunks)):
+                task_instruction = (
+                    f"3. TABLE QUERY (TABLE NOT FOUND - STRICT ANTI-HALLUCINATION): The student is asking about {ref_spec} {page_spec}, but this specific table was NOT located in the verified study context excerpts or indexed tables. "
+                    "DO NOT HALLUCINATE OR INVENT TABLE DATA, ROWS, OR COLUMNS! "
+                    "Tell the student: 'I couldn't locate this specific table directly in the indexed material for this chapter. Could you please provide the exact page number, table title/caption, or chapter? Once you provide that, I'll examine that exact page and explain or solve it without guessing.'\n"
+                )
+            else:
+                task_instruction = (
+                    f"3. TABLE SOLVING REQUEST: The student is asking to solve/complete {ref_spec} {page_spec}. "
+                    f"Check the VERIFIED STUDY CONTEXT excerpts and tables above. "
+                    f"If the table or its sequence data appears in the context: "
+                    f"(a) State clearly what the table asks to do. "
+                    f"(b) Explain the step-by-step mathematical method or formulas used to check/solve each entry (e.g. arithmetic sequence formula, difference test). "
+                    f"(c) Present the COMPLETE solved table in clean, valid Markdown with all columns filled and verified. "
+                    f"If the specific table is NOT found in the provided context excerpts, politely state that the table was not found and ask for the exact page number or title.\n"
+                )
+        elif is_figure_query:
+            target_fig = (
+                context_bundle.related_figures[0]
+                if context_bundle.related_figures
+                else (query_meta.referenced_figure or "the figure on the requested page")
             )
+            page_spec = f"on page {query_meta.referenced_page}" if query_meta.referenced_page else ""
+            if context_bundle.missing_figure_requested or (not context_bundle.related_figures and not any(k in c.content.lower() for c in context_bundle.retrieved_chunks for k in ["figure", "fig.", "diagram", "image"])):
+                task_instruction = (
+                    f"3. FIGURE / IMAGE QUERY (FIGURE NOT FOUND - STRICT ANTI-HALLUCINATION): The student is asking about {target_fig} {page_spec}, but this specific figure or image was NOT located in the verified study context. "
+                    "DO NOT GUESS OR HALLUCINATE WHAT THE FIGURE CONTAINS! "
+                    "Tell the student: 'I couldn't locate this specific figure/image directly in the indexed material for this chapter. Could you please provide the exact page number, figure caption/title, or chapter? Once you provide that, I will check that exact page and explain it accurately without guessing.'\n"
+                )
+            else:
+                task_instruction = (
+                    f"3. FIGURE / DIAGRAM EXPLANATION REQUEST: The student is asking to explain {target_fig} {page_spec}. "
+                    f"CRITICAL GROUNDING RULES: "
+                    f"(a) Look specifically at the verified figure title/caption and text physically describing the figure located on the referenced page. "
+                    f"(b) DO NOT confuse forward references or cross-references to other figures (e.g. 'See Figure X on the next page' or 'as shown later') with the actual figure on this page! Explain ONLY the figure physically located on this page ({target_fig}). "
+                    f"(c) Clearly describe what the figure depicts, its key components, architectural role, and working mechanisms. "
+                    f"(d) Break down its working principles clearly and intuitively for the student.\n"
+                )
+        elif is_global_material:
+            curriculum_list_str = ", ".join(context_bundle.curriculum_topics[:8]) if context_bundle.curriculum_topics else "the major curriculum topics across the document"
+            if is_questions_only:
+                task_instruction = (
+                    f"3. PRACTICE QUESTIONS ACROSS ALL TOPICS (WHOLE MATERIAL - QUESTIONS ONLY):\n"
+                    f"The student explicitly requested {target_count} questions from the WHOLE study material covering ALL topics (no answers, no solution keys, no hints).\n"
+                    f"CRITICAL ANTI-NARROWING RULE: DO NOT restrict the questions to the previous chat topic or a single chapter!\n"
+                    f"Distribute the {target_count} questions evenly across the curriculum ({curriculum_list_str}).\n"
+                    f"Provide clear, numbered questions with real academic substance. DO NOT include answers, solution keys, or hints.\n"
+                )
+            else:
+                is_important_questions = any(w in query_meta.resolved_query.lower() for w in ["important", "key", "main", "exam"]) or query_meta.visual_diagram_type == "concept_graph"
+                graph_hint = ""
+                if is_important_questions or query_meta.visual_diagram_type == "concept_graph":
+                    graph_hint = (
+                        "CONCEPT RELATIONSHIP GRAPH: Before or alongside the questions, generate a comprehensive Mermaid concept relationship graph (```mermaid\nflowchart TD\n...```) mapping how the major curriculum topics and exam areas connect to each other across the entire syllabus! "
+                        "Follow with '#### 🔍 Visual Breakdown (How to Read this Diagram)'.\n"
+                    )
+                ans_str = "For each question, provide a thorough, accurate model answer and pedagogical explanation." if (format_dirs.get("include_answers") or "answer" in query_meta.resolved_query.lower()) else "Provide the questions clearly."
+                task_instruction = (
+                    f"3. COMPREHENSIVE PRACTICE QUESTIONS (WHOLE MATERIAL - ALL TOPICS):\n"
+                    f"The student requested {target_count} questions from the entire study material covering ALL topics.\n"
+                    f"CRITICAL ANTI-NARROWING RULE: DO NOT restrict the questions to the previous chat topic (e.g. do NOT focus solely on one model or algorithm discussed earlier)! "
+                    f"Evenly distribute the {target_count} questions across distinct chapters and curriculum topics ({curriculum_list_str}).\n"
+                    f"Number each question clearly (`### Question 1: [Topic/Chapter Title]`, `### Question 2: [Topic/Chapter Title]`, etc.).\n"
+                    f"{ans_str}\n"
+                    f"{graph_hint}"
+                )
         elif is_questions_only or query_meta.intent == "PRACTICE_QUESTIONS":
             if is_questions_only:
                 task_instruction = (
@@ -393,51 +726,139 @@ class TeachingAgent:
                     f"DO NOT include answers, solution keys, hints, or options. DO NOT output a multiple-choice quiz or code boxes.\n"
                 )
             else:
+                is_important_questions = any(w in query_meta.resolved_query.lower() for w in ["important", "key", "main", "exam"]) or query_meta.visual_diagram_type == "concept_graph"
+                graph_hint = ""
+                if is_important_questions or query_meta.visual_diagram_type == "concept_graph":
+                    graph_hint = (
+                        "CONCEPT RELATIONSHIP GRAPH: Before or alongside the questions, generate an insightful Mermaid concept relationship graph (```mermaid\nflowchart TD\n...```) mapping how the core topics, principles, and question themes interconnect so the student can understand the conceptual network before practicing! "
+                        "Follow with '#### 🔍 Visual Breakdown (How to Read this Diagram)'.\n"
+                    )
                 task_instruction = (
                     f"3. PRACTICE QUESTIONS: Generate EXACTLY {target_count} high-yield exam preparation questions on {effective_concept}. "
                     f"Number them cleanly (Question 1, Question 2, ...). "
+                    f"{graph_hint}"
                     f"If the student requested explanations or answers, provide clear explanations. DO NOT output an interactive multiple-choice quiz.\n"
                 )
         elif is_topics_overview:
-            task_instruction = (
-                "3. CURRICULUM OVERVIEW / MAIN TOPICS: The student is asking for the main topics, summary, or learning roadmap of this study material. "
-                "Present a structured, engaging breakdown of the verified curriculum and key topics in this document. "
-                "Highlight the core theme of each section clearly, and end with an Interactive Checkpoint asking the student which topic they would like to start with.\n"
-            )
+            is_seq = any(w in query_meta.resolved_query.lower() for w in ["evolution", "phase", "phases", "step", "steps", "stage", "stages", "pipeline", "history", "timeline"])
+            if is_seq or query_meta.visual_diagram_type == "flowchart_lr":
+                task_instruction = (
+                    "3. CURRICULUM OVERVIEW / PHASES / EVOLUTION: The student is asking for the evolution, phases, or progression of this subject. "
+                    "Present a structured, engaging breakdown of the verified phases and key milestones. "
+                    "MANDATORY SEQUENTIAL FLOWCHART: You MUST generate a clean horizontal Mermaid flowchart (```mermaid\nflowchart LR\n...```) showing the sequential progression across phases (e.g. Phase 1 --> Phase 2 --> Phase 3 --> Phase 4). "
+                    "DO NOT use a radial mindmap for chronological phases! "
+                    "Quote all node text containing special characters or parentheses. "
+                    "Immediately beneath the flowchart, include '#### 🔍 Visual Breakdown (How to Read this Diagram)', explain the key concepts of each phase, and conclude with the Interactive Checkpoint.\n"
+                )
+            else:
+                task_instruction = (
+                    "3. CURRICULUM OVERVIEW / MAIN TOPICS / SYLLABUS PILLARS: The student is asking for the main topics, syllabus pillars, summary, or learning roadmap of this study material. "
+                    "Present a structured, engaging breakdown of the verified curriculum and key topics in this document. "
+                    "INTERACTIVE OVERVIEW DIAGRAM: Generate a structured Mermaid diagram organizing the core pillars and their subtopics/chapters (use `mindmap` for non-sequential syllabus branches, or `flowchart TD` for hierarchical relationship trees). "
+                    "Quote all node text containing parentheses, brackets, colons, or punctuation. "
+                    "Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' explaining the core pillars and relationships, explain the key concepts of each pillar, and conclude with the Interactive Checkpoint.\n"
+                )
         else:
             task_instruction = ""
 
+        target_visual_subject = query_meta.visual_prompt_focus or query_meta.resolved_query
+        if is_figure_query and context_bundle.related_figures:
+            target_visual_subject = context_bundle.related_figures[0]
+
         visual_directive = ""
-        if query_meta.visual_modality == "mermaid":
+        v_type = getattr(query_meta, "visual_diagram_type", "none")
+
+        if getattr(query_meta, "query_scope", None) == "ambiguous_scope" or is_pasted_mcq or is_batch_questions or query_meta.visual_modality == "none":
+            visual_directive = ""
+        elif v_type == "flowchart_lr" or (query_meta.visual_modality == "mermaid" and any(w in query_meta.resolved_query.lower() for w in ["evolution", "phase", "phases", "step", "steps", "stage", "stages", "pipeline", "timeline"])):
             visual_directive = (
-                f"5. VISUAL GENERATION: The student requested a diagram or visual. Generate a clear, valid Mermaid diagram (```mermaid ... ```) representing {query_meta.visual_prompt_focus or query_meta.resolved_query}. "
-                f"Quote all node text with special characters. Immediately beneath the diagram, include a '#### 🔍 Visual Breakdown (How to Read this Diagram)' section with 3-4 bullet points explaining what each part and arrow means in simple English.\n"
+                f"5. VISUAL GENERATION (HORIZONTAL SEQUENTIAL FLOWCHART): Generate a clean, valid Mermaid horizontal flowchart (```mermaid\nflowchart LR\n...```) representing {target_visual_subject}. "
+                "Show the progression cleanly from left to right (e.g. Phase 1 --> Phase 2 --> Phase 3 --> Phase 4). "
+                "STRICT RULE: DO NOT use a radial mindmap for chronological or sequential phases! "
+                "Quote all node text containing special characters or punctuation. "
+                "Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' with bullet points explaining each phase and arrow.\n"
             )
-        elif query_meta.visual_modality == "svg":
+        elif v_type == "concept_graph":
             visual_directive = (
-                f"5. VISUAL GENERATION: The student requested an image or visual. Generate a beautiful, responsive Inline SVG vector diagram (```svg <svg viewBox=\"0 0 600 350\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```) illustrating {query_meta.visual_prompt_focus or query_meta.resolved_query}. "
-                f"Use modern colors and clear text labels. Immediately beneath the SVG, include a '#### 🔍 Visual Breakdown (How to Read this Diagram)' section with 3-4 bullet points explaining what each color, shape, line, and boundary represents in simple English.\n"
+                f"5. VISUAL GENERATION (CONCEPT RELATIONSHIP GRAPH): Generate an interconnected Mermaid concept graph (```mermaid\nflowchart TD\n...```) representing {target_visual_subject}. "
+                "Map out how the core exam concepts, underlying principles, and question themes relate and connect to each other so the student grasps the conceptual network. "
+                "Quote all node text containing special characters or punctuation. "
+                "Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' explaining the relationships and key exam insights.\n"
+            )
+        elif v_type == "sequence":
+            visual_directive = (
+                f"5. VISUAL GENERATION (SEQUENCE DIAGRAM): Generate a clean, valid Mermaid sequence diagram (```mermaid\nsequenceDiagram\n...```) representing the interaction or protocol exchange in {target_visual_subject}. "
+                "Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' explaining the request-response steps.\n"
+            )
+        elif v_type == "state_diagram":
+            visual_directive = (
+                f"5. VISUAL GENERATION (STATE DIAGRAM): Generate a clean Mermaid state diagram (```mermaid\nstateDiagram-v2\n...```) representing the states and transitions of {target_visual_subject}. "
+                "Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)'.\n"
+            )
+        elif v_type == "svg" or query_meta.visual_modality == "svg":
+            is_algo = any(w in query_meta.resolved_query.lower() for w in [
+                "algorithm", "binary search", "quicksort", "sort", "merge sort", "dijkstra",
+                "bfs", "dfs", "array", "stack", "queue", "tree", "pointer", "graph",
+                "dynamic programming", "gradient descent", "backprop", "neural network"
+            ])
+            if is_algo:
+                visual_directive = (
+                    f"5. VISUAL GENERATION (ALGORITHM INLINE SVG): Generate a high-clarity, intuitive Inline SVG vector diagram (```svg <svg viewBox=\"0 0 650 320\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```) illustrating the algorithm {target_visual_subject}. "
+                    "Visually depict the data state (e.g. array slots with values and indices), pointers (e.g. low, mid, high or i, j, pivot), comparisons, or node transitions using modern colors (Indigo #6366F1, Emerald #10B981, Amber #F59E0B, Rose #EF4444, Slate #64748B). "
+                    "Include legible text labels and arrows. Immediately beneath the SVG, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' explaining each visual element.\n"
+                )
+            else:
+                visual_directive = (
+                    f"5. VISUAL GENERATION (INLINE SVG): Generate a beautiful, responsive Inline SVG vector diagram (```svg <svg viewBox=\"0 0 600 350\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```) illustrating {target_visual_subject}. "
+                    "Use modern colors and clear text labels. Immediately beneath the SVG, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' with 3-4 bullet points explaining what each color, shape, line, and boundary represents.\n"
+                )
+        elif v_type == "mindmap":
+            visual_directive = (
+                f"5. VISUAL GENERATION (MINDMAP): Generate a structured Mermaid mindmap (```mermaid\nmindmap\n  root((Title))\n    Pillar1\n      [\"Subtopic 1\"]\n...```) representing {target_visual_subject}. "
+                "Quote all node text containing special characters or punctuation. Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' explaining the core pillars and relationships.\n"
+            )
+        elif query_meta.visual_modality == "mermaid" or is_topics_overview:
+            visual_directive = (
+                f"5. VISUAL GENERATION: Generate a clean, valid Mermaid diagram (```mermaid ... ```) representing {target_visual_subject}. "
+                "For sequential phases or timelines, use `flowchart LR`. For hierarchies or concept networks, use `flowchart TD`. For non-sequential broad syllabi, use `mindmap`. "
+                "Quote all node text containing special characters or punctuation. Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' explaining what each part and arrow means.\n"
             )
         elif wants_visual:
-            visual_directive = (
-                "5. VISUAL GENERATION: A visual aid is beneficial here. Provide a Mermaid flowchart (for hierarchies/processes) or an Inline SVG diagram (for shapes/anatomy) to enhance student intuition. "
-                "Immediately beneath the diagram, include a '#### 🔍 Visual Breakdown (How to Read this Diagram)' section explaining the visual elements in simple words.\n"
-            )
+            is_algo = any(w in query_meta.resolved_query.lower() for w in [
+                "algorithm", "sort", "search", "tree", "array", "pointer", "dijkstra", "stack", "queue", "graph", "neural"
+            ])
+            if is_algo:
+                visual_directive = (
+                    "5. VISUAL GENERATION: Generate an Inline SVG vector diagram (```svg <svg viewBox=\"0 0 650 320\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```) visualizing this algorithm or data structure with colored state boxes, pointers, and step labels. "
+                    "Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)'.\n"
+                )
+            else:
+                visual_directive = (
+                    "5. VISUAL GENERATION: A visual aid is beneficial here. Provide the appropriate diagram matching the concept (Inline SVG for algorithms and physical/spatial models, flowchart LR for phases, concept graph/flowchart TD for relationships). "
+                    "Immediately beneath the diagram, include a '#### 🔍 Visual Breakdown (How to Read this Diagram)' section.\n"
+                )
+
+        if is_global_material:
+            subject_focus_display = "Entire Study Material (All Topics / Chapters)"
+        else:
+            subject_focus_display = context_bundle.topic_title or "Academic Studies"
 
         user_prompt = (
-            f"Subject Focus / Document Title: {context_bundle.topic_title or 'Academic Studies'}\n"
+            f"Subject Focus / Document Title: {subject_focus_display}\n"
             f"Student Question: \"{query_meta.resolved_query}\"\n"
             f"Learning Intent: {query_meta.intent}\n"
             f"{count_str}"
             f"{topic_spec_str}"
-            f"Visual aid requested/warranted: {'yes' if wants_visual or query_meta.visual_modality != 'none' else 'no'}\n"
-            f"Visual modality selected: {query_meta.visual_modality}\n\n"
+            f"Visual aid requested/warranted: {'no' if (is_pasted_mcq or is_batch_questions or getattr(query_meta, 'query_scope', None) == 'ambiguous_scope') else ('yes' if wants_visual or query_meta.visual_modality != 'none' else 'no')}\n"
+            f"Visual modality selected: {'none' if (is_pasted_mcq or is_batch_questions or getattr(query_meta, 'query_scope', None) == 'ambiguous_scope') else query_meta.visual_modality}\n"
+            f"Visual diagram type: {'none' if (is_pasted_mcq or is_batch_questions or getattr(query_meta, 'query_scope', None) == 'ambiguous_scope') else v_type}\n\n"
             f"{history_str}"
             f"{curriculum_str}"
             f"=== VERIFIED STUDY CONTEXT (from the student's uploaded document) ===\n"
             f"{context_str}\n"
             f"{formulas_str}\n"
             f"{tables_str}\n"
+            f"{figures_str}\n"
             f"======================================================================\n\n"
             f"Instructions:\n"
             f"1. Check if the question is within the scope of this study material. If the student asks about any concept or classification covered in the verified excerpts below, or asks about main topics, curriculum, summary, or practice problems, it is 100% IN-SCOPE and must be answered thoroughly.\n"
@@ -502,8 +923,9 @@ class TeachingAgent:
         content = re.sub(r"(?m)^[ \t]*-{3,}[ \t]*$", "\n---\n", content)
         # Ensure Markdown headers (##, ###, ####) have empty lines before them
         content = re.sub(r"(?<=\S)\n(#{1,4}\s+)", r"\n\n\1", content)
-        # 3. Strip multi-branch navigation menus
-        content = cls._STRIP_MENU_PATTERN.sub("", content)
+        # 3. Strip multi-branch navigation menus (skip for pasted MCQs/batch questions to protect options/answers)
+        if not (query_meta and (getattr(query_meta, "is_pasted_mcq", False) or getattr(query_meta, "is_batch_questions", False))):
+            content = cls._STRIP_MENU_PATTERN.sub("", content)
 
         # 4. Strip trailing "Hint: ..." lines so response ends naturally
         lines = content.split("\n")
@@ -523,12 +945,15 @@ class TeachingAgent:
                 break
         content = "\n".join(lines).strip()
 
-        # If this is practice questions, student requested only questions, or table solving, do not append artificial checkpoint
+        # If this is practice questions, student requested only questions, table solving, pasted MCQ/batch solving, or answer_only depth, do not append artificial checkpoint
         is_exempt = query_meta and (
             query_meta.intent == "PRACTICE_QUESTIONS"
             or (query_meta.format_directives and query_meta.format_directives.get("questions_only"))
             or (query_meta.format_directives and query_meta.format_directives.get("solve_table"))
             or query_meta.referenced_table is not None
+            or getattr(query_meta, "is_pasted_mcq", False)
+            or getattr(query_meta, "is_batch_questions", False)
+            or (query_meta.pre_gen_plan and (query_meta.pre_gen_plan.skip_followup_question or query_meta.pre_gen_plan.depth == "answer_only"))
         )
         if is_exempt:
             return content
@@ -601,6 +1026,11 @@ class TeachingAgent:
                     sections.append("### 📐 Key Formulations")
                     for f in clean_f:
                         sections.append(f)
+
+            if context_bundle.related_figures:
+                sections.append("### 🖼️ Document Figures on Referenced Page")
+                for fig in context_bundle.related_figures:
+                    sections.append(f"- **{fig}**")
         else:
             sections.append(
                 "No relevant excerpts were found in your document for this question. "

@@ -280,7 +280,12 @@ class TutoringQueryOrchestrator:
         yield {"type": "phase_start", "phase": "Analyzing Query & Context", "phase_key": "analysis"}
 
         # 1. Query Preprocessing
-        normalized_query, language, val_meta = QueryPreprocessor.preprocess(raw_query)
+        try:
+            normalized_query, language, val_meta = QueryPreprocessor.preprocess(raw_query)
+        except ValueError as ve:
+            yield {"type": "token", "token": f"⚠️ {str(ve)} Please type a question or topic to explore."}
+            yield {"type": "done"}
+            return
 
         # 2. Context Integration
         context = ContextIntegrator.assemble_context(
@@ -364,10 +369,9 @@ class TutoringQueryOrchestrator:
             yield {"type": "token", "token": intro_msg, "data": intro_msg}
             yield {"type": "token", "token": fenced_block, "data": fenced_block}
             yield {"type": "grounding", "data": {"grounding_score": 1.0, "formatted_badge": "100% Grounded in Materials", "verified": True}}
+            # 8. Post-Processing & State Update (Database Persistence)
+            # MUST execute BEFORE yielding "done" so client disconnect does not abort DB commit
             latency_ms = round((time.time() - start_time) * 1000, 2)
-            yield {"type": "phase_end", "phase": "Generation Complete", "phase_key": "flashcard_quiz"}
-            yield {"type": "done", "latency_ms": latency_ms}
-
             if session_id:
                 cls._update_session_state(
                     session=session,
@@ -381,6 +385,9 @@ class TutoringQueryOrchestrator:
                     latency_ms=latency_ms,
                     entities=[target_topic]
                 )
+
+            yield {"type": "phase_end", "phase": "Generation Complete", "phase_key": "flashcard_quiz"}
+            yield {"type": "done", "latency_ms": latency_ms}
             return
 
         # 5. Router Decision
@@ -444,9 +451,9 @@ class TutoringQueryOrchestrator:
 
         latency_ms = round((time.time() - start_time) * 1000, 2)
         yield {"type": "phase_end", "phase": "Synthesis Complete", "phase_key": "synthesis"}
-        yield {"type": "done", "latency_ms": latency_ms}
 
         # 8. Post-Processing & State Update (Database Persistence)
+        # Persist BEFORE yielding "done" so that immediate client disconnects do not drop database writes
         if session_id:
             cls._update_session_state(
                 session=session,
@@ -460,6 +467,8 @@ class TutoringQueryOrchestrator:
                 latency_ms=latency_ms,
                 entities=query_meta.extracted_entities
             )
+
+        yield {"type": "done", "latency_ms": latency_ms}
 
     @classmethod
     def _update_session_state(
@@ -495,10 +504,25 @@ class TutoringQueryOrchestrator:
                 sess.message_count = (sess.message_count or 0) + 2
                 sess.last_active = now_utc
 
-            # 2. Record User & Assistant Messages
+            # Validate topic_id against CurriculumTopic table to guarantee no foreign key violations
+            from app.models.session import CurriculumTopic
+            valid_topic_id = None
+            if topic_id:
+                topic_record = session.query(CurriculumTopic.id).filter(CurriculumTopic.id == topic_id).first()
+                if topic_record:
+                    valid_topic_id = topic_id
+                else:
+                    # Save slug or non-curriculum identifier in session_metadata
+                    meta = dict(sess.session_metadata or {})
+                    meta["topic_id"] = topic_id
+                    sess.session_metadata = meta
+
+            # 2. Record User & Assistant Messages with strict chronological sequencing
+            from datetime import timedelta
+            asst_utc = now_utc + timedelta(milliseconds=10)
             user_msg = ChatMessage(
                 session_id=session_id,
-                topic_id=topic_id,
+                topic_id=valid_topic_id,
                 role="user",
                 content=user_query,
                 intent=intent,
@@ -506,14 +530,14 @@ class TutoringQueryOrchestrator:
             )
             asst_msg = ChatMessage(
                 session_id=session_id,
-                topic_id=topic_id,
+                topic_id=valid_topic_id,
                 role="assistant",
                 content=assistant_response,
                 intent=intent,
                 citations=citations,
                 grounding_score=grounding_score,
                 latency_ms=latency_ms,
-                created_at=now_utc
+                created_at=asst_utc
             )
             session.add_all([user_msg, asst_msg])
             session.commit()

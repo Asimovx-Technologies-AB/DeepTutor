@@ -58,10 +58,12 @@ class MultiStrategyRetrievalOrchestrator:
             if e_clean and e_clean not in _STOPWORDS:
                 expanded_terms.add(e_clean)
 
-        # Check if query is an overview / main topics / summary inquiry
+        # Check if query is an overview / main topics / summary / whole material inquiry
+        is_global_scope = getattr(query_meta, "query_scope", None) == "global_material"
         is_overview_query = (
             query_meta.intent == "SUMMARY"
-            or any(w in resolved_query.lower() for w in ["main topic", "topics", "summary", "overview", "syllabus", "chapters", "what is this document", "what does this cover", "roadmap", "curriculum"])
+            or is_global_scope
+            or any(w in resolved_query.lower() for w in ["main topic", "topics", "summary", "overview", "syllabus", "chapters", "what is this document", "what does this cover", "roadmap", "curriculum", "whole material", "from this material", "cover all"])
         )
 
         # 2. Metadata Filtering & Base Query Construction
@@ -166,7 +168,7 @@ class MultiStrategyRetrievalOrchestrator:
                 or topic_title.lower() in chunk_section
                 or any(t in chunk_topic or t in chunk_section for t in topic_terms)
             ))
-            topic_affinity_bonus = 0.2 if has_topic_match else 0.0
+            topic_affinity_bonus = 0.2 if (has_topic_match and not is_global_scope) else 0.0
 
             # Figure boost: if query asks for a specific figure, prioritize chunks containing that figure reference
             ref_fig_bonus = 0.0
@@ -205,23 +207,45 @@ class MultiStrategyRetrievalOrchestrator:
                 "cosine_score": cosine_score,
             })
 
-        # Sort by final score descending
-        ranked = sorted(scored_chunks, key=lambda x: x["score"], reverse=True)[:top_k]
+        # Sort by final score descending with diverse topic coverage if global material scope
+        effective_top_k = max(top_k, 10) if is_global_scope else top_k
+        if is_global_scope:
+            selected = []
+            seen_topics = set()
+            sorted_all = sorted(scored_chunks, key=lambda x: x["score"], reverse=True)
+            for sc in sorted_all:
+                t_key = (sc["chunk"].topic or sc["chunk"].chapter_section or f"page_{sc['chunk'].page_number}").strip().lower()
+                if t_key and t_key not in seen_topics:
+                    seen_topics.add(t_key)
+                    selected.append(sc)
+                    if len(selected) >= effective_top_k:
+                        break
+            if len(selected) < effective_top_k:
+                for sc in sorted_all:
+                    if sc not in selected:
+                        selected.append(sc)
+                        if len(selected) >= effective_top_k:
+                            break
+            ranked = selected
+        else:
+            ranked = sorted(scored_chunks, key=lambda x: x["score"], reverse=True)[:top_k]
 
         # 4. Parent + Child Expansion & Exact Page Guarantee
-        selected_chunk_ids = {item["chunk"].id for item in ranked}
-        expanded_chunks: List[KnowledgeChunk] = [item["chunk"] for item in ranked]
-
-        # If an active page was specified (e.g. from user query "page 22"), guarantee all chunks from that page are included
+        # If an active page was specified (e.g. from user query "page 5"), guarantee all chunks from that page are strictly prioritized at index 0
+        exact_page_chunks = []
         if active_page:
             exact_page_chunks = session.query(KnowledgeChunk).filter(
                 KnowledgeChunk.document_id == document_id,
                 KnowledgeChunk.page_number == active_page
-            ).all()
-            for epc in reversed(exact_page_chunks):
-                if epc.id not in selected_chunk_ids:
-                    expanded_chunks.insert(0, epc)
-                    selected_chunk_ids.add(epc.id)
+            ).order_by(KnowledgeChunk.chunk_index).all()
+            
+            page_chunk_ids = {epc.id for epc in exact_page_chunks}
+            other_chunks = [item["chunk"] for item in ranked if item["chunk"].id not in page_chunk_ids]
+            expanded_chunks: List[KnowledgeChunk] = list(exact_page_chunks) + other_chunks
+            selected_chunk_ids = {c.id for c in expanded_chunks}
+        else:
+            selected_chunk_ids = {item["chunk"].id for item in ranked}
+            expanded_chunks: List[KnowledgeChunk] = [item["chunk"] for item in ranked]
 
         for item in ranked[:2]:
             parent_id = item["chunk"].parent_id
@@ -231,12 +255,26 @@ class MultiStrategyRetrievalOrchestrator:
                     expanded_chunks.append(parent_chunk)
                     selected_chunk_ids.add(parent_id)
 
-        # 5. Extract Related Formulas & Tables from Assets
+        # 5. Extract Related Formulas, Tables, & Figures from Assets
         related_formulas = []
         related_tables = []
+        related_figures = []
         pages_hit = list({c.page_number for c in expanded_chunks})
         if active_page and active_page not in pages_hit:
             pages_hit.append(active_page)
+
+        # 5b. Extract verified figure captions from target page chunks
+        fig_cap_pattern = re.compile(r"(?:Figure|Fig\.?)\s*(\d+(?:[-.]\d+)*)\s*[:.-]?\s*([^\n\r]+)", re.IGNORECASE)
+        target_figure_chunks = exact_page_chunks if active_page else expanded_chunks
+        for c in target_figure_chunks:
+            for match in fig_cap_pattern.finditer(c.content):
+                fig_num = match.group(1).replace(".", "-")
+                fig_title = match.group(2).strip()
+                # Exclude cross-references like "Figure 1.4 for a graphical representation"
+                if not any(fig_title.lower().startswith(prefix) for prefix in ["for a", "shows", "illustrates", "see", "refer"]):
+                    fig_label = f"Figure {fig_num}: {fig_title}"
+                    if fig_label not in related_figures:
+                        related_figures.append(fig_label)
 
         # If a specific table was referenced (e.g. "Table 1.2" or "table"), look for it in DocumentAsset
         if query_meta.referenced_table and document_id:
@@ -277,6 +315,9 @@ class MultiStrategyRetrievalOrchestrator:
                     related_formulas.append(a.latex)
                 elif a.asset_type == "table" and a.markdown and a.markdown not in related_tables:
                     related_tables.append(a.markdown)
+                elif a.asset_type == "figure" and a.caption and a.caption not in related_figures:
+                    if not active_page or a.page_number == active_page:
+                        related_figures.append(a.caption)
 
         # For overview / main topics queries, guarantee key introductory/topic chunks across the document
         if is_overview_query and document_id and candidate_chunks:
@@ -308,6 +349,29 @@ class MultiStrategyRetrievalOrchestrator:
                 )
             )
 
+        # 7. Check for requested but missing tables or figures
+        missing_table_requested = False
+        requested_table_name = None
+        ref_table = getattr(query_meta, "referenced_table", None)
+        raw_q_lower = (query_meta.raw_query or "").lower()
+        if ref_table or ("table" in raw_q_lower and any(w in raw_q_lower for w in ["solve", "explain", "show", "what is", "where is", "fill", "calculate", "find"])):
+            requested_table_name = ref_table or "table"
+            has_table_in_chunks = any("table" in c.content.lower() or "|" in c.content for c in expanded_chunks)
+            if not related_tables and not has_table_in_chunks:
+                missing_table_requested = True
+
+        missing_figure_requested = False
+        requested_figure_name = None
+        ref_fig = getattr(query_meta, "referenced_figure", None)
+        if ref_fig or any(w in raw_q_lower for w in ["figure", "diagram", "image", "drawing", "picture", "illustration"]):
+            requested_figure_name = ref_fig or "figure/image"
+            has_fig_in_chunks = any(
+                any(k in c.content.lower() for k in ["figure", "fig.", "diagram", "image"])
+                for c in expanded_chunks
+            )
+            if not related_figures and not has_fig_in_chunks:
+                missing_figure_requested = True
+
         return ContextBundle(
             document_id=document_id,
             topic_title=topic_title or "Subject Lesson",
@@ -318,5 +382,10 @@ class MultiStrategyRetrievalOrchestrator:
             curriculum_topics=curriculum_topic_titles,
             related_formulas=related_formulas[:5],
             related_tables=related_tables[:3],
+            related_figures=related_figures[:3],
             citations=citations,
+            missing_table_requested=missing_table_requested,
+            missing_figure_requested=missing_figure_requested,
+            requested_table_name=requested_table_name,
+            requested_figure_name=requested_figure_name,
         )

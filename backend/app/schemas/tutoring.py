@@ -5,6 +5,18 @@ from app.schemas.chunk import KnowledgeChunkRead
 from app.schemas.layout import TableAsset, FormulaAsset
 
 
+class PreGenerationPlan(BaseModel):
+    """
+    Pre-Generation Classification Plan determining response shape, depth, format,
+    visual need, and follow-up question behavior before generation begins.
+    """
+    depth: Literal["answer_only", "short", "detailed", "default"] = "default"
+    format: Literal["bullets", "table", "stepwise", "prose"] = "prose"
+    visual: Literal["none", "required", "conditional"] = "conditional"
+    skip_followup_question: bool = False
+    reasoning: str = "Default balanced teaching response strategy."
+
+
 class QueryMetadata(BaseModel):
     """
     Structured representation of the analyzed user query
@@ -23,10 +35,16 @@ class QueryMetadata(BaseModel):
         "FOLLOW_UP",
         "CASUAL",
         "SUMMARY",
+        "STUDY_NOTES",
         "QUIZ",
         "PROBLEM_SOLVING",
         "PRACTICE_QUESTIONS"
     ] = "DOCUMENT_QA"
+    
+    context_source: Literal[
+        "dialogue_history",   # Query targets recent chat history turns or previous assistant explanations
+        "study_material",     # Query targets document textbook content, formulas, concepts, or practice problems
+    ] = "study_material"
     
     target_topic: Optional[str] = None
     question_count: Optional[int] = None
@@ -41,8 +59,29 @@ class QueryMetadata(BaseModel):
         default_factory=lambda: {"needs_latex": False, "needs_table": False, "needs_steps": False, "needs_socratic": True}
     )
     visual_modality: Literal["none", "mermaid", "svg"] = "none"
+    visual_diagram_type: Literal[
+        "none",
+        "flowchart_lr",      # Horizontal chronological progressions, evolutions, phases, pipelines, timelines
+        "flowchart_td",      # Vertical logic, decision trees, algorithmic workflows, classifications
+        "concept_graph",     # Concept relationship network for important questions & topic mastery
+        "sequence",          # Multi-actor communication, network protocols, client-server exchanges
+        "state_diagram",     # Finite state machines and state transitions
+        "mindmap",           # Unordered radial brainstorming / multi-pillar syllabus overviews
+        "svg"                # Spatial, physical, anatomical, geometric, vector diagrams
+    ] = "none"
     visual_prompt_focus: Optional[str] = None
     question_complexity: Literal["simple", "multi_hop", "comparative", "evaluative"] = "simple"
+    is_pasted_mcq: bool = False
+    is_batch_questions: bool = False
+    batch_question_count: Optional[int] = None
+    query_scope: Literal[
+        "global_material",   # Explicitly covers whole document / all topics (e.g. "from this material", "cover all the topics")
+        "current_topic",     # Explicitly follow-up on chat topic (e.g. "tell me more about bagging", "why is step 2 needed?")
+        "specific_topic",    # Explicitly names a concept (e.g. "what is SVM?", "questions on Random Forest")
+        "ambiguous_scope",   # Ambiguous: could be previous chat topic OR whole material (e.g. "give me 5 questions", "quiz me")
+    ] = "specific_topic"
+    scope_clarification_prompt: Optional[str] = None
+    pre_gen_plan: PreGenerationPlan = Field(default_factory=PreGenerationPlan)
 
 
 class CitationItem(BaseModel):
@@ -71,7 +110,12 @@ class ContextBundle(BaseModel):
     curriculum_topics: List[str] = Field(default_factory=list)
     related_formulas: List[str] = Field(default_factory=list)
     related_tables: List[str] = Field(default_factory=list)
+    related_figures: List[str] = Field(default_factory=list)
     citations: List[CitationItem] = Field(default_factory=list)
+    missing_table_requested: bool = False
+    missing_figure_requested: bool = False
+    requested_table_name: Optional[str] = None
+    requested_figure_name: Optional[str] = None
 
 
 class AnswerValidationResult(BaseModel):

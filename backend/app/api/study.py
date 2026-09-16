@@ -533,15 +533,16 @@ def stream_topic_lecture(
     prompt_query = f"Teach and explain the topic: {topic_title}"
 
     def event_generator():
-        gen = TutoringQueryOrchestrator.stream_query_response(
-            session=db,
-            raw_query=prompt_query,
-            session_id=session_id,
-            topic_id=topic_id,
-            topic_title=topic_title
-        )
-        for event in gen:
-            yield f"data: {json.dumps(event)}\n\n"
+        with SessionLocal() as stream_db:
+            gen = TutoringQueryOrchestrator.stream_query_response(
+                session=stream_db,
+                raw_query=prompt_query,
+                session_id=session_id,
+                topic_id=topic_id,
+                topic_title=topic_title
+            )
+            for event in gen:
+                yield f"data: {json.dumps(event)}\n\n"
 
     return StreamingResponse(
         event_generator(),
@@ -739,15 +740,21 @@ def stream_agent_message(
     def event_generator():
         # Dedicated session ensures active DB connection throughout stream completion
         with SessionLocal() as stream_db:
-            gen = TutoringQueryOrchestrator.stream_query_response(
-                session=stream_db,
-                raw_query=message,
-                session_id=session_id,
-                topic_id=topic_id,
-                topic_title=subject
-            )
-            for event in gen:
-                yield f"data: {json.dumps(event)}\n\n"
+            try:
+                gen = TutoringQueryOrchestrator.stream_query_response(
+                    session=stream_db,
+                    raw_query=message,
+                    session_id=session_id,
+                    topic_id=topic_id,
+                    topic_title=subject
+                )
+                for event in gen:
+                    yield f"data: {json.dumps(event)}\n\n"
+            except Exception as err:
+                logger.error(f"[stream_agent_message] SSE generator exception: {err}", exc_info=True)
+                err_event = {"type": "token", "token": f"⚠️ An error occurred while processing your query: {str(err)}"}
+                yield f"data: {json.dumps(err_event)}\n\n"
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     return StreamingResponse(
         event_generator(),

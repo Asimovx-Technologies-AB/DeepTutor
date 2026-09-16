@@ -177,7 +177,7 @@ const ChatMessageComponent = ({
                     const language = match ? match[1] : ''
                     const codeStr = String(children).replace(/\n$/, '')
                     if (language === 'mermaid') {
-                      return <MermaidDiagram chart={codeStr} />
+                      return <MermaidDiagram chart={codeStr} onNodeClick={onSuggestionClick} />
                     }
                     if (language === 'svg' || (codeStr.includes('<svg') && codeStr.includes('</svg>'))) {
                       return <InlineSVGDiagram svg={codeStr} />

@@ -24,7 +24,8 @@ def list_chat_sessions(
         {
             "id": s.id,
             "session_title": s.title,
-            "topic_id": s.id,
+            "topic_id": (s.session_metadata or {}).get("topic_id") or s.id,
+            "document_id": s.document_id,
             "document_name": s.document_name,
             "created_at": s.created_at.isoformat(),
             "updated_at": s.last_active.isoformat() if s.last_active else s.created_at.isoformat(),
@@ -42,10 +43,23 @@ def create_chat_session(
     """Creates a new chat session."""
     topic_id = payload.get("topic_id")
     title = payload.get("session_title", "General Tutoring")
+    metadata = {"topic_id": topic_id} if topic_id else {}
+
+    doc_id = None
+    doc_name = None
+    if topic_id:
+        from app.models.document import Document
+        doc = db.query(Document).filter(Document.id == topic_id).first()
+        if doc:
+            doc_id = doc.id
+            doc_name = doc.title or doc.filename
     
     sess = StudySession(
         title=title,
         subject=title,
+        document_id=doc_id,
+        document_name=doc_name,
+        session_metadata=metadata,
         status="active"
     )
     db.add(sess)
@@ -54,7 +68,7 @@ def create_chat_session(
     return {
         "id": sess.id,
         "session_title": sess.title,
-        "topic_id": sess.id,
+        "topic_id": topic_id or sess.id,
         "document_name": sess.document_name,
         "created_at": sess.created_at.isoformat(),
         "updated_at": sess.last_active.isoformat() if sess.last_active else sess.created_at.isoformat(),
@@ -74,7 +88,7 @@ def get_chat_session(
     return {
         "id": sess.id,
         "session_title": sess.title,
-        "topic_id": sess.id,
+        "topic_id": (sess.session_metadata or {}).get("topic_id") or sess.id,
         "document_name": sess.document_name,
         "created_at": sess.created_at.isoformat(),
         "updated_at": sess.last_active.isoformat() if sess.last_active else sess.created_at.isoformat(),
@@ -109,8 +123,10 @@ def get_chat_messages(
             "role": m.role,
             "content": m.content,
             "citations": m.citations or [],
+            "sources": m.citations or [],
+            "metadata": {"sources": m.citations or []},
             "grounding_score": m.grounding_score or 1.0,
-            "created_at": m.created_at.isoformat(),
+            "created_at": m.created_at.isoformat() if m.created_at else None,
         }
         for m in msgs
     ]

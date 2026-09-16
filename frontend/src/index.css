@@ -972,3 +972,18 @@ textarea:focus-visible {
   background-size: 200% 100%;
   animation: shimmer-flow 1.8s infinite linear;
 }
+
+/* ─── Sleek Dynamic Input Bar Scrollbar ─── */
+.custom-input-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-input-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-input-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 9999px;
+}
+.custom-input-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
