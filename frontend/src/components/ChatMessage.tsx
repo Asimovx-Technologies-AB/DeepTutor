@@ -11,6 +11,7 @@ import SourceCard, { type Source } from './SourceCard'
 import InlineSVGDiagram from './InlineSVGDiagram'
 import StudyNotesCard, { isStudyNotesContent } from './StudyNotesCard'
 import FlashcardQuizCard, { parseQuizDataFromContent } from './FlashcardQuizCard'
+import TeacherModeCard, { parseCheckpointFromMarkdown } from './TeacherModeCard'
 
 interface Props {
   role: 'user' | 'assistant'
@@ -53,9 +54,14 @@ const ChatMessageComponent = ({
     response_format
   })
 
+  const parsedCheckpoint = parseCheckpointFromMarkdown(content)
+  const hasCheckpoint = Boolean(parsedCheckpoint.checkpoint)
+
   // Use React deferred value during streaming so UI thread stays responsive
   const deferredContent = useDeferredValue(content)
-  const displayContent = isStreaming ? deferredContent : content
+  const displayContent = isStreaming
+    ? deferredContent
+    : (hasCheckpoint ? parsedCheckpoint.beforeText : content)
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content)
@@ -63,7 +69,11 @@ const ChatMessageComponent = ({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const hasSuggestions = isAssistant && !isStreaming && suggestedQuestions && suggestedQuestions.length > 0
+  // If interactive checkpoint card is active, avoid duplicating option chips
+  const visibleSuggestions = hasCheckpoint
+    ? (suggestedQuestions || []).filter((q) => !q.toLowerCase().startsWith('option ') && q.length > 2)
+    : (suggestedQuestions || [])
+  const hasSuggestions = isAssistant && !isStreaming && visibleSuggestions.length > 0
   const hasFollowUp = isAssistant && !isStreaming && socraticFollowUp && socraticFollowUp.trim()
 
   return (
@@ -238,6 +248,15 @@ const ChatMessageComponent = ({
           )}
         </div>
 
+        {/* ── Interactive Teacher Mode Checkpoint Card ──────────────── */}
+        {isAssistant && !isStreaming && hasCheckpoint && parsedCheckpoint.checkpoint && (
+          <TeacherModeCard
+            checkpoint={parsedCheckpoint.checkpoint}
+            onSelectOption={(opt) => onSuggestionClick?.(opt)}
+            onActionClick={(act) => onSuggestionClick?.(act)}
+          />
+        )}
+
         {/* Source cards */}
         {isAssistant && sources && sources.length > 0 && !isStreaming && !content.includes("Topic Not Found") && (
           <SourceCard sources={sources} />
@@ -271,7 +290,7 @@ const ChatMessageComponent = ({
             transition={{ delay: 0.2, duration: 0.25 }}
             className="mt-3 flex flex-wrap gap-2"
           >
-            {suggestedQuestions!.map((q, i) => (
+            {visibleSuggestions.map((q, i) => (
               <button
                 key={i}
                 onClick={() => onSuggestionClick?.(q)}

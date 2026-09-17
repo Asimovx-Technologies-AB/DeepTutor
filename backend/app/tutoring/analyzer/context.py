@@ -46,6 +46,7 @@ class ContextIntegrator:
                 if study_sess.session_metadata:
                     context["active_artifact_id"] = study_sess.session_metadata.get("active_artifact_id")
                     context["active_question_paper_id"] = study_sess.session_metadata.get("active_question_paper_id")
+                    context["teacher_state"] = study_sess.session_metadata.get("teacher_state")
                 
                 # Fetch recent messages
                 recent_msgs = (

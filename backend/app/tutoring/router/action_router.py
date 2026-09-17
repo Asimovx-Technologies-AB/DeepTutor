@@ -22,7 +22,8 @@ ExecutionRoute = Literal[
     "INSUFFICIENT_EVIDENCE_REPLY",
     "MATERIAL_NOT_SUPPORTED_REPLY",
     "ANSWER_CHALLENGE_PIPELINE",
-    "DOCUMENT_TOPIC_ANALYSIS_PIPELINE"
+    "DOCUMENT_TOPIC_ANALYSIS_PIPELINE",
+    "TEACHER_MODE_PIPELINE"
 ]
 
 RetrievalStrategyType = Literal[
@@ -49,6 +50,10 @@ class ActionRouter:
     ) -> Tuple[ExecutionRoute, RetrievalStrategyType]:
         action = understanding.action
         intent = understanding.intent
+
+        # 0. Interactive Teacher Mode takes priority when requested or active
+        if intent == "TEACH_TOPIC" or action == ActionTypeEnum.TEACH_TOPIC.value:
+            return "TEACHER_MODE_PIPELINE", "thematic"
 
         if hasattr(understanding, "decision") and understanding.decision == "CLARIFY":
             return "CLARIFICATION_REPLY", "none"

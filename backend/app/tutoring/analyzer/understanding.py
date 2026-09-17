@@ -51,6 +51,8 @@ IMPORTANT:
 - If the user asks for questions and answers, explicitly determine whether answers are requested and extract the requested number.
 - If ambiguity exists, generate a concise, specific clarification question using the available context. Do not be vague.
 - If the user disputes, corrects, or challenges the correctness of your previous answer (e.g. "I think you are giving the wrong answers", "that is incorrect"), you MUST set intent="ANSWER_CHALLENGE" and decision="CLARIFY".
+- If the user asks to be taught a topic or learn interactively step-by-step (e.g. "Teach me SVM", "Act as a teacher and teach me Decision Trees", "I want to learn Newton's Laws"), you MUST choose intent="TEACH_TOPIC", action="TEACH_TOPIC", decision="ANSWER", and extract the clean target topic (e.g. "SVM", "Decision Tree").
+- If the user is responding to an ongoing teaching interaction (answering a check question, asking a doubt, or saying "continue"), set intent="TEACH_TOPIC", action="TEACH_TOPIC", decision="ANSWER".
 
 Decision States:
 - ANSWER: Clear query, normal RAG or fact answering.
@@ -260,6 +262,39 @@ class QueryUnderstanding:
             return True, len(q_lines)
 
         return False, None
+
+    TEACH_TOPIC_PATTERNS = [
+        re.compile(
+            r"^(?:act\s+as\s+(?:a\s+)?(?:teacher|tutor)\s+(?:and\s+)?(?:to\s+)?)?"
+            r"(?:please\s+)?(?:can\s+you\s+)?(?:teach|guide)\s+(?:me\s+)?(?:about\s+)?(.+)$",
+            re.IGNORECASE
+        ),
+        re.compile(
+            r"^(?:i\s+want\s+to\s+learn|help\s+me\s+learn|let(?:'s|\s+us)\s+learn)\s+(?:about\s+)?(.+)$",
+            re.IGNORECASE
+        ),
+        re.compile(
+            r"\b(?:teach\s+me\s+about|teach\s+me|start\s+teaching|teach\s+topic|teach\s+lesson)\s+(.+)$",
+            re.IGNORECASE
+        ),
+    ]
+
+    @classmethod
+    def extract_teach_topic(cls, text: str) -> Optional[str]:
+        cleaned = text.strip()
+        for pat in cls.TEACH_TOPIC_PATTERNS:
+            m = pat.search(cleaned)
+            if m and m.lastindex and m.group(m.lastindex):
+                raw_t = m.group(m.lastindex).strip(" ?.!:,;")
+                raw_t = re.sub(
+                    r"\b(?:step\s+by\s+step|from\s+scratch|thoroughly|completely|deeply|in\s+detail|please)\b",
+                    "",
+                    raw_t,
+                    flags=re.IGNORECASE
+                ).strip(" ?.!:,;")
+                if raw_t and len(raw_t) >= 2:
+                    return raw_t
+        return None
 
     GLOBAL_SCOPE_PATTERN = re.compile(
         r"\b(?:(?:from\s+)?(?:this|the)\s+(?:material|meterial|document|textbook|pdf|book|syllabus|curriculum|course|subject)|"
@@ -545,16 +580,22 @@ class QueryUnderstanding:
         language: str,
         is_follow_up: bool = False,
         conversation_history: Optional[List[Dict[str, Any]]] = None,
-        ref_meta: Optional[Dict[str, Any]] = None
+        ref_meta: Optional[Dict[str, Any]] = None,
+        teacher_state: Optional[Dict[str, Any]] = None
     ) -> QueryMetadata:
         """
         Uses live LLM with conversation history for query understanding; falls back to heuristic patterns if LLM unavailable.
         """
+        # Explicit topic check for teacher mode initiation
+        explicit_teach_topic = cls.extract_teach_topic(raw_query)
+        has_active_teacher = bool(teacher_state and teacher_state.get("mode") == "teacher")
+
         # 0. Deterministic Fast-Path for Casual Greetings & Acknowledgments
+        # Bypassed if in an active teacher mode session or asking to be taught
         raw_lower = raw_query.lower()
         is_casual_match = any(pat.search(normalized_query) for pat in cls.CASUAL_PATTERNS) or any(pat.search(raw_lower.strip()) for pat in cls.CASUAL_PATTERNS)
-        has_academic_keywords = any(w in raw_lower for w in ["what", "how", "why", "explain", "solve", "give", "question", "quiz", "page", "table", "figure", "diagram", "compare"])
-        if is_casual_match and len(raw_lower.strip().split()) <= 6 and not has_academic_keywords:
+        has_academic_keywords = any(w in raw_lower for w in ["what", "how", "why", "explain", "solve", "give", "question", "quiz", "page", "table", "figure", "diagram", "compare", "teach", "learn"])
+        if not has_active_teacher and not explicit_teach_topic and is_casual_match and len(raw_lower.strip().split()) <= 6 and not has_academic_keywords:
             from app.tutoring.analyzer.fast_path import QueryFastPath
             fast_res = QueryFastPath.evaluate(normalized_query, raw_query, language)
             pre_gen_plan = PreGenerationClassifier.classify(
@@ -635,7 +676,11 @@ class QueryUnderstanding:
                         raw_intent = str(parsed.get("intent", "DOCUMENT_QA")).upper()
                         # Map extended intent to canonical pipeline intent if needed
                         legacy_intent = raw_intent
-                        if raw_intent in ("EXPLAIN_TOPIC", "TEACH_TOPIC", "SIMPLIFY", "CLARIFY_CONCEPT"):
+                        if raw_intent == "TEACH_TOPIC" or explicit_teach_topic:
+                            legacy_intent = "TEACH_TOPIC"
+                        elif has_active_teacher and raw_intent not in ("CREATE_STUDY_PLAN", "MODIFY_STUDY_PLAN"):
+                            legacy_intent = "TEACH_TOPIC"
+                        elif raw_intent in ("EXPLAIN_TOPIC", "SIMPLIFY", "CLARIFY_CONCEPT"):
                             legacy_intent = "EXPLANATION"
                         elif raw_intent in ("COMPARE_CONCEPTS",):
                             legacy_intent = "COMPARISON"
@@ -662,7 +707,9 @@ class QueryUnderstanding:
                         else:
                             context_source = "study_material"
 
-                        target_topic = parsed.get("target_topic") or parsed.get("topic")
+                        target_topic = explicit_teach_topic or parsed.get("target_topic") or parsed.get("topic")
+                        if has_active_teacher and not target_topic:
+                            target_topic = teacher_state.get("topic")
                         question_count = parsed.get("question_count")
                         referenced_page = parsed.get("referenced_page")
                         referenced_table = parsed.get("referenced_table")
@@ -1110,9 +1157,15 @@ class QueryUnderstanding:
             intent = "PROBLEM_SOLVING"
         elif any(pat.search(cleaned) for pat in cls.ANSWER_CHALLENGE_PATTERNS):
             intent = "ANSWER_CHALLENGE"
+        elif explicit_teach_topic or any(pat.search(cleaned) for pat in cls.TEACH_TOPIC_PATTERNS):
+            intent = "TEACH_TOPIC"
+            target_topic = explicit_teach_topic or cls.extract_teach_topic(raw_query)
+        elif has_active_teacher and not is_follow_up:
+            intent = "TEACH_TOPIC"
+            target_topic = teacher_state.get("topic")
         elif is_follow_up:
             intent = "FOLLOW_UP"
-        elif any(w in cleaned for w in ["explain", "teach", "how does", "why does", "deep dive"]):
+        elif any(w in cleaned for w in ["explain", "how does", "why does", "deep dive"]):
             intent = "EXPLANATION"
         else:
             intent = "DOCUMENT_QA"

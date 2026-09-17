@@ -835,6 +835,13 @@ export default function LearnPage() {
             )
           )
         },
+        onSuggestions: (suggestions: string[]) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId ? { ...m, suggested_questions: suggestions } : m
+            )
+          )
+        },
         onDone: () => {
           setIsAgentThinking(false)
           if (accumulatedText && accumulatedText.length > 250) {

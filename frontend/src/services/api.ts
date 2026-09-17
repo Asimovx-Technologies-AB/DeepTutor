@@ -89,6 +89,9 @@ export const streamChatMessage = async ({
   onGraphContext,
   onGrounding,
   onFlashcardQuiz,
+  onSuggestions,
+  onTeacherState,
+  onCheckpoint,
   onDone,
   onError,
   signal,
@@ -102,6 +105,9 @@ export const streamChatMessage = async ({
   onGraphContext: (graph: any) => void
   onGrounding?: (grounding: any) => void
   onFlashcardQuiz?: (quizData: any) => void
+  onSuggestions?: (suggestions: string[]) => void
+  onTeacherState?: (teacherState: any) => void
+  onCheckpoint?: (checkpoint: any) => void
   onDone: () => void
   onError: (err: any) => void
   signal?: AbortSignal
@@ -128,7 +134,7 @@ export const streamChatMessage = async ({
     } catch (fetchErr: any) {
       if (signal?.aborted || fetchErr?.name === 'AbortError') return
       if (attempts < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 1500))
+        await new Promise((r) => setTimeout(r, 1200))
         continue
       }
       onError(fetchErr)
@@ -174,6 +180,12 @@ export const streamChatMessage = async ({
             onGrounding(evt.data)
           } else if (evt.type === 'flashcard_quiz' && onFlashcardQuiz) {
             onFlashcardQuiz(evt.data)
+          } else if (evt.type === 'suggestions' && onSuggestions) {
+            onSuggestions(evt.data)
+          } else if (evt.type === 'teacher_state' && onTeacherState) {
+            onTeacherState(evt.data)
+          } else if (evt.type === 'checkpoint' && onCheckpoint) {
+            onCheckpoint(evt.data)
           } else if (evt.type === 'done') {
             isCompleted = true
             onDone()
@@ -550,6 +562,7 @@ export const streamAgentMessage = async ({
   onSources,
   onToken,
   onFlashcardQuiz,
+  onSuggestions,
   onDone,
   onError,
   signal,
@@ -561,6 +574,7 @@ export const streamAgentMessage = async ({
   onSources?: (sources: any[]) => void
   onToken: (token: string) => void
   onFlashcardQuiz?: (quizData: any) => void
+  onSuggestions?: (suggestions: string[]) => void
   onDone: () => void
   onError: (err: any) => void
   signal?: AbortSignal
@@ -612,6 +626,8 @@ export const streamAgentMessage = async ({
             onSources(evt.data || [])
           } else if (evt.type === 'flashcard_quiz' && onFlashcardQuiz) {
             onFlashcardQuiz(evt.data)
+          } else if (evt.type === 'suggestions' && onSuggestions) {
+            onSuggestions(evt.data || [])
           } else if (evt.type === 'done') {
             onDone()
             return

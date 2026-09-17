@@ -441,3 +441,130 @@ class StudySessionRead(BaseModel):
     created_at: datetime
     last_active: datetime
     curriculum_topics: List[CurriculumTopicRead] = Field(default_factory=list)
+
+
+# ─── Interactive Teacher Mode State Schemas ──────────────────────────────────
+
+class TeacherStageEnum(str, Enum):
+    """Structured stages for interactive Teacher Mode state machine."""
+    INTRO = "INTRO"
+    TEACHING = "TEACHING"
+    FIGURE_EXPLANATION = "FIGURE_EXPLANATION"
+    CHECKPOINT = "CHECKPOINT"
+    WAITING_FOR_STUDENT = "WAITING_FOR_STUDENT"
+    EVALUATING = "EVALUATING"
+    REEXPLAINING = "REEXPLAINING"
+    PREREQUISITE_REVIEW = "PREREQUISITE_REVIEW"
+    DOUBT = "DOUBT"
+    SYNTHESIS = "SYNTHESIS"
+    FINAL_ASSESSMENT = "FINAL_ASSESSMENT"
+    COMPLETED = "COMPLETED"
+
+
+class PauseContext(BaseModel):
+    """Lightweight snapshot of teaching position when paused for doubts or side-tracks."""
+    current_unit_id: str
+    current_stage: str
+    current_question_id: Optional[str] = None
+    current_figure_id: Optional[str] = None
+    previous_action: Optional[str] = None
+
+
+class VisualLearningState(BaseModel):
+    """Tracks progressive visual/diagram explanation across learning units."""
+    visual_id: Optional[str] = None
+    analysis: Optional[str] = None
+    components: List[str] = Field(default_factory=list)
+    explained_components: List[str] = Field(default_factory=list)
+    current_component: Optional[str] = None
+    understanding: Optional[str] = None
+
+
+class LearningUnit(BaseModel):
+    """A granular, teachable learning unit dynamically created from study material."""
+    id: str
+    concept: str
+    objective: str
+    prerequisites: List[str] = Field(default_factory=list)
+    source_references: List[str] = Field(default_factory=list)
+    relevant_visual_references: List[str] = Field(default_factory=list)
+    source_pages: List[int] = Field(default_factory=list)
+    relevant_figures: List[str] = Field(default_factory=list)
+    relevant_tables: List[str] = Field(default_factory=list)
+    relevant_formulas: List[str] = Field(default_factory=list)
+    relationships: List[str] = Field(default_factory=list)
+    misconceptions: List[str] = Field(default_factory=list)
+    difficulty: str = "Intermediate"
+    expected_understanding: Optional[str] = None
+    status: Literal["pending", "in_progress", "completed", "skipped", "weak"] = "pending"
+
+
+class TeachingPlan(BaseModel):
+    """Dynamic, topic-agnostic teaching plan decomposed from study material."""
+    topic: str
+    overall_goal: str
+    learning_units: List[LearningUnit] = Field(default_factory=list)
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class StudentUnderstandingLevelEnum(str, Enum):
+    UNDERSTOOD = "UNDERSTOOD"
+    PARTIAL = "PARTIAL"
+    MISCONCEPTION = "MISCONCEPTION"
+    PREREQUISITE_GAP = "PREREQUISITE_GAP"
+    NOT_UNDERSTOOD = "NOT_UNDERSTOOD"
+    UNCLEAR = "UNCLEAR"
+
+
+class TeacherTurnActionEnum(str, Enum):
+    START_LESSON = "START_LESSON"
+    EXPLAIN_CONCEPT = "EXPLAIN_CONCEPT"
+    CHECK_UNDERSTANDING = "CHECK_UNDERSTANDING"
+    EVALUATE_ANSWER = "EVALUATE_ANSWER"
+    ANSWER_DOUBT = "ANSWER_DOUBT"
+    RESUME_LESSON = "RESUME_LESSON"
+    ADAPTIVE_REEXPLAIN = "ADAPTIVE_REEXPLAIN"
+    PREREQUISITE_REVIEW = "PREREQUISITE_REVIEW"
+    NEXT_LEARNING_UNIT = "NEXT_LEARNING_UNIT"
+    SKIP_UNIT = "SKIP_UNIT"
+    BACKTRACK_UNIT = "BACKTRACK_UNIT"
+    TOPIC_SYNTHESIS = "TOPIC_SYNTHESIS"
+    FINAL_ASSESSMENT = "FINAL_ASSESSMENT"
+    LEARNING_REPORT = "LEARNING_REPORT"
+    TOPIC_NOT_FOUND = "TOPIC_NOT_FOUND"
+
+
+class TeacherSessionState(BaseModel):
+    """
+    Persistent state for an interactive, multi-turn Teacher Mode session.
+    Preserves progression, active concept, current question, doubts, and pause snapshots.
+    Uses stable current_unit_id rather than array index alone.
+    """
+    session_id: str
+    mode: Literal["teacher"] = "teacher"
+    topic: str
+    current_unit_id: Optional[str] = None
+    current_subtopic: Optional[str] = None
+    current_concept: Optional[str] = None
+    current_stage: str = TeacherStageEnum.INTRO.value
+    current_objective: Optional[str] = None
+    teaching_plan: Optional[TeachingPlan] = None
+    current_unit_index: int = 0
+    completed_learning_units: List[str] = Field(default_factory=list)
+    completed_concepts: List[str] = Field(default_factory=list)
+    pending_concepts: List[str] = Field(default_factory=list)
+    current_figure: Optional[str] = None
+    visual_state: Optional[VisualLearningState] = None
+    current_question: Optional[Dict[str, Any]] = None
+    student_doubts: List[Dict[str, Any]] = Field(default_factory=list)
+    misconceptions: List[str] = Field(default_factory=list)
+    understanding_state: str = "not_started"
+    paused: bool = False
+    pause_reason: Optional[str] = None
+    pause_context: Optional[PauseContext] = None
+    previous_state: Optional[Dict[str, Any]] = None
+    next_step: Optional[str] = None
+    assessment_history: List[Dict[str, Any]] = Field(default_factory=list)
+    last_explanation: Optional[str] = None
+
+

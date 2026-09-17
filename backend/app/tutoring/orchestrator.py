@@ -112,7 +112,8 @@ class TutoringQueryOrchestrator:
             language=language,
             is_follow_up=ref_meta["is_follow_up"],
             conversation_history=context.get("history", []),
-            ref_meta=ref_meta
+            ref_meta=ref_meta,
+            teacher_state=context.get("teacher_state")
         )
 
         effective_page = query_meta.referenced_page or ref_meta.get("referenced_page") or active_page
@@ -347,6 +348,16 @@ class TutoringQueryOrchestrator:
                 "socratic_follow_up": None,
                 "suggested_questions": []
             }
+        elif route_dest == "TEACHER_MODE_PIPELINE":
+            from app.tutoring.teaching.interactive_teacher import InteractiveTeacherEngine
+            res_dict = InteractiveTeacherEngine.execute_teacher_turn(
+                session=session,
+                session_id=session_id or "default_session",
+                raw_query=raw_query,
+                query_meta=query_meta,
+                context=context,
+                doc_id=doc_id,
+            )
         else:
             # RETRIEVAL_PIPELINE
             chosen_strategy = "contextual" if effective_page else retrieval_strategy
@@ -470,7 +481,9 @@ class TutoringQueryOrchestrator:
             resolved_query=resolved_query,
             language=language,
             is_follow_up=ref_meta["is_follow_up"],
-            conversation_history=context.get("history", [])
+            conversation_history=context.get("history", []),
+            ref_meta=ref_meta,
+            teacher_state=context.get("teacher_state")
         )
 
         # 4. Target Topic & Quiz Intent Routing
@@ -587,7 +600,59 @@ class TutoringQueryOrchestrator:
                 )
             yield {"type": "done", "latency_ms": round((time.time() - start_time) * 1000, 2)}
             return
+
+        if route_dest == "TEACHER_MODE_PIPELINE":
+            from app.tutoring.teaching.interactive_teacher import InteractiveTeacherEngine
+            yield {"type": "phase_end", "phase": "Analysis Complete", "phase_key": "analysis"}
             
+            full_content_tokens = []
+            citations_data = []
+            grounding_val = 1.0
+            suggestions_data = []
+
+            for event in InteractiveTeacherEngine.stream_teacher_turn(
+                session=session,
+                session_id=session_id or "default_session",
+                raw_query=raw_query,
+                query_meta=query_meta,
+                context=context,
+                doc_id=doc_id,
+            ):
+                evt_type = event.get("type")
+                if evt_type == "token":
+                    t_str = event.get("token") or event.get("data") or ""
+                    full_content_tokens.append(t_str)
+                    yield event
+                elif evt_type == "sources":
+                    citations_data = event.get("data", [])
+                    yield event
+                elif evt_type == "grounding":
+                    grounding_val = event.get("data", {}).get("grounding_score", 1.0)
+                    yield event
+                elif evt_type == "suggestions":
+                    suggestions_data = event.get("data", [])
+                    yield event
+                elif evt_type in ("phase_start", "phase_end", "teacher_state", "checkpoint"):
+                    yield event
+                elif evt_type == "done":
+                    total_time = round((time.time() - start_time) * 1000, 2)
+                    if session_id:
+                        cls._update_session_state(
+                            session=session,
+                            session_id=session_id,
+                            topic_id=topic_id,
+                            user_query=raw_query,
+                            assistant_response="".join(full_content_tokens),
+                            intent="TEACH_TOPIC",
+                            citations=citations_data,
+                            grounding_score=grounding_val,
+                            latency_ms=total_time,
+                            entities=query_meta.extracted_entities
+                        )
+                    yield {"type": "done", "latency_ms": total_time}
+                    return
+            return
+
         if route_dest in ("CLARIFY_PIPELINE", "INSUFFICIENT_EVIDENCE_PIPELINE", "MATERIAL_NOT_SUPPORTED_PIPELINE", "ANSWER_CHALLENGE_PIPELINE"):
             yield {"type": "phase_end", "phase": "Analysis Complete", "phase_key": "analysis"}
             

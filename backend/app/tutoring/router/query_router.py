@@ -14,7 +14,8 @@ RouteDestination = Literal[
     "CLARIFY_PIPELINE",
     "INSUFFICIENT_EVIDENCE_PIPELINE",
     "MATERIAL_NOT_SUPPORTED_PIPELINE",
-    "ANSWER_CHALLENGE_PIPELINE"
+    "ANSWER_CHALLENGE_PIPELINE",
+    "TEACHER_MODE_PIPELINE"
 ]
 
 RetrievalStrategy = Literal[
@@ -39,7 +40,9 @@ class QueryRouter:
         if meta.understanding_result:
             exec_route, ret_strat = ActionRouter.route_action(meta.understanding_result, has_active_document)
             strat_mapped: RetrievalStrategy = ret_strat if ret_strat in ("cross_lesson", "thematic", "multi_concept", "contextual") else "contextual"
-            if exec_route == "CASUAL_PIPELINE":
+            if exec_route == "TEACHER_MODE_PIPELINE":
+                return "TEACHER_MODE_PIPELINE", "thematic"
+            elif exec_route == "CASUAL_PIPELINE":
                 return "CASUAL_PIPELINE", "contextual"
             elif exec_route == "SUMMARIZER_PIPELINE":
                 return "SUMMARY_PIPELINE", "thematic"
@@ -65,7 +68,9 @@ class QueryRouter:
                 return "RETRIEVAL_PIPELINE", strat_mapped
 
         # 2. Legacy / Fallback matching
-        if intent == "ANSWER_CHALLENGE":
+        if intent == "TEACH_TOPIC":
+            return "TEACHER_MODE_PIPELINE", "thematic"
+        elif intent == "ANSWER_CHALLENGE":
             return "ANSWER_CHALLENGE_PIPELINE", "none"
         elif intent in ("CASUAL", "GREETING", "CONFIRMATION"):
             return "CASUAL_PIPELINE", "contextual"
