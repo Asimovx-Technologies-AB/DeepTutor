@@ -7,7 +7,7 @@ import 'katex/dist/katex.min.css'
 import { Bot, User, Copy, Check, Image, Lightbulb, HelpCircle, Sparkles } from 'lucide-react'
 import { motion } from 'framer-motion'
 import SourceCard, { type Source } from './SourceCard'
-import MermaidDiagram from './MermaidDiagram'
+
 import InlineSVGDiagram from './InlineSVGDiagram'
 import StudyNotesCard, { isStudyNotesContent } from './StudyNotesCard'
 import FlashcardQuizCard, { parseQuizDataFromContent } from './FlashcardQuizCard'
@@ -162,7 +162,6 @@ const ChatMessageComponent = ({
                     const className = child?.props?.className || ''
                     const childStr = String(child?.props?.children || '')
                     if (
-                      className.includes('language-mermaid') ||
                       className.includes('language-svg') ||
                       className.includes('language-flashcard_quiz') ||
                       className.includes('language-flashcard-quiz') ||
@@ -176,9 +175,6 @@ const ChatMessageComponent = ({
                     const match = /language-(\w+)/.exec(className || '')
                     const language = match ? match[1] : ''
                     const codeStr = String(children).replace(/\n$/, '')
-                    if (language === 'mermaid') {
-                      return <MermaidDiagram chart={codeStr} onNodeClick={onSuggestionClick} />
-                    }
                     if (language === 'svg' || (codeStr.includes('<svg') && codeStr.includes('</svg>'))) {
                       return <InlineSVGDiagram svg={codeStr} />
                     }

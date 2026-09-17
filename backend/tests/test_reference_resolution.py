@@ -14,9 +14,15 @@ class MockQuery:
         
     def filter(self, *args):
         return self
+
+    def limit(self, *args):
+        return self
         
     def first(self):
         return self.item
+
+    def all(self):
+        return [self.item] if self.item is not None else []
 
 class MockDBSession:
     def __init__(self, artifact=None, item=None):

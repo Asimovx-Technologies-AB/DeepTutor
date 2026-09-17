@@ -20,12 +20,13 @@ import {
 import { studyApi, documentsApi, streamAgentMessage } from '../services/api'
 import { exportNotesToPdf } from '../utils/pdfExport'
 import { useAuthStore } from '../stores/authStore'
-import MermaidDiagram from '../components/MermaidDiagram'
+
 import InlineSVGDiagram from '../components/InlineSVGDiagram'
 import StudyNotesCard, { extractDocTitle, isStudyNotesContent } from '../components/StudyNotesCard'
 import FlashcardQuizCard, { parseQuizDataFromContent } from '../components/FlashcardQuizCard'
 import ConfirmModal from '../components/ConfirmModal'
 import { SessionLoadingAnimation } from '../components/SessionLoadingAnimation'
+import QuestionPaperValidatorModal from '../components/QuestionPaperValidatorModal'
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
@@ -164,6 +165,9 @@ export default function LearnPage() {
   const [drawerSearchQuery, setDrawerSearchQuery] = useState('')
   const [isUploadDrawerOpen, setIsUploadDrawerOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Question Paper Validator State
+  const [isValidatorModalOpen, setIsValidatorModalOpen] = useState(false)
 
   // Panels
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
@@ -1275,7 +1279,6 @@ export default function LearnPage() {
       const className = child?.props?.className || ''
       const childStr = String(child?.props?.children || '')
       if (
-        className.includes('language-mermaid') ||
         className.includes('language-svg') ||
         className.includes('flashcard') ||
         className.includes('quiz') ||
@@ -1294,9 +1297,6 @@ export default function LearnPage() {
       const match = /language-(\w+)/.exec(className || '')
       const lang = match ? match[1] : ''
       const codeString = String(children).replace(/\n$/, '')
-      if (!inline && lang === 'mermaid') {
-        return <MermaidDiagram chart={codeString} />
-      }
       if (!inline && (lang === 'svg' || (codeString.includes('<svg') && codeString.includes('</svg>')))) {
         return <InlineSVGDiagram svg={codeString} />
       }
@@ -1370,6 +1370,17 @@ export default function LearnPage() {
                   >
                     <Plus size={14} />
                     <span>Blank Room</span>
+                  </button>
+                </div>
+                
+                {/* Secondary Action Row */}
+                <div className="mt-2 shrink-0">
+                  <button
+                    onClick={() => setIsValidatorModalOpen(true)}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs border border-slate-200/90 transition shadow-2xs cursor-pointer"
+                  >
+                    <CheckSquare size={14} className="text-indigo-600" />
+                    <span>Validate Question Paper</span>
                   </button>
                 </div>
 
@@ -2697,6 +2708,17 @@ export default function LearnPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <QuestionPaperValidatorModal
+        isOpen={isValidatorModalOpen}
+        onClose={() => setIsValidatorModalOpen(false)}
+        sessionDocuments={sessionDocuments}
+        onNotesGenerated={(markdown) => {
+          setCurrentArtifactMarkdown(markdown)
+          setArtifactViewerOpen(true)
+          setArtifactDockSide('right')
+        }}
+      />
     </div>
   )
 

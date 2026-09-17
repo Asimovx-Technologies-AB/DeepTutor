@@ -344,6 +344,16 @@ export const mcpApi = {
     api.post('/mcp/tools/execute', { tool_name: toolName, arguments: args }),
 }
 
+// ─── Question Papers ──────────────────────────────────────────
+export const questionPapersApi = {
+  getExtractedQuestions: (documentId: string) =>
+    api.get(`/question-papers/${documentId}/questions`),
+  validatePaper: (documentId: string, studyMaterialId: string) =>
+    api.post(`/question-papers/${documentId}/validate/${studyMaterialId}`),
+  generateNotes: (documentId: string, studyMaterialId: string) =>
+    api.post(`/question-papers/${documentId}/generate-notes/${studyMaterialId}`),
+}
+
 // ─── Study Plan ───────────────────────────────────────────────
 export const studyPlanApi = {
   myPlans: () => api.get('/study-plan/my-plans'),

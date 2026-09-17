@@ -36,7 +36,8 @@ class DocumentPipelineOrchestrator:
         session: Session,
         file_bytes: bytes,
         filename: str,
-        existing_doc_id: Optional[str] = None
+        existing_doc_id: Optional[str] = None,
+        document_type: str = "STUDY_MATERIAL"
     ) -> CanonicalDocumentRepresentation:
         start_time = time.time()
         stage_durations: Dict[str, float] = {}
@@ -138,6 +139,17 @@ class DocumentPipelineOrchestrator:
             formulas=all_formulas,
         )
         stage_durations["KNOWLEDGE_CHUNKER"] = round((time.time() - t0) * 1000, 2)
+        
+        # 7.5 Question Paper Extraction
+        if document_type == "QUESTION_PAPER":
+            t0 = time.time()
+            from app.pipeline.question_extractor import QuestionPaperExtractor
+            extracted_qs = QuestionPaperExtractor.extract_questions(
+                session=session,
+                doc_id=doc_id,
+                pages_data=pages_data
+            )
+            stage_durations["QUESTION_EXTRACTION"] = round((time.time() - t0) * 1000, 2)
 
         # 8. Semantic Knowledge Relationships (Graph)
         t0 = time.time()
@@ -198,7 +210,8 @@ class DocumentPipelineOrchestrator:
         cls,
         doc_id: str,
         file_bytes: bytes,
-        filename: str
+        filename: str,
+        document_type: str = "STUDY_MATERIAL"
     ):
         """
         Executes the deep parallel pipeline (tables, formulas, 14-dimension chunks,
@@ -212,7 +225,8 @@ class DocumentPipelineOrchestrator:
                 session=db,
                 file_bytes=file_bytes,
                 filename=filename,
-                existing_doc_id=doc_id
+                existing_doc_id=doc_id,
+                document_type=document_type
             )
             logger.info(f"[BackgroundPipeline] Completed deep processing for {filename} (ID: {doc_id}).")
 

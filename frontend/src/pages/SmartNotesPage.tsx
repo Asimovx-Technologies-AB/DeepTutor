@@ -15,7 +15,7 @@ import {
   FileCheck, ShieldAlert, ArrowRight, Zap, Target, Star
 } from 'lucide-react'
 import { notesApi, documentsApi } from '../services/api'
-import MermaidDiagram from '../components/MermaidDiagram'
+
 import InlineSVGDiagram from '../components/InlineSVGDiagram'
 import ConfirmModal from '../components/ConfirmModal'
 
@@ -609,13 +609,9 @@ export default function SmartNotesPage() {
                   components={{
                     code({ className, children, ...props }: any) {
                       const match = /language-(\w+)/.exec(className || '')
-                      const isMermaid = match && match[1] === 'mermaid'
                       const isInline = !match
 
                       const codeStr = String(children).replace(/\n$/, '')
-                      if (isMermaid) {
-                        return <MermaidDiagram chart={codeStr} />
-                      }
                       if ((match && match[1] === 'svg') || (codeStr.includes('<svg') && codeStr.includes('</svg>'))) {
                         return <InlineSVGDiagram svg={codeStr} />
                       }

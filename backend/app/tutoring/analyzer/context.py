@@ -29,6 +29,8 @@ class ContextIntegrator:
             "document_id": None,
             "document_title": None,
             "current_topic": None,
+            "active_artifact_id": None,
+            "active_question_paper_id": None,
             "history": [],
             "student_profile": {"difficulty": "Intermediate", "goals": ["Understanding"]},
             "mastery_scores": {},
@@ -40,6 +42,10 @@ class ContextIntegrator:
             if study_sess:
                 context["document_id"] = study_sess.document_id
                 context["document_title"] = study_sess.title or study_sess.document_name
+                
+                if study_sess.session_metadata:
+                    context["active_artifact_id"] = study_sess.session_metadata.get("active_artifact_id")
+                    context["active_question_paper_id"] = study_sess.session_metadata.get("active_question_paper_id")
                 
                 # Fetch recent messages
                 recent_msgs = (

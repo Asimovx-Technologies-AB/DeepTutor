@@ -127,17 +127,16 @@ Before answering, analyze the student's question intent and choose the optimal p
   - Display block math: `$$ formula $$` on standalone lines for display equations.
   - CRITICAL: NEVER put plain English sentences or labels inside `$ ... $` or `$$ ... $$` unless enclosed in `\\text{...}`.
 
-=== STRICT OUT-OF-MATERIAL GUARDRAIL ===
-- You are strictly a tutor for the student's uploaded study material and its academic domain.
-- If the student's question is COMPLETELY UNRELATED to the provided study material and its academic domain (for instance, asking about unrelated pop culture, celebrity gossip, stock market advice, or recipes):
-  Do NOT answer or hallucinate out-of-scope content.
+=== STRICT OUT-OF-MATERIAL GUARDRAIL (MATERIAL-GROUNDED MODE) ===
+- You are operating in STRICT MATERIAL-GROUNDED MODE. You are ONLY a tutor for the specific context provided.
+- You MUST base your answers entirely on the verified context excerpts, figures, and tables provided below.
+- Do NOT draw from external knowledge to answer factual questions. If the provided context does not contain the answer, you must state that the material does not cover it.
+- If the student's question is unrelated to the provided study material, or if the material does not contain the necessary information:
   Politely decline with:
-  "I am your dedicated tutor for this study material. Your question is outside the scope of your uploaded document on **[Topic / Subject]**. To keep your learning focused and productive, please ask questions related to this study material, or upload documents for that subject!"
+  "I am your dedicated tutor for this study material. Your question about **[Topic / Subject]** is not covered in the uploaded document. To keep your learning focused and productive, please ask questions related to the provided material, or upload documents that cover this subject."
 - MANDATORY IN-SCOPE EXCEPTIONS (NEVER REFUSE):
-  1. Main Topics & Curriculum Overview: Questions asking "what are the main topics", "what does this document cover", "give me a summary", "overview", "what chapters are there", "learning roadmap", or "syllabus" are ALWAYS 100% IN-SCOPE. Synthesize a structured, engaging curriculum breakdown and learning roadmap from the verified curriculum and topics.
-  2. Questions Grounded in Verified Excerpts: If the student asks about ANY concept, term, chapter, classification, or phenomenon mentioned in the verified study context excerpts below (such as specific types, functions, examples, or distribution), answer it thoroughly, grounded strictly in those excerpts.
-  3. Academic Domain Questions: If the question relates to the general academic subject of the uploaded document (e.g. Geography, Environmental Science, History, Mathematics), answer it authoritatively using the context.
-  4. Pedagogical & Dialogue Requests: Requests for practice questions, quizzes, problem solving, explaining simpler, or asking about earlier conversation turns in this session are ALWAYS IN-SCOPE.
+  1. Main Topics & Curriculum Overview: Questions asking "what are the main topics", "what does this document cover", "give me a summary", or "syllabus" are ALWAYS IN-SCOPE.
+  2. Pedagogical & Dialogue Requests: Requests for practice questions, quizzes, problem solving, explaining simpler, or asking about earlier conversation turns in this session are ALWAYS IN-SCOPE.
 
 === STRICT ANTI-HALLUCINATION GUARDRAILS FOR TABLES & FIGURES ===
 - If the student asks about a specific table, figure, or image (or claims a table/figure exists in the material):
@@ -447,8 +446,29 @@ class TeachingAgent:
                 f"- {visual_constraint_str}\n"
                 f"- {followup_constraint_str}\n"
                 f"- Strategy Reasoning: {plan.reasoning}\n"
-                "===========================================================\n\n"
             )
+            
+            # Enforce output requirements if they exist
+            out_reqs = getattr(query_meta, "output_requirements", None)
+            if out_reqs:
+                if out_reqs.format == "ANSWER_ONLY":
+                    hard_constraints_block += "- OUTPUT CONSTRAINT: Provide ONLY the direct answer. DO NOT include any explanatory text, greetings, bullet points, or concluding checkpoints. Output exactly what is requested and nothing more.\n"
+                elif out_reqs.format == "BULLETS_ONLY":
+                    hard_constraints_block += "- OUTPUT CONSTRAINT: Provide the answer strictly in bullet points. DO NOT include introductory or concluding paragraphs.\n"
+                    
+                if out_reqs.length == "SHORT":
+                    hard_constraints_block += "- LENGTH CONSTRAINT: Keep the response extremely brief, no more than 2-3 sentences.\n"
+                elif out_reqs.length == "LONG":
+                    hard_constraints_block += "- LENGTH CONSTRAINT: Provide a comprehensive and detailed response, breaking down all nuances.\n"
+                    
+                if not out_reqs.include_explanation:
+                    hard_constraints_block += "- EXPLANATION CONSTRAINT: DO NOT explain your reasoning. Provide only the final result or direct answer.\n"
+                if not out_reqs.include_examples:
+                    hard_constraints_block += "- EXAMPLES CONSTRAINT: DO NOT include any examples or analogies.\n"
+                if not out_reqs.include_steps:
+                    hard_constraints_block += "- STEPS CONSTRAINT: DO NOT show step-by-step working, provide only the final answer.\n"
+
+            hard_constraints_block += "===========================================================\n\n"
 
         is_study_notes_request = (
             query_meta.intent == "STUDY_NOTES"
@@ -745,17 +765,15 @@ class TeachingAgent:
                 task_instruction = (
                     "3. CURRICULUM OVERVIEW / PHASES / EVOLUTION: The student is asking for the evolution, phases, or progression of this subject. "
                     "Present a structured, engaging breakdown of the verified phases and key milestones. "
-                    "MANDATORY SEQUENTIAL FLOWCHART: You MUST generate a clean horizontal Mermaid flowchart (```mermaid\nflowchart LR\n...```) showing the sequential progression across phases (e.g. Phase 1 --> Phase 2 --> Phase 3 --> Phase 4). "
-                    "DO NOT use a radial mindmap for chronological phases! "
-                    "Quote all node text containing special characters or parentheses. "
+                    "MANDATORY SEQUENTIAL DIAGRAM: You MUST generate a clean, responsive Inline SVG vector diagram (```svg <svg viewBox=\"0 0 650 320\" ...> ... </svg> ```) showing the sequential progression across phases (e.g. Phase 1 --> Phase 2 --> Phase 3 --> Phase 4). "
+                    "Include legible text labels and arrows. "
                     "Immediately beneath the flowchart, include '#### 🔍 Visual Breakdown (How to Read this Diagram)', explain the key concepts of each phase, and conclude with the Interactive Checkpoint.\n"
                 )
             else:
                 task_instruction = (
                     "3. CURRICULUM OVERVIEW / MAIN TOPICS / SYLLABUS PILLARS: The student is asking for the main topics, syllabus pillars, summary, or learning roadmap of this study material. "
                     "Present a structured, engaging breakdown of the verified curriculum and key topics in this document. "
-                    "INTERACTIVE OVERVIEW DIAGRAM: Generate a structured Mermaid diagram organizing the core pillars and their subtopics/chapters (use `mindmap` for non-sequential syllabus branches, or `flowchart TD` for hierarchical relationship trees). "
-                    "Quote all node text containing parentheses, brackets, colons, or punctuation. "
+                    "INTERACTIVE OVERVIEW DIAGRAM: Generate a beautiful, responsive Inline SVG vector diagram (```svg <svg viewBox=\"0 0 650 400\" ...> ... </svg> ```) organizing the core pillars and their subtopics/chapters. "
                     "Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' explaining the core pillars and relationships, explain the key concepts of each pillar, and conclude with the Interactive Checkpoint.\n"
                 )
         else:
@@ -768,31 +786,38 @@ class TeachingAgent:
         visual_directive = ""
         v_type = getattr(query_meta, "visual_diagram_type", "none")
 
-        if getattr(query_meta, "query_scope", None) == "ambiguous_scope" or is_pasted_mcq or is_batch_questions or query_meta.visual_modality == "none":
-            visual_directive = ""
-        elif v_type == "flowchart_lr" or (query_meta.visual_modality == "mermaid" and any(w in query_meta.resolved_query.lower() for w in ["evolution", "phase", "phases", "step", "steps", "stage", "stages", "pipeline", "timeline"])):
+        is_image_only_intent = False
+        if query_meta.visual_modality == "svg" and any(w in query_meta.resolved_query.lower() for w in ["draw", "image", "picture", "figure", "illustration", "visualize", "diagram", "svg"]):
+            is_image_only_intent = True
+
+        if is_image_only_intent:
             visual_directive = (
-                f"5. VISUAL GENERATION (HORIZONTAL SEQUENTIAL FLOWCHART): Generate a clean, valid Mermaid horizontal flowchart (```mermaid\nflowchart LR\n...```) representing {target_visual_subject}. "
-                "Show the progression cleanly from left to right (e.g. Phase 1 --> Phase 2 --> Phase 3 --> Phase 4). "
-                "STRICT RULE: DO NOT use a radial mindmap for chronological or sequential phases! "
-                "Quote all node text containing special characters or punctuation. "
+                f"5. VISUAL GENERATION (IMAGE ONLY): The student explicitly requested an image or diagram of {target_visual_subject}. "
+                "Generate a high-clarity, beautiful Inline SVG vector diagram (```svg <svg viewBox=\"0 0 650 350\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```). "
+                "CRITICAL: Do NOT output any other teaching text, introductions, or conclusions. Just the SVG block, followed immediately by '#### 🔍 Visual Breakdown (How to Read this Diagram)' with a concise bulleted explanation of the visual elements. "
+            )
+        elif getattr(query_meta, "query_scope", None) == "ambiguous_scope" or is_pasted_mcq or is_batch_questions or query_meta.visual_modality == "none":
+            visual_directive = ""
+        elif v_type == "flowchart_lr" or (query_meta.visual_modality == "svg" and any(w in query_meta.resolved_query.lower() for w in ["evolution", "phase", "phases", "step", "steps", "stage", "stages", "pipeline", "timeline"])):
+            visual_directive = (
+                f"5. VISUAL GENERATION (HORIZONTAL SEQUENTIAL FLOW): Generate a clean, valid Inline SVG diagram (```svg <svg viewBox=\"0 0 700 250\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```) representing {target_visual_subject}. "
+                "Show the progression cleanly from left to right (e.g. Phase 1 --> Phase 2 --> Phase 3 --> Phase 4) using modern colors and clear text labels. "
                 "Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' with bullet points explaining each phase and arrow.\n"
             )
         elif v_type == "concept_graph":
             visual_directive = (
-                f"5. VISUAL GENERATION (CONCEPT RELATIONSHIP GRAPH): Generate an interconnected Mermaid concept graph (```mermaid\nflowchart TD\n...```) representing {target_visual_subject}. "
+                f"5. VISUAL GENERATION (CONCEPT RELATIONSHIP GRAPH): Generate an interconnected Inline SVG concept graph (```svg <svg viewBox=\"0 0 650 450\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```) representing {target_visual_subject}. "
                 "Map out how the core exam concepts, underlying principles, and question themes relate and connect to each other so the student grasps the conceptual network. "
-                "Quote all node text containing special characters or punctuation. "
                 "Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' explaining the relationships and key exam insights.\n"
             )
         elif v_type == "sequence":
             visual_directive = (
-                f"5. VISUAL GENERATION (SEQUENCE DIAGRAM): Generate a clean, valid Mermaid sequence diagram (```mermaid\nsequenceDiagram\n...```) representing the interaction or protocol exchange in {target_visual_subject}. "
-                "Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' explaining the request-response steps.\n"
+                f"5. VISUAL GENERATION (SEQUENCE DIAGRAM): Generate a clean, valid Inline SVG sequence diagram (```svg <svg viewBox=\"0 0 600 400\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```) representing the interaction or protocol exchange in {target_visual_subject}. "
+                "Use vertical swimlanes/lifelines and horizontal message arrows. Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' explaining the request-response steps.\n"
             )
         elif v_type == "state_diagram":
             visual_directive = (
-                f"5. VISUAL GENERATION (STATE DIAGRAM): Generate a clean Mermaid state diagram (```mermaid\nstateDiagram-v2\n...```) representing the states and transitions of {target_visual_subject}. "
+                f"5. VISUAL GENERATION (STATE DIAGRAM): Generate a clean Inline SVG state diagram (```svg <svg viewBox=\"0 0 650 350\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```) representing the states and transitions of {target_visual_subject}. "
                 "Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)'.\n"
             )
         elif v_type == "svg" or query_meta.visual_modality == "svg":
@@ -814,29 +839,19 @@ class TeachingAgent:
                 )
         elif v_type == "mindmap":
             visual_directive = (
-                f"5. VISUAL GENERATION (MINDMAP): Generate a structured Mermaid mindmap (```mermaid\nmindmap\n  root((Title))\n    Pillar1\n      [\"Subtopic 1\"]\n...```) representing {target_visual_subject}. "
-                "Quote all node text containing special characters or punctuation. Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' explaining the core pillars and relationships.\n"
+                f"5. VISUAL GENERATION (MINDMAP): Generate a structured Inline SVG radial mindmap (```svg <svg viewBox=\"0 0 700 450\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```) representing {target_visual_subject}. "
+                "Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' explaining the core pillars and relationships.\n"
             )
-        elif query_meta.visual_modality == "mermaid" or is_topics_overview:
+        elif query_meta.visual_modality == "svg" or is_topics_overview:
             visual_directive = (
-                f"5. VISUAL GENERATION: Generate a clean, valid Mermaid diagram (```mermaid ... ```) representing {target_visual_subject}. "
-                "For sequential phases or timelines, use `flowchart LR`. For hierarchies or concept networks, use `flowchart TD`. For non-sequential broad syllabi, use `mindmap`. "
-                "Quote all node text containing special characters or punctuation. Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' explaining what each part and arrow means.\n"
+                f"5. VISUAL GENERATION: Generate a clean, valid Inline SVG diagram (```svg <svg viewBox=\"0 0 650 350\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```) representing {target_visual_subject}. "
+                "Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' explaining what each part and arrow means.\n"
             )
         elif wants_visual:
-            is_algo = any(w in query_meta.resolved_query.lower() for w in [
-                "algorithm", "sort", "search", "tree", "array", "pointer", "dijkstra", "stack", "queue", "graph", "neural"
-            ])
-            if is_algo:
-                visual_directive = (
-                    "5. VISUAL GENERATION: Generate an Inline SVG vector diagram (```svg <svg viewBox=\"0 0 650 320\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```) visualizing this algorithm or data structure with colored state boxes, pointers, and step labels. "
-                    "Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)'.\n"
-                )
-            else:
-                visual_directive = (
-                    "5. VISUAL GENERATION: A visual aid is beneficial here. Provide the appropriate diagram matching the concept (Inline SVG for algorithms and physical/spatial models, flowchart LR for phases, concept graph/flowchart TD for relationships). "
-                    "Immediately beneath the diagram, include a '#### 🔍 Visual Breakdown (How to Read this Diagram)' section.\n"
-                )
+            visual_directive = (
+                "5. VISUAL GENERATION: Generate an Inline SVG vector diagram (```svg <svg viewBox=\"0 0 650 320\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```) visualizing this concept or data structure with colored state boxes, pointers, and step labels. "
+                "Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)'.\n"
+            )
 
         if is_global_material:
             subject_focus_display = "Entire Study Material (All Topics / Chapters)"

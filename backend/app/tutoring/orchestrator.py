@@ -12,6 +12,7 @@ from app.tutoring.analyzer.preprocessor import QueryPreprocessor
 from app.tutoring.analyzer.context import ContextIntegrator
 from app.tutoring.analyzer.resolver import ReferenceResolver
 from app.tutoring.analyzer.understanding import QueryUnderstanding
+from app.tutoring.analyzer.clarification import ClarificationGenerator
 from app.tutoring.analyzer.service import QueryUnderstandingService
 from app.tutoring.analyzer.fast_path import QueryFastPath
 from app.tutoring.router.query_router import QueryRouter
@@ -284,11 +285,17 @@ class TutoringQueryOrchestrator:
                 "suggested_questions": ["Explain the first topic", "Tell me more about the second one"]
             }
         elif route_dest == "CLARIFY_PIPELINE":
-            clarify_msg = "Could you please clarify what you mean?"
-            if query_meta.understanding_result and query_meta.understanding_result.clarification_question:
-                clarify_msg = query_meta.understanding_result.clarification_question
+            if query_meta.understanding_result:
+                clarify_msg = ClarificationGenerator.generate_clarification(
+                    user_query=raw_query,
+                    understanding=query_meta.understanding_result,
+                    conversation_history=context.get("history", []),
+                    available_topics=[effective_topic]
+                )
             elif query_meta.scope_clarification_prompt:
                 clarify_msg = query_meta.scope_clarification_prompt
+            else:
+                clarify_msg = "Could you please clarify what you mean?"
             
             res_dict = {
                 "content": clarify_msg,
@@ -306,6 +313,35 @@ class TutoringQueryOrchestrator:
             res_dict = {
                 "content": evidence_msg,
                 "intent": "INSUFFICIENT_EVIDENCE",
+                "citations": [],
+                "grounding_score": 1.0,
+                "socratic_follow_up": None,
+                "suggested_questions": []
+            }
+        elif route_dest == "MATERIAL_NOT_SUPPORTED_PIPELINE":
+            topic_str = query_meta.target_topic or raw_query
+            evidence_msg = f"I couldn't find '{topic_str}' in the selected study material. Please upload or select the material that covers this topic."
+            res_dict = {
+                "content": evidence_msg,
+                "intent": "MATERIAL_NOT_SUPPORTED",
+                "citations": [],
+                "grounding_score": 1.0,
+                "socratic_follow_up": None,
+                "suggested_questions": []
+            }
+        elif route_dest == "ANSWER_CHALLENGE_PIPELINE":
+            # Response Correction Re-validation Phase
+            evidence_msg = "I've re-evaluated my previous answer based on your feedback. Could you clarify which part seems incorrect, or should I try regenerating it differently?"
+            if query_meta.understanding_result:
+                evidence_msg = ClarificationGenerator.generate_clarification(
+                    user_query=raw_query,
+                    understanding=query_meta.understanding_result,
+                    conversation_history=context.get("history", []),
+                    available_topics=[effective_topic]
+                )
+            res_dict = {
+                "content": evidence_msg,
+                "intent": "ANSWER_CHALLENGE",
                 "citations": [],
                 "grounding_score": 1.0,
                 "socratic_follow_up": None,
@@ -336,7 +372,7 @@ class TutoringQueryOrchestrator:
             }
 
         # 7. Answer Validation Gate
-        if res_dict["intent"] in ("CLARIFY_CONCEPT", "INSUFFICIENT_EVIDENCE", "DOCUMENT_TOPIC_ANALYSIS"):
+        if res_dict["intent"] in ("CLARIFY_CONCEPT", "INSUFFICIENT_EVIDENCE", "MATERIAL_NOT_SUPPORTED", "ANSWER_CHALLENGE", "DOCUMENT_TOPIC_ANALYSIS"):
             # Skip pedagogical validation for system messages/prompts
             res_dict["validation"] = {
                 "is_valid": True,
@@ -544,6 +580,59 @@ class TutoringQueryOrchestrator:
                     user_query=raw_query,
                     assistant_response=plan_text,
                     intent=query_meta.intent,
+                    citations=[],
+                    grounding_score=1.0,
+                    latency_ms=round((time.time() - start_time) * 1000, 2),
+                    entities=query_meta.extracted_entities
+                )
+            yield {"type": "done", "latency_ms": round((time.time() - start_time) * 1000, 2)}
+            return
+            
+        if route_dest in ("CLARIFY_PIPELINE", "INSUFFICIENT_EVIDENCE_PIPELINE", "MATERIAL_NOT_SUPPORTED_PIPELINE", "ANSWER_CHALLENGE_PIPELINE"):
+            yield {"type": "phase_end", "phase": "Analysis Complete", "phase_key": "analysis"}
+            
+            if route_dest == "CLARIFY_PIPELINE":
+                if query_meta.understanding_result:
+                    msg = ClarificationGenerator.generate_clarification(
+                        user_query=raw_query,
+                        understanding=query_meta.understanding_result,
+                        conversation_history=context.get("history", []),
+                        available_topics=[effective_topic]
+                    )
+                else:
+                    msg = query_meta.scope_clarification_prompt or "Could you please clarify what you mean?"
+                intent_val = "CLARIFY_CONCEPT"
+            elif route_dest == "INSUFFICIENT_EVIDENCE_PIPELINE":
+                msg = "I couldn't find enough information in the uploaded materials to accurately answer this question."
+                if query_meta.understanding_result and query_meta.understanding_result.missing_information:
+                    msg += f" Missing information: {query_meta.understanding_result.missing_information}"
+                intent_val = "INSUFFICIENT_EVIDENCE"
+            elif route_dest == "MATERIAL_NOT_SUPPORTED_PIPELINE":
+                topic_str = query_meta.target_topic or raw_query
+                msg = f"I couldn't find '{topic_str}' in the selected study material. Please upload or select the material that covers this topic."
+                intent_val = "MATERIAL_NOT_SUPPORTED"
+            else: # ANSWER_CHALLENGE_PIPELINE
+                msg = "I've re-evaluated my previous answer based on your feedback. Could you clarify which part seems incorrect, or should I try regenerating it differently?"
+                if query_meta.understanding_result:
+                    msg = ClarificationGenerator.generate_clarification(
+                        user_query=raw_query,
+                        understanding=query_meta.understanding_result,
+                        conversation_history=context.get("history", []),
+                        available_topics=[effective_topic]
+                    )
+                intent_val = "ANSWER_CHALLENGE"
+
+            yield {"type": "token", "token": msg, "data": msg}
+            yield {"type": "grounding", "data": {"validation_status": "PASS", "grounding_score": 1.0, "cross_reference_valid": True, "is_valid": True}}
+            
+            if session_id:
+                cls._update_session_state(
+                    session=session,
+                    session_id=session_id,
+                    topic_id=topic_id,
+                    user_query=raw_query,
+                    assistant_response=msg,
+                    intent=intent_val,
                     citations=[],
                     grounding_score=1.0,
                     latency_ms=round((time.time() - start_time) * 1000, 2),

@@ -67,6 +67,43 @@ def check_pgvector_support(session: Session) -> bool:
     return has_pgvector
 
 
+def _run_migrations(db: Session):
+    """Applies any pending reviewed SQL migrations from the migrations directory."""
+    from pathlib import Path
+    migrations_dir = Path(__file__).resolve().parent.parent.parent / "migrations"
+    if not migrations_dir.is_dir():
+        return
+
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                filename TEXT PRIMARY KEY,
+                applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        """))
+        db.commit()
+
+        applied = {
+            row[0] for row in db.execute(text("SELECT filename FROM schema_migrations")).fetchall()
+        }
+
+        migration_files = sorted(migrations_dir.glob("*.sql"))
+        for mig_file in migration_files:
+            if mig_file.name not in applied:
+                logger.info(f"[DB] Applying migration {mig_file.name}...")
+                sql_content = mig_file.read_text(encoding="utf-8")
+                db.execute(text(sql_content))
+                db.execute(
+                    text("INSERT INTO schema_migrations (filename, applied_at) VALUES (:fn, CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING"),
+                    {"fn": mig_file.name}
+                )
+                db.commit()
+                logger.info(f"[DB] Migration {mig_file.name} applied successfully.")
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"[DB] Notice during migration run: {e}")
+
+
 def init_db():
     """Initializes tables and attempts to install the pgvector extension if PostgreSQL."""
     db = SessionLocal()
@@ -84,6 +121,9 @@ def init_db():
         import app.models # noqa
         Base.metadata.create_all(bind=engine)
         logger.info("[DB] All database tables created/verified successfully.")
+
+        if not is_sqlite:
+            _run_migrations(db)
     except Exception as e:
         logger.error(f"[DB] Error initializing database tables: {e}")
         raise

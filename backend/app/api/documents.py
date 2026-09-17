@@ -32,6 +32,7 @@ async def upload_and_process_document(
     file: UploadFile = File(...),
     topic_id: Optional[str] = Form(None),
     section_id: Optional[str] = Form(None),
+    document_type: Optional[str] = Form("STUDY_MATERIAL"),
     db: Session = Depends(get_db)
 ):
     """
@@ -144,6 +145,7 @@ async def upload_and_process_document(
                 pdf_version=meta_dict.get("pdf_version") or "1.4",
                 status="PROCESSING",
                 current_stage="PARSING",
+                document_type=document_type
             )
             db.add(db_doc)
         else:
@@ -229,7 +231,8 @@ async def upload_and_process_document(
             DocumentPipelineOrchestrator.process_document_background,
             doc_id,
             file_bytes,
-            file.filename
+            file.filename,
+            document_type
         )
 
         # 8. Return immediately in < 1 second!

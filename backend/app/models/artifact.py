@@ -17,6 +17,8 @@ class GeneratedArtifact(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     session_id = Column(String(36), ForeignKey("study_sessions.id", ondelete="CASCADE"), index=True, nullable=False)
     artifact_type = Column(String(50), index=True, nullable=False) # e.g., PRACTICE_QUESTION_SET, QUIZ
+    title = Column(String(255), nullable=True) # e.g., "SVM Important Questions"
+    status = Column(String(50), default="ACTIVE") # ACTIVE, ARCHIVED
     subject = Column(String(255), nullable=True)
     topic = Column(String(255), nullable=True)
     source_material_id = Column(String(36), nullable=True)

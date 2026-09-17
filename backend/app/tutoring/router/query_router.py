@@ -12,7 +12,9 @@ RouteDestination = Literal[
     "DIRECT_LLM_PIPELINE",
     "DOCUMENT_TOPIC_ANALYSIS_PIPELINE",
     "CLARIFY_PIPELINE",
-    "INSUFFICIENT_EVIDENCE_PIPELINE"
+    "INSUFFICIENT_EVIDENCE_PIPELINE",
+    "MATERIAL_NOT_SUPPORTED_PIPELINE",
+    "ANSWER_CHALLENGE_PIPELINE"
 ]
 
 RetrievalStrategy = Literal[
@@ -55,11 +57,17 @@ class QueryRouter:
                 return "CLARIFY_PIPELINE", "none"
             elif exec_route == "INSUFFICIENT_EVIDENCE_REPLY":
                 return "INSUFFICIENT_EVIDENCE_PIPELINE", "none"
+            elif exec_route == "MATERIAL_NOT_SUPPORTED_REPLY":
+                return "MATERIAL_NOT_SUPPORTED_PIPELINE", "none"
+            elif exec_route == "ANSWER_CHALLENGE_PIPELINE":
+                return "ANSWER_CHALLENGE_PIPELINE", "none"
             elif exec_route == "RAG_RETRIEVAL":
                 return "RETRIEVAL_PIPELINE", strat_mapped
 
         # 2. Legacy / Fallback matching
-        if intent in ("CASUAL", "GREETING", "CONFIRMATION"):
+        if intent == "ANSWER_CHALLENGE":
+            return "ANSWER_CHALLENGE_PIPELINE", "none"
+        elif intent in ("CASUAL", "GREETING", "CONFIRMATION"):
             return "CASUAL_PIPELINE", "contextual"
         elif intent in ("SUMMARY", "STUDY_NOTES", "GENERATE_NOTES", "SUMMARIZE"):
             return "SUMMARY_PIPELINE", "thematic"

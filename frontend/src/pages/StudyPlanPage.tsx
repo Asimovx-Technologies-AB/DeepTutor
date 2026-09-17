@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
-import MermaidDiagram from '../components/MermaidDiagram'
+
 import InlineSVGDiagram from '../components/InlineSVGDiagram'
 import {
   Calendar,
@@ -1357,13 +1357,9 @@ export default function StudyPlanPage() {
                         ),
                         code({ className, children }: any) {
                           const match = /language-(\w+)/.exec(className || '')
-                          const isMermaid = match && match[1] === 'mermaid'
                           const isInline = !match
                           const codeStr = String(children).replace(/\n$/, '')
 
-                          if (isMermaid) {
-                            return <MermaidDiagram chart={codeStr} />
-                          }
                           if ((match && match[1] === 'svg') || (codeStr.includes('<svg') && codeStr.includes('</svg>'))) {
                             return <InlineSVGDiagram svg={codeStr} />
                           }

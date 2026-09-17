@@ -12,7 +12,8 @@ from app.schemas.tutoring import (
     RetrievalScopeEnum,
     ResponseTypeEnum,
     ActionTypeEnum,
-    DecisionStateEnum
+    DecisionStateEnum,
+    OutputRequirements
 )
 from app.services.llm_service import default_llm_service
 from app.tutoring.analyzer.pre_gen_classifier import PreGenerationClassifier
@@ -48,16 +49,19 @@ IMPORTANT:
 - Do not use retrieval results to redefine the user's intent. Retrieval is evidence, not intent.
 - For document-level requests (identifying important topics, generating questions from the material, summarizing), do not treat Top-K retrieval as sufficient evidence. Use DOCUMENT_ANALYSIS.
 - If the user asks for questions and answers, explicitly determine whether answers are requested and extract the requested number.
-- If ambiguity exists, generate a concise, specific clarification question using the available context. Do not be vague (e.g., "Do you mean land-use types or soil types?").
+- If ambiguity exists, generate a concise, specific clarification question using the available context. Do not be vague.
+- If the user disputes, corrects, or challenges the correctness of your previous answer (e.g. "I think you are giving the wrong answers", "that is incorrect"), you MUST set intent="ANSWER_CHALLENGE" and decision="CLARIFY".
 
 Decision States:
 - ANSWER: Clear query, normal RAG or fact answering.
-- CLARIFY: Ambiguous query, needs clarification.
+- CLARIFY: Ambiguous query, needs clarification, or user is challenging/disputing a previous answer.
 - RETRIEVE: Direct search query.
 - DOCUMENT_ANALYSIS: Analyze whole document (topics, summarize).
 - GENERATE: Generate questions, quizzes, flashcards.
 - FOLLOW_UP: Contextual follow-up to previous turn.
 - INSUFFICIENT_CONTEXT: Pronouns/references cannot be resolved.
+- MATERIAL_NOT_SUPPORTED: Topic is clear but material does not contain it.
+- INSUFFICIENT_EVIDENCE: Material mentions topic but lacks details.
 - OUT_OF_SCOPE: Irrelevant.
 
 Answerability States:
@@ -66,7 +70,7 @@ Answerability States:
 - INSUFFICIENT_EVIDENCE: Needs more context.
 
 Intent Taxonomy:
-- ANSWER_QUESTION, EXPLAIN_TOPIC, TEACH_TOPIC, SUMMARIZE, SIMPLIFY, GENERATE_EXAMPLES, GENERATE_QUESTIONS, GENERATE_QUIZ, GENERATE_FLASHCARDS, CREATE_STUDY_PLAN, MODIFY_STUDY_PLAN, SEARCH_MATERIAL, ASK_FROM_MATERIAL, COMPARE_CONCEPTS, SOLVE_PROBLEM, CHECK_ANSWER, GENERATE_NOTES, DOCUMENT_TOPIC_ANALYSIS, CONTINUE_LEARNING, CLARIFY_CONCEPT, FOLLOW_UP, GREETING, CONFIRMATION, OUT_OF_SCOPE
+- ANSWER_QUESTION, EXPLAIN_TOPIC, TEACH_TOPIC, SUMMARIZE, SIMPLIFY, GENERATE_EXAMPLES, GENERATE_QUESTIONS, GENERATE_QUIZ, GENERATE_FLASHCARDS, CREATE_STUDY_PLAN, MODIFY_STUDY_PLAN, SEARCH_MATERIAL, ASK_FROM_MATERIAL, COMPARE_CONCEPTS, SOLVE_PROBLEM, CHECK_ANSWER, GENERATE_NOTES, DOCUMENT_TOPIC_ANALYSIS, CONTINUE_LEARNING, CLARIFY_CONCEPT, FOLLOW_UP, GREETING, CONFIRMATION, OUT_OF_SCOPE, ANSWER_CHALLENGE
 
 Output JSON Schema:
 {
@@ -88,12 +92,16 @@ Output JSON Schema:
   "requires_document_analysis": true | false,
   "analysis_scope": "COMPLETE_DOCUMENT" | null,
   "action": "EXPLAIN_TOPIC",
-  "decision": "ANSWER" | "CLARIFY" | "DOCUMENT_ANALYSIS" | "GENERATE" | "INSUFFICIENT_CONTEXT" | "OUT_OF_SCOPE",
+  "decision": "ANSWER" | "CLARIFY" | "DOCUMENT_ANALYSIS" | "GENERATE" | "INSUFFICIENT_CONTEXT" | "MATERIAL_NOT_SUPPORTED" | "INSUFFICIENT_EVIDENCE" | "OUT_OF_SCOPE",
   "answerability": {
     "status": "ANSWERABLE" | "AMBIGUOUS" | "INSUFFICIENT_EVIDENCE",
     "confidence": 0.95,
     "evidence_available": true
   },
+  "intent_confidence": 0.95,
+  "topic_confidence": 0.90,
+  "reference_confidence": 0.99,
+  "ambiguity_type": "INTENT" | "REFERENCE" | "ENTITY" | "TOPIC" | "DOCUMENT" | "SCOPE" | "OUTPUT" | "NONE",
   "clarification_needed": false,
   "clarification_question": null,
   "missing_information": [],
@@ -101,7 +109,7 @@ Output JSON Schema:
   "include_answers": false,
   "source_scope": null,
   "conversation_reference": null,
-  "resolved_reference": null,
+  "context_source": "dialogue_history" | "study_material",
   "response_type": "DETAILED_EXPLANATION" | "STEP_BY_STEP" | "COMPARISON" | "QUIZ" | "SIMPLE_EXPLANATION" | "TABLE",
   "requires_tool": false,
   "tool_name": null,
@@ -112,7 +120,7 @@ Output JSON Schema:
   "referenced_page": null,
   "referenced_table": null,
   "referenced_figure": null,
-  "visual_modality": "none" | "mermaid" | "svg",
+  "visual_modality": "none" | "svg",
   "visual_diagram_type": "none" | "flowchart_lr" | "flowchart_td" | "concept_graph" | "sequence" | "state_diagram" | "mindmap" | "svg",
   "visual_prompt_focus": null,
   "is_pasted_mcq": false,
@@ -120,7 +128,16 @@ Output JSON Schema:
   "batch_question_count": null,
   "format_directives": {},
   "needs_latex": false,
-  "needs_table": false
+  "needs_table": false,
+  "output_requirements": {
+    "format": "DEFAULT",
+    "length": "DEFAULT",
+    "include_explanation": true,
+    "include_examples": false,
+    "include_steps": false,
+    "include_sources": false,
+    "include_question": false
+  }
 }
 
 Return ONLY valid JSON. No conversational text."""
@@ -148,6 +165,11 @@ class QueryUnderstanding:
 
     SUMMARY_PATTERNS = [
         re.compile(r"\b(?:summarize|summary|overview|key\s+takeaways|briefly\s+describe)\b", re.IGNORECASE)
+    ]
+
+    ANSWER_CHALLENGE_PATTERNS = [
+        re.compile(r"\b(?:wrong|incorrect|false|mistake|error|bad\s+answer|not\s+right|inaccurate|disagree)\b", re.IGNORECASE),
+        re.compile(r"i\s+think\s+you\s+are\s+giving\s+(?:the\s+)?wrong", re.IGNORECASE)
     ]
 
     DOCUMENT_TOPIC_ANALYSIS_PATTERN = re.compile(
@@ -505,9 +527,13 @@ class QueryUnderstanding:
             reference_type=ref_meta.get("reference_type", "NONE") if ref_meta else "NONE",
             reference_target=ref_meta.get("reference_target") if ref_meta else None,
             reference_index=ref_meta.get("reference_index") if ref_meta else None,
-            artifact_id=ref_meta.get("artifact_id") if ref_meta else None,
             artifact_item_id=ref_meta.get("artifact_item_id") if ref_meta else None,
-            ambiguity_status=ref_meta.get("ambiguity_status", "CLEAR") if ref_meta else "CLEAR"
+            ambiguity_status=ref_meta.get("ambiguity_status", "CLEAR") if ref_meta else "CLEAR",
+            ambiguity_type=getattr(meta, "ambiguity_type", "NONE"),
+            intent_confidence=getattr(meta, "intent_confidence", 1.0),
+            topic_confidence=getattr(meta, "topic_confidence", 1.0),
+            reference_confidence=getattr(meta, "reference_confidence", 1.0),
+            output_requirements=getattr(meta, "output_requirements", None) or OutputRequirements()
         )
 
     @classmethod
@@ -627,8 +653,13 @@ class QueryUnderstanding:
                             legacy_intent = "DOCUMENT_QA"
 
                         intent = legacy_intent
-                        context_source = str(parsed.get("context_source", "study_material")).lower().strip()
-                        if context_source not in ("dialogue_history", "study_material"):
+                        raw_cs = str(parsed.get("context_source", "")).lower().strip()
+                        cleaned_lower = raw_query.lower()
+                        if raw_cs in ("dialogue_history", "study_material"):
+                            context_source = raw_cs
+                        elif any(w in cleaned_lower for w in ["our chat", "previous answer", "what did we discuss", "what did you say", "repeat that", "earlier message", "in this chat", "what we discussed", "what you said"]):
+                            context_source = "dialogue_history"
+                        else:
                             context_source = "study_material"
 
                         target_topic = parsed.get("target_topic") or parsed.get("topic")
@@ -637,6 +668,19 @@ class QueryUnderstanding:
                         referenced_table = parsed.get("referenced_table")
                         format_directives = parsed.get("format_directives") or {}
                         entities = parsed.get("entities") or []
+                        
+                        raw_out_reqs = parsed.get("output_requirements") or {}
+                        from app.schemas.tutoring import OutputRequirements
+                        out_reqs = OutputRequirements(
+                            format=raw_out_reqs.get("format", "DEFAULT"),
+                            length=raw_out_reqs.get("length", "DEFAULT"),
+                            include_explanation=raw_out_reqs.get("include_explanation", True),
+                            include_examples=raw_out_reqs.get("include_examples", False),
+                            include_steps=raw_out_reqs.get("include_steps", False),
+                            include_sources=raw_out_reqs.get("include_sources", False),
+                            include_question=raw_out_reqs.get("include_question", False)
+                        )
+                        
                         if intent == "STUDY_NOTES":
                             format_directives["generate_study_notes"] = True
                         if ": " in resolved_query and re.search(r"\b(?:question|q|problem|item)\s*(?:#|no\.?|num\.?)?\s*\d+\b", raw_query, re.IGNORECASE):
@@ -652,7 +696,10 @@ class QueryUnderstanding:
 
                         # Extract visual modality and cognitive diagram type
                         visual_modality = str(parsed.get("visual_modality", "none")).lower().strip()
-                        if visual_modality not in ("mermaid", "svg"):
+                        # All diagrams now rendered as SVG (mermaid removed)
+                        if visual_modality in ("mermaid", "svg"):
+                            visual_modality = "svg"
+                        else:
                             visual_modality = "none"
 
                         visual_diagram_type = str(parsed.get("visual_diagram_type", "none")).lower().strip()
@@ -663,8 +710,6 @@ class QueryUnderstanding:
                         if visual_diagram_type not in valid_diagram_types:
                             if visual_modality == "svg":
                                 visual_diagram_type = "svg"
-                            elif visual_modality == "mermaid":
-                                visual_diagram_type = "flowchart_td"
                             else:
                                 visual_diagram_type = "none"
 
@@ -726,20 +771,20 @@ class QueryUnderstanding:
                             "evolution", "evolve", "phase", "phases", "step", "steps",
                             "stage", "stages", "pipeline", "chronological", "history", "timeline", "journey"
                         ]):
-                            visual_modality = "mermaid"
+                            visual_modality = "svg"
                             visual_diagram_type = "flowchart_lr"
                             visual_prompt_focus = f"Sequential horizontal flowchart (LR) of {target_topic or refined_query}"
                         elif visual_modality == "none" or visual_diagram_type in ("none", "mindmap"):
                             # Cognitive topology refinement:
                             # 1. Explicit Mindmap requests
                             if any(k in raw_lower for k in ["mindmap", "mind map", "concept map"]):
-                                visual_modality = "mermaid"
+                                visual_modality = "svg"
                                 visual_diagram_type = "mindmap"
                                 visual_prompt_focus = f"Mindmap of core branches for {target_topic or refined_query}"
                             # 2. Explicit Flowchart requests
                             elif any(k in raw_lower for k in ["flowchart", "flow chart"]):
                                 is_seq = any(k in raw_lower for k in ["evolution", "phase", "step", "stage", "timeline"])
-                                visual_modality = "mermaid"
+                                visual_modality = "svg"
                                 visual_diagram_type = "flowchart_lr" if is_seq else "flowchart_td"
                                 visual_prompt_focus = f"Flowchart of {target_topic or refined_query}"
                             # 3. Algorithms & Data Structures -> HIGH PRIORITY FOR INLINE SVG
@@ -759,17 +804,17 @@ class QueryUnderstanding:
                                 "important question", "important questions", "exam question", "exam questions",
                                 "key questions", "practice questions"
                             ]):
-                                visual_modality = "mermaid"
+                                visual_modality = "svg"
                                 visual_diagram_type = "concept_graph"
                                 visual_prompt_focus = f"Concept relationship graph connecting core exam topics and question themes for {target_topic or refined_query}"
                             # 6. Protocols / Multi-actor interactions -> sequence
                             elif any(k in raw_lower for k in ["handshake", "protocol", "client-server", "client server", "oauth", "api exchange", "message exchange"]):
-                                visual_modality = "mermaid"
+                                visual_modality = "svg"
                                 visual_diagram_type = "sequence"
                                 visual_prompt_focus = f"Sequence diagram of {target_topic or refined_query}"
                             # 7. State transitions -> state_diagram
                             elif any(k in raw_lower for k in ["state machine", "fsm", "state diagram", "lifecycle states", "status transitions"]):
-                                visual_modality = "mermaid"
+                                visual_modality = "svg"
                                 visual_diagram_type = "state_diagram"
                                 visual_prompt_focus = f"State diagram of {target_topic or refined_query}"
                             # 8. Scientific, spatial, anatomical, physical, geometric -> svg
@@ -779,12 +824,12 @@ class QueryUnderstanding:
                                 visual_prompt_focus = f"Technical vector illustration of {target_topic or refined_query}"
                             # 9. Unordered syllabus pillars -> mindmap
                             elif any(k in raw_lower for k in ["syllabus", "curriculum", "chapters", "table of content", "core pillars", "pillars"]):
-                                visual_modality = "mermaid"
+                                visual_modality = "svg"
                                 visual_diagram_type = "mindmap"
                                 visual_prompt_focus = f"Mindmap of core syllabus pillars, topics, and relationships for {target_topic or refined_query}"
                             # 10. Decision trees, hierarchies, classifications -> flowchart_td
                             elif any(k in raw_lower for k in ["hierarchy", "classification", "tree"]):
-                                visual_modality = "mermaid"
+                                visual_modality = "svg"
                                 visual_diagram_type = "flowchart_td"
                                 visual_prompt_focus = f"Hierarchical classification of {target_topic or refined_query}"
 
@@ -859,26 +904,33 @@ class QueryUnderstanding:
                             format_directives=format_directives,
                             extracted_entities=entities[:10],
                             learning_objective="analyze" if intent == "COMPARISON" else ("apply" if intent in ["PRACTICE_QUESTIONS", "PROBLEM_SOLVING"] else "understand"),
-                            difficulty_level="Intermediate",
+                            difficulty_level=parsed.get("difficulty", "Intermediate").capitalize(),
                             response_requirements={
                                 "needs_latex": needs_latex,
-                                "needs_table": needs_table or bool(referenced_table),
-                                "needs_steps": intent in ["PROBLEM_SOLVING", "EXPLANATION", "COMPARISON"],
-                                "needs_socratic": True,
+                                "needs_table": needs_table,
+                                "needs_steps": False,
+                                "needs_socratic": True
                             },
                             visual_modality=visual_modality,
                             visual_diagram_type=visual_diagram_type,
                             visual_prompt_focus=visual_prompt_focus,
-                            question_complexity="comparative" if intent == "COMPARISON" else "simple",
+                            question_complexity="comparative" if intent == "COMPARISON" else ("multi_hop" if len(entities) > 2 else "simple"),
                             is_pasted_mcq=is_pasted_mcq,
                             is_batch_questions=is_batch_questions,
-                            batch_question_count=int(batch_question_count) if batch_question_count is not None else None,
+                            batch_question_count=batch_question_count,
                             query_scope=query_scope,
                             scope_clarification_prompt=scope_clarification_prompt,
-                            pre_gen_plan=pre_gen_plan,
+                            output_requirements=out_reqs,
+                            pre_gen_plan=pre_gen_plan
                         )
+                        
+                        setattr(meta_res, "intent_confidence", parsed.get("intent_confidence", 1.0))
+                        setattr(meta_res, "topic_confidence", parsed.get("topic_confidence", 1.0))
+                        setattr(meta_res, "reference_confidence", parsed.get("reference_confidence", 1.0))
+                        setattr(meta_res, "ambiguity_type", parsed.get("ambiguity_type", "NONE"))
+
                         meta_res.understanding_result = cls._build_structured_result_from_meta(
-                            meta_res, raw_query, normalized_query, refined_query, language
+                            meta_res, raw_query, normalized_query, refined_query, language, None, target_topic, ref_meta
                         )
                         # Override with explicitly generated fields if provided
                         if "decision" in parsed:
@@ -1056,6 +1108,8 @@ class QueryUnderstanding:
             intent = "SUMMARY"
         elif any(pat.search(cleaned) for pat in cls.PROBLEM_SOLVING_PATTERNS):
             intent = "PROBLEM_SOLVING"
+        elif any(pat.search(cleaned) for pat in cls.ANSWER_CHALLENGE_PATTERNS):
+            intent = "ANSWER_CHALLENGE"
         elif is_follow_up:
             intent = "FOLLOW_UP"
         elif any(w in cleaned for w in ["explain", "teach", "how does", "why does", "deep dive"]):
@@ -1148,17 +1202,17 @@ class QueryUnderstanding:
             visual_prompt_focus = None
         # 1. Explicit Mindmap requests (e.g. "give me a mindmap of machine learning algorithms")
         elif any(w in cleaned for w in ["mindmap", "mind map", "concept map"]):
-            visual_modality = "mermaid"
+            visual_modality = "svg"
             visual_diagram_type = "mindmap"
             visual_prompt_focus = f"Mindmap of core branches and topics for {target_topic or resolved_query}"
         # 2. Explicit Flowchart requests (e.g. "draw a flowchart of...")
         elif any(w in cleaned for w in ["flowchart", "flow chart"]):
-            visual_modality = "mermaid"
+            visual_modality = "svg"
             visual_diagram_type = "flowchart_lr" if any(w in cleaned for w in flowchart_lr_triggers) else "flowchart_td"
             visual_prompt_focus = f"Flowchart of {target_topic or resolved_query}"
         # 3. Network protocols & interactions
         elif any(w in cleaned for w in sequence_triggers):
-            visual_modality = "mermaid"
+            visual_modality = "svg"
             visual_diagram_type = "sequence"
             visual_prompt_focus = f"Sequence diagram of {target_topic or resolved_query}"
         # 4. Algorithms & Data Structures -> HIGH PRIORITY FOR INLINE SVG
@@ -1168,12 +1222,12 @@ class QueryUnderstanding:
             visual_prompt_focus = f"Step-by-step vector illustration of {target_topic or resolved_query} algorithm with visual pointers and states"
         # 5. Chronological / Evolutionary / Sequential Progressions (NEVER A MINDMAP)
         elif any(w in cleaned for w in flowchart_lr_triggers):
-            visual_modality = "mermaid"
+            visual_modality = "svg"
             visual_diagram_type = "flowchart_lr"
             visual_prompt_focus = f"Sequential horizontal flowchart (LR) illustrating the phases/evolution of {target_topic or resolved_query}"
         # 6. Important Questions / Whole Material -> Concept relationship graph
         elif query_scope == "global_material" or any(w in cleaned for w in concept_graph_triggers):
-            visual_modality = "mermaid"
+            visual_modality = "svg"
             visual_diagram_type = "concept_graph"
             if query_scope == "global_material":
                 visual_prompt_focus = "Conceptual relationship network mapping the core pillars across the entire study material curriculum"
@@ -1181,17 +1235,17 @@ class QueryUnderstanding:
                 visual_prompt_focus = f"Concept relationship network mapping core exam topics and question themes for {target_topic or resolved_query}"
         # 7. State transitions
         elif any(w in cleaned for w in state_triggers):
-            visual_modality = "mermaid"
+            visual_modality = "svg"
             visual_diagram_type = "state_diagram"
             visual_prompt_focus = f"State diagram of {target_topic or resolved_query}"
         # 8. General flowcharts / hierarchies / classifications
         elif any(w in cleaned for w in flowchart_td_triggers):
-            visual_modality = "mermaid"
+            visual_modality = "svg"
             visual_diagram_type = "flowchart_td"
             visual_prompt_focus = f"Flowchart or classification hierarchy for {target_topic or resolved_query}"
         # 9. Unordered syllabus pillars (Radial mindmap)
         elif any(w in cleaned for w in mindmap_triggers):
-            visual_modality = "mermaid"
+            visual_modality = "svg"
             visual_diagram_type = "mindmap"
             visual_prompt_focus = f"Mindmap of core syllabus pillars, topics, and relationships for {target_topic or resolved_query}"
         # 10. Spatial / Anatomical / Geometric / Physical SVG

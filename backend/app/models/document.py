@@ -30,6 +30,7 @@ class Document(Base):
     file_path = Column(String(512), nullable=False)
     file_size_bytes = Column(Integer, nullable=False)
     mime_type = Column(String(100), default="application/pdf")
+    document_type = Column(String(50), default="STUDY_MATERIAL") # STUDY_MATERIAL, QUESTION_PAPER
     page_count = Column(Integer, default=0)
     
     # Metadata extracted from PDF / Doc

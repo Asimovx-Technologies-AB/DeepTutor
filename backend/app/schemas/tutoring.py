@@ -27,6 +27,17 @@ class AmbiguityStatusEnum(str, Enum):
     AMBIGUOUS = "AMBIGUOUS"
 
 
+class AmbiguityTypeEnum(str, Enum):
+    INTENT = "INTENT"
+    REFERENCE = "REFERENCE"
+    ENTITY = "ENTITY"
+    TOPIC = "TOPIC"
+    DOCUMENT = "DOCUMENT"
+    SCOPE = "SCOPE"
+    OUTPUT = "OUTPUT"
+    NONE = "NONE"
+
+
 class DecisionStateEnum(str, Enum):
     ANSWER = "ANSWER"
     CLARIFY = "CLARIFY"
@@ -74,6 +85,7 @@ class UserIntent(str, Enum):
     GREETING = "GREETING"
     CONFIRMATION = "CONFIRMATION"
     OUT_OF_SCOPE = "OUT_OF_SCOPE"
+    ANSWER_CHALLENGE = "ANSWER_CHALLENGE"
     # Legacy / alias compat
     CASUAL = "CASUAL"
     DOCUMENT_QA = "DOCUMENT_QA"
@@ -172,6 +184,15 @@ class ActionPlan(BaseModel):
     clarification_prompt: Optional[str] = None
 
 
+class OutputRequirements(BaseModel):
+    format: str = "DEFAULT" # ANSWER_ONLY, EXPLANATION, STEP_BY_STEP, KEY_POINTS, SHORT_ANSWER, DETAILED_ANSWER, EXPLANATION_WITH_EXAMPLE, QUESTION_LIST, QUESTION_AND_ANSWER_LIST, BULLET_POINTS
+    length: str = "DEFAULT" # SHORT, DEFAULT, DETAILED
+    include_explanation: bool = True
+    include_examples: bool = False
+    include_steps: bool = False
+    include_sources: bool = False
+    include_question: bool = False
+
 class QueryUnderstandingResult(BaseModel):
     """
     Strongly typed, unified output produced by the Query Understanding Layer.
@@ -216,8 +237,16 @@ class QueryUnderstandingResult(BaseModel):
     requires_tool: bool = False
     tool_name: Optional[str] = None
 
-    confidence: float = 1.0
+    # Multi-dimensional Confidences
+    intent_confidence: float = 1.0
+    topic_confidence: float = 1.0
+    reference_confidence: float = 1.0
+    material_support_confidence: float = 1.0
+    evidence_confidence: float = 1.0
+    confidence: float = 1.0  # Overall combined confidence
+
     requires_example: bool = False
+    ambiguity_type: str = "NONE"
     clarification_prompt: Optional[str] = None
     is_fast_path: bool = False
 
@@ -229,6 +258,8 @@ class QueryUnderstandingResult(BaseModel):
     source_scope: Optional[str] = None
     conversation_reference: Optional[str] = None
     resolved_reference: Optional[str] = None
+    
+    output_requirements: OutputRequirements = Field(default_factory=OutputRequirements)
 
 
 class QueryMetadata(BaseModel):
@@ -262,7 +293,7 @@ class QueryMetadata(BaseModel):
     response_requirements: Dict[str, bool] = Field(
         default_factory=lambda: {"needs_latex": False, "needs_table": False, "needs_steps": False, "needs_socratic": True}
     )
-    visual_modality: Literal["none", "mermaid", "svg"] = "none"
+    visual_modality: Literal["none", "svg"] = "none"
     visual_diagram_type: Literal[
         "none",
         "flowchart_lr",      # Horizontal chronological progressions, evolutions, phases, pipelines, timelines
@@ -285,8 +316,17 @@ class QueryMetadata(BaseModel):
         "ambiguous_scope",   # Ambiguous: could be previous chat topic OR whole material (e.g. "give me 5 questions", "quiz me")
     ] = "specific_topic"
     scope_clarification_prompt: Optional[str] = None
-    pre_gen_plan: PreGenerationPlan = Field(default_factory=PreGenerationPlan)
+
+    output_requirements: Optional[OutputRequirements] = None
+
+    pre_gen_plan: Optional[PreGenerationPlan] = None
     understanding_result: Optional[QueryUnderstandingResult] = None
+    
+    # Confidence and Ambiguity dimensions
+    intent_confidence: float = 1.0
+    topic_confidence: float = 1.0
+    reference_confidence: float = 1.0
+    ambiguity_type: str = "NONE"
 
 
 class CitationItem(BaseModel):

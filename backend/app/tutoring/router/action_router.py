@@ -19,6 +19,9 @@ ExecutionRoute = Literal[
     "PROBLEM_SOLVER_PIPELINE",
     "CASUAL_PIPELINE",
     "CLARIFICATION_REPLY",
+    "INSUFFICIENT_EVIDENCE_REPLY",
+    "MATERIAL_NOT_SUPPORTED_REPLY",
+    "ANSWER_CHALLENGE_PIPELINE",
     "DOCUMENT_TOPIC_ANALYSIS_PIPELINE"
 ]
 
@@ -51,6 +54,11 @@ class ActionRouter:
             return "CLARIFICATION_REPLY", "none"
         if hasattr(understanding, "decision") and understanding.decision == "INSUFFICIENT_EVIDENCE":
             return "INSUFFICIENT_EVIDENCE_REPLY", "none"
+        if hasattr(understanding, "decision") and understanding.decision == "MATERIAL_NOT_SUPPORTED":
+            return "MATERIAL_NOT_SUPPORTED_REPLY", "none"
+            
+        if intent == "ANSWER_CHALLENGE":
+            return "ANSWER_CHALLENGE_PIPELINE", "none"
 
         # 1. Low Confidence / Scope Clarification
         if understanding.confidence < 0.5 and understanding.clarification_prompt:

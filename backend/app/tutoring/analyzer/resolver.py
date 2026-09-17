@@ -35,9 +35,9 @@ class ReferenceResolver:
     )
 
     QUESTION_INDEX_PATTERNS = [
-        re.compile(r"\b(?:question|q|problem|item)\s*(?:#|no\.?|num\.?)?\s*(\d+)\b", re.IGNORECASE),
-        re.compile(r"\b(\d+)(?:st|nd|rd|th)\s+(?:question|q|problem|item)\b", re.IGNORECASE),
-        re.compile(r"\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+(?:question|q|problem|item)\b", re.IGNORECASE),
+        re.compile(r"\b(?:question|q|problem|item)\s*(?:#|no\.?|num\.?)?\s*(\d+)(?:\s+(?:from|in|of)\s+(?:the\s+)?([a-zA-Z0-9_\-\s]+))?\b", re.IGNORECASE),
+        re.compile(r"\b(\d+)(?:st|nd|rd|th)\s+(?:question|q|problem|item)(?:\s+(?:from|in|of)\s+(?:the\s+)?([a-zA-Z0-9_\-\s]+))?\b", re.IGNORECASE),
+        re.compile(r"\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+(?:question|q|problem|item)(?:\s+(?:from|in|of)\s+(?:the\s+)?([a-zA-Z0-9_\-\s]+))?\b", re.IGNORECASE),
     ]
 
     WORD_TO_INDEX = {
@@ -118,33 +118,65 @@ class ReferenceResolver:
             q_match = q_pat.search(query)
             if q_match:
                 idx_val = None
+                heading_val = None
                 if q_match.group(1):
                     val_str = q_match.group(1).lower()
                     if val_str.isdigit():
                         idx_val = int(val_str)
                     elif val_str in cls.WORD_TO_INDEX:
                         idx_val = cls.WORD_TO_INDEX[val_str]
+                if len(q_match.groups()) > 1 and q_match.group(2):
+                    heading_val = q_match.group(2).strip()
+                    
                 if idx_val:
                     meta["referenced_question_index"] = idx_val
+                    if heading_val:
+                        meta["referenced_artifact_heading"] = heading_val
+                        
                     # Attempt DB Artifact Resolution first
                     if db_session and session_id:
-                        recent_artifact = db_session.query(GeneratedArtifact).filter(
-                            GeneratedArtifact.session_id == session_id
-                        ).order_by(GeneratedArtifact.created_at.desc()).first()
+                        query_artifacts = db_session.query(GeneratedArtifact).filter(GeneratedArtifact.session_id == session_id)
                         
-                        if recent_artifact:
+                        target_artifact = None
+                        is_ambiguous = False
+                        
+                        if heading_val:
+                            # Try semantic string match against title
+                            artifacts = query_artifacts.all()
+                            matches = [a for a in artifacts if a.title and heading_val.lower() in a.title.lower()]
+                            if matches:
+                                target_artifact = matches[0]
+                        else:
+                            # Fetch active artifact from session if exists, otherwise fallback to recent
+                            from app.models.session import StudySession
+                            sess = db_session.query(StudySession).filter(StudySession.id == session_id).first()
+                            active_id = sess.session_metadata.get("active_artifact_id") if sess and sess.session_metadata else None
+                            
+                            if active_id:
+                                target_artifact = query_artifacts.filter(GeneratedArtifact.id == active_id).first()
+                            else:
+                                recent_artifacts = query_artifacts.order_by(GeneratedArtifact.created_at.desc()).limit(2).all()
+                                if len(recent_artifacts) > 1 and recent_artifacts[0].artifact_type == recent_artifacts[1].artifact_type:
+                                    is_ambiguous = True
+                                elif recent_artifacts:
+                                    target_artifact = recent_artifacts[0]
+                                    
+                        if is_ambiguous:
+                            meta["ambiguity_status"] = "AMBIGUOUS"
+                            meta["reference_type"] = "NONE"
+                        elif target_artifact:
                             item = db_session.query(GeneratedArtifactItem).filter(
-                                GeneratedArtifactItem.artifact_id == recent_artifact.id,
+                                GeneratedArtifactItem.artifact_id == target_artifact.id,
                                 GeneratedArtifactItem.item_index == idx_val
                             ).first()
                             
                             if item:
                                 resolved = f"Explain the following generated practice question:\n\n{item.content}"
-                                meta["reference_type"] = "GENERATED_QUESTION" if recent_artifact.artifact_type in ("PRACTICE_QUESTION_SET", "QUIZ") else recent_artifact.artifact_type
+                                meta["reference_type"] = "GENERATED_QUESTION" if target_artifact.artifact_type in ("PRACTICE_QUESTION_SET", "QUIZ") else target_artifact.artifact_type
                                 meta["reference_index"] = idx_val
-                                meta["artifact_id"] = recent_artifact.id
+                                meta["artifact_id"] = target_artifact.id
                                 meta["artifact_item_id"] = item.id
-                                meta["resolved_topic"] = item.topic or recent_artifact.topic
+                                meta["resolved_topic"] = item.topic or target_artifact.topic
                                 meta["ambiguity_status"] = "RESOLVED_FROM_CONTEXT"
                                 return resolved, meta
                                 
