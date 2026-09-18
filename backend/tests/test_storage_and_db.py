@@ -135,3 +135,73 @@ def test_storage_pipeline_persistence(db_session):
 
     db_assets = db_session.query(DocumentAsset).filter(DocumentAsset.document_id == doc_id).all()
     assert len(db_assets) == 2
+
+
+def test_bulk_delete_documents(db_session):
+    from app.api.documents import bulk_delete_documents, BulkDeleteRequest
+
+    doc1 = Document(
+        id="bulk-doc-1",
+        file_hash="bulk_hash_1_1234567890abcdef1234567890abcdef1234567890abcdef",
+        filename="biology.pdf",
+        file_path="storage://biology.pdf",
+        file_size_bytes=2048,
+        page_count=2,
+        title="Biology 101",
+        status="INDEXED"
+    )
+    doc2 = Document(
+        id="bulk-doc-2",
+        file_hash="bulk_hash_2_1234567890abcdef1234567890abcdef1234567890abcdef",
+        filename="chemistry.pdf",
+        file_path="storage://chemistry.pdf",
+        file_size_bytes=4096,
+        page_count=3,
+        title="Chemistry 101",
+        status="INDEXED"
+    )
+    doc3 = Document(
+        id="bulk-doc-3",
+        file_hash="bulk_hash_3_1234567890abcdef1234567890abcdef1234567890abcdef",
+        filename="physics.pdf",
+        file_path="storage://physics.pdf",
+        file_size_bytes=1024,
+        page_count=1,
+        title="Physics 101",
+        status="INDEXED"
+    )
+    db_session.add_all([doc1, doc2, doc3])
+
+    chunk1 = KnowledgeChunk(
+        id="bulk-chunk-1",
+        document_id=doc1.id,
+        page_number=1,
+        chunk_index=0,
+        content="Cells are the basic structural units of all organisms.",
+        chunk_type="definition",
+        topic="Cell Biology",
+        search_text="cells basic units organisms"
+    )
+    db_session.add(chunk1)
+    db_session.commit()
+
+    # Bulk delete doc1 and doc2
+    req = BulkDeleteRequest(document_ids=[doc1.id, doc2.id])
+    res = bulk_delete_documents(payload=req, db=db_session)
+
+    assert res["status"] == "deleted"
+    assert res["deleted_count"] == 2
+    assert set(res["deleted_ids"]) == {doc1.id, doc2.id}
+
+    # Verify doc1 and doc2 are deleted, along with chunk1
+    remaining_docs = db_session.query(Document).filter(Document.id.in_([doc1.id, doc2.id, doc3.id])).all()
+    assert len(remaining_docs) == 1
+    assert remaining_docs[0].id == doc3.id
+
+    remaining_chunks = db_session.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == doc1.id).all()
+    assert len(remaining_chunks) == 0
+
+    # Test empty payload returns 0
+    empty_res = bulk_delete_documents(payload=BulkDeleteRequest(document_ids=[]), db=db_session)
+    assert empty_res["deleted_count"] == 0
+

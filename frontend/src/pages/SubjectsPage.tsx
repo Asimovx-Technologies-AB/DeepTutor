@@ -2,7 +2,20 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { ArrowRight, BookOpen, FileText, Search, Sparkles, UploadCloud, Trash2, Layers } from 'lucide-react'
+import {
+  ArrowRight,
+  BookOpen,
+  FileText,
+  Search,
+  Sparkles,
+  UploadCloud,
+  Trash2,
+  Layers,
+  CheckSquare,
+  Square,
+  Check,
+  X
+} from 'lucide-react'
 import { documentsApi, studyApi } from '../services/api'
 import { useLanguageStore } from '../stores/languageStore'
 import ConfirmModal from '../components/ConfirmModal'
@@ -19,6 +32,12 @@ export default function SubjectsPage() {
   const [materialToDelete, setMaterialToDelete] = useState<StudyDocument | null>(null)
   const [selectedMaterial, setSelectedMaterial] = useState<StudyDocument | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Multi-select state
+  const [isSelectMode, setIsSelectMode] = useState(false)
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([])
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false)
 
   const { data: documents = [], isLoading, refetch } = useQuery<StudyDocument[]>({
     queryKey: ['documents'],
@@ -38,6 +57,38 @@ export default function SubjectsPage() {
       console.error('Failed to delete material:', err)
     } finally {
       setIsDeleting(false)
+    }
+  }
+
+  const toggleSelectDoc = (id: string) => {
+    setSelectedDocIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    )
+  }
+
+  const confirmBulkDeleteMaterials = async () => {
+    if (selectedDocIds.length === 0) return
+    setIsBulkDeleting(true)
+    try {
+      await documentsApi.bulkDelete(selectedDocIds)
+      await refetch()
+      setSelectedDocIds([])
+      setShowBulkDeleteModal(false)
+      setIsSelectMode(false)
+    } catch (err) {
+      console.error('Failed to bulk delete materials:', err)
+      // Fallback in case bulk endpoint encounters an issue
+      try {
+        await Promise.all(selectedDocIds.map((id) => documentsApi.delete(id)))
+        await refetch()
+        setSelectedDocIds([])
+        setShowBulkDeleteModal(false)
+        setIsSelectMode(false)
+      } catch (fallbackErr) {
+        console.error('Fallback delete failed:', fallbackErr)
+      }
+    } finally {
+      setIsBulkDeleting(false)
     }
   }
 
@@ -80,6 +131,18 @@ export default function SubjectsPage() {
   const filtered = documents.filter((doc) =>
     `${doc.file_name} ${(doc.key_topics || []).join(' ')}`.toLowerCase().includes(search.toLowerCase()),
   )
+
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((doc) => selectedDocIds.includes(doc.id))
+
+  const handleToggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelectedDocIds([])
+    } else {
+      setSelectedDocIds(filtered.map((doc) => doc.id))
+    }
+  }
+
   const copy = uiLanguage === 'sv'
     ? {
         eyebrow: 'Ditt studiebibliotek', title: 'Mina material',
@@ -88,6 +151,13 @@ export default function SubjectsPage() {
         emptyTitle: 'Inget studiematerial ännu',
         emptyBody: 'Ladda upp en PDF eller andra anteckningar för att skapa ditt första AI-studierum.',
         processing: 'Bearbetar', ready: 'Redo att studera', topics: 'AI-identifierade områden', open: 'Välj studierum',
+        selectMode: 'Markera',
+        selectAll: 'Markera alla',
+        deselectAll: 'Avmarkera alla',
+        deleteSelected: 'Ta bort markerade',
+        done: 'Klar',
+        selected: 'Markerad',
+        clickToSelect: 'Klicka för att markera',
       }
     : {
         eyebrow: 'Your study library', title: 'My Materials',
@@ -96,6 +166,13 @@ export default function SubjectsPage() {
         emptyTitle: 'No study material yet',
         emptyBody: 'Upload a PDF, notes, or another supported file to create your first AI study workspace.',
         processing: 'Processing', ready: 'Ready to study', topics: 'AI-detected topics', open: 'Choose Study Room',
+        selectMode: 'Select',
+        selectAll: 'Select all',
+        deselectAll: 'Deselect all',
+        deleteSelected: 'Delete selected',
+        done: 'Done',
+        selected: 'Selected',
+        clickToSelect: 'Click to select',
       }
 
   return (
@@ -112,13 +189,86 @@ export default function SubjectsPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 sm:px-8 mt-8">
-        {documents.length > 0 && <div className="relative max-w-md mb-7"><Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#AFAFAF]" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={copy.search} className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white border border-[#E2E8F0] text-sm font-bold focus:outline-none focus:border-[#4F46E5]" /></div>}
+        {documents.length > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-7">
+            <div className="relative flex-1 max-w-md">
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#AFAFAF]" />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={copy.search}
+                className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white border border-[#E2E8F0] text-sm font-bold focus:outline-none focus:border-[#4F46E5] shadow-2xs"
+              />
+            </div>
 
-        {isLoading ? <div className="py-20 text-center text-sm font-bold text-[#777777]">Loading your materials...</div> : filtered.length > 0 ? (
+            <div className="flex items-center gap-2.5 flex-wrap">
+              {!isSelectMode ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSelectMode(true)
+                    setSelectedDocIds([])
+                  }}
+                  className="px-4 py-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-[#E2E8F0] text-sm font-black text-[#3C3C3C] hover:text-[#4F46E5] flex items-center gap-2 shadow-2xs transition-all cursor-pointer"
+                >
+                  <CheckSquare size={16} className="text-[#4F46E5]" />
+                  <span>{copy.selectMode}</span>
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleToggleSelectAll}
+                    className="px-4 py-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-[#E2E8F0] text-sm font-bold text-[#3C3C3C] flex items-center gap-2 shadow-2xs transition-all cursor-pointer"
+                  >
+                    {allFilteredSelected ? (
+                      <>
+                        <CheckSquare size={16} className="text-[#4F46E5]" />
+                        <span>{copy.deselectAll}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Square size={16} className="text-slate-400" />
+                        <span>{copy.selectAll} ({filtered.length})</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={selectedDocIds.length === 0}
+                    onClick={() => setShowBulkDeleteModal(true)}
+                    className="px-4 py-3.5 rounded-2xl bg-rose-500 hover:bg-rose-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-black flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Trash2 size={16} />
+                    <span>{copy.deleteSelected} ({selectedDocIds.length})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSelectMode(false)
+                      setSelectedDocIds([])
+                    }}
+                    className="px-4 py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-sm font-bold text-slate-700 flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <X size={16} />
+                    <span>{copy.done}</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="py-20 text-center text-sm font-bold text-[#777777]">Loading your materials...</div>
+        ) : filtered.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filtered.map((doc, index) => {
               const ready = doc.indexed || doc.index_status === 'done'
               const sessionCount = doc.session_count ?? (doc.linked_sessions?.length ?? 1)
+              const isSelected = selectedDocIds.includes(doc.id)
 
               return (
                 <motion.div
@@ -126,14 +276,47 @@ export default function SubjectsPage() {
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.04 }}
-                  onClick={() => ready && setSelectedMaterial(doc)}
-                  className={`text-left bg-white border border-[#E2E8F0] rounded-[2rem] p-6 shadow-sm hover:shadow-lg hover:border-[#4F46E5]/40 transition-all group ${
-                    ready ? 'cursor-pointer' : 'cursor-wait opacity-80'
+                  onClick={() => {
+                    if (isSelectMode) {
+                      toggleSelectDoc(doc.id)
+                    } else if (ready) {
+                      setSelectedMaterial(doc)
+                    }
+                  }}
+                  className={`text-left bg-white border rounded-[2rem] p-6 shadow-sm transition-all group relative ${
+                    isSelected
+                      ? 'border-[#4F46E5] ring-2 ring-[#4F46E5]/20 bg-indigo-50/15 shadow-md'
+                      : 'border-[#E2E8F0] hover:shadow-lg hover:border-[#4F46E5]/40'
+                  } ${
+                    isSelectMode
+                      ? 'cursor-pointer'
+                      : ready
+                      ? 'cursor-pointer'
+                      : 'cursor-wait opacity-80'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="w-14 h-14 rounded-2xl bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center group-hover:scale-105 transition-transform">
-                      <FileText size={26} />
+                    <div className="flex items-center gap-3">
+                      {isSelectMode && (
+                        <div
+                          role="checkbox"
+                          aria-checked={isSelected}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleSelectDoc(doc.id)
+                          }}
+                          className={`w-7 h-7 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#4F46E5] text-white shadow-xs ring-2 ring-[#4F46E5]/30'
+                              : 'border-2 border-slate-300 hover:border-[#4F46E5] bg-white text-transparent'
+                          }`}
+                        >
+                          <Check size={16} className="stroke-[3]" />
+                        </div>
+                      )}
+                      <div className="w-14 h-14 rounded-2xl bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center group-hover:scale-105 transition-transform">
+                        <FileText size={26} />
+                      </div>
                     </div>
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
                       {sessionCount > 0 && (
@@ -145,18 +328,20 @@ export default function SubjectsPage() {
                       <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${ready ? 'bg-[#D7FFB8] text-[#46A302]' : 'bg-amber-100 text-amber-700'}`}>
                         {ready ? copy.ready : `${copy.processing} ${doc.index_progress || 0}%`}
                       </span>
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        title="Delete material"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setMaterialToDelete(doc)
-                        }}
-                        className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                      >
-                        <Trash2 size={15} />
-                      </span>
+                      {!isSelectMode && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          title="Delete material"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setMaterialToDelete(doc)
+                          }}
+                          className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={15} />
+                        </span>
+                      )}
                     </div>
                   </div>
                   <h2 className="font-black text-xl text-[#3C3C3C] mt-5 capitalize line-clamp-2 group-hover:text-[#4F46E5] transition-colors">{displayName(doc.file_name)}</h2>
@@ -179,15 +364,36 @@ export default function SubjectsPage() {
                       {ready && !doc.key_topics?.length && <span className="text-xs text-[#999]">Topics are being prepared</span>}
                     </div>
                   </div>
-                  <div className="border-t border-[#E2E8F0] mt-5 pt-4 flex items-center justify-between text-sm font-black text-[#4F46E5]">
-                    <span>{copy.open}</span>
-                    <ArrowRight size={17} className="group-hover:translate-x-1 transition-transform" />
+                  <div className="border-t border-[#E2E8F0] mt-5 pt-4 flex items-center justify-between text-sm font-black">
+                    {isSelectMode ? (
+                      <span className={isSelected ? 'text-[#4F46E5]' : 'text-slate-400'}>
+                        {isSelected ? copy.selected : copy.clickToSelect}
+                      </span>
+                    ) : (
+                      <>
+                        <span className="text-[#4F46E5]">{copy.open}</span>
+                        <ArrowRight size={17} className="text-[#4F46E5] group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
                   </div>
                 </motion.div>
               )
             })}
           </div>
-        ) : <div className="bg-white border border-dashed border-[#C7D2FE] rounded-[2rem] py-20 px-6 text-center"><div className="w-20 h-20 rounded-[2rem] bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center mx-auto mb-5"><BookOpen size={34} /></div><h2 className="text-2xl font-black text-[#3C3C3C]">{search ? 'No matching material' : copy.emptyTitle}</h2><p className="text-[#777777] text-sm font-medium max-w-md mx-auto mt-2">{search ? copy.search : copy.emptyBody}</p>{!search && <button onClick={() => navigate('/chat')} className="btn-primary mt-6 px-6 py-3 rounded-2xl inline-flex items-center gap-2 font-black"><UploadCloud size={18} /> {copy.upload}</button>}</div>}
+        ) : (
+          <div className="bg-white border border-dashed border-[#C7D2FE] rounded-[2rem] py-20 px-6 text-center">
+            <div className="w-20 h-20 rounded-[2rem] bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center mx-auto mb-5">
+              <BookOpen size={34} />
+            </div>
+            <h2 className="text-2xl font-black text-[#3C3C3C]">{search ? 'No matching material' : copy.emptyTitle}</h2>
+            <p className="text-[#777777] text-sm font-medium max-w-md mx-auto mt-2">{search ? copy.search : copy.emptyBody}</p>
+            {!search && (
+              <button onClick={() => navigate('/chat')} className="btn-primary mt-6 px-6 py-3 rounded-2xl inline-flex items-center gap-2 font-black">
+                <UploadCloud size={18} /> {copy.upload}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <MaterialSessionModal
@@ -205,6 +411,34 @@ export default function SubjectsPage() {
         isLoading={isDeleting}
         onConfirm={confirmDeleteMaterial}
         onCancel={() => setMaterialToDelete(null)}
+      />
+
+      <ConfirmModal
+        isOpen={showBulkDeleteModal}
+        title={
+          uiLanguage === 'sv'
+            ? `Ta bort ${selectedDocIds.length} studiematerial?`
+            : `Delete ${selectedDocIds.length} Study Materials?`
+        }
+        itemName={
+          documents
+            .filter((d) => selectedDocIds.includes(d.id))
+            .map((d) => displayName(d.file_name))
+            .join(', ')
+        }
+        warningNote={
+          uiLanguage === 'sv'
+            ? `Permanent radering: Alla extraherade områden, AI-studieanteckningar och studierum för dessa ${selectedDocIds.length} material tas bort permanent.`
+            : `Permanent Data Removal: All extracted topics, AI study notes, vector search indexes, and study rooms for these ${selectedDocIds.length} materials will be permanently wiped.`
+        }
+        confirmText={
+          uiLanguage === 'sv'
+            ? `Ta bort ${selectedDocIds.length} material`
+            : `Delete ${selectedDocIds.length} Materials`
+        }
+        isLoading={isBulkDeleting}
+        onConfirm={confirmBulkDeleteMaterials}
+        onCancel={() => setShowBulkDeleteModal(false)}
       />
     </div>
   )

@@ -293,7 +293,7 @@ class QueryMetadata(BaseModel):
     response_requirements: Dict[str, bool] = Field(
         default_factory=lambda: {"needs_latex": False, "needs_table": False, "needs_steps": False, "needs_socratic": True}
     )
-    visual_modality: Literal["none", "svg"] = "none"
+    visual_modality: Literal["none", "svg", "mermaid"] = "none"
     visual_diagram_type: Literal[
         "none",
         "flowchart_lr",      # Horizontal chronological progressions, evolutions, phases, pipelines, timelines

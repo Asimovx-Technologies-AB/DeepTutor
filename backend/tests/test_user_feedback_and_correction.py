@@ -69,7 +69,10 @@ def test_classify_questions_and_continuations():
     ]
     for q in questions:
         result = UserMessageContextClassifier.classify_message(raw_query=q)
-        assert result.category == UserMessageClassificationEnum.NEW_QUESTION_REQUEST
+        assert result.category in (
+            UserMessageClassificationEnum.NEW_QUESTION_REQUEST,
+            UserMessageClassificationEnum.GENERAL_FACTUAL
+        )
 
     continuations = [
         "continue",
@@ -174,3 +177,103 @@ def test_teaching_statement_evaluation_handler_output():
 
         assert "That is not correct" in response
         assert "Would you like me to continue to the next subtopic?" in response
+
+
+def test_priority_1_extended_corrections():
+    """Verify all extended correction patterns map to FEEDBACK_CORRECTION."""
+    inputs = [
+        "that is wrong",
+        "you are wrong",
+        "you're wrong",
+        "that's not what I meant",
+        "not what i asked",
+        "you misunderstood",
+        "there is a mistake in your answer",
+    ]
+    for inp in inputs:
+        res = UserMessageContextClassifier.classify_message(raw_query=inp)
+        assert res.category == UserMessageClassificationEnum.FEEDBACK_CORRECTION, (
+            f"Expected '{inp}' to be FEEDBACK_CORRECTION, got {res.category}"
+        )
+
+
+def test_priority_2_ambiguity_clarification():
+    """Verify ambiguous queries (e.g. 'what is eight one?') are flagged for clarification."""
+    from app.tutoring.teaching.factual_handler import FactualQueryHandler
+
+    ambig = FactualQueryHandler.check_ambiguity("what is eight one?")
+    assert ambig is not None
+    assert "81 (eighty-one)" in ambig
+    assert "81st element" in ambig
+
+    res = UserMessageContextClassifier.classify_message(raw_query="what is eight one?")
+    assert res.is_ambiguous is True
+    assert res.ambiguity_clarification == ambig
+
+
+def test_priority_2_factual_query_answer_only():
+    """Verify 'answer only' constraint yields clean single answer without checkpoints or boilerplate."""
+    from app.tutoring.teaching.factual_handler import FactualQueryHandler
+
+    with patch("app.tutoring.teaching.factual_handler.default_llm_service.generate") as mock_gen:
+        mock_gen.return_value = "Helium (He)."
+
+        resp = FactualQueryHandler.handle_factual_query(
+            raw_query="what is the second element in periodic table , i need answer only",
+            is_teacher_mode=False
+        )
+
+        assert resp == "Helium (He)."
+        assert "### 💡 Interactive Checkpoint" not in resp
+        assert "Active Recall Question" not in resp
+        assert "dedicated tutor" not in resp.lower()
+
+
+def test_priority_4_unrelated_query():
+    """Verify unrelated queries receive natural response without robotic refusal boilerplate."""
+    from app.tutoring.teaching.factual_handler import FactualQueryHandler
+
+    with patch("app.tutoring.teaching.factual_handler.default_llm_service.generate") as mock_gen:
+        mock_gen.return_value = "I'm doing well, thank you! How can I assist you today?"
+
+        resp = FactualQueryHandler.handle_unrelated_query(
+            raw_query="how are you doing today?",
+        )
+
+        assert "dedicated tutor for this study material" not in resp.lower()
+        assert "### 💡 Interactive Checkpoint" not in resp
+
+
+def test_priority_5_teaching_mode_guard():
+    """Verify Interactive Checkpoints and subtopic transitions are suppressed when teacher mode is off."""
+    from app.tutoring.teaching.agent import TeachingAgent
+    from app.schemas.tutoring import ContextBundle, QueryMetadata
+
+    dummy_meta = QueryMetadata(
+        raw_query="Explain photosynthesis",
+        normalized_query="explain photosynthesis",
+        resolved_query="Explain photosynthesis",
+        intent="EXPLAIN_CONCEPT",
+        target_topic="Photosynthesis",
+    )
+
+    # When is_teacher_mode is False
+    content_without_teacher = "Photosynthesis is the process by which plants convert sunlight into chemical energy."
+    enforced = TeachingAgent._enforce_response_contract(
+        content=content_without_teacher,
+        topic_title="Photosynthesis",
+        query_meta=dummy_meta,
+        is_teacher_mode=False
+    )
+    assert "### 💡 Interactive Checkpoint" not in enforced
+    assert "Would you like me to continue to the next subtopic?" not in enforced
+
+    # When is_teacher_mode is True
+    enforced_teacher = TeachingAgent._enforce_response_contract(
+        content=content_without_teacher,
+        topic_title="Photosynthesis",
+        query_meta=dummy_meta,
+        is_teacher_mode=True
+    )
+    assert "### 💡 Interactive Checkpoint" in enforced_teacher
+

@@ -47,6 +47,14 @@ class ContextIntegrator:
                     context["active_artifact_id"] = study_sess.session_metadata.get("active_artifact_id")
                     context["active_question_paper_id"] = study_sess.session_metadata.get("active_question_paper_id")
                     context["teacher_state"] = study_sess.session_metadata.get("teacher_state")
+                    context["is_teacher_mode"] = bool(
+                        study_sess.session_metadata.get("is_teacher_mode")
+                        or (
+                            study_sess.session_metadata.get("teacher_state")
+                            and study_sess.session_metadata.get("teacher_state", {}).get("mode") == "teacher"
+                            and not study_sess.session_metadata.get("teacher_state", {}).get("paused")
+                        )
+                    )
                 
                 # Fetch recent messages
                 recent_msgs = (

@@ -1,6 +1,6 @@
 import base64
 import logging
-from typing import Optional
+from typing import Optional, Set
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,9 @@ class VLMService:
 
     def __init__(self):
         self.provider = settings.VLM_PROVIDER
-        self.model = settings.VLM_MODEL
+        self.model = settings.VLM_MODEL or "gemini-3.5-flash-lite"
+        self._working_model: Optional[str] = None
+        self._broken_models: Set[str] = set()
 
     def transcribe_document_page(self, image_bytes: bytes) -> str:
         """Transcribes a rendered page image to Markdown with LaTeX equations and tables."""
@@ -36,44 +38,49 @@ class VLMService:
                     "- Do not omit or summarize any body text; transcribe all readable content faithfully."
                 )
 
-                candidate_models = [self.model]
+                # Prioritize active working model or ultra-fast, high-availability lite models
+                candidate_models = []
+                if self._working_model and self._working_model not in self._broken_models:
+                    candidate_models.append(self._working_model)
+                if self.model and self.model not in self._broken_models and self.model not in candidate_models:
+                    candidate_models.append(self.model)
+
                 for fb in [
-                    "gemini-2.5-flash",
-                    "gemini-2.5-flash-lite",
-                    "gemini-3.5-flash",
-                    "gemini-1.5-flash",
-                    "gemini-flash-latest",
+                    "gemini-3.5-flash-lite",
+                    "gemini-flash-lite-latest",
+                    "gemini-3.1-flash-lite",
                     "gemini-3.6-flash",
                 ]:
-                    if fb not in candidate_models:
+                    if fb not in candidate_models and fb not in self._broken_models:
                         candidate_models.append(fb)
 
                 for model_name in candidate_models:
-                    for attempt in range(2):
-                        try:
-                            response = client.models.generate_content(
-                                model=model_name,
-                                contents=[
-                                    genai.types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
-                                    prompt,
-                                ],
-                            )
-                            if response and response.text and response.text.strip():
-                                return response.text.strip()
-                        except Exception as me:
-                            err_str = str(me).lower()
-                            if "404" in err_str or "not found" in err_str or "no longer available" in err_str:
-                                break
-                            if "503" in err_str or "unavailable" in err_str or "high demand" in err_str:
-                                logger.info(f"VLM model {model_name} is under high demand (503). Switching to fallback model.")
-                                break
-                            if "429" in err_str or "quota" in err_str or "resource_exhausted" in err_str:
-                                if attempt == 0:
-                                    time.sleep(1.0)
-                                    continue
-                                break
-                            if attempt == 1:
-                                logger.warning(f"VLM model {model_name} failed: {me}")
+                    try:
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=[
+                                genai.types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
+                                prompt,
+                            ],
+                        )
+                        if response and response.text and response.text.strip():
+                            self._working_model = model_name
+                            return response.text.strip()
+                    except Exception as me:
+                        err_str = str(me).lower()
+                        if "404" in err_str or "not found" in err_str or "no longer available" in err_str:
+                            self._broken_models.add(model_name)
+                            continue
+                        if "503" in err_str or "unavailable" in err_str or "high demand" in err_str:
+                            logger.info(f"VLM model {model_name} is under high demand (503). Switching to fallback model.")
+                            self._broken_models.add(model_name)
+                            continue
+                        if "429" in err_str or "quota" in err_str or "resource_exhausted" in err_str:
+                            logger.warning(f"VLM model {model_name} quota exceeded (429). Switching to fallback.")
+                            self._broken_models.add(model_name)
+                            continue
+                        logger.warning(f"VLM model {model_name} failed: {me}")
+                        self._broken_models.add(model_name)
             except Exception as e:
                 logger.error(f"Gemini VLM call failed: {e}")
 

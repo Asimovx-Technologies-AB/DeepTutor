@@ -88,12 +88,14 @@ class UserMessageContextClassifier:
         query_lower = query_clean.lower()
         history = conversation_history or []
 
+        query_clean_nopunct = query_clean.rstrip(".?! \t")
+
         # 1. PRIORITY 1: Fast deterministic regex matching for corrections/challenges
         for pat in _CORRECTION_PATTERNS:
-            if pat.search(query_clean):
+            if pat.search(query_clean) or pat.search(query_clean_nopunct):
                 # Edge case: if previous message explicitly asked a yes/no question like "Is X true?",
                 # "no" might be an answer to that question rather than disputing the tutor.
-                if query_lower in ["no", "nope", "nah"] and history:
+                if query_clean_nopunct.lower() in ["no", "nope", "nah"] and history:
                     last_bot = history[-1].get("content", "") if history[-1].get("role") == "assistant" else ""
                     if "is this true or false" in last_bot.lower() or "answer yes or no" in last_bot.lower():
                         return UserMessageClassificationResult(
@@ -112,7 +114,7 @@ class UserMessageContextClassifier:
 
         # 2. Fast deterministic matching for continuation
         for pat in _CONTINUATION_PATTERNS:
-            if pat.search(query_clean):
+            if pat.search(query_clean) or pat.search(query_clean_nopunct):
                 return UserMessageClassificationResult(
                     category=UserMessageClassificationEnum.CLARIFICATION_CONTINUATION,
                     confidence=0.98,
@@ -139,13 +141,14 @@ class UserMessageContextClassifier:
                 ambiguity_clarification=ambig_q,
             )
 
-        # 5. Check if query is explicitly asking about the uploaded study material
+        # 5. Check if query is explicitly asking about the active topic or uploaded study material
         is_material_explicit = any(k in query_lower for k in _STUDY_MATERIAL_KEYWORDS)
-        if is_material_explicit and has_active_document:
+        is_topic_match = bool(current_topic and len(current_topic.strip()) >= 3 and current_topic.lower() in query_lower)
+        if (is_material_explicit or is_topic_match) and has_active_document:
             return UserMessageClassificationResult(
                 category=UserMessageClassificationEnum.STUDY_MATERIAL_QUESTION,
                 confidence=0.92,
-                reasoning="Query explicitly references uploaded study material/notes/document.",
+                reasoning="Query explicitly references active topic or study material/notes/document.",
             )
 
         # 6. Check for simple general factual question patterns
@@ -153,11 +156,14 @@ class UserMessageContextClassifier:
         has_question_pattern = any(pat.search(query_clean) for pat in _QUESTION_PATTERNS)
         simple_factual_triggers = [
             "element in periodic table", "second element", "first element", "third element",
-            "what is 81", "what is 8", "speed of light", "capital of", "who invented",
+            "speed of light", "capital of", "who invented", "who discovered",
             "atomic number", "boiling point", "square root of", "what is the formula of",
-            "answer only", "i need answer only"
+            "answer only", "i need answer only", "just the answer", "only the answer"
         ]
-        if any(trig in query_lower for trig in simple_factual_triggers):
+        is_number_factual = bool(re.search(r"^(?:what\s+is|what's|calculate)\s+(?:the\s+)?(?:\d+|[0-9+\-*/^().\s]+)\??$", query_clean, re.IGNORECASE))
+        is_element_factual = bool(re.search(r"\b(?:first|second|third|fourth|fifth|\d+(?:st|nd|rd|th)?)\s+element\b", query_lower))
+
+        if any(trig in query_lower for trig in simple_factual_triggers) or is_number_factual or is_element_factual:
             return UserMessageClassificationResult(
                 category=UserMessageClassificationEnum.GENERAL_FACTUAL,
                 confidence=0.95,
@@ -169,7 +175,8 @@ class UserMessageContextClassifier:
         if not has_question_pattern and len(words) >= 2:
             statement_indicators = [
                 " is ", " are ", " was ", " were ", " has ", " have ", " does ", " means ",
-                " equals ", " causes ", " results in ", " consists of ", " used for ", " because "
+                " equals ", " causes ", " results in ", " consists of ", " used for ", " because ",
+                " produces ", " creates ", " generates ", " forms ", " releases ", " contains ", " represents "
             ]
             if any(ind in f" {query_lower} " for ind in statement_indicators):
                 return UserMessageClassificationResult(

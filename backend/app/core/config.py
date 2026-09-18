@@ -43,7 +43,7 @@ class Settings(BaseSettings):
 
     # Vision-Language Model (VLM)
     VLM_PROVIDER: Literal["mock", "gemini", "azure_openai", "openai"] = "mock"
-    VLM_MODEL: str = "gemini-3.6-flash"
+    VLM_MODEL: str = "gemini-3.5-flash-lite"
 
     # API Keys
     GEMINI_API_KEY: Optional[str] = None

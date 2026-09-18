@@ -1,5 +1,6 @@
 import logging
 from typing import List, Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -578,6 +579,39 @@ def get_canonical_document(
     )
 
 
+class BulkDeleteRequest(BaseModel):
+    document_ids: List[str]
+
+
+@router.post("/bulk-delete")
+def bulk_delete_documents(
+    payload: BulkDeleteRequest,
+    db: Session = Depends(get_db)
+):
+    """Deletes multiple documents and all related pages, chunks, and assets."""
+    if not payload.document_ids:
+        return {"status": "deleted", "deleted_count": 0, "deleted_ids": []}
+
+    docs = db.query(Document).filter(Document.id.in_(payload.document_ids)).all()
+    deleted_ids = []
+    try:
+        from app.storage.local_storage import default_storage
+    except Exception:
+        default_storage = None
+
+    for doc in docs:
+        deleted_ids.append(doc.id)
+        if default_storage and doc.file_path:
+            try:
+                default_storage.delete_file(doc.file_path)
+            except Exception as e:
+                logger.warning(f"Failed to delete storage file for doc {doc.id}: {e}")
+        db.delete(doc)
+
+    db.commit()
+    return {"status": "deleted", "deleted_count": len(deleted_ids), "deleted_ids": deleted_ids}
+
+
 @router.delete("/{doc_id}")
 def delete_document(
     doc_id: str,
@@ -588,6 +622,14 @@ def delete_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found.")
 
+    if doc.file_path:
+        try:
+            from app.storage.local_storage import default_storage
+            default_storage.delete_file(doc.file_path)
+        except Exception as e:
+            logger.warning(f"Failed to delete storage file for doc {doc.id}: {e}")
+
     db.delete(doc)
     db.commit()
     return {"status": "deleted", "id": doc_id}
+
