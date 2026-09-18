@@ -317,3 +317,38 @@ def test_tutoring_orchestrator_processing_document_guard(db_session):
     assert "outside the scope" not in result["content"].lower()
 
 
+def test_curriculum_overview_proper_formatting():
+    from app.tutoring.teaching.agent import TeachingAgent
+    from app.schemas.tutoring import QueryMetadata
+
+    meta = QueryMetadata(
+        raw_query="what are the importent topics",
+        normalized_query="what are the important topics",
+        resolved_query="what are the important topics",
+        intent="SUMMARY",
+        entities=[],
+        extracted_entities=[]
+    )
+
+    raw_unformatted = (
+        "Based on your curriculum, the important topics covered in the chemistry study module include "
+        "Nomenclature of Organic Compounds, Isomerism in Organic Compounds, Chemical Reactivity of Organic Compounds, "
+        "Periodic Table Trends and Properties, and Mole Concept and Stoichiometry."
+    )
+
+    formatted = TeachingAgent._enforce_response_contract(
+        content=raw_unformatted,
+        topic_title="Chemistry",
+        query_meta=meta,
+        is_teacher_mode=False
+    )
+
+    assert "1. **Nomenclature of Organic Compounds**" in formatted
+    assert "2. **Isomerism in Organic Compounds**" in formatted
+    assert "3. **Chemical Reactivity of Organic Compounds**" in formatted
+    assert "4. **Periodic Table Trends and Properties**" in formatted
+    assert "5. **Mole Concept and Stoichiometry**" in formatted
+    assert "Which of these topics would you like to explore first?" in formatted
+
+
+

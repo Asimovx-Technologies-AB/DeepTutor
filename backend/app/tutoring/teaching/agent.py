@@ -111,6 +111,20 @@ Before answering, analyze the student's question intent and choose the optimal p
      * Detailed Sequential Answers: Address every single question in order with rigorous, direct explanations and solutions.
      * No Diagrams: Suppress diagrams/SVGs to preserve tokens and keep answers clean.
 
+9. CURRICULUM OVERVIEW & IMPORTANT TOPICS (e.g. "what are the main topics", "what are the important topics", "curriculum", "syllabus", "topics in this document"):
+   - Structure:
+     * Brief Context Header: 1 concise introductory sentence acknowledging the document subject and scope.
+     * Structured Topic Breakdown (MANDATORY PROPER FORMAT):
+       🚫 You MUST NEVER output all topics in a single run-on sentence or comma-separated paragraph!
+       Format each topic clearly with Markdown structure:
+       ### 📚 Key Topics in this Material
+       1. **[Topic Name]**
+          - **What it covers**: 1-2 concise sentences summarizing the core principles and scope of this topic.
+          - **Exam Focus / Key Highlights**: Key mechanisms, fundamental formulas, or high-yield exam takeaways.
+     * Suggested Next Step:
+       Conclude warmly with a question inviting the student to choose which topic to explore first:
+       "Which of these topics would you like to explore or practice first?"
+
 === MULTI-TURN CONVERSATION MEMORY ===
 - You have full access to the previous conversation history in this study session.
 - If the student asks about something you explained earlier, or asks a follow-up referencing ANY prior response, answer, or question, refer accurately and coherently to what you previously taught or answered in this session.
@@ -775,10 +789,18 @@ class TeachingAgent:
                 )
             else:
                 task_instruction = (
-                    "3. CURRICULUM OVERVIEW / MAIN TOPICS / SYLLABUS PILLARS: The student is asking for the main topics, syllabus pillars, summary, or learning roadmap of this study material. "
-                    "Present a structured, engaging breakdown of the verified curriculum and key topics in this document. "
-                    "INTERACTIVE OVERVIEW DIAGRAM: Generate a beautiful, responsive Inline SVG vector diagram (```svg <svg viewBox=\"0 0 650 400\" ...> ... </svg> ```) organizing the core pillars and their subtopics/chapters. "
-                    "Immediately beneath the diagram, include '#### 🔍 Visual Breakdown (How to Read this Diagram)' explaining the core pillars and relationships, explain the key concepts of each pillar, and conclude with the Interactive Checkpoint.\n"
+                    "3. CURRICULUM OVERVIEW & IMPORTANT TOPICS (STRICT PROPER FORMATTING REQUIRED):\n"
+                    "The student is asking for the important topics, curriculum overview, or syllabus pillars of this study material.\n"
+                    "MANDATORY FORMATTING INSTRUCTIONS:\n"
+                    "- 🚫 NEVER collapse or dump all topics together into a single run-on sentence paragraph separated by commas!\n"
+                    "- Format the response cleanly using structured Markdown:\n"
+                    "  Start with a brief, encouraging introduction (e.g., 'Here are the key topics covered in your study material:').\n"
+                    "  Then present each verified topic as a clean numbered section or bulleted item:\n"
+                    "  1. **[Topic Title]**\n"
+                    "     - **What it covers:** 1-2 concise sentences summarizing the core concepts from the verified text.\n"
+                    "     - **Exam Focus:** Key formulas, mechanisms, or high-yield problem types.\n"
+                    "  Repeat this clean structure for each topic from the verified curriculum.\n"
+                    "- Conclude warmly by asking: 'Which of these topics would you like to explore first?'\n"
                 )
         else:
             task_instruction = ""
@@ -967,6 +989,28 @@ class TeachingAgent:
             else:
                 break
         content = "\n".join(lines).strip()
+
+        # Format Curriculum / Topics Overview if collapsed into a single run-on sentence
+        is_topics_overview = query_meta and (
+            query_meta.intent == "SUMMARY"
+            or any(w in query_meta.resolved_query.lower() for w in ["main topic", "topics", "summary", "overview", "syllabus", "roadmap", "chapters", "curriculum"])
+        )
+        if is_topics_overview:
+            single_para = len([p for p in content.split("\n\n") if p.strip()]) <= 2
+            has_no_list = not any(line.strip().startswith(("-", "*", "1.", "2.")) for line in content.split("\n"))
+            if single_para and has_no_list:
+                inc_match = re.search(r"^(.*?include(?:s|d)?\s+)(.+?)[\.\?!]?$", content, re.IGNORECASE | re.DOTALL)
+                if inc_match:
+                    intro = inc_match.group(1).strip().rstrip(":")
+                    raw_topics = inc_match.group(2).strip()
+                    topics = re.split(r',\s*(?:and\s+)?', raw_topics)
+                    topics = [t.strip().rstrip('.') for t in topics if t.strip()]
+                    if len(topics) >= 2:
+                        formatted = f"{intro}:\n\n"
+                        for idx, top in enumerate(topics, 1):
+                            formatted += f"{idx}. **{top}**\n"
+                        formatted += "\nWhich of these topics would you like to explore first?"
+                        content = formatted
 
         # If this is practice questions, student requested only questions, table solving, pasted MCQ/batch solving, or answer_only depth, do not append artificial checkpoint
         is_exempt = not is_teacher_mode or (query_meta and (
