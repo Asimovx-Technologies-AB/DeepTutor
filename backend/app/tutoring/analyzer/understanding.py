@@ -266,7 +266,7 @@ class QueryUnderstanding:
     TEACH_TOPIC_PATTERNS = [
         re.compile(
             r"^(?:act\s+as\s+(?:a\s+)?(?:teacher|tutor)\s+(?:and\s+)?(?:to\s+)?)?"
-            r"(?:please\s+)?(?:can\s+you\s+)?(?:teach|guide)\s+(?:me\s+)?(?:about\s+)?(.+)$",
+            r"(?:please\s+)?(?:can\s+you\s+)?(?:teach|guide|explain\s+to|explain\s+me\s+about|explain\s+me)\s+(?:me\s+)?(?:about\s+)?(.+)$",
             re.IGNORECASE
         ),
         re.compile(
@@ -274,7 +274,15 @@ class QueryUnderstanding:
             re.IGNORECASE
         ),
         re.compile(
-            r"\b(?:teach\s+me\s+about|teach\s+me|start\s+teaching|teach\s+topic|teach\s+lesson)\s+(.+)$",
+            r"\b(?:teach\s+me\s+about|teach\s+me|start\s+teaching|teach\s+topic|teach\s+lesson|explain\s+me\s+about|explain\s+me|explain\s+to\s+me)\s*(.*)$",
+            re.IGNORECASE
+        ),
+        re.compile(
+            r"^(?:please\s+)?(?:can\s+you\s+)?explain\s+(?:this|the)\s+topic\b",
+            re.IGNORECASE
+        ),
+        re.compile(
+            r"^(?:please\s+)?(?:can\s+you\s+)?teach\s+(?:me\s+)?(?:this\s+)?chapter\b",
             re.IGNORECASE
         ),
     ]
@@ -282,6 +290,12 @@ class QueryUnderstanding:
     @classmethod
     def extract_teach_topic(cls, text: str) -> Optional[str]:
         cleaned = text.strip()
+        if re.search(r"^(?:please\s+)?(?:can\s+you\s+)?explain\s+(?:this|the)\s+topic\b", cleaned, re.IGNORECASE):
+            return "this topic"
+        if re.search(r"^(?:please\s+)?(?:can\s+you\s+)?teach\s+(?:me\s+)?(?:this\s+)?chapter\b", cleaned, re.IGNORECASE):
+            return "this chapter"
+        if re.search(r"^(?:start\s+teaching)\s*$", cleaned, re.IGNORECASE):
+            return "this topic"
         for pat in cls.TEACH_TOPIC_PATTERNS:
             m = pat.search(cleaned)
             if m and m.lastindex and m.group(m.lastindex):
@@ -1012,7 +1026,8 @@ class QueryUnderstanding:
             resolved_query=resolved_query,
             language=language,
             is_follow_up=is_follow_up,
-            conversation_history=conversation_history
+            conversation_history=conversation_history,
+            teacher_state=teacher_state
         )
         meta_fallback.understanding_result = cls._build_structured_result_from_meta(
             meta_fallback, raw_query, normalized_query, resolved_query, language
@@ -1036,9 +1051,12 @@ class QueryUnderstanding:
         resolved_query: str,
         language: str,
         is_follow_up: bool,
-        conversation_history: Optional[List[Dict[str, Any]]] = None
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+        teacher_state: Optional[Dict[str, Any]] = None
     ) -> QueryMetadata:
         cleaned = resolved_query.strip().lower()
+        explicit_teach_topic = cls.extract_teach_topic(raw_query) or cls.extract_teach_topic(resolved_query)
+        has_active_teacher = bool(teacher_state and teacher_state.get("mode") == "teacher")
 
         # Scope reasoning: whole material vs. chat topic vs. ambiguous
         det_scope, det_clarification = cls._detect_query_scope(raw_query, conversation_history)
@@ -1162,7 +1180,7 @@ class QueryUnderstanding:
             target_topic = explicit_teach_topic or cls.extract_teach_topic(raw_query)
         elif has_active_teacher and not is_follow_up:
             intent = "TEACH_TOPIC"
-            target_topic = teacher_state.get("topic")
+            target_topic = teacher_state.get("topic") if teacher_state else None
         elif is_follow_up:
             intent = "FOLLOW_UP"
         elif any(w in cleaned for w in ["explain", "how does", "why does", "deep dive"]):

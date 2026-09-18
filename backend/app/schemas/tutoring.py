@@ -449,15 +449,22 @@ class TeacherStageEnum(str, Enum):
     """Structured stages for interactive Teacher Mode state machine."""
     INTRO = "INTRO"
     TEACHING = "TEACHING"
+    TEACHING_SUBTOPIC = "TEACHING_SUBTOPIC"
+    AWAITING_CONFIRMATION = "AWAITING_CONFIRMATION"
+    ANSWERING_QUESTION = "ANSWERING_QUESTION"
     FIGURE_EXPLANATION = "FIGURE_EXPLANATION"
     CHECKPOINT = "CHECKPOINT"
+    CHECKPOINT_EXAM = "CHECKPOINT_EXAM"
     WAITING_FOR_STUDENT = "WAITING_FOR_STUDENT"
     EVALUATING = "EVALUATING"
     REEXPLAINING = "REEXPLAINING"
     PREREQUISITE_REVIEW = "PREREQUISITE_REVIEW"
     DOUBT = "DOUBT"
     SYNTHESIS = "SYNTHESIS"
+    COMPLETE_FIGURE = "COMPLETE_FIGURE"
     FINAL_ASSESSMENT = "FINAL_ASSESSMENT"
+    FINAL_EXAM = "FINAL_EXAM"
+    EXAM_EVALUATION = "EXAM_EVALUATION"
     COMPLETED = "COMPLETED"
 
 
@@ -478,6 +485,9 @@ class VisualLearningState(BaseModel):
     explained_components: List[str] = Field(default_factory=list)
     current_component: Optional[str] = None
     understanding: Optional[str] = None
+    previous_visual_description: Optional[str] = None
+    diagram_elements: List[str] = Field(default_factory=list)
+    diagram_relationships: List[str] = Field(default_factory=list)
 
 
 class LearningUnit(BaseModel):
@@ -519,30 +529,45 @@ class StudentUnderstandingLevelEnum(str, Enum):
 class TeacherTurnActionEnum(str, Enum):
     START_LESSON = "START_LESSON"
     EXPLAIN_CONCEPT = "EXPLAIN_CONCEPT"
+    EXPLAIN_SUBTOPIC = "EXPLAIN_SUBTOPIC"
     CHECK_UNDERSTANDING = "CHECK_UNDERSTANDING"
     EVALUATE_ANSWER = "EVALUATE_ANSWER"
     ANSWER_DOUBT = "ANSWER_DOUBT"
+    ANSWER_QUESTION = "ANSWER_QUESTION"
     RESUME_LESSON = "RESUME_LESSON"
     ADAPTIVE_REEXPLAIN = "ADAPTIVE_REEXPLAIN"
+    REEXPLAIN_SUBTOPIC = "REEXPLAIN_SUBTOPIC"
     PREREQUISITE_REVIEW = "PREREQUISITE_REVIEW"
     NEXT_LEARNING_UNIT = "NEXT_LEARNING_UNIT"
+    CONFIRM_NEXT = "CONFIRM_NEXT"
+    DECLINE_NEXT = "DECLINE_NEXT"
+    CONFIRM_CHECKPOINT_EXAM = "CONFIRM_CHECKPOINT_EXAM"
+    SUBMIT_CHECKPOINT_EXAM = "SUBMIT_CHECKPOINT_EXAM"
+    CONFIRM_EXAM = "CONFIRM_EXAM"
+    SUBMIT_EXAM = "SUBMIT_EXAM"
+    EVALUATE_EXAM = "EVALUATE_EXAM"
     SKIP_UNIT = "SKIP_UNIT"
     BACKTRACK_UNIT = "BACKTRACK_UNIT"
     TOPIC_SYNTHESIS = "TOPIC_SYNTHESIS"
     FINAL_ASSESSMENT = "FINAL_ASSESSMENT"
     LEARNING_REPORT = "LEARNING_REPORT"
     TOPIC_NOT_FOUND = "TOPIC_NOT_FOUND"
+    UNRELATED_QUERY = "UNRELATED_QUERY"
 
 
 class TeacherSessionState(BaseModel):
     """
     Persistent state for an interactive, multi-turn Teacher Mode session.
-    Preserves progression, active concept, current question, doubts, and pause snapshots.
-    Uses stable current_unit_id rather than array index alone.
+    Preserves progression, subtopic order, cumulative progressive diagram state,
+    confirmation checkpoints, doubts, adaptive checkpoint exams, and final exam state.
     """
     session_id: str
     mode: Literal["teacher"] = "teacher"
-    topic: str
+    topic: str = ""
+    main_topic: str = ""
+    topic_id: Optional[str] = None
+    subtopics: List[str] = Field(default_factory=list)
+    current_subtopic_index: int = 0
     current_unit_id: Optional[str] = None
     current_subtopic: Optional[str] = None
     current_concept: Optional[str] = None
@@ -551,8 +576,25 @@ class TeacherSessionState(BaseModel):
     teaching_plan: Optional[TeachingPlan] = None
     current_unit_index: int = 0
     completed_learning_units: List[str] = Field(default_factory=list)
+    completed_subtopics: List[str] = Field(default_factory=list)
     completed_concepts: List[str] = Field(default_factory=list)
+    remaining_subtopics: List[str] = Field(default_factory=list)
     pending_concepts: List[str] = Field(default_factory=list)
+    diagram_state: Optional[str] = None
+    previous_visual_description: Optional[str] = None
+    diagram_elements: List[str] = Field(default_factory=list)
+    diagram_relationships: List[str] = Field(default_factory=list)
+    used_subtopic_headings: List[str] = Field(default_factory=list)
+    awaiting_user_confirmation: bool = True
+    checkpoint_exam_completed: bool = False
+    checkpoint_exam_available: bool = False
+    checkpoint_exam_started: bool = False
+    checkpoint_exam_score: Optional[str] = None
+    exam_available: bool = False
+    exam_started: bool = False
+    exam_score: Optional[str] = None
+    weak_subtopics: List[str] = Field(default_factory=list)
+    specific_portion: Optional[str] = None
     current_figure: Optional[str] = None
     visual_state: Optional[VisualLearningState] = None
     current_question: Optional[Dict[str, Any]] = None
@@ -566,5 +608,32 @@ class TeacherSessionState(BaseModel):
     next_step: Optional[str] = None
     assessment_history: List[Dict[str, Any]] = Field(default_factory=list)
     last_explanation: Optional[str] = None
+
+    def model_post_init(self, __context: Any) -> None:
+        """Keep legacy and enhanced state attributes bidirectionally synchronized."""
+        if not self.main_topic and self.topic:
+            self.main_topic = self.topic
+        elif not self.topic and self.main_topic:
+            self.topic = self.main_topic
+
+        if not self.current_subtopic and self.current_concept:
+            self.current_subtopic = self.current_concept
+        elif not self.current_concept and self.current_subtopic:
+            self.current_concept = self.current_subtopic
+
+        if self.teaching_plan and self.teaching_plan.learning_units and not self.subtopics:
+            self.subtopics = [u.concept for u in self.teaching_plan.learning_units]
+
+        if self.current_subtopic_index == 0 and self.current_unit_index != 0:
+            self.current_subtopic_index = self.current_unit_index
+        elif self.current_subtopic_index != 0 and self.current_unit_index == 0:
+            self.current_unit_index = self.current_subtopic_index
+        else:
+            self.current_unit_index = self.current_subtopic_index
+
+        if not self.completed_subtopics and self.completed_concepts:
+            self.completed_subtopics = list(self.completed_concepts)
+        elif not self.completed_concepts and self.completed_subtopics:
+            self.completed_concepts = list(self.completed_subtopics)
 
 
