@@ -8,6 +8,8 @@ from app.models.study_plan import StudyPlan
 from app.models.artifact import GeneratedArtifact, GeneratedArtifactItem
 from app.models.topic_analysis import DocumentTopicAnalysis, ExtractedTopic
 from app.models.question_paper import QuestionPaperQuestion, QuestionSupportAnalysis
+from app.models.user import User
+from app.models.student_memory import StudentMemoryFact
 
 __all__ = [
     "GeneratedArtifact",
@@ -28,4 +30,6 @@ __all__ = [
     "ExtractedTopic",
     "QuestionPaperQuestion",
     "QuestionSupportAnalysis",
+    "User",
+    "StudentMemoryFact",
 ]

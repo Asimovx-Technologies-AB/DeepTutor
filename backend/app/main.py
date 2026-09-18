@@ -50,9 +50,10 @@ app.add_middleware(
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled error handling {request.method} {request.url.path}: {exc}", exc_info=True)
+    error_detail = str(exc) if settings.DEBUG else "An unexpected error occurred."
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error occurred.", "error": str(exc)},
+        content={"detail": "Internal server error occurred.", "error": error_detail},
     )
 
 # Mount API routers under API_V1_STR

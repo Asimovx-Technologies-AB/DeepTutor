@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.config import settings
 from app.models.document import Document, DocumentPage
 from app.models.chunk import KnowledgeChunk
 from app.models.assets import DocumentAsset
@@ -41,12 +42,24 @@ async def upload_and_process_document(
     initializes the StudySession and curriculum topics, and schedules deep pipeline
     processing (tables, formulas, 14-dimension chunks) in the background.
     """
-    if not file.filename.lower().endswith(".pdf"):
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are currently supported.")
 
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    # Security: Validate file size (DoS prevention)
+    max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    if len(file_bytes) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds maximum allowed size of {settings.MAX_UPLOAD_SIZE_MB}MB."
+        )
+
+    # Security: Verify true MIME signature via magic bytes
+    if b"%PDF-" not in file_bytes[:1024]:
+        raise HTTPException(status_code=400, detail="Invalid file: Not a valid PDF document.")
 
     # Sanitize Form parameter defaults if invoked directly in tests/internally
     topic_id = topic_id.default if hasattr(topic_id, "default") else topic_id

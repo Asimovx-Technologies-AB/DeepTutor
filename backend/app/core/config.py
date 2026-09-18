@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     API_V1_STR: str = "/api"
 
+    # Security Configuration
+    SECRET_KEY: str = "deeptutor-dev-insecure-secret-key-change-in-production-min32bytes"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
+    MAX_UPLOAD_SIZE_MB: int = 50
+    RATE_LIMIT_PER_MINUTE: int = 60
+    LLM_RATE_LIMIT_PER_MINUTE: int = 20
+
     # CORS Configuration
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",

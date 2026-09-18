@@ -2,13 +2,15 @@ import json
 import re
 import logging
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, BackgroundTasks, Request
 from fastapi.responses import StreamingResponse, Response
+from app.core.rate_limiter import llm_api_limiter
 from sqlalchemy.orm import Session
 from app.core.database import get_db, SessionLocal
 from app.models.document import Document
 from app.models.chunk import KnowledgeChunk
 from app.models.session import StudySession, CurriculumTopic, ChatMessage
+from app.models.student_memory import StudentMemoryFact
 from app.schemas.tutoring import (
     StudySessionCreate,
     StudySessionRead,
@@ -17,6 +19,7 @@ from app.schemas.tutoring import (
 )
 from app.pipeline.orchestrator import DocumentPipelineOrchestrator
 from app.tutoring.orchestrator import TutoringQueryOrchestrator
+from app.core.security import get_current_user_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/study", tags=["Study & Learn"])
@@ -36,9 +39,26 @@ async def upload_study_material(
     the StudySession and curriculum topics, and schedules deep pipeline processing
     (14-dimension chunking, embeddings, table/formula extraction, graph) in the background.
     """
+    if file.filename and not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are currently supported.")
+
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    from app.core.config import settings
+
+    # Security: Validate file size (DoS prevention)
+    max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    if len(file_bytes) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds maximum allowed size of {settings.MAX_UPLOAD_SIZE_MB}MB."
+        )
+
+    # Security: Verify true MIME signature via magic bytes
+    if b"%PDF-" not in file_bytes[:1024]:
+        raise HTTPException(status_code=400, detail="Invalid file: Not a valid PDF document.")
 
     import hashlib
     import uuid
@@ -308,6 +328,7 @@ def list_study_sessions(db: Session = Depends(get_db)):
 @router.post("/sessions/new")
 def create_study_session(
     payload: Optional[Dict[str, Any]] = None,
+    current_user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """Creates a new independent study workspace session."""
@@ -315,11 +336,13 @@ def create_study_session(
     title = payload.get("title") or "New Study Workspace"
     subject = payload.get("subject") or "General Study"
     document_id = payload.get("document_id")
+    user_id = payload.get("user_id") or (current_user_id if isinstance(current_user_id, str) else "default_user")
 
     sess = StudySession(
         title=title,
         subject=subject,
         document_id=document_id,
+        user_id=user_id,
         status="active"
     )
     db.add(sess)
@@ -433,12 +456,20 @@ def get_study_session(
 @router.delete("/sessions/{session_id}")
 def delete_study_session(
     session_id: str,
+    current_user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """Deletes a study session and cascades to its topics and chat messages."""
+    if not isinstance(current_user_id, str):
+        current_user_id = "default_user"
+
     sess = db.query(StudySession).filter(StudySession.id == session_id).first()
     if not sess:
         raise HTTPException(status_code=404, detail="Session not found.")
+
+    # IDOR Protection: reject deletion if session belongs to another user
+    if sess.user_id and sess.user_id != "default_user" and sess.user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this session.")
 
     # Cascade delete messages and topics
     db.query(ChatMessage).filter(ChatMessage.session_id == session_id).delete(synchronize_session=False)
@@ -470,16 +501,27 @@ def remove_document_from_session(
 @router.post("/sessions/batch-delete")
 def batch_delete_sessions(
     payload: Dict[str, List[str]],
+    current_user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
-    """Deletes multiple sessions in batch."""
+    """Deletes multiple sessions in batch with ownership verification."""
+    if not isinstance(current_user_id, str):
+        current_user_id = "default_user"
+
     session_ids = payload.get("session_ids", [])
     if session_ids:
-        db.query(ChatMessage).filter(ChatMessage.session_id.in_(session_ids)).delete(synchronize_session=False)
-        db.query(CurriculumTopic).filter(CurriculumTopic.session_id.in_(session_ids)).delete(synchronize_session=False)
-        db.query(StudySession).filter(StudySession.id.in_(session_ids)).delete(synchronize_session=False)
-        db.commit()
-    return {"status": "success", "deleted_count": len(session_ids)}
+        owned_query = db.query(StudySession.id).filter(
+            StudySession.id.in_(session_ids),
+            (StudySession.user_id == current_user_id) | (StudySession.user_id == "default_user")
+        )
+        allowed_ids = [row[0] for row in owned_query.all()]
+        if allowed_ids:
+            db.query(ChatMessage).filter(ChatMessage.session_id.in_(allowed_ids)).delete(synchronize_session=False)
+            db.query(CurriculumTopic).filter(CurriculumTopic.session_id.in_(allowed_ids)).delete(synchronize_session=False)
+            db.query(StudySession).filter(StudySession.id.in_(allowed_ids)).delete(synchronize_session=False)
+            db.commit()
+        return {"status": "success", "deleted_count": len(allowed_ids)}
+    return {"status": "success", "deleted_count": 0}
 
 
 @router.get("/sessions/{session_id}/messages")
@@ -615,14 +657,17 @@ def generate_topic_exam(
     session_id = payload.get("session_id")
     topic_id = payload.get("topic_id")
     topic_title = payload.get("topic_title", "General Exam")
+    # Security: Sanitize user input against prompt injection and control characters
+    cleaned_title = re.sub(r"[\r\n\t]+", " ", str(topic_title))
+    cleaned_title = re.sub(r"[^\w\s\-.,:()/?!+*]", "", cleaned_title)[:200].strip() or "General Exam"
 
-    query = f"Generate an interactive quiz and exam for {topic_title}"
+    query = f"Generate an interactive quiz and exam for {cleaned_title}"
     result = TutoringQueryOrchestrator.process_query(
         session=db,
         raw_query=query,
         session_id=session_id,
         topic_id=topic_id,
-        topic_title=topic_title
+        topic_title=cleaned_title
     )
     return {
         "status": "success",
@@ -729,10 +774,18 @@ def synthesize_session_curriculum(
 @router.post("/agent/message/stream")
 def stream_agent_message(
     payload: Dict[str, Any],
+    request: Request = None,
     db: Session = Depends(get_db)
 ):
     """Real-time SSE token streaming endpoint for LearnPage chat."""
+    if request:
+        llm_api_limiter.check(request)
+
     message = payload.get("message") or payload.get("query") or ""
+    # Security: Cap message length to prevent memory abuse / DoS
+    if len(message) > 8000:
+        message = message[:8000]
+
     session_id = payload.get("session_id")
     subject = payload.get("subject")
     topic_id = payload.get("topic_id")
@@ -770,11 +823,18 @@ def stream_agent_message(
 @router.post("/agent/message")
 def send_agent_message(
     payload: Dict[str, Any],
+    request: Request = None,
     db: Session = Depends(get_db)
 ):
     """Message endpoint for study agent in LearnPage."""
+    if request:
+        llm_api_limiter.check(request)
+
     import time
     message = payload.get("message") or payload.get("query") or ""
+    if len(message) > 8000:
+        message = message[:8000]
+
     session_id = payload.get("session_id")
     subject = payload.get("subject")
     topic_id = payload.get("topic_id")
@@ -973,42 +1033,92 @@ def export_notes_markdown(payload: Dict[str, Any]):
 
 # ─── Student Long-Term Memory Profile ────────────────────────────────────────
 
-_student_memory_store: Dict[str, Dict[str, Any]] = {}
-
 @router.get("/memory/{user_id}")
-def get_student_memory(user_id: str):
-    """Retrieves long-term memory profile for a student."""
-    mem = _student_memory_store.get(user_id, {
-        "user_id": user_id,
-        "facts": ["Learns best through physical analogies", "Prefers LaTeX mathematical formulations"],
-        "mastered_topics": [],
-        "learning_style": "Visual & Socratic",
-        "study_level": "University Level"
-    })
-    return mem
+def get_student_memory(
+    user_id: str,
+    db: Session = Depends(get_db)
+):
+    """Retrieves long-term memory profile for a student from database."""
+    session_to_close = None
+    if not isinstance(db, Session):
+        db = SessionLocal()
+        session_to_close = db
 
-@router.post("/memory/{user_id}/fact")
-def add_student_memory_fact(user_id: str, fact_data: Dict[str, Any]):
-    """Stores a learned pedagogical preference or fact for the student."""
-    if user_id not in _student_memory_store:
-        _student_memory_store[user_id] = {
+    try:
+        facts = (
+            db.query(StudentMemoryFact)
+            .filter(StudentMemoryFact.user_id == user_id)
+            .order_by(StudentMemoryFact.created_at.asc())
+            .all()
+        )
+        fact_strings = [f.fact for f in facts]
+        if not fact_strings:
+            fact_strings = [
+                "Learns best through physical analogies",
+                "Prefers LaTeX mathematical formulations"
+            ]
+
+        return {
             "user_id": user_id,
-            "facts": [],
+            "facts": fact_strings,
             "mastered_topics": [],
             "learning_style": "Visual & Socratic",
             "study_level": "University Level"
         }
-    fact = fact_data.get("fact") or fact_data.get("content") or ""
-    if fact:
-        _student_memory_store[user_id]["facts"].append(fact)
-    return {"status": "success", "memory": _student_memory_store[user_id]}
+    finally:
+        if session_to_close:
+            session_to_close.close()
+
+
+@router.post("/memory/{user_id}/fact")
+def add_student_memory_fact(
+    user_id: str,
+    fact_data: Dict[str, Any],
+    db: Session = Depends(get_db)
+):
+    """Stores a learned pedagogical preference or fact for the student in database."""
+    session_to_close = None
+    if not isinstance(db, Session):
+        db = SessionLocal()
+        session_to_close = db
+
+    try:
+        fact_text = (fact_data.get("fact") or fact_data.get("content") or "").strip()
+        if fact_text:
+            # Enforce max length to prevent database abuse / DoS
+            fact_text = fact_text[:2000]
+            new_fact = StudentMemoryFact(
+                user_id=user_id,
+                fact=fact_text,
+                meta=fact_data.get("metadata") or {}
+            )
+            db.add(new_fact)
+            db.commit()
+
+        return get_student_memory(user_id=user_id, db=db)
+    finally:
+        if session_to_close:
+            session_to_close.close()
+
 
 @router.delete("/memory/{user_id}")
-def clear_student_memory(user_id: str):
-    """Clears long-term student memory."""
-    if user_id in _student_memory_store:
-        del _student_memory_store[user_id]
-    return {"status": "success", "message": "Memory cleared."}
+def clear_student_memory(
+    user_id: str,
+    db: Session = Depends(get_db)
+):
+    """Clears long-term student memory from database."""
+    session_to_close = None
+    if not isinstance(db, Session):
+        db = SessionLocal()
+        session_to_close = db
+
+    try:
+        db.query(StudentMemoryFact).filter(StudentMemoryFact.user_id == user_id).delete(synchronize_session=False)
+        db.commit()
+        return {"status": "success", "message": f"Memory cleared for user {user_id}."}
+    finally:
+        if session_to_close:
+            session_to_close.close()
 
 
 # ─── Socratic Teacher Mode Interactive Endpoints ──────────────────────────────
