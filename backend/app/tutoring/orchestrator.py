@@ -1,10 +1,13 @@
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import logging
 from typing import List, Dict, Any, Optional, Generator, Tuple
 from sqlalchemy.orm import Session
-from app.models.session import StudySession, ChatMessage, StudentMastery
+from app.models.document import Document
+from app.models.chunk import KnowledgeChunk
+from app.models.session import StudySession, ChatMessage, StudentMastery, CurriculumTopic
 from app.models.artifact import GeneratedArtifact, GeneratedArtifactItem
+from app.models.topic_analysis import ExtractedTopic
 from app.schemas.tutoring import (
     QueryMetadata, ContextBundle, TeachingResponse, AnswerValidationResult
 )
@@ -15,9 +18,20 @@ from app.tutoring.analyzer.understanding import QueryUnderstanding
 from app.tutoring.analyzer.clarification import ClarificationGenerator
 from app.tutoring.analyzer.service import QueryUnderstandingService
 from app.tutoring.analyzer.fast_path import QueryFastPath
+from app.tutoring.analyzer.feedback_classifier import UserMessageContextClassifier, UserMessageClassificationEnum
 from app.tutoring.router.query_router import QueryRouter
 from app.tutoring.retrieval.orchestrator import MultiStrategyRetrievalOrchestrator
 from app.tutoring.teaching.agent import TeachingAgent
+from app.tutoring.teaching.factual_handler import FactualQueryHandler
+from app.tutoring.teaching.correction_handler import TeachingCorrectionHandler
+from app.tutoring.teaching.interactive_teacher import InteractiveTeacherEngine
+from app.tutoring.exam.engine import (
+    is_exam_report_intent,
+    is_exam_start_intent,
+    extract_exam_params,
+    ExamSessionManager,
+    ExamQuestionGenerator,
+)
 from app.tutoring.validation.validator import AnswerValidator
 from app.tutoring.pipelines.casual import CasualPipeline
 from app.tutoring.pipelines.summary import SummaryPipeline
@@ -25,6 +39,7 @@ from app.tutoring.pipelines.assessment import AssessmentPipeline
 from app.tutoring.pipelines.problem_solving import ProblemSolvingPipeline
 from app.tutoring.flashcards.intent import FlashcardQuizIntentDetector
 from app.tutoring.flashcards.retriever import PostgresStudyMaterialRetriever
+from app.services.topic_analyzer import TopicAnalysisService
 import json
 import re
 
@@ -67,8 +82,6 @@ class TutoringQueryOrchestrator:
 
         # Guard: Check if document is still undergoing background parsing/indexing
         if doc_id:
-            from app.models.document import Document
-            from app.models.chunk import KnowledgeChunk
             doc_record = session.query(Document).filter(Document.id == doc_id).first()
             if doc_record and doc_record.status in ("PROCESSING", "PARSING", "EXTRACTING"):
                 chunk_count = session.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == doc_id).count()
@@ -120,14 +133,6 @@ class TutoringQueryOrchestrator:
         effective_topic = query_meta.target_topic or topic_title or context.get("document_title") or "Study Document"
 
         # ─── EXAM ENGINE INTERCEPT (highest priority) ────────────────────
-        from app.tutoring.exam.engine import (
-            is_exam_report_intent,
-            is_exam_start_intent,
-            extract_exam_params,
-            ExamSessionManager,
-            ExamQuestionGenerator
-        )
-
         # Priority 0a: EXAM_REPORT — must never reach RAG / study-note generators
         if is_exam_report_intent(raw_query):
             exam = ExamSessionManager.get_latest_exam(session, session_id) if session_id else None
@@ -395,6 +400,11 @@ class TutoringQueryOrchestrator:
                 mode=fc_intent.preferred_mode
             )
             payload_json = json.dumps(quiz_payload.model_dump(), indent=2)
+            num_questions = len(getattr(quiz_payload, "questions", getattr(quiz_payload, "items", [])))
+            intro_msg = f"I've prepared an interactive **{quiz_payload.title}** on **{quiz_payload.topic}** with {num_questions} questions grounded in your study materials:\n\n"
+            fenced_block = f"```flashcard_quiz\n{payload_json}\n```"
+            content = intro_msg + fenced_block
+            latency_ms = round((time.time() - start_time) * 1000, 2)
             
             # Persist artifact
             if session_id:
@@ -439,10 +449,6 @@ class TutoringQueryOrchestrator:
             context.get("is_teacher_mode")
             or (context.get("teacher_state") and context.get("teacher_state", {}).get("mode") == "teacher" and not context.get("teacher_state", {}).get("paused"))
         )
-
-        from app.tutoring.analyzer.feedback_classifier import UserMessageContextClassifier, UserMessageClassificationEnum
-        from app.tutoring.teaching.factual_handler import FactualQueryHandler
-        from app.tutoring.teaching.correction_handler import TeachingCorrectionHandler
 
         msg_classification = UserMessageContextClassifier.classify_message(
             raw_query=raw_query,
@@ -599,13 +605,11 @@ class TutoringQueryOrchestrator:
             )
             res_dict = ProblemSolvingPipeline.solve_problem(resolved_query, context_bundle)
         elif route_dest == "DOCUMENT_TOPIC_ANALYSIS_PIPELINE":
-            from app.services.topic_analyzer import TopicAnalysisService
             analysis = TopicAnalysisService.get_or_run_analysis(session, doc_id)
             if analysis and analysis.status == "COMPLETED":
                 content = TopicAnalysisService.format_analysis_for_chat(session, analysis)
                 # Persist as artifact for follow-up reference resolution
                 if session_id:
-                    from app.models.topic_analysis import ExtractedTopic
                     topics = session.query(ExtractedTopic).filter(ExtractedTopic.analysis_id == analysis.id).order_by(ExtractedTopic.importance_score.desc()).all()
                     cls._persist_generated_artifact(
                         session=session,
@@ -688,7 +692,6 @@ class TutoringQueryOrchestrator:
                 "suggested_questions": ["Explain this concept", "Give me an example"]
             }
         elif (route_dest == "TEACHER_MODE_PIPELINE" and is_teacher_session) or msg_classification.category == UserMessageClassificationEnum.TEACH_TOPIC_REQUEST:
-            from app.tutoring.teaching.interactive_teacher import InteractiveTeacherEngine
             res_dict = InteractiveTeacherEngine.execute_teacher_turn(
                 session=session,
                 session_id=session_id or "default_session",
@@ -801,8 +804,6 @@ class TutoringQueryOrchestrator:
 
         # Guard: Check if document is still undergoing background parsing/indexing
         if doc_id:
-            from app.models.document import Document
-            from app.models.chunk import KnowledgeChunk
             doc_record = session.query(Document).filter(Document.id == doc_id).first()
             if doc_record and doc_record.status in ("PROCESSING", "PARSING", "EXTRACTING"):
                 chunk_count = session.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == doc_id).count()
@@ -820,7 +821,9 @@ class TutoringQueryOrchestrator:
         # 3. Reference Resolution
         resolved_query, ref_meta = ReferenceResolver.resolve_references(
             query=normalized_query,
-            conversation_history=context["history"]
+            conversation_history=context["history"],
+            db_session=session,
+            session_id=session_id
         )
 
         # 4. Query Understanding
@@ -840,14 +843,6 @@ class TutoringQueryOrchestrator:
         effective_topic = query_meta.target_topic or topic_title or context.get("document_title") or "Study Document"
 
         # ─── EXAM ENGINE STREAMING INTERCEPT (highest priority) ───────────
-        from app.tutoring.exam.engine import (
-            is_exam_report_intent,
-            is_exam_start_intent,
-            extract_exam_params,
-            ExamSessionManager,
-            ExamQuestionGenerator
-        )
-
         # Priority 0a: EXAM_REPORT
         if is_exam_report_intent(raw_query):
             yield {"type": "phase_start", "phase": "Compiling Exam Report", "phase_key": "exam_report"}
@@ -1149,10 +1144,6 @@ class TutoringQueryOrchestrator:
             or (context.get("teacher_state") and context.get("teacher_state", {}).get("mode") == "teacher" and not context.get("teacher_state", {}).get("paused"))
         )
 
-        from app.tutoring.analyzer.feedback_classifier import UserMessageContextClassifier, UserMessageClassificationEnum
-        from app.tutoring.teaching.factual_handler import FactualQueryHandler
-        from app.tutoring.teaching.correction_handler import TeachingCorrectionHandler
-
         msg_classification = UserMessageContextClassifier.classify_message(
             raw_query=raw_query,
             conversation_history=context.get("history", []),
@@ -1349,7 +1340,6 @@ class TutoringQueryOrchestrator:
             return
 
         if (route_dest == "TEACHER_MODE_PIPELINE" and is_teacher_session) or msg_classification.category == UserMessageClassificationEnum.TEACH_TOPIC_REQUEST:
-            from app.tutoring.teaching.interactive_teacher import InteractiveTeacherEngine
             yield {"type": "phase_end", "phase": "Analysis Complete", "phase_key": "analysis"}
             
             full_content_tokens = []
@@ -1424,7 +1414,6 @@ class TutoringQueryOrchestrator:
                 msg = f"I couldn't find '{topic_str}' in the selected study material. Please upload or select the material that covers this topic."
                 intent_val = "MATERIAL_NOT_SUPPORTED"
             else: # ANSWER_CHALLENGE_PIPELINE
-                from app.tutoring.teaching.correction_handler import TeachingCorrectionHandler
                 msg = TeachingCorrectionHandler.handle_user_correction(
                     user_feedback=raw_query,
                     conversation_history=context.get("history", []),
@@ -1585,7 +1574,6 @@ class TutoringQueryOrchestrator:
                 sess.last_active = now_utc
 
             # Validate topic_id against CurriculumTopic table to guarantee no foreign key violations
-            from app.models.session import CurriculumTopic
             valid_topic_id = None
             if topic_id:
                 topic_record = session.query(CurriculumTopic.id).filter(CurriculumTopic.id == topic_id).first()
@@ -1598,7 +1586,6 @@ class TutoringQueryOrchestrator:
                     sess.session_metadata = meta
 
             # 2. Record User & Assistant Messages with strict chronological sequencing
-            from datetime import timedelta
             asst_utc = now_utc + timedelta(milliseconds=10)
             user_msg = ChatMessage(
                 session_id=session_id,

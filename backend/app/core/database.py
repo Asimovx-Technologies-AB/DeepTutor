@@ -27,9 +27,13 @@ try:
             echo=False
         )
 except Exception as e:
-    logger.warning(f"Failed to connect to primary DB ({settings.DATABASE_URL}): {e}. Falling back to SQLite.")
-    engine = create_engine("sqlite:///./deeptutor_data.db", connect_args={"check_same_thread": False})
-    is_sqlite = True
+    if is_sqlite:
+        engine = create_engine(settings.DATABASE_URL, connect_args={"check_same_thread": False})
+    else:
+        logger.error(f"Cannot initialize database engine for {settings.DATABASE_URL}: {e}")
+        raise RuntimeError(
+            f"Database initialization failed. Set DATABASE_URL correctly in .env. Error: {e}"
+        ) from e
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()

@@ -1,5 +1,5 @@
 import logging
-from typing import Generator, Optional
+from typing import Generator, Optional, List
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -48,6 +48,47 @@ class LLMService:
     # Internal: Gemini helpers with retry on empty-output error
     # ------------------------------------------------------------------
 
+    def _gemini_candidate_models(self) -> List[str]:
+        """Returns ordered list of Gemini fallback model names."""
+        candidates = [self.model]
+        for fb in [
+            "gemini-3.1-flash-lite",
+            "gemini-flash-lite-latest",
+            "gemini-3.5-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-3.6-flash",
+        ]:
+            if fb not in candidates:
+                candidates.append(fb)
+        return candidates
+
+    @staticmethod
+    def _is_quota_or_unavailable_error(err_msg: str) -> bool:
+        return any(
+            k in err_msg
+            for k in [
+                "not found",
+                "404",
+                "no longer available",
+                "429",
+                "quota",
+                "resource_exhausted",
+                "503",
+                "unavailable",
+            ]
+        )
+
+    @staticmethod
+    def _is_empty_output_error(err_msg: str) -> bool:
+        return any(
+            k in err_msg
+            for k in [
+                "model output",
+                "must contain",
+                "output text",
+            ]
+        )
+
     def _call_gemini(self, prompt: str, system_prompt: Optional[str]) -> Optional[str]:
         """
         Calls Gemini with up to 2 attempts and candidate model fallbacks.
@@ -62,16 +103,7 @@ class LLMService:
         current_prompt = prompt
         current_sys = system_prompt
 
-        candidate_models = [self.model]
-        for fb in [
-            "gemini-3.1-flash-lite",
-            "gemini-flash-lite-latest",
-            "gemini-3.5-flash-lite",
-            "gemini-3.5-flash",
-            "gemini-3.6-flash",
-        ]:
-            if fb not in candidate_models:
-                candidate_models.append(fb)
+        candidate_models = self._gemini_candidate_models()
 
         for model_name in candidate_models:
             for attempt in range(2):
@@ -117,25 +149,11 @@ class LLMService:
 
                 except Exception as e:
                     err_msg = str(e).lower()
-                    if (
-                        "not found" in err_msg
-                        or "404" in err_msg
-                        or "no longer available" in err_msg
-                        or "429" in err_msg
-                        or "quota" in err_msg
-                        or "resource_exhausted" in err_msg
-                        or "503" in err_msg
-                        or "unavailable" in err_msg
-                    ):
+                    if self._is_quota_or_unavailable_error(err_msg):
                         logger.warning(f"Model {model_name} unavailable or quota limited: {e}. Trying next candidate model.")
                         break
 
-                    is_empty_output = (
-                        "model output" in err_msg
-                        or "must contain" in err_msg
-                        or "output text" in err_msg
-                    )
-                    if is_empty_output and attempt == 0:
+                    if self._is_empty_output_error(err_msg) and attempt == 0:
                         logger.warning(
                             f"Gemini empty-output error (attempt {attempt + 1}): {e}. "
                             "Retrying with simplified prompt."
@@ -163,16 +181,7 @@ class LLMService:
         current_prompt = prompt
         current_sys = system_prompt
 
-        candidate_models = [self.model]
-        for fb in [
-            "gemini-3.1-flash-lite",
-            "gemini-flash-lite-latest",
-            "gemini-3.5-flash-lite",
-            "gemini-3.5-flash",
-            "gemini-3.6-flash",
-        ]:
-            if fb not in candidate_models:
-                candidate_models.append(fb)
+        candidate_models = self._gemini_candidate_models()
 
         for model_name in candidate_models:
             for attempt in range(2):
@@ -205,25 +214,11 @@ class LLMService:
 
                 except Exception as e:
                     err_msg = str(e).lower()
-                    if (
-                        "not found" in err_msg
-                        or "404" in err_msg
-                        or "no longer available" in err_msg
-                        or "429" in err_msg
-                        or "quota" in err_msg
-                        or "resource_exhausted" in err_msg
-                        or "503" in err_msg
-                        or "unavailable" in err_msg
-                    ):
+                    if self._is_quota_or_unavailable_error(err_msg):
                         logger.warning(f"Model {model_name} stream unavailable or quota limited: {e}. Trying fallback.")
                         break
 
-                    is_empty_output = (
-                        "model output" in err_msg
-                        or "must contain" in err_msg
-                        or "output text" in err_msg
-                    )
-                    if is_empty_output and attempt == 0:
+                    if self._is_empty_output_error(err_msg) and attempt == 0:
                         logger.warning(
                             f"Gemini empty-output stream error (attempt {attempt + 1}): {e}. Retrying."
                         )

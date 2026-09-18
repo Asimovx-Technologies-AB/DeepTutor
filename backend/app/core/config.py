@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Literal, Optional, ClassVar
+from typing import List, Literal, Optional, ClassVar, Any, Union
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
 
@@ -21,6 +21,28 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     API_V1_STR: str = "/api"
+
+    # CORS Configuration
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+    ]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Any) -> List[str]:
+        if isinstance(v, str):
+            return [i.strip() for i in v.split(",") if i.strip()]
+        elif isinstance(v, (list, tuple)):
+            return [str(i).strip() for i in v]
+        return [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+        ]
 
     # Database Configuration
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/deeptutor"
@@ -90,26 +112,29 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP_TOKENS: int = 64
     TEXT_QUALITY_OCR_THRESHOLD: float = 0.65
 
-    def auto_detect_providers(self):
-        """Automatically selects active provider when corresponding API key is populated."""
+    def model_post_init(self, __context: Any) -> None:
+        """Auto-detect providers after all fields are resolved from env."""
         if self.GEMINI_API_KEY:
-            self.LLM_PROVIDER = "gemini"
-            self.EMBEDDING_PROVIDER = "gemini"
-            self.VLM_PROVIDER = "gemini"
+            object.__setattr__(self, "LLM_PROVIDER", "gemini")
+            object.__setattr__(self, "EMBEDDING_PROVIDER", "gemini")
+            object.__setattr__(self, "VLM_PROVIDER", "gemini")
         elif self.OPENAI_API_KEY:
-            self.LLM_PROVIDER = "openai"
-            self.EMBEDDING_PROVIDER = "openai"
-            self.EMBEDDING_MODEL = "text-embedding-3-small"
-            self.EMBEDDING_DIMENSION = 1536
-            self.VLM_PROVIDER = "openai"
+            object.__setattr__(self, "LLM_PROVIDER", "openai")
+            object.__setattr__(self, "EMBEDDING_PROVIDER", "openai")
+            object.__setattr__(self, "EMBEDDING_MODEL", "text-embedding-3-small")
+            object.__setattr__(self, "EMBEDDING_DIMENSION", 1536)
+            object.__setattr__(self, "VLM_PROVIDER", "openai")
         elif self.GROQ_API_KEY:
-            self.LLM_PROVIDER = "groq"
-            self.LLM_MODEL = "llama-3.3-70b-versatile"
+            object.__setattr__(self, "LLM_PROVIDER", "groq")
+            object.__setattr__(self, "LLM_MODEL", "llama-3.3-70b-versatile")
         else:
-            self.LLM_PROVIDER = "mock"
-            self.EMBEDDING_PROVIDER = "local"
-            self.VLM_PROVIDER = "mock"
+            object.__setattr__(self, "LLM_PROVIDER", "mock")
+            object.__setattr__(self, "EMBEDDING_PROVIDER", "local")
+            object.__setattr__(self, "VLM_PROVIDER", "mock")
+
+    def auto_detect_providers(self):
+        """Backwards-compatible alias for manual trigger in tests."""
+        self.model_post_init(None)
 
 
 settings = Settings()
-settings.auto_detect_providers()

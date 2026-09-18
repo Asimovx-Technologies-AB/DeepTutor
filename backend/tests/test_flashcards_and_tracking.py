@@ -167,3 +167,60 @@ def test_tracking_agent_and_gamification(db_session):
     assert summary.student_id == student
     assert summary.total_xp >= 20
     assert any(m.topic == topic for m in summary.topic_masteries)
+
+
+def test_quiz_non_streaming_orchestrator_response(db_session):
+    """Verify non-streaming quiz orchestration assigns content & latency without NameError."""
+    from app.tutoring.orchestrator import TutoringQueryOrchestrator
+    from unittest.mock import patch
+    from app.tutoring.flashcards.schemas import FlashcardQuizPayload, QuestionCardSchema, OptionSchema
+
+    fake_payload = FlashcardQuizPayload(
+        topic="Transformers",
+        title="Transformers Quiz",
+        mode="quiz",
+        questions=[
+            QuestionCardSchema(
+                id="q1",
+                prompt="What is self-attention?",
+                options=[OptionSchema(id="o1", text="Mechanism"), OptionSchema(id="o2", text="Layer")],
+                correct_option_id="o1",
+                explanation="Grounded in materials"
+            )
+        ]
+    )
+
+    with patch("app.tutoring.teaching.agent.TeachingAgent.generate_flashcards_or_quiz", return_value=fake_payload):
+        resp = TutoringQueryOrchestrator.process_query(
+            session=db_session,
+            raw_query="Give me a quiz on Transformers",
+            session_id=None
+        )
+
+    assert resp["type"] == "flashcard_quiz"
+    assert resp["intent"] == "QUIZ"
+    assert "content" in resp
+    assert "latency_ms" in resp
+    assert isinstance(resp["content"], str)
+    assert "```flashcard_quiz" in resp["content"]
+    assert resp["latency_ms"] >= 0
+
+
+def test_streaming_reference_resolver_receives_session(db_session):
+    """Verify streaming query response passes db_session and session_id to ReferenceResolver."""
+    from app.tutoring.orchestrator import TutoringQueryOrchestrator
+    from unittest.mock import patch
+
+    with patch("app.tutoring.analyzer.resolver.ReferenceResolver.resolve_references") as mock_resolve:
+        mock_resolve.return_value = ("hello", {"is_follow_up": False})
+        list(TutoringQueryOrchestrator.stream_query_response(
+            session=db_session,
+            raw_query="hello",
+            session_id="test-stream-sess-123"
+        ))
+
+        mock_resolve.assert_called_once()
+        _, kwargs = mock_resolve.call_args
+        assert kwargs.get("db_session") == db_session
+        assert kwargs.get("session_id") == "test-stream-sess-123"
+
