@@ -77,3 +77,78 @@ def test_teaching_agent_prompt_injection_for_referenced_question():
     assert "EXPLAINING SPECIFIC PREVIOUS QUESTION #2" in user_prompt
     assert "Explain how Backpropagation computes gradients using the chain rule" in user_prompt
     assert "Question Statement" in user_prompt
+
+
+def test_question_index_resolution_across_multiple_intervening_turns():
+    """Verify that question index resolution finds questions even after multiple intervening turns."""
+    conv_history = [
+        {"role": "user", "content": "give me 3 questions on thermodynamics"},
+        {
+            "role": "assistant",
+            "content": (
+                "### 📝 Practice Questions: Thermodynamics\n\n"
+                "1. **Zeroth Law**: State the zeroth law of thermodynamics.\n"
+                "2. **Carnot Engine**: Calculate the theoretical efficiency of a Carnot cycle operating between 500K and 300K.\n"
+                "3. **Entropy**: Explain why the entropy of an isolated system never decreases."
+            ),
+        },
+        {"role": "user", "content": "can you tell me a fun fact about physics?"},
+        {"role": "assistant", "content": "Did you know that hot water can freeze faster than cold water under certain conditions? This is called the Mpemba effect."},
+        {"role": "user", "content": "that is so cool!"},
+        {"role": "assistant", "content": "It really is! Physics is full of surprising phenomena."},
+    ]
+
+    raw_query = "explain question 2"
+    res = CoreferencePronounResolver.resolve(raw_query, conv_history)
+
+    assert "Carnot Engine" in res["resolved_query"] or "Carnot cycle" in res["resolved_query"]
+    assert res["meta"].get("referenced_question_index") == 2
+    assert "Carnot cycle" in res["meta"].get("referenced_question_text")
+    assert "Thermodynamics" in res["meta"].get("referenced_question_text")
+
+
+def test_question_index_resolution_with_heading_filter():
+    """Verify that when the user specifies a topic, question resolution targets that specific question set."""
+    conv_history = [
+        {"role": "user", "content": "questions on isomerism"},
+        {
+            "role": "assistant",
+            "content": (
+                "### 📝 Practice Questions: Isomerism\n\n"
+                "1. **Structural Isomers**: Differentiate chain and position isomerism.\n"
+                "2. **Stereoisomerism**: Explain optical activity in lactic acid."
+            ),
+        },
+        {"role": "user", "content": "questions on alkanes"},
+        {
+            "role": "assistant",
+            "content": (
+                "### 📝 Practice Questions: Alkanes\n\n"
+                "1. **Combustion**: Write the balanced combustion reaction for propane.\n"
+                "2. **Halogenation**: Describe free-radical chlorination of methane."
+            ),
+        },
+    ]
+
+    raw_query = "what is the answer to question 2 from isomerism?"
+    res = CoreferencePronounResolver.resolve(raw_query, conv_history)
+
+    assert "Stereoisomerism" in res["resolved_query"] or "lactic acid" in res["resolved_query"]
+    assert res["meta"].get("referenced_question_index") == 2
+    assert "lactic acid" in res["meta"].get("referenced_question_text")
+
+
+def test_practice_questions_heading_enforcement():
+    """Verify that _enforce_response_contract ensures the practice questions heading is present."""
+    meta = QueryMetadata(
+        raw_query="give me questions on optics",
+        normalized_query="give me questions on optics",
+        resolved_query="give me questions on optics",
+        intent="PRACTICE_QUESTIONS",
+    )
+    raw_content = "1. **Snell's Law**: State Snell's law of refraction.\n2. **Total Internal Reflection**: Define critical angle."
+    formatted = TeachingAgent._enforce_response_contract(raw_content, "Optics", meta)
+
+    assert "### 📝 Practice Questions: Optics" in formatted
+    assert "1. **Snell's Law**" in formatted
+

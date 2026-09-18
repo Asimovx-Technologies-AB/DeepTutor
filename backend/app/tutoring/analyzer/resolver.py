@@ -46,37 +46,64 @@ class ReferenceResolver:
     }
 
     @classmethod
-    def _extract_question_from_history(cls, conversation_history: List[Dict[str, str]], target_idx: int) -> Optional[str]:
+    def _extract_question_from_history(
+        cls,
+        conversation_history: List[Dict[str, str]],
+        target_idx: int,
+        target_heading: Optional[str] = None
+    ) -> Optional[str]:
         if not conversation_history:
             return None
-        last_asst = ""
+
+        # Scan all past assistant messages from newest to oldest
+        candidate_messages = []
         for m in reversed(conversation_history):
             role = m.get("role") or ""
             if role in ("assistant", "tutor") or not role:
                 c = (m.get("content") or m.get("text") or "").strip()
                 if c and len(c) > 20:
-                    last_asst = c
-                    break
-        if not last_asst:
+                    candidate_messages.append(c)
+
+        if not candidate_messages:
             return None
 
-        # Line-by-line scanning
-        lines = last_asst.split("\n")
         idx_str = str(target_idx)
         item_pattern = re.compile(
             rf"^(?:#{{1,6}}\s*)?(?:\*{{1,2}})?(?:question|q|problem|item)?\s*{idx_str}(?:\b|[\.:\)\s-])\s*(?:\*{{1,2}})?",
             re.IGNORECASE
         )
 
-        for line in lines:
-            l = line.strip()
-            if not l:
-                continue
-            if item_pattern.search(l):
-                cleaned_line = item_pattern.sub("", l).strip()
-                cleaned_line = cleaned_line.strip("*").strip(".").strip(":").strip()
-                if len(cleaned_line) >= 5:
-                    return cleaned_line
+        # Prioritize messages matching topic/heading if provided
+        if target_heading:
+            th_lower = target_heading.strip().lower()
+            matching_msgs = [c for c in candidate_messages if th_lower in c.lower()]
+            ordered_candidates = matching_msgs + [c for c in candidate_messages if c not in matching_msgs]
+        else:
+            ordered_candidates = candidate_messages
+
+        for asst_text in ordered_candidates:
+            lines = asst_text.split("\n")
+            # Extract set heading if present (e.g., ### 📝 Practice Questions: Isomerism)
+            set_heading = None
+            for line in lines:
+                l_strip = line.strip()
+                if l_strip.startswith("#"):
+                    clean_h = l_strip.lstrip("#").strip()
+                    if any(w in clean_h.lower() for w in ["question", "practice", "exam", "quiz", "problem"]):
+                        set_heading = clean_h
+                        break
+
+            for line in lines:
+                l = line.strip()
+                if not l:
+                    continue
+                if item_pattern.search(l):
+                    cleaned_line = item_pattern.sub("", l).strip()
+                    cleaned_line = cleaned_line.strip("*").strip(".").strip(":").strip()
+                    if len(cleaned_line) >= 5:
+                        if set_heading:
+                            return f"[{set_heading}] {cleaned_line}"
+                        return cleaned_line
 
         return None
 
@@ -182,7 +209,7 @@ class ReferenceResolver:
                                 
                     # Fallback to chat history parsing if DB lookup failed or unavailable
                     if conversation_history:
-                        q_text = cls._extract_question_from_history(conversation_history, idx_val)
+                        q_text = cls._extract_question_from_history(conversation_history, idx_val, target_heading=heading_val)
                         if q_text:
                             meta["referenced_question_text"] = q_text
                             resolved = f"{query}: {q_text}"

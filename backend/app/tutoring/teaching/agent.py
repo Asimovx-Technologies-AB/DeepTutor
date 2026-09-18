@@ -82,6 +82,13 @@ Before answering, analyze the student's question intent and choose the optimal p
 
 5. PRACTICE & EXAM QUESTIONS (e.g. "give me questions", "5 questions on this", "practice questions", "only need questions"):
    - High-yield, exam-grade inquiry based strictly on the study material.
+   - MANDATORY SET HEADING & CONCEPT TAGGING:
+     * MUST always start with a prominent Markdown heading indicating the topic/chapter:
+       `### 📝 Practice Questions: [Topic/Concept Name]`
+     * Number each question cleanly with a bold subtopic or concept tag:
+       `1. **[Core Subtopic/Concept]**: [Clear, rigorous question prompt]`
+       `2. **[Core Subtopic/Concept]**: [Clear, rigorous question prompt]`
+       This ensures students can reference questions by number or concept tag at any point in the conversation.
    - USER FORMAT RESPECT:
      * If the student asks for "only questions", "just questions", or wants to test themselves:
        Present ONLY the clean numbered questions with clear problem descriptions and scenarios.
@@ -772,8 +779,12 @@ class TeachingAgent:
                         "Follow with '#### 🔍 Visual Breakdown (How to Read this Diagram)'.\n"
                     )
                 task_instruction = (
-                    f"3. PRACTICE QUESTIONS: Generate EXACTLY {target_count} high-yield exam preparation questions on {effective_concept}. "
-                    f"Number them cleanly (Question 1, Question 2, ...). "
+                    f"3. PRACTICE QUESTIONS (MANDATORY SET HEADING & CONCEPT ANCHORS):\n"
+                    f"Generate EXACTLY {target_count} high-yield exam preparation questions on {effective_concept}.\n"
+                    f"- MANDATORY SET HEADING: You MUST start your response with: '### 📝 Practice Questions: {effective_concept}'\n"
+                    f"- NUMBERED QUESTIONS WITH CONCEPT ANCHORS:\n"
+                    f"  1. **[Specific Subtopic/Concept]**: [Clear, rigorous question statement]\n"
+                    f"  2. **[Specific Subtopic/Concept]**: [Clear, rigorous question statement]\n"
                     f"{graph_hint}"
                     f"If the student requested explanations or answers, provide clear explanations. DO NOT output an interactive multiple-choice quiz.\n"
                 )
@@ -1025,6 +1036,10 @@ class TeachingAgent:
         if is_exempt:
             content = re.sub(r"###\s*💡\s*Interactive Checkpoint.*", "", content, flags=re.DOTALL).strip()
             content = re.sub(r"\*\*Would you like me to continue to the next subtopic\?\*\*", "", content, flags=re.IGNORECASE).strip()
+            if query_meta and (query_meta.intent == "PRACTICE_QUESTIONS" or (query_meta.format_directives and query_meta.format_directives.get("questions_only"))):
+                if not re.search(r"^###?\s*.*(?:questions|practice)", content, re.IGNORECASE | re.MULTILINE):
+                    clean_topic = topic_title or "Practice Questions"
+                    content = f"### 📝 Practice Questions: {clean_topic}\n\n{content}"
             return content
 
         # 5. Ensure Interactive Checkpoint exists for teaching explanations when in teaching mode
