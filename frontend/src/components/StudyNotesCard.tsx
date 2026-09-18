@@ -32,6 +32,7 @@ export function isStudyNotesContent(msgOrContent: any): boolean {
     const text = msgOrContent
     const lower = text.toLowerCase()
     const trimmed = text.trimStart()
+    if (trimmed.startsWith('# 📊 Exam Report') || lower.includes('exam report:')) return false
     return (
       lower.includes('generated study textbook') ||
       (trimmed.startsWith('#') && lower.includes('study note')) ||

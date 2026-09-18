@@ -118,6 +118,260 @@ class TutoringQueryOrchestrator:
 
         effective_page = query_meta.referenced_page or ref_meta.get("referenced_page") or active_page
         effective_topic = query_meta.target_topic or topic_title or context.get("document_title") or "Study Document"
+
+        # ─── EXAM ENGINE INTERCEPT (highest priority) ────────────────────
+        from app.tutoring.exam.engine import (
+            is_exam_report_intent,
+            is_exam_start_intent,
+            extract_exam_params,
+            ExamSessionManager,
+            ExamQuestionGenerator
+        )
+
+        # Priority 0a: EXAM_REPORT — must never reach RAG / study-note generators
+        if is_exam_report_intent(raw_query):
+            exam = ExamSessionManager.get_latest_exam(session, session_id) if session_id else None
+            if exam:
+                report_content = ExamSessionManager.generate_exam_report(exam)
+            else:
+                report_content = (
+                    "I don't have an exam attempt to analyze yet. "
+                    "Start or complete an exam first, and I can generate your report."
+                )
+            latency_ms = round((time.time() - start_time) * 1000, 2)
+            if session_id:
+                cls._update_session_state(
+                    session=session,
+                    session_id=session_id,
+                    topic_id=topic_id,
+                    user_query=raw_query,
+                    assistant_response=report_content,
+                    intent="EXAM_REPORT",
+                    citations=[],
+                    grounding_score=1.0,
+                    latency_ms=latency_ms,
+                    entities=[]
+                )
+            return {
+                "content": report_content,
+                "type": "exam_report",
+                "intent": "EXAM_REPORT",
+                "citations": [],
+                "grounding_score": 1.0,
+                "socratic_follow_up": None,
+                "suggested_questions": [
+                    "Which topics should I revise?",
+                    "Give me practice questions on my weak areas"
+                ],
+                "latency_ms": latency_ms,
+            }
+
+        # Priority 0b: EXAM_START — creates stateful interactive 1-by-1 exam session
+        if is_exam_start_intent(raw_query):
+            # Explicitly pause any existing teacher state so exam runs with full isolation
+            if session_id:
+                sess_row = session.query(StudySession).filter(StudySession.id == session_id).first()
+                if sess_row and sess_row.session_metadata:
+                    meta = dict(sess_row.session_metadata)
+                    if "teacher_state" in meta:
+                        meta["teacher_state"]["paused"] = True
+                        sess_row.session_metadata = meta
+                        try:
+                            session.commit()
+                        except Exception:
+                            session.rollback()
+
+            exam_default = topic_title if (topic_title and topic_title not in ("Study Material", "Study Document")) else effective_topic
+            params = extract_exam_params(raw_query, default_topic=exam_default)
+            exam_topic = params["topic"]
+            q_count = params["question_count"]
+            exam_type = params.get("exam_type", "mcq")
+
+            retriever = PostgresStudyMaterialRetriever(session)
+            chunks = retriever.retrieve_chunks(
+                topic=exam_topic,
+                document_id=doc_id,
+                session_id=session_id,
+            )
+
+            exam_questions = ExamQuestionGenerator.generate(
+                topic=exam_topic,
+                retrieved_chunks=chunks,
+                question_count=q_count,
+                exam_type=exam_type,
+            )
+
+            if session_id:
+                created_exam = ExamSessionManager.create_exam_session(
+                    db=session,
+                    session_id=session_id,
+                    subject=context.get("subject", ""),
+                    topic=exam_topic,
+                    questions=exam_questions,
+                    exam_type=exam_type,
+                )
+            else:
+                created_exam = {
+                    "total_questions": len(exam_questions),
+                    "exam_type": exam_type,
+                }
+
+            q1 = exam_questions[0]
+            is_written = exam_type == "written" or q1.get("question_type") == "written"
+            if is_written:
+                lines = [
+                    f"# 📝 Written Exam: {exam_topic}",
+                    f"**Question 1 of {len(exam_questions)}** (Max Marks: {q1.get('max_marks', 5)})",
+                    "",
+                    f"{q1['question']}",
+                    "",
+                    "*(Write your explanation in your own words below)*",
+                ]
+                suggested_chips = []
+            else:
+                lines = [
+                    f"# 📝 Exam: {exam_topic}",
+                    f"**Question 1 of {len(exam_questions)}**",
+                    "",
+                    f"{q1['question']}",
+                    "",
+                ]
+                for oi, opt in enumerate(q1.get("options", [])):
+                    lines.append(f"- **{chr(65 + oi)}.** {opt}")
+                lines.append("")
+                lines.append("*(Reply with **A**, **B**, **C**, or **D** to submit your answer)*")
+                suggested_chips = ["A", "B", "C", "D"]
+
+            exam_start_content = "\n".join(lines)
+            latency_ms = round((time.time() - start_time) * 1000, 2)
+            if session_id:
+                cls._update_session_state(
+                    session=session,
+                    session_id=session_id,
+                    topic_id=topic_id,
+                    user_query=raw_query,
+                    assistant_response=exam_start_content,
+                    intent="EXAM_START",
+                    citations=[],
+                    grounding_score=1.0,
+                    latency_ms=latency_ms,
+                    entities=[]
+                )
+            return {
+                "content": exam_start_content,
+                "type": "exam_question",
+                "intent": "EXAM_START",
+                "citations": [],
+                "grounding_score": 1.0,
+                "socratic_follow_up": None,
+                "suggested_questions": suggested_chips,
+                "latency_ms": latency_ms,
+            }
+
+        # Priority 0c: EXAM_ANSWER — if active exam, student answers advance question by question
+        if session_id:
+            active_exam = ExamSessionManager.get_active_exam(session, session_id)
+            if active_exam:
+                is_written_exam = active_exam.get("exam_type") == "written"
+                q_lower = raw_query.strip().lower()
+                if is_written_exam:
+                    is_likely_answer = not is_exam_report_intent(raw_query) and not q_lower.startswith(
+                        ("teach", "give me report", "show report", "exam report", "my report")
+                    )
+                else:
+                    is_likely_answer = (
+                        len(raw_query.strip()) <= 200
+                        and not is_exam_report_intent(raw_query)
+                        and not q_lower.startswith(("explain", "teach", "what is", "how", "why", "give me", "show me", "create", "generate"))
+                    )
+                if is_likely_answer:
+                    answer_result = ExamSessionManager.submit_answer(session, session_id, raw_query.strip())
+                    if not answer_result.get("error"):
+                        r = answer_result
+                        is_written_q = r.get("question_type") == "written" or is_written_exam
+                        if is_written_q:
+                            status_badge = "✅ **Good Answer!**" if r.get("is_correct") else "📝 **Answer Evaluated**"
+                            response_lines = [
+                                f"{status_badge} Marks Awarded: **{r.get('marks', 0)} / {r.get('max_marks', 5)}**",
+                                f"Score so far: **{r['score_so_far']} marks**",
+                                "",
+                                f"**Feedback**: {r.get('feedback', '')}",
+                                "",
+                                "**Model Reference Answer**:",
+                                f"> {r.get('reference_answer') or r.get('correct_answer', '')}",
+                            ]
+                        else:
+                            if r["is_correct"]:
+                                response_lines = [
+                                    f"✅ **Correct!** (+{r.get('marks', 1)} mark)",
+                                    f"Score so far: **{r['score_so_far']}**"
+                                ]
+                            else:
+                                response_lines = [
+                                    f"❌ **Incorrect.** The correct answer is: **{r['correct_answer']}**",
+                                    f"Score so far: **{r['score_so_far']}**"
+                                ]
+
+                        suggested_chips = []
+                        if r.get("next_question"):
+                            nq = r["next_question"]
+                            is_nq_written = nq.get("question_type") == "written" or is_written_exam
+                            response_lines.append("")
+                            response_lines.append("---")
+                            if is_nq_written:
+                                response_lines.append(f"**Question {nq['question_index']} of {active_exam['total_questions']}** (Max Marks: {nq.get('max_marks', 5)})")
+                                response_lines.append("")
+                                response_lines.append(f"{nq['question']}")
+                                response_lines.append("")
+                                response_lines.append("*(Write your explanation in your own words below)*")
+                                suggested_chips = []
+                            else:
+                                response_lines.append(f"**Question {nq['question_index']} of {active_exam['total_questions']}**")
+                                response_lines.append("")
+                                response_lines.append(f"{nq['question']}")
+                                response_lines.append("")
+                                if nq.get("options"):
+                                    for oi, opt in enumerate(nq["options"]):
+                                        response_lines.append(f"- **{chr(65 + oi)}.** {opt}")
+                                response_lines.append("")
+                                response_lines.append("*(Reply with **A**, **B**, **C**, or **D** to submit your answer)*")
+                                suggested_chips = ["A", "B", "C", "D"]
+                        elif r["exam_status"] == "completed":
+                            response_lines.append("")
+                            response_lines.append("---")
+                            response_lines.append("🎉 **Exam completed!**")
+                            response_lines.append(f"Final Score: **{active_exam['obtained_marks']} / {active_exam['total_marks']} ({active_exam['percentage']}%)**")
+                            response_lines.append("")
+                            response_lines.append("Say *\"show my exam report\"* to view your full performance analysis, topic-wise breakdown, and mistake review.")
+                            suggested_chips = ["Show my exam report", "Which topics should I revise?"]
+
+                        content = "\n".join(response_lines)
+                        latency_ms = round((time.time() - start_time) * 1000, 2)
+                        if session_id:
+                            cls._update_session_state(
+                                session=session,
+                                session_id=session_id,
+                                topic_id=topic_id,
+                                user_query=raw_query,
+                                assistant_response=content,
+                                intent="EXAM_ANSWER",
+                                citations=[],
+                                grounding_score=1.0,
+                                latency_ms=latency_ms,
+                                entities=[]
+                            )
+                        return {
+                            "content": content,
+                            "type": "exam_answer",
+                            "intent": "EXAM_ANSWER",
+                            "citations": [],
+                            "grounding_score": 1.0,
+                            "socratic_follow_up": None,
+                            "suggested_questions": suggested_chips,
+                            "latency_ms": latency_ms,
+                        }
+        # ─── END EXAM ENGINE INTERCEPT ────────────────────────────────────
+
         fc_intent = FlashcardQuizIntentDetector.detect(raw_query, default_topic=effective_topic)
         is_quiz_request = (query_meta.intent == "QUIZ") or (fc_intent.is_flashcard_quiz and query_meta.intent != "PRACTICE_QUESTIONS")
 
@@ -584,6 +838,254 @@ class TutoringQueryOrchestrator:
         # 4. Target Topic & Quiz Intent Routing
         effective_page = query_meta.referenced_page or ref_meta.get("referenced_page") or active_page
         effective_topic = query_meta.target_topic or topic_title or context.get("document_title") or "Study Document"
+
+        # ─── EXAM ENGINE STREAMING INTERCEPT (highest priority) ───────────
+        from app.tutoring.exam.engine import (
+            is_exam_report_intent,
+            is_exam_start_intent,
+            extract_exam_params,
+            ExamSessionManager,
+            ExamQuestionGenerator
+        )
+
+        # Priority 0a: EXAM_REPORT
+        if is_exam_report_intent(raw_query):
+            yield {"type": "phase_start", "phase": "Compiling Exam Report", "phase_key": "exam_report"}
+            exam = ExamSessionManager.get_latest_exam(session, session_id) if session_id else None
+            if exam:
+                report_content = ExamSessionManager.generate_exam_report(exam)
+            else:
+                report_content = (
+                    "I don't have an exam attempt to analyze yet. "
+                    "Start or complete an exam first, and I can generate your report."
+                )
+            yield {"type": "token", "token": report_content, "data": report_content}
+            yield {"type": "grounding", "data": {"grounding_score": 1.0, "formatted_badge": "Exam Performance Analytics", "verified": True}}
+            latency_ms = round((time.time() - start_time) * 1000, 2)
+            if session_id:
+                cls._update_session_state(
+                    session=session,
+                    session_id=session_id,
+                    topic_id=topic_id,
+                    user_query=raw_query,
+                    assistant_response=report_content,
+                    intent="EXAM_REPORT",
+                    citations=[],
+                    grounding_score=1.0,
+                    latency_ms=latency_ms,
+                    entities=[]
+                )
+            yield {"type": "phase_end", "phase": "Report Ready", "phase_key": "exam_report"}
+            yield {
+                "type": "done",
+                "latency_ms": latency_ms,
+                "suggested_questions": [
+                    "Which topics should I revise?",
+                    "Give me practice questions on my weak areas"
+                ]
+            }
+            return
+
+        # Priority 0b: EXAM_START — creates stateful interactive 1-by-1 exam session
+        if is_exam_start_intent(raw_query):
+            # Explicitly pause any existing teacher state so exam runs with full isolation
+            if session_id:
+                sess_row = session.query(StudySession).filter(StudySession.id == session_id).first()
+                if sess_row and sess_row.session_metadata:
+                    meta = dict(sess_row.session_metadata)
+                    if "teacher_state" in meta:
+                        meta["teacher_state"]["paused"] = True
+                        sess_row.session_metadata = meta
+                        try:
+                            session.commit()
+                        except Exception:
+                            session.rollback()
+
+            yield {"type": "phase_start", "phase": "Setting up Exam Session", "phase_key": "exam_start"}
+            exam_default = topic_title if (topic_title and topic_title not in ("Study Material", "Study Document")) else effective_topic
+            params = extract_exam_params(raw_query, default_topic=exam_default)
+            exam_topic = params["topic"]
+            q_count = params["question_count"]
+            exam_type = params.get("exam_type", "mcq")
+
+            retriever = PostgresStudyMaterialRetriever(session)
+            chunks = retriever.retrieve_chunks(
+                topic=exam_topic,
+                document_id=doc_id,
+                session_id=session_id,
+            )
+
+            exam_questions = ExamQuestionGenerator.generate(
+                topic=exam_topic,
+                retrieved_chunks=chunks,
+                question_count=q_count,
+                exam_type=exam_type,
+            )
+
+            if session_id:
+                created_exam = ExamSessionManager.create_exam_session(
+                    db=session,
+                    session_id=session_id,
+                    subject=context.get("subject", ""),
+                    topic=exam_topic,
+                    questions=exam_questions,
+                    exam_type=exam_type,
+                )
+
+            q1 = exam_questions[0]
+            is_written = exam_type == "written" or q1.get("question_type") == "written"
+            if is_written:
+                lines = [
+                    f"# 📝 Written Exam: {exam_topic}",
+                    f"**Question 1 of {len(exam_questions)}** (Max Marks: {q1.get('max_marks', 5)})",
+                    "",
+                    f"{q1['question']}",
+                    "",
+                    "*(Write your explanation in your own words below)*",
+                ]
+                suggested_chips = []
+            else:
+                lines = [
+                    f"# 📝 Exam: {exam_topic}",
+                    f"**Question 1 of {len(exam_questions)}**",
+                    "",
+                    f"{q1['question']}",
+                    "",
+                ]
+                for oi, opt in enumerate(q1.get("options", [])):
+                    lines.append(f"- **{chr(65 + oi)}.** {opt}")
+                lines.append("")
+                lines.append("*(Reply with **A**, **B**, **C**, or **D** to submit your answer)*")
+                suggested_chips = ["A", "B", "C", "D"]
+
+            exam_start_content = "\n".join(lines)
+            yield {"type": "token", "token": exam_start_content, "data": exam_start_content}
+            yield {"type": "grounding", "data": {"grounding_score": 1.0, "formatted_badge": "Exam Mode Active", "verified": True}}
+            latency_ms = round((time.time() - start_time) * 1000, 2)
+            if session_id:
+                cls._update_session_state(
+                    session=session,
+                    session_id=session_id,
+                    topic_id=topic_id,
+                    user_query=raw_query,
+                    assistant_response=exam_start_content,
+                    intent="EXAM_START",
+                    citations=[],
+                    grounding_score=1.0,
+                    latency_ms=latency_ms,
+                    entities=[]
+                )
+            yield {"type": "phase_end", "phase": "Exam Ready", "phase_key": "exam_start"}
+            yield {
+                "type": "done",
+                "latency_ms": latency_ms,
+                "suggested_questions": suggested_chips
+            }
+            return
+
+        # Priority 0c: EXAM_ANSWER — if active exam, student answers advance question by question
+        if session_id:
+            active_exam = ExamSessionManager.get_active_exam(session, session_id)
+            if active_exam:
+                is_written_exam = active_exam.get("exam_type") == "written"
+                q_lower = raw_query.strip().lower()
+                if is_written_exam:
+                    is_likely_answer = not is_exam_report_intent(raw_query) and not q_lower.startswith(
+                        ("teach", "give me report", "show report", "exam report", "my report")
+                    )
+                else:
+                    is_likely_answer = (
+                        len(raw_query.strip()) <= 200
+                        and not is_exam_report_intent(raw_query)
+                        and not q_lower.startswith(("explain", "teach", "what is", "how", "why", "give me", "show me", "create", "generate"))
+                    )
+                if is_likely_answer:
+                    answer_result = ExamSessionManager.submit_answer(session, session_id, raw_query.strip())
+                    if not answer_result.get("error"):
+                        r = answer_result
+                        is_written_q = r.get("question_type") == "written" or is_written_exam
+                        if is_written_q:
+                            status_badge = "✅ **Good Answer!**" if r.get("is_correct") else "📝 **Answer Evaluated**"
+                            response_lines = [
+                                f"{status_badge} Marks Awarded: **{r.get('marks', 0)} / {r.get('max_marks', 5)}**",
+                                f"Score so far: **{r['score_so_far']} marks**",
+                                "",
+                                f"**Feedback**: {r.get('feedback', '')}",
+                                "",
+                                "**Model Reference Answer**:",
+                                f"> {r.get('reference_answer') or r.get('correct_answer', '')}",
+                            ]
+                        else:
+                            if r["is_correct"]:
+                                response_lines = [
+                                    f"✅ **Correct!** (+{r.get('marks', 1)} mark)",
+                                    f"Score so far: **{r['score_so_far']}**"
+                                ]
+                            else:
+                                response_lines = [
+                                    f"❌ **Incorrect.** The correct answer is: **{r['correct_answer']}**",
+                                    f"Score so far: **{r['score_so_far']}**"
+                                ]
+
+                        suggested_chips = []
+                        if r.get("next_question"):
+                            nq = r["next_question"]
+                            is_nq_written = nq.get("question_type") == "written" or is_written_exam
+                            response_lines.append("")
+                            response_lines.append("---")
+                            if is_nq_written:
+                                response_lines.append(f"**Question {nq['question_index']} of {active_exam['total_questions']}** (Max Marks: {nq.get('max_marks', 5)})")
+                                response_lines.append("")
+                                response_lines.append(f"{nq['question']}")
+                                response_lines.append("")
+                                response_lines.append("*(Write your explanation in your own words below)*")
+                                suggested_chips = []
+                            else:
+                                response_lines.append(f"**Question {nq['question_index']} of {active_exam['total_questions']}**")
+                                response_lines.append("")
+                                response_lines.append(f"{nq['question']}")
+                                response_lines.append("")
+                                if nq.get("options"):
+                                    for oi, opt in enumerate(nq["options"]):
+                                        response_lines.append(f"- **{chr(65 + oi)}.** {opt}")
+                                response_lines.append("")
+                                response_lines.append("*(Reply with **A**, **B**, **C**, or **D** to submit your answer)*")
+                                suggested_chips = ["A", "B", "C", "D"]
+                        elif r["exam_status"] == "completed":
+                            response_lines.append("")
+                            response_lines.append("---")
+                            response_lines.append("🎉 **Exam completed!**")
+                            response_lines.append(f"Final Score: **{active_exam['obtained_marks']} / {active_exam['total_marks']} ({active_exam['percentage']}%)**")
+                            response_lines.append("")
+                            response_lines.append("Say *\"show my exam report\"* to view your full performance analysis, topic-wise breakdown, and mistake review.")
+                            suggested_chips = ["Show my exam report", "Which topics should I revise?"]
+
+                        content = "\n".join(response_lines)
+                        yield {"type": "token", "token": content, "data": content}
+                        yield {"type": "grounding", "data": {"grounding_score": 1.0, "formatted_badge": "Exam Evaluation", "verified": True}}
+                        latency_ms = round((time.time() - start_time) * 1000, 2)
+                        if session_id:
+                            cls._update_session_state(
+                                session=session,
+                                session_id=session_id,
+                                topic_id=topic_id,
+                                user_query=raw_query,
+                                assistant_response=content,
+                                intent="EXAM_ANSWER",
+                                citations=[],
+                                grounding_score=1.0,
+                                latency_ms=latency_ms,
+                                entities=[]
+                            )
+                        yield {"type": "phase_end", "phase": "Answer Evaluated", "phase_key": "exam_answer"}
+                        yield {
+                            "type": "done",
+                            "latency_ms": latency_ms,
+                            "suggested_questions": suggested_chips
+                        }
+                        return
+        # ─── END EXAM ENGINE STREAMING INTERCEPT ─────────────────────────
+
         fc_intent = FlashcardQuizIntentDetector.detect(raw_query, default_topic=effective_topic)
         is_quiz_request = (query_meta.intent == "QUIZ") or (fc_intent.is_flashcard_quiz and query_meta.intent != "PRACTICE_QUESTIONS")
 

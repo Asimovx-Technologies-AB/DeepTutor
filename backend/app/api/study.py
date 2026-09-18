@@ -892,6 +892,54 @@ def evaluate_topic_exam(
             topic_row.mastered = True
             db.commit()
 
+    # ─── Persist exam session for later report retrieval ────────────────
+    if session_id:
+        from app.tutoring.exam.engine import ExamSessionManager
+        from datetime import datetime, timezone
+        import uuid as _uuid
+        exam_questions = []
+        for idx, q in enumerate(questions, 1):
+            q_id = q.get("id")
+            options = q.get("options", [])
+            correct_idx_val = q.get("correct_index", 0)
+            correct_text_val = options[correct_idx_val] if correct_idx_val < len(options) else ""
+            student_ans = answers.get(q_id, "")
+            q_eval = next((e for e in evaluations if e.get("id") == q_id), {})
+            exam_questions.append({
+                "question_id": q_id or str(_uuid.uuid4()),
+                "question_index": idx,
+                "question": q.get("question", ""),
+                "options": options,
+                "correct_answer": correct_text_val,
+                "user_answer": student_ans if student_ans else None,
+                "is_correct": q_eval.get("is_correct", False),
+                "marks": 1 if q_eval.get("is_correct") else 0,
+                "max_marks": 1,
+                "topic": q.get("topic", ""),
+                "subtopic": q.get("subtopic", ""),
+            })
+        exam_session = {
+            "exam_id": str(_uuid.uuid4()),
+            "subject": "",
+            "topic": topic_id or "",
+            "questions": exam_questions,
+            "total_questions": total,
+            "current_question_index": total,
+            "attempted_questions": sum(1 for eq in exam_questions if eq["user_answer"]),
+            "correct_answers": score,
+            "incorrect_answers": sum(1 for eq in exam_questions if eq["user_answer"] and not eq["is_correct"]),
+            "unanswered_questions": sum(1 for eq in exam_questions if not eq["user_answer"]),
+            "total_marks": total,
+            "obtained_marks": score,
+            "percentage": percentage,
+            "accuracy": round((score / max(sum(1 for eq in exam_questions if eq["user_answer"]), 1)) * 100, 1),
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "status": "completed",
+        }
+        ExamSessionManager.save_exam_session(db, session_id, exam_session)
+    # ─── End persist exam session ─────────────────────────────────────
+
     return {
         "status": "success",
         "topic_id": topic_id,

@@ -30,6 +30,15 @@ _CONTINUATION_PATTERNS = [
     re.compile(r"^(?:more\s+details?|tell\s+me\s+more|elaborate|keep\s+going)[.!]*$", re.IGNORECASE),
 ]
 
+_CLARIFICATION_PATTERNS = [
+    re.compile(r"\b(?:(?:what\s+)?i\s+(?:really\s+)?mean(?:t)?\s*(?:is|was)?|i'm\s+saying|i\s+am\s+saying|what\s+i'm\s+saying\s+is)\b", re.IGNORECASE),
+    re.compile(r"\b(?:by\s+[^,;]+?\s+i\s+mean(?:t)?)\b", re.IGNORECASE),
+    re.compile(r"\b(?:everything|all)\s+means\b", re.IGNORECASE),
+    re.compile(r"\b(?:means|meaning)\s+(?:all|everything|that|to\s+say|the\s+whole)\b", re.IGNORECASE),
+    re.compile(r"^(?:i\s+mean|i\s+meant)\b", re.IGNORECASE),
+    re.compile(r"\bmeans\s+all\s+(?:the\s+)?topics?\b", re.IGNORECASE),
+]
+
 _TEACH_PATTERNS = [
     re.compile(r"\b(?:teach\s+me|act\s+as\s+a\s+teacher|start\s+teacher\s+mode|teach\s+step\s+by\s+step)\b", re.IGNORECASE),
 ]
@@ -90,6 +99,16 @@ class UserMessageContextClassifier:
 
         query_clean_nopunct = query_clean.rstrip(".?! \t")
 
+        # 0. HIGHEST PRIORITY: Exam report requests must never be misclassified
+        from app.tutoring.exam.engine import is_exam_report_intent
+        if is_exam_report_intent(query_clean):
+            return UserMessageClassificationResult(
+                category=UserMessageClassificationEnum.GENERAL_FACTUAL,
+                confidence=0.99,
+                reasoning=f"Exam report request detected: '{query_clean}'. Routing to EXAM_REPORT pipeline.",
+                is_exam_report=True,
+            )
+
         # 1. PRIORITY 1: Fast deterministic regex matching for corrections/challenges
         for pat in _CORRECTION_PATTERNS:
             if pat.search(query_clean) or pat.search(query_clean_nopunct):
@@ -119,6 +138,15 @@ class UserMessageContextClassifier:
                     category=UserMessageClassificationEnum.CLARIFICATION_CONTINUATION,
                     confidence=0.98,
                     reasoning=f"Matched continuation pattern: '{query_clean}'",
+                )
+
+        # 2b. Fast deterministic matching for user clarifications / meta-dialogue ("X means Y", "i mean X")
+        for pat in _CLARIFICATION_PATTERNS:
+            if pat.search(query_clean) or pat.search(query_clean_nopunct):
+                return UserMessageClassificationResult(
+                    category=UserMessageClassificationEnum.CLARIFICATION_CONTINUATION,
+                    confidence=0.98,
+                    reasoning=f"Matched user clarification/meta-dialogue pattern: '{query_clean}'",
                 )
 
         # 3. Fast deterministic matching for explicit teaching mode requests
@@ -173,18 +201,27 @@ class UserMessageContextClassifier:
         # 7. Declarative statement check: if not a question and contains factual claim words
         words = query_clean.split()
         if not has_question_pattern and len(words) >= 2:
-            statement_indicators = [
-                " is ", " are ", " was ", " were ", " has ", " have ", " does ", " means ",
-                " equals ", " causes ", " results in ", " consists of ", " used for ", " because ",
-                " produces ", " creates ", " generates ", " forms ", " releases ", " contains ", " represents "
-            ]
-            if any(ind in f" {query_lower} " for ind in statement_indicators):
-                return UserMessageClassificationResult(
-                    category=UserMessageClassificationEnum.STATEMENT_EVALUATION,
-                    confidence=0.85,
-                    reasoning="Contains declarative copula/relation indicating a factual statement.",
-                    target_statement=query_clean,
-                )
+            # Exclude personal/conversational directives from academic statement evaluation
+            first_w = words[0].lower()
+            is_conversational = first_w in ["i", "we", "you", "let", "can", "please"] or any(
+                query_lower.startswith(prefix) for prefix in [
+                    "i mean", "i meant", "what i mean", "everything means", "all means",
+                    "teach me", "tell me", "show me", "give me", "i want", "help me"
+                ]
+            )
+            if not is_conversational:
+                statement_indicators = [
+                    " is ", " are ", " was ", " were ", " has ", " have ", " does ", " means ",
+                    " equals ", " causes ", " results in ", " consists of ", " used for ", " because ",
+                    " produces ", " creates ", " generates ", " forms ", " releases ", " contains ", " represents "
+                ]
+                if any(ind in f" {query_lower} " for ind in statement_indicators):
+                    return UserMessageClassificationResult(
+                        category=UserMessageClassificationEnum.STATEMENT_EVALUATION,
+                        confidence=0.85,
+                        reasoning="Contains declarative copula/relation indicating a factual statement.",
+                        target_statement=query_clean,
+                    )
 
         # 8. Fallback to lightweight LLM classification for nuanced inputs
         recent_history_str = "\n".join([

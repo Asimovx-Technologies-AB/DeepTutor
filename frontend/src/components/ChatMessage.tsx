@@ -12,6 +12,7 @@ import InlineSVGDiagram from './InlineSVGDiagram'
 import StudyNotesCard, { isStudyNotesContent } from './StudyNotesCard'
 import FlashcardQuizCard, { parseQuizDataFromContent } from './FlashcardQuizCard'
 import TeacherModeCard, { parseCheckpointFromMarkdown } from './TeacherModeCard'
+import ExamReportCard, { isExamReportContent } from './ExamReportCard'
 
 interface Props {
   role: 'user' | 'assistant'
@@ -51,6 +52,12 @@ const ChatMessageComponent = ({
     role,
     content,
     export_ready,
+    response_format
+  })
+
+  const isExamReport = isAssistant && isExamReportContent({
+    role,
+    content,
     response_format
   })
 
@@ -111,6 +118,11 @@ const ChatMessageComponent = ({
               {/* Study Notes Document Attachment Card */}
               {isStudyNotes && (
                 <StudyNotesCard markdown={content} className="mb-3" />
+              )}
+
+              {/* Exam Performance Report Card */}
+              {isExamReport && (
+                <ExamReportCard markdown={content} className="mb-3" />
               )}
 
               {/* Flashcard & Quiz Direct Prop Renderer or Parsed Plain Text */}

@@ -171,7 +171,11 @@ class TeachingCorrectionHandler:
             if resp and len(resp.strip()) > 20:
                 clean = resp.strip()
                 if is_teacher_mode and "continue to the next subtopic" not in clean.lower():
-                    clean += "\n\n**Would you like me to continue to the next subtopic?**"
+                    has_trailing_question = clean.endswith("?") or bool(
+                        re.search(r"(?:would you like|shall we|ready to|do you want|what do you think)[^.\n]*\?\s*$", clean, re.IGNORECASE)
+                    )
+                    if not has_trailing_question:
+                        clean += "\n\n**Would you like me to continue to the next subtopic?**"
                 return clean
         except Exception as e:
             logger.error(f"[TeachingCorrectionHandler] Statement evaluation failed: {e}")

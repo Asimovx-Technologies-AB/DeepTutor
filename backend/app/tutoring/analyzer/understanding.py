@@ -72,7 +72,7 @@ Answerability States:
 - INSUFFICIENT_EVIDENCE: Needs more context.
 
 Intent Taxonomy:
-- ANSWER_QUESTION, EXPLAIN_TOPIC, TEACH_TOPIC, SUMMARIZE, SIMPLIFY, GENERATE_EXAMPLES, GENERATE_QUESTIONS, GENERATE_QUIZ, GENERATE_FLASHCARDS, CREATE_STUDY_PLAN, MODIFY_STUDY_PLAN, SEARCH_MATERIAL, ASK_FROM_MATERIAL, COMPARE_CONCEPTS, SOLVE_PROBLEM, CHECK_ANSWER, GENERATE_NOTES, DOCUMENT_TOPIC_ANALYSIS, CONTINUE_LEARNING, CLARIFY_CONCEPT, FOLLOW_UP, GREETING, CONFIRMATION, OUT_OF_SCOPE, ANSWER_CHALLENGE
+- ANSWER_QUESTION, EXPLAIN_TOPIC, TEACH_TOPIC, SUMMARIZE, SIMPLIFY, GENERATE_EXAMPLES, GENERATE_QUESTIONS, GENERATE_QUIZ, GENERATE_FLASHCARDS, CREATE_STUDY_PLAN, MODIFY_STUDY_PLAN, SEARCH_MATERIAL, ASK_FROM_MATERIAL, COMPARE_CONCEPTS, SOLVE_PROBLEM, CHECK_ANSWER, GENERATE_NOTES, DOCUMENT_TOPIC_ANALYSIS, CONTINUE_LEARNING, CLARIFY_CONCEPT, FOLLOW_UP, GREETING, CONFIRMATION, OUT_OF_SCOPE, ANSWER_CHALLENGE, EXAM_START, EXAM_ANSWER, EXAM_NEXT, EXAM_COMPLETE, EXAM_REPORT
 
 Output JSON Schema:
 {
@@ -289,26 +289,30 @@ class QueryUnderstanding:
 
     @classmethod
     def extract_teach_topic(cls, text: str) -> Optional[str]:
-        cleaned = text.strip()
-        if re.search(r"^(?:please\s+)?(?:can\s+you\s+)?explain\s+(?:this|the)\s+topic\b", cleaned, re.IGNORECASE):
-            return "this topic"
-        if re.search(r"^(?:please\s+)?(?:can\s+you\s+)?teach\s+(?:me\s+)?(?:this\s+)?chapter\b", cleaned, re.IGNORECASE):
-            return "this chapter"
-        if re.search(r"^(?:start\s+teaching)\s*$", cleaned, re.IGNORECASE):
-            return "this topic"
-        for pat in cls.TEACH_TOPIC_PATTERNS:
-            m = pat.search(cleaned)
-            if m and m.lastindex and m.group(m.lastindex):
-                raw_t = m.group(m.lastindex).strip(" ?.!:,;")
-                raw_t = re.sub(
-                    r"\b(?:step\s+by\s+step|from\s+scratch|thoroughly|completely|deeply|in\s+detail|please)\b",
-                    "",
-                    raw_t,
-                    flags=re.IGNORECASE
-                ).strip(" ?.!:,;")
-                if raw_t and len(raw_t) >= 2:
-                    return raw_t
-        return None
+        try:
+            from app.tutoring.teaching.interactive_teacher import InteractiveTeacherEngine
+            return InteractiveTeacherEngine.extract_teach_topic_phrase(text)
+        except Exception:
+            cleaned = text.strip()
+            if re.search(r"^(?:please\s+)?(?:can\s+you\s+)?explain\s+(?:this|the)\s+topic\b", cleaned, re.IGNORECASE):
+                return "this topic"
+            if re.search(r"^(?:please\s+)?(?:can\s+you\s+)?teach\s+(?:me\s+)?(?:this\s+)?chapter\b", cleaned, re.IGNORECASE):
+                return "this chapter"
+            if re.search(r"^(?:start\s+teaching)\s*$", cleaned, re.IGNORECASE):
+                return "this topic"
+            for pat in cls.TEACH_TOPIC_PATTERNS:
+                m = pat.search(cleaned)
+                if m and m.lastindex and m.group(m.lastindex):
+                    raw_t = m.group(m.lastindex).strip(" ?.!:,;")
+                    raw_t = re.sub(
+                        r"\b(?:step\s+by\s+step|from\s+scratch|thoroughly|completely|deeply|in\s+detail|please)\b",
+                        "",
+                        raw_t,
+                        flags=re.IGNORECASE
+                    ).strip(" ?.!:,;")
+                    if raw_t and len(raw_t) >= 2 and raw_t.lower() not in ("everything", "all", "all topics"):
+                        return raw_t
+            return None
 
     GLOBAL_SCOPE_PATTERN = re.compile(
         r"\b(?:(?:from\s+)?(?:this|the)\s+(?:material|meterial|document|textbook|pdf|book|syllabus|curriculum|course|subject)|"

@@ -23,6 +23,7 @@ import { useAuthStore } from '../stores/authStore'
 
 import InlineSVGDiagram from '../components/InlineSVGDiagram'
 import StudyNotesCard, { extractDocTitle, isStudyNotesContent } from '../components/StudyNotesCard'
+import ExamReportCard, { isExamReportContent } from '../components/ExamReportCard'
 import FlashcardQuizCard, { parseQuizDataFromContent } from '../components/FlashcardQuizCard'
 import ConfirmModal from '../components/ConfirmModal'
 import { SessionLoadingAnimation } from '../components/SessionLoadingAnimation'
@@ -2049,6 +2050,7 @@ export default function LearnPage() {
                           (Boolean(msg.text) && msg.text.includes('Generated Study Textbook'))
                         )
                         const isStudyNotes = !isUser && isStudyNotesContent(msg)
+                        const isExamReport = !isUser && isExamReportContent(msg)
 
                         return (
                           <motion.div
@@ -2159,6 +2161,11 @@ export default function LearnPage() {
                                         </>
                                       )
                                     })()}
+                                  </div>
+                                ) : isExamReport ? (
+                                  /* Exam Performance Report Card */
+                                  <div className="w-full">
+                                    <ExamReportCard markdown={msg.text} className="mb-3" />
                                   </div>
                                 ) : isStudyNotes ? (
                                   /* Study Notes Response (Matching Claude design) */

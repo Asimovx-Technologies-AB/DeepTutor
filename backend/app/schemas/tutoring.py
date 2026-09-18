@@ -86,6 +86,12 @@ class UserIntent(str, Enum):
     CONFIRMATION = "CONFIRMATION"
     OUT_OF_SCOPE = "OUT_OF_SCOPE"
     ANSWER_CHALLENGE = "ANSWER_CHALLENGE"
+    # Exam lifecycle intents
+    EXAM_START = "EXAM_START"
+    EXAM_ANSWER = "EXAM_ANSWER"
+    EXAM_NEXT = "EXAM_NEXT"
+    EXAM_COMPLETE = "EXAM_COMPLETE"
+    EXAM_REPORT = "EXAM_REPORT"
     # Legacy / alias compat
     CASUAL = "CASUAL"
     DOCUMENT_QA = "DOCUMENT_QA"
@@ -97,6 +103,7 @@ class UserIntent(str, Enum):
     COMPARISON = "COMPARISON"
     EXPLANATION = "EXPLANATION"
     DOCUMENT_TOPIC_ANALYSIS = "DOCUMENT_TOPIC_ANALYSIS"
+
 
 
 class RetrievalDecisionEnum(str, Enum):
@@ -577,6 +584,7 @@ class UserMessageClassificationResult(BaseModel):
     is_ambiguous: bool = False
     ambiguity_clarification: Optional[str] = None
     suggested_interpretation: Optional[str] = None
+    is_exam_report: bool = False
 
 
 class TeacherSessionState(BaseModel):

@@ -762,6 +762,10 @@ class InteractiveTeacherEngine:
         classification = UserMessageContextClassifier.classify_message(raw_query, current_topic=state.main_topic)
         if classification.category == UserMessageClassificationEnum.FEEDBACK_CORRECTION:
             return TeacherTurnActionEnum.FEEDBACK_CORRECTION
+        if classification.category == UserMessageClassificationEnum.CLARIFICATION_CONTINUATION:
+            if not state.teaching_plan or not state.subtopics:
+                return TeacherTurnActionEnum.START_LESSON
+            return TeacherTurnActionEnum.CONFIRM_NEXT
         if classification.category == UserMessageClassificationEnum.STATEMENT_EVALUATION:
             return TeacherTurnActionEnum.STATEMENT_EVALUATION
 
@@ -789,6 +793,24 @@ class InteractiveTeacherEngine:
 
         return TeacherTurnActionEnum.EXPLAIN_SUBTOPIC
 
+    QUANTIFIER_AND_META_TOPICS = {
+        "everything", "all", "all topics", "all the topic", "all the topics", "all topics in",
+        "all of it", "all of them", "the whole thing", "whole thing",
+        "entire topic", "full topic", "complete syllabus", "entire syllabus",
+        "whole syllabus", "all concepts", "every concept", "anything", "something",
+        "nothing", "it", "this", "that", "this topic", "the topic", "this chapter",
+        "the chapter", "lesson", "the lesson", "portion", "the portion"
+    }
+
+    @classmethod
+    def is_quantifier_or_meta(cls, text: Optional[str]) -> bool:
+        if not text:
+            return True
+        t = text.strip().lower()
+        t = re.sub(r"^(?:just\s+the|only\s+the|the|a|an)\s+", "", t).strip()
+        t = re.sub(r"\b(?:step\s+by\s+step|from\s+scratch|thoroughly|completely|deeply|in\s+detail|please)\b", "", t).strip()
+        return t in cls.QUANTIFIER_AND_META_TOPICS or bool(re.match(r"^(?:everything|all(?:\s+the)?(?:\s+topics?)?|all\s+of\s+it)$", t))
+
     @classmethod
     def extract_teach_topic_and_portion(cls, text: str) -> Tuple[Optional[str], Optional[str]]:
         """
@@ -796,26 +818,81 @@ class InteractiveTeacherEngine:
         - 'Teach me Root Node of Decision Tree' -> ('Decision Tree', 'Root Node')
         - 'Explain Decision Node in Decision Tree' -> ('Decision Tree', 'Decision Node')
         - 'Teach me Decision Tree' -> ('Decision Tree', None)
+        - 'so tommarow i have exam on self attention, so teach me everything' -> ('self attention', None)
+        - 'teach me everything about self attention' -> ('self attention', None)
         """
         cleaned = text.strip()
 
+        # 1. Trailing scope with target topic, e.g. "teach me everything about self attention"
+        trailing_scope = re.search(
+            r"\b(?:teach|explain|guide)\s+(?:to\s+)?(?:me\s+)?(?:about\s+)?(?:everything|all|all\s+the\s+topics?|all\s+topics?|the\s+whole\s+thing|all\s+of\s+it)\s+(?:about|on|in|for|of)\s+(.+)$",
+            cleaned,
+            re.IGNORECASE
+        )
+        if trailing_scope:
+            cand = trailing_scope.group(1).strip(" ?.!:,;")
+            cand = re.sub(r"\b(?:step\s+by\s+step|from\s+scratch|thoroughly|completely|deeply|in\s+detail|please)\b", "", cand, flags=re.IGNORECASE).strip(" ?.!:,;")
+            cand = re.sub(r"^(?:the|a|an)\s+", "", cand, flags=re.IGNORECASE).strip()
+            if cand and not cls.is_quantifier_or_meta(cand) and len(cand) >= 2:
+                return cand, None
+
+        # 2. Preceding exam/test clause, e.g. "so tommarow i have exam on self attention, so teach me everything"
+        exam_match = re.search(
+            r"\b(?:exam|test|quiz|midterm|finals?)\s+(?:on|about|for|in)\s+([^,;.]+?)(?:,?\s*(?:so\s+)?(?:please\s+)?(?:teach|guide|explain|start)|$)",
+            cleaned,
+            re.IGNORECASE
+        )
+        if exam_match:
+            cand = exam_match.group(1).strip(" ?.!:,;")
+            cand = re.sub(r"^(?:the|a|an)\s+", "", cand, flags=re.IGNORECASE).strip()
+            if cand and not cls.is_quantifier_or_meta(cand) and len(cand) >= 2:
+                return cand, None
+
+        # 3. Preceding prepare/study clause, e.g. "preparing for self attention, teach me everything"
+        prep_match = re.search(
+            r"\b(?:prepare|preparing|studying|learn|learning|revision\s+for|revision\s+on)\s+(?:for\s+)?([^,;.]+?)(?:,?\s*(?:so\s+)?(?:please\s+)?(?:teach|guide|explain|start)|$)",
+            cleaned,
+            re.IGNORECASE
+        )
+        if prep_match:
+            cand = prep_match.group(1).strip(" ?.!:,;")
+            cand = re.sub(r"^(?:the|a|an)\s+", "", cand, flags=re.IGNORECASE).strip()
+            if cand and not cls.is_quantifier_or_meta(cand) and len(cand) >= 2:
+                return cand, None
+
+        # 4. Preceding topic with colon/comma, e.g. "self attention: teach me everything"
+        prefix_topic = re.search(
+            r"^([^,;.:]+?)\s*[:,-]\s*(?:so\s+)?(?:please\s+)?(?:teach|explain|guide)\s+(?:me\s+)?(?:everything|all|all\s+topics|all\s+of\s+it)",
+            cleaned,
+            re.IGNORECASE
+        )
+        if prefix_topic:
+            cand = prefix_topic.group(1).strip(" ?.!:,;")
+            cand = re.sub(r"^(?:for|about|on)\s+", "", cand, flags=re.IGNORECASE).strip()
+            cand = re.sub(r"^(?:the|a|an)\s+", "", cand, flags=re.IGNORECASE).strip()
+            if cand and not cls.is_quantifier_or_meta(cand) and len(cand) >= 2:
+                return cand, None
+
+        # 5. Specific portion within topic, e.g. "Teach me Root Node of Decision Tree"
         portion_match = re.search(r"\b(?:teach|explain)\s+(?:to\s+)?(?:me\s+)?(?:about\s+)?(.+?)\s+(?:of|in|from)\s+(.+)$", cleaned, re.IGNORECASE)
         if portion_match:
             portion = portion_match.group(1).strip(" ?.!:,;")
             topic = portion_match.group(2).strip(" ?.!:,;")
             portion = re.sub(r"^(?:just\s+the|only\s+the|the|a|an)\s+", "", portion, flags=re.IGNORECASE).strip()
             topic = re.sub(r"^(?:the|a|an)\s+", "", topic, flags=re.IGNORECASE).strip()
-            return topic, portion
+            if not cls.is_quantifier_or_meta(topic):
+                return topic, portion
 
         just_portion_match = re.search(r"\b(?:teach|explain)\s+(?:to\s+)?(?:me\s+)?(?:about\s+)?(?:just\s+|only\s+)?(?:the\s+)?(?:portion|part|section|concept)\s+(?:of\s+)?(.+)$", cleaned, re.IGNORECASE)
         if just_portion_match:
             portion = just_portion_match.group(1).strip(" ?.!:,;")
             portion = re.sub(r"\b(?:step\s+by\s+step|from\s+scratch|thoroughly|completely|deeply|in\s+detail|please)\b", "", portion, flags=re.IGNORECASE).strip(" ?.!:,;")
-            return portion, portion
+            if not cls.is_quantifier_or_meta(portion):
+                return portion, portion
 
-        pat1 = re.compile(r"^(?:act\s+as\s+(?:a\s+)?(?:teacher|tutor)\s+(?:and\s+)?(?:to\s+)?)?(?:please\s+)?(?:can\s+you\s+)?(?:teach|guide|explain\s+to|explain\s+me\s+about|explain\s+me|explain\s+to\s+me)\s*(?:about\s+)?(.+)$", re.IGNORECASE)
+        pat1 = re.compile(r"^(?:act\s+as\s+(?:a\s+)?(?:teacher|tutor)\s+(?:and\s+)?(?:to\s+)?)?(?:please\s+)?(?:can\s+you\s+)?(?:teach\s+(?:me\s+)?|guide\s+(?:me\s+)?|explain\s+(?:to\s+me\s+|me\s+)?)\s*(?:about\s+)?(.+)$", re.IGNORECASE)
         pat2 = re.compile(r"^(?:i\s+want\s+to\s+learn|help\s+me\s+learn|let(?:'s|\s+us)\s+learn)\s+(?:about\s+)?(.+)$", re.IGNORECASE)
-        pat3 = re.compile(r"\b(?:teach\s+me\s+about|teach\s+me|start\s+teaching|teach\s+topic|teach\s+lesson|explain\s+me\s+about|explain\s+me|explain\s+to\s+me)\s*(.*)$", re.IGNORECASE)
+        pat3 = re.compile(r"\b(?:teach\s+(?:me\s+)?about|teach\s+me|teach|start\s+teaching|teach\s+topic|teach\s+lesson|explain\s+me\s+about|explain\s+me|explain\s+to\s+me)\s*(.*)$", re.IGNORECASE)
         pat4 = re.compile(r"^(?:please\s+)?(?:can\s+you\s+)?explain\s+(?:this|the)\s+topic\b", re.IGNORECASE)
         pat5 = re.compile(r"^(?:please\s+)?(?:can\s+you\s+)?teach\s+(?:me\s+)?(?:this\s+)?chapter\b", re.IGNORECASE)
 
@@ -825,11 +902,13 @@ class InteractiveTeacherEngine:
             return "this chapter", None
 
         for p in [pat1, pat2, pat3]:
-            m = p.match(cleaned)
+            m = p.search(cleaned)
             if m and m.lastindex and m.group(m.lastindex):
                 raw = m.group(m.lastindex).strip(" ?.!:,;")
+                raw = re.sub(r"^(?:me\s+|to\s+me\s+|about\s+)", "", raw, flags=re.IGNORECASE).strip(" ?.!:,;")
+                raw = re.sub(r"^(?:just\s+the|only\s+the|the|a|an)\s+", "", raw, flags=re.IGNORECASE).strip()
                 raw = re.sub(r"\b(?:step\s+by\s+step|from\s+scratch|thoroughly|completely|deeply|in\s+detail|please)\b", "", raw, flags=re.IGNORECASE).strip(" ?.!:,;")
-                if raw and len(raw) >= 2:
+                if raw and not cls.is_quantifier_or_meta(raw) and len(raw) >= 2:
                     return raw, None
 
         return None, None
@@ -903,6 +982,14 @@ class InteractiveTeacherEngine:
         start_time = time.time()
         extracted_topic, specific_portion = cls.extract_teach_topic_and_portion(raw_query)
         effective_topic = query_meta.target_topic or extracted_topic or context.get("document_title") or "Study Topic"
+        if cls.is_quantifier_or_meta(effective_topic) or effective_topic in ("Study Topic", "this topic", "this chapter"):
+            hist = context.get("history", [])
+            for turn in reversed(hist):
+                c = (turn.get("content") or turn.get("text") or "").strip()
+                t_cand, _ = cls.extract_teach_topic_and_portion(c)
+                if t_cand and not cls.is_quantifier_or_meta(t_cand):
+                    effective_topic = t_cand
+                    break
 
         # 1. State Retrieval
         state = cls.get_or_create_state(
@@ -911,6 +998,10 @@ class InteractiveTeacherEngine:
             topic=effective_topic,
             existing_state_dict=context.get("teacher_state"),
         )
+        if cls.is_quantifier_or_meta(state.main_topic) and not cls.is_quantifier_or_meta(effective_topic):
+            state.main_topic = effective_topic
+            state.topic = effective_topic
+
         if specific_portion:
             state.specific_portion = specific_portion
 
@@ -926,13 +1017,19 @@ class InteractiveTeacherEngine:
             state.topic = clean_topic
 
             if not is_grounded and doc_id:
-                msg = (
-                    f"I couldn't locate sufficient information about **{state.main_topic}** in your uploaded study material.\n\n"
-                    f"To keep your learning focused and rigorously verified without fabricating details, please select or upload documents "
-                    f"that cover this topic, or choose a topic from your chapter outline!"
-                )
+                if cls.is_quantifier_or_meta(state.main_topic) or state.main_topic in ("Study Topic", "this topic", "this chapter"):
+                    msg = (
+                        "I'd love to help you prepare! Which topic or subject would you like to master today?\n\n"
+                        "You can choose a chapter from your study materials or tell me any concept you'd like to explore!"
+                    )
+                else:
+                    msg = (
+                        f"I couldn't locate sufficient information about **{state.main_topic}** in your uploaded study material.\n\n"
+                        f"To keep your learning focused and rigorously verified without fabricating details, please select or upload documents "
+                        f"that cover this topic, or choose a topic from your chapter outline!"
+                    )
                 yield {"type": "token", "token": msg, "data": msg}
-                yield {"type": "grounding", "data": {"grounding_score": 1.0, "formatted_badge": "Grounding Guardrail", "verified": True}}
+                yield {"type": "grounding", "data": {"grounding_score": 1.0, "formatted_badge": "Ready to Learn" if cls.is_quantifier_or_meta(state.main_topic) else "Grounding Guardrail", "verified": True}}
                 yield {"type": "done", "latency_ms": round((time.time() - start_time) * 1000, 2)}
                 return
 
