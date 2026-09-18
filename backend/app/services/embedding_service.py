@@ -55,13 +55,17 @@ class EmbeddingService:
         if not texts:
             return []
 
-        # Process in chunks of 50 to avoid API payload limits
+        # Process in chunks of 50 to avoid API payload limits (parallelized across worker threads)
         chunk_size = 50
         if len(texts) > chunk_size:
+            sub_batches = [texts[i : i + chunk_size] for i in range(0, len(texts), chunk_size)]
+            import concurrent.futures
+            workers = min(4, len(sub_batches))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+                results = list(executor.map(self.embed_batch, sub_batches))
             all_embeddings = []
-            for i in range(0, len(texts), chunk_size):
-                sub_batch = texts[i : i + chunk_size]
-                all_embeddings.extend(self.embed_batch(sub_batch))
+            for r in results:
+                all_embeddings.extend(r)
             return all_embeddings
 
         if self.provider == "gemini" and settings.GEMINI_API_KEY:

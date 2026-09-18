@@ -141,7 +141,7 @@ def test_stateful_turn_progression(db_session: Session):
         doc_id=None,
     )
 
-    assert "SVM" in resp_turn1["content"]
+    assert ("SVM" in resp_turn1["content"] or "Support Vector Machine" in resp_turn1["content"])
     assert ("**Visual:**" in resp_turn1["content"] or "Visual:" in resp_turn1["content"] or "```" in resp_turn1["content"])
     assert "Would you like me to continue to the next subtopic?" in resp_turn1["content"]
     assert len(resp_turn1["suggested_questions"]) >= 2

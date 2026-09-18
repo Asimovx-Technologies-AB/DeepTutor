@@ -93,7 +93,9 @@ class DocumentPipelineOrchestrator:
             page["quality_score"] = q_score
 
             has_no_text = not raw_text or not raw_text.strip()
-            if (decision == "POOR" and is_scanned_doc) or has_no_text:
+            # Only trigger VLM fallback if the document is classified as scanned/hybrid or has actual raster image bytes
+            needs_vlm = (decision == "POOR" and is_scanned_doc) or (is_scanned_doc and has_no_text) or (has_no_text and bool(page.get("image_bytes")))
+            if needs_vlm:
                 normalized_text = VLMFallbackExtractor.process_scanned_page(page)
                 page["classification"] = "scanned"
             else:

@@ -47,6 +47,12 @@ async def upload_and_process_document(
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
+    # Sanitize Form parameter defaults if invoked directly in tests/internally
+    topic_id = topic_id.default if hasattr(topic_id, "default") else topic_id
+    section_id = section_id.default if hasattr(section_id, "default") else section_id
+    doc_type_val = document_type.default if hasattr(document_type, "default") else document_type
+    document_type_str = str(doc_type_val) if isinstance(doc_type_val, str) else "STUDY_MATERIAL"
+
     import hashlib
     import uuid
     import fitz
@@ -145,7 +151,7 @@ async def upload_and_process_document(
                 pdf_version=meta_dict.get("pdf_version") or "1.4",
                 status="PROCESSING",
                 current_stage="PARSING",
-                document_type=document_type
+                document_type=document_type_str
             )
             db.add(db_doc)
         else:

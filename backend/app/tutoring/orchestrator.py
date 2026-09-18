@@ -330,23 +330,21 @@ class TutoringQueryOrchestrator:
                 "socratic_follow_up": None,
                 "suggested_questions": []
             }
-        elif route_dest == "ANSWER_CHALLENGE_PIPELINE":
-            # Response Correction Re-validation Phase
-            evidence_msg = "I've re-evaluated my previous answer based on your feedback. Could you clarify which part seems incorrect, or should I try regenerating it differently?"
-            if query_meta.understanding_result:
-                evidence_msg = ClarificationGenerator.generate_clarification(
-                    user_query=raw_query,
-                    understanding=query_meta.understanding_result,
-                    conversation_history=context.get("history", []),
-                    available_topics=[effective_topic]
-                )
+        elif route_dest == "ANSWER_CHALLENGE_PIPELINE" or query_meta.intent == "ANSWER_CHALLENGE":
+            from app.tutoring.teaching.correction_handler import TeachingCorrectionHandler
+            evidence_msg = TeachingCorrectionHandler.handle_user_correction(
+                user_feedback=raw_query,
+                conversation_history=context.get("history", []),
+                current_topic=effective_topic,
+                is_teacher_mode=False
+            )
             res_dict = {
                 "content": evidence_msg,
                 "intent": "ANSWER_CHALLENGE",
                 "citations": [],
                 "grounding_score": 1.0,
-                "socratic_follow_up": None,
-                "suggested_questions": []
+                "socratic_follow_up": "Would you like me to clarify anything else or proceed?",
+                "suggested_questions": ["Explain this concept", "Give me an example"]
             }
         elif route_dest == "TEACHER_MODE_PIPELINE":
             from app.tutoring.teaching.interactive_teacher import InteractiveTeacherEngine
@@ -360,6 +358,15 @@ class TutoringQueryOrchestrator:
             )
         else:
             # RETRIEVAL_PIPELINE
+            from app.tutoring.analyzer.feedback_classifier import UserMessageContextClassifier, UserMessageClassificationEnum
+            from app.tutoring.teaching.correction_handler import TeachingCorrectionHandler
+
+            msg_classification = UserMessageContextClassifier.classify_message(
+                raw_query=raw_query,
+                conversation_history=context.get("history", []),
+                current_topic=effective_topic
+            )
+
             chosen_strategy = "contextual" if effective_page else retrieval_strategy
             context_bundle = MultiStrategyRetrievalOrchestrator.retrieve_context_bundle(
                 session=session,
@@ -371,24 +378,58 @@ class TutoringQueryOrchestrator:
                 top_k=5,
                 conversation_history=context.get("history", [])
             )
-            # Teaching Agent
-            teaching_resp = TeachingAgent.generate_teaching_response(query_meta, context_bundle)
-            res_dict = {
-                "content": teaching_resp.content,
-                "intent": teaching_resp.intent,
-                "citations": [c.model_dump() for c in teaching_resp.citations],
-                "grounding_score": teaching_resp.grounding_score,
-                "socratic_follow_up": teaching_resp.socratic_follow_up,
-                "suggested_questions": teaching_resp.suggested_questions,
-            }
+
+            if msg_classification.category == UserMessageClassificationEnum.FEEDBACK_CORRECTION:
+                correction_text = TeachingCorrectionHandler.handle_user_correction(
+                    user_feedback=raw_query,
+                    conversation_history=context.get("history", []),
+                    current_topic=effective_topic,
+                    study_material_snippets=[c.content for c in (context_bundle.retrieved_chunks or [])[:3]],
+                    is_teacher_mode=False
+                )
+                res_dict = {
+                    "content": correction_text,
+                    "intent": "FEEDBACK_CORRECTION",
+                    "citations": [],
+                    "grounding_score": 1.0,
+                    "socratic_follow_up": "Would you like me to clarify anything else or proceed?",
+                    "suggested_questions": ["Explain the key concepts", "Give me a practice question"]
+                }
+            elif msg_classification.category == UserMessageClassificationEnum.STATEMENT_EVALUATION:
+                eval_text = TeachingCorrectionHandler.handle_statement_evaluation(
+                    user_statement=raw_query,
+                    conversation_history=context.get("history", []),
+                    current_topic=effective_topic,
+                    study_material_snippets=[c.content for c in (context_bundle.retrieved_chunks or [])[:3]],
+                    is_teacher_mode=False
+                )
+                res_dict = {
+                    "content": eval_text,
+                    "intent": "STATEMENT_EVALUATION",
+                    "citations": [],
+                    "grounding_score": 1.0,
+                    "socratic_follow_up": "Would you like to test another concept?",
+                    "suggested_questions": ["Give me a practice question", "Explain the key concepts"]
+                }
+            else:
+                # Teaching Agent
+                teaching_resp = TeachingAgent.generate_teaching_response(query_meta, context_bundle)
+                res_dict = {
+                    "content": teaching_resp.content,
+                    "intent": teaching_resp.intent,
+                    "citations": [c.model_dump() for c in teaching_resp.citations],
+                    "grounding_score": teaching_resp.grounding_score,
+                    "socratic_follow_up": teaching_resp.socratic_follow_up,
+                    "suggested_questions": teaching_resp.suggested_questions,
+                }
 
         # 7. Answer Validation Gate
-        if res_dict["intent"] in ("CLARIFY_CONCEPT", "INSUFFICIENT_EVIDENCE", "MATERIAL_NOT_SUPPORTED", "ANSWER_CHALLENGE", "DOCUMENT_TOPIC_ANALYSIS"):
+        if res_dict["intent"] in ("CLARIFY_CONCEPT", "INSUFFICIENT_EVIDENCE", "MATERIAL_NOT_SUPPORTED", "ANSWER_CHALLENGE", "DOCUMENT_TOPIC_ANALYSIS", "FEEDBACK_CORRECTION", "STATEMENT_EVALUATION"):
             # Skip pedagogical validation for system messages/prompts
             res_dict["validation"] = {
                 "is_valid": True,
                 "validation_status": "PASS",
-                "feedback_notes": "Validation skipped for system-generated conversational response."
+                "feedback_notes": "Validation skipped for conversational feedback / correction."
             }
         else:
             validation_result = AnswerValidator.validate_response(res_dict["content"], context_bundle)
@@ -677,14 +718,13 @@ class TutoringQueryOrchestrator:
                 msg = f"I couldn't find '{topic_str}' in the selected study material. Please upload or select the material that covers this topic."
                 intent_val = "MATERIAL_NOT_SUPPORTED"
             else: # ANSWER_CHALLENGE_PIPELINE
-                msg = "I've re-evaluated my previous answer based on your feedback. Could you clarify which part seems incorrect, or should I try regenerating it differently?"
-                if query_meta.understanding_result:
-                    msg = ClarificationGenerator.generate_clarification(
-                        user_query=raw_query,
-                        understanding=query_meta.understanding_result,
-                        conversation_history=context.get("history", []),
-                        available_topics=[effective_topic]
-                    )
+                from app.tutoring.teaching.correction_handler import TeachingCorrectionHandler
+                msg = TeachingCorrectionHandler.handle_user_correction(
+                    user_feedback=raw_query,
+                    conversation_history=context.get("history", []),
+                    current_topic=effective_topic,
+                    is_teacher_mode=False
+                )
                 intent_val = "ANSWER_CHALLENGE"
 
             yield {"type": "token", "token": msg, "data": msg}
@@ -725,6 +765,68 @@ class TutoringQueryOrchestrator:
         # Emit citations / sources early
         citations_data = [c.model_dump() for c in context_bundle.citations]
         yield {"type": "sources", "data": citations_data}
+
+        # User Feedback & Statement Evaluation Gate before final generation
+        from app.tutoring.analyzer.feedback_classifier import UserMessageContextClassifier, UserMessageClassificationEnum
+        from app.tutoring.teaching.correction_handler import TeachingCorrectionHandler
+
+        msg_classification = UserMessageContextClassifier.classify_message(
+            raw_query=raw_query,
+            conversation_history=context.get("history", []),
+            current_topic=effective_topic
+        )
+
+        if msg_classification.category == UserMessageClassificationEnum.FEEDBACK_CORRECTION:
+            correction_text = TeachingCorrectionHandler.handle_user_correction(
+                user_feedback=raw_query,
+                conversation_history=context.get("history", []),
+                current_topic=effective_topic,
+                study_material_snippets=[c.content for c in (context_bundle.retrieved_chunks or [])[:3]],
+                is_teacher_mode=False
+            )
+            yield {"type": "token", "token": correction_text, "data": correction_text}
+            yield {"type": "grounding", "data": {"validation_status": "PASS", "grounding_score": 1.0, "cross_reference_valid": True, "is_valid": True}}
+            if session_id:
+                cls._update_session_state(
+                    session=session,
+                    session_id=session_id,
+                    topic_id=topic_id,
+                    user_query=raw_query,
+                    assistant_response=correction_text,
+                    intent="FEEDBACK_CORRECTION",
+                    citations=citations_data,
+                    grounding_score=1.0,
+                    latency_ms=round((time.time() - start_time) * 1000, 2),
+                    entities=query_meta.extracted_entities
+                )
+            yield {"type": "done", "latency_ms": round((time.time() - start_time) * 1000, 2)}
+            return
+
+        if msg_classification.category == UserMessageClassificationEnum.STATEMENT_EVALUATION:
+            eval_text = TeachingCorrectionHandler.handle_statement_evaluation(
+                user_statement=raw_query,
+                conversation_history=context.get("history", []),
+                current_topic=effective_topic,
+                study_material_snippets=[c.content for c in (context_bundle.retrieved_chunks or [])[:3]],
+                is_teacher_mode=False
+            )
+            yield {"type": "token", "token": eval_text, "data": eval_text}
+            yield {"type": "grounding", "data": {"validation_status": "PASS", "grounding_score": 1.0, "cross_reference_valid": True, "is_valid": True}}
+            if session_id:
+                cls._update_session_state(
+                    session=session,
+                    session_id=session_id,
+                    topic_id=topic_id,
+                    user_query=raw_query,
+                    assistant_response=eval_text,
+                    intent="STATEMENT_EVALUATION",
+                    citations=citations_data,
+                    grounding_score=1.0,
+                    latency_ms=round((time.time() - start_time) * 1000, 2),
+                    entities=query_meta.extracted_entities
+                )
+            yield {"type": "done", "latency_ms": round((time.time() - start_time) * 1000, 2)}
+            return
 
         # True live token streaming
         full_content_chunks = []

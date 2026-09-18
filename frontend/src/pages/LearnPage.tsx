@@ -296,10 +296,10 @@ export default function LearnPage() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSubject, setUploadSubject] = useState('')
 
-  const isDocProcessing = Boolean(
-    isUploading ||
+  const isDeepIndexing = Boolean(
     ['PROCESSING', 'PARSING', 'EXTRACTING', 'INDEXING'].includes((docStatus || '').toUpperCase())
   )
+  const isDocProcessing = isUploading || isDeepIndexing
 
   // Student Profile
   const [_studentMemory, setStudentMemory] = useState<any>(null)
@@ -644,13 +644,20 @@ export default function LearnPage() {
         setActiveTopic(data.topics[0])
       }
 
-      // Reset messages so the circle loader displays until processing finishes
-      setMessages([])
+      // Welcome greeting for immediate chat interaction
+      const welcomeMsg: ChatMessage = {
+        id: `welcome-${Date.now()}`,
+        role: 'assistant',
+        text: `### 📚 Ready to study **${docName}**!\n\nI have analyzed your material and mapped out the core topics. You can ask any question right away, explore the topics in the syllabus drawer, or choose one of the study tools below.`,
+        sources: [],
+        suggested_questions: (data.topics || []).slice(0, 3).map((t: any) => `Explain ${t.title || t}`)
+      }
+      setMessages([welcomeMsg])
       fetchSessions()
       setTimeout(() => {
         setIsUploading(false)
         setUploadingFileMeta(null)
-      }, 500)
+      }, 400)
     } catch (err: any) {
       setIsUploading(false)
       setUploadingFileMeta(null)
@@ -1681,6 +1688,14 @@ export default function LearnPage() {
                     />
                   </button>
 
+                  {/* Deep Indexing Indicator */}
+                  {isDeepIndexing && (
+                    <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/60 shadow-2xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                      <span>⚡ Fast Mode • Deep indexing</span>
+                    </span>
+                  )}
+
                   {/* Attached Materials Badge & Popover */}
                   {sessionDocuments && sessionDocuments.length > 0 && (
                     <div className="relative shrink-0" ref={materialsPopoverRef}>
@@ -2474,11 +2489,11 @@ export default function LearnPage() {
                           }
                         }}
                         placeholder={
-                          isDocProcessing
-                            ? "⚡ Processing document text & topics... Please wait"
+                          isUploading
+                            ? "⚡ Uploading document... Please wait"
                             : `Ask questions about ${activeTopic?.title || 'your uploaded course notes'}...`
                         }
-                        className={`flex-1 bg-transparent border-0 border-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 ring-0 chat-reading font-serif text-slate-900 placeholder-slate-400 resize-none max-h-[180px] py-1 px-1.5 custom-input-scrollbar leading-relaxed ${isDocProcessing ? 'cursor-not-allowed opacity-60' : ''}`}
+                        className={`flex-1 bg-transparent border-0 border-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 ring-0 chat-reading font-serif text-slate-900 placeholder-slate-400 resize-none max-h-[180px] py-1 px-1.5 custom-input-scrollbar leading-relaxed ${isUploading ? 'cursor-not-allowed opacity-60' : ''}`}
                         style={{ outline: 'none', boxShadow: 'none', border: 'none' }}
                       />
 
@@ -2487,26 +2502,26 @@ export default function LearnPage() {
                         {(inputQuery.trim() || attachedFile) ? (
                           <button
                             onClick={() => {
-                              if (!isDocProcessing && !isAgentThinking) {
+                              if (!isUploading && !isAgentThinking) {
                                 handleSendMessage()
                                 if (textareaRef.current) textareaRef.current.style.height = 'auto'
                               }
                             }}
-                            disabled={isAgentThinking || isUploading || isDocProcessing}
+                            disabled={isAgentThinking || isUploading}
                             className="w-8 h-8 rounded-full bg-[#000000] hover:bg-slate-800 text-white flex items-center justify-center transition shrink-0 cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                            title={isDocProcessing ? "Document is processing..." : (attachedFile ? "Upload and analyze document" : "Send message")}
+                            title={isUploading ? "Document is uploading..." : (attachedFile ? "Upload and analyze document" : "Send message")}
                           >
                             <ArrowUp size={16} />
                           </button>
                         ) : (
                           <button
-                            onClick={() => !isDocProcessing && handleToggleMic()}
-                            disabled={isDocProcessing}
+                            onClick={() => !isUploading && handleToggleMic()}
+                            disabled={isUploading}
                             className={`w-8 h-8 rounded-full flex items-center justify-center transition shrink-0 cursor-pointer ${isListeningVoice
                               ? 'bg-red-500 text-white animate-pulse'
                               : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
                               }`}
-                            title={isDocProcessing ? "Processing in progress..." : "Voice input"}
+                            title={isUploading ? "Uploading in progress..." : "Voice input"}
                           >
                             <Mic size={17} />
                           </button>

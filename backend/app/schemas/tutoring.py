@@ -553,6 +553,30 @@ class TeacherTurnActionEnum(str, Enum):
     LEARNING_REPORT = "LEARNING_REPORT"
     TOPIC_NOT_FOUND = "TOPIC_NOT_FOUND"
     UNRELATED_QUERY = "UNRELATED_QUERY"
+    FEEDBACK_CORRECTION = "FEEDBACK_CORRECTION"
+    STATEMENT_EVALUATION = "STATEMENT_EVALUATION"
+
+
+class UserMessageClassificationEnum(str, Enum):
+    FEEDBACK_CORRECTION = "FEEDBACK_CORRECTION"
+    GENERAL_FACTUAL = "GENERAL_FACTUAL"
+    STUDY_MATERIAL_QUESTION = "STUDY_MATERIAL_QUESTION"
+    UNRELATED_CHAT = "UNRELATED_CHAT"
+    NEW_QUESTION_REQUEST = "NEW_QUESTION_REQUEST"
+    STATEMENT_EVALUATION = "STATEMENT_EVALUATION"
+    CLARIFICATION_CONTINUATION = "CLARIFICATION_CONTINUATION"
+    TEACH_TOPIC_REQUEST = "TEACH_TOPIC_REQUEST"
+
+
+class UserMessageClassificationResult(BaseModel):
+    category: UserMessageClassificationEnum
+    confidence: float = 1.0
+    reasoning: Optional[str] = None
+    target_statement: Optional[str] = None
+    corrected_aspect: Optional[str] = None
+    is_ambiguous: bool = False
+    ambiguity_clarification: Optional[str] = None
+    suggested_interpretation: Optional[str] = None
 
 
 class TeacherSessionState(BaseModel):

@@ -713,34 +713,59 @@ class InteractiveTeacherEngine:
             if any(w in cleaned for w in ["continue", "next", "proceed", "skip", "go ahead", "yes", "sure", "ok"]):
                 return TeacherTurnActionEnum.CONFIRM_NEXT
 
-        # 3. Resuming / Confirmation from Doubt or Subtopic checkpoint
+        # 3. Explicit User Feedback / Correction about previous AI response
+        correction_triggers = [
+            "wrong", "wrong answer", "that's wrong", "thats wrong", "this is wrong", "it's wrong", "its wrong",
+            "incorrect", "that's incorrect", "thats incorrect", "this is incorrect",
+            "not correct", "that's not correct", "thats not correct", "this is not correct",
+            "not right", "that's not right", "thats not right", "this is not right",
+            "you are wrong", "you're wrong", "you made a mistake", "there is a mistake"
+        ]
         cleaned_no_punct = re.sub(r"[^\w\s]", " ", cleaned).strip()
         words = cleaned_no_punct.split()
         first_word = words[0] if words else ""
 
+        # Distinguish standalone "no" / "wrong" from pausing the lesson
+        if cleaned in correction_triggers or any(cleaned == ct for ct in ["wrong", "incorrect", "not correct", "not right"]):
+            return TeacherTurnActionEnum.FEEDBACK_CORRECTION
+        if first_word in ["wrong", "incorrect"] or any(t in cleaned for t in ["wrong answer", "incorrect answer", "you are wrong", "you're wrong"]):
+            return TeacherTurnActionEnum.FEEDBACK_CORRECTION
+        if cleaned in ["no", "nope"] and not any(t in cleaned for t in ["pause", "wait", "hold", "stop", "dont", "don't"]):
+            # User says "no" to previous explanation/checkpoint without pause command
+            return TeacherTurnActionEnum.FEEDBACK_CORRECTION
+
+        # 4. Resuming / Confirmation from Doubt or Subtopic checkpoint
         confirm_triggers = ["yes", "continue", "next", "sure", "okay", "ok", "yep", "yeah", "proceed", "ready"]
         if first_word in confirm_triggers or any(t in cleaned for t in ["go ahead", "next please", "next one", "carry on", "explain the next"]):
             if state.paused:
                 return TeacherTurnActionEnum.RESUME_LESSON
             return TeacherTurnActionEnum.CONFIRM_NEXT
 
-        # 4. User says No / Pause
-        decline_triggers = ["no", "not yet", "wait", "hold on", "stop", "pause", "dont continue", "don't continue", "no thanks", "nope"]
-        if first_word in ["no", "wait", "pause", "stop", "hold", "nope"] or any(t in cleaned for t in ["not yet", "dont continue", "don't continue", "no thanks"]):
+        # 5. User says Pause / Decline continuation
+        decline_triggers = ["wait", "hold on", "stop", "pause", "dont continue", "don't continue", "no thanks", "not yet", "hold"]
+        if first_word in ["wait", "pause", "stop", "hold"] or any(t in cleaned for t in decline_triggers):
             return TeacherTurnActionEnum.DECLINE_NEXT
 
-        # 5. "Explain again" / Simpler breakdown
+        # 6. "Explain again" / Simpler breakdown
         reexplain_triggers = ["explain again", "make it simpler", "simpler please", "dont understand", "don't understand", "clarify again", "once more", "again please"]
         if any(t in cleaned for t in reexplain_triggers):
             return TeacherTurnActionEnum.REEXPLAIN_SUBTOPIC
 
-        # 6. Navigation: Skip or Backtrack
+        # 7. Navigation: Skip or Backtrack
         if any(w in cleaned for w in ["skip", "skip this", "skip unit", "next concept"]):
             return TeacherTurnActionEnum.SKIP_UNIT
         if any(w in cleaned for w in ["go back", "previous concept", "backtrack", "return"]):
             return TeacherTurnActionEnum.BACKTRACK_UNIT
 
-        # 7. Student Question / Doubt during subtopic teaching
+        # 8. Check for Factual Statements (Declarative claims, attempted answers, or misconceptions)
+        from app.tutoring.analyzer.feedback_classifier import UserMessageContextClassifier, UserMessageClassificationEnum
+        classification = UserMessageContextClassifier.classify_message(raw_query, current_topic=state.main_topic)
+        if classification.category == UserMessageClassificationEnum.FEEDBACK_CORRECTION:
+            return TeacherTurnActionEnum.FEEDBACK_CORRECTION
+        if classification.category == UserMessageClassificationEnum.STATEMENT_EVALUATION:
+            return TeacherTurnActionEnum.STATEMENT_EVALUATION
+
+        # 9. Student Question / Doubt during subtopic teaching
         doubt_triggers = [
             "why", "how", "what is", "what does", "what do you mean", "can you clarify",
             "could you explain", "i have a doubt", "difference between", "tell me about",
@@ -749,7 +774,7 @@ class InteractiveTeacherEngine:
         if any(cleaned.startswith(t) or f" {t} " in f" {cleaned} " for t in doubt_triggers):
             return TeacherTurnActionEnum.ANSWER_QUESTION
 
-        # 8. Check for completely unrelated queries
+        # 10. Check for completely unrelated queries
         if state.subtopics and len(cleaned.split()) >= 3:
             topic_words = set(re.findall(r"\w+", state.topic.lower()))
             query_words = set(re.findall(r"\w+", cleaned))
@@ -758,7 +783,7 @@ class InteractiveTeacherEngine:
             if any(ui in cleaned for ui in unrelated_indicators) and not overlap:
                 return TeacherTurnActionEnum.UNRELATED_QUERY
 
-        # 9. Default: if awaiting confirmation and query is ambiguous, treat as question/doubt
+        # 11. Default: if awaiting confirmation and query is ambiguous, treat as question/doubt
         if state.awaiting_user_confirmation and not state.exam_available:
             return TeacherTurnActionEnum.ANSWER_QUESTION
 
@@ -1220,6 +1245,57 @@ class InteractiveTeacherEngine:
             yield {"type": "done", "latency_ms": round((time.time() - start_time) * 1000, 2)}
             return
 
+        # 6b. Handle Student Feedback / Correction about previous AI response
+        if action == TeacherTurnActionEnum.FEEDBACK_CORRECTION:
+            yield {"type": "phase_start", "phase": "Reviewing & Verifying Previous Answer", "phase_key": "correction"}
+            from app.tutoring.teaching.correction_handler import TeachingCorrectionHandler
+            correction_text = TeachingCorrectionHandler.handle_user_correction(
+                user_feedback=raw_query,
+                conversation_history=context.get("history", []),
+                current_topic=state.main_topic,
+                current_subtopic=state.current_subtopic or state.main_topic,
+                study_material_snippets=[state.last_explanation] if state.last_explanation else [],
+                is_teacher_mode=True,
+            )
+
+            for token in cls._stream_text_chunks(correction_text):
+                yield {"type": "token", "token": token, "data": token}
+
+            state.last_explanation = correction_text
+            state.awaiting_user_confirmation = True
+            cls.persist_state(session, session_id, state)
+
+            yield {"type": "suggestions", "data": ["Yes, continue", "Explain again", "I have another question"]}
+            yield {"type": "grounding", "data": {"grounding_score": 1.0, "formatted_badge": "Verified Correction", "verified": True}}
+            yield {"type": "phase_end", "phase": "Review Complete", "phase_key": "correction"}
+            yield {"type": "done", "latency_ms": round((time.time() - start_time) * 1000, 2)}
+            return
+
+        # 6c. Handle Student Factual Statement Evaluation
+        if action == TeacherTurnActionEnum.STATEMENT_EVALUATION:
+            yield {"type": "phase_start", "phase": "Evaluating Concept Understanding", "phase_key": "evaluation"}
+            from app.tutoring.teaching.correction_handler import TeachingCorrectionHandler
+            eval_text = TeachingCorrectionHandler.handle_statement_evaluation(
+                user_statement=raw_query,
+                conversation_history=context.get("history", []),
+                current_topic=state.main_topic,
+                current_subtopic=state.current_subtopic or state.main_topic,
+                study_material_snippets=[state.last_explanation] if state.last_explanation else [],
+                is_teacher_mode=True,
+            )
+
+            for token in cls._stream_text_chunks(eval_text):
+                yield {"type": "token", "token": token, "data": token}
+
+            state.awaiting_user_confirmation = True
+            cls.persist_state(session, session_id, state)
+
+            yield {"type": "suggestions", "data": ["Yes, continue", "Explain again", "I have another question"]}
+            yield {"type": "grounding", "data": {"grounding_score": 1.0, "formatted_badge": "Understanding Evaluated", "verified": True}}
+            yield {"type": "phase_end", "phase": "Evaluation Complete", "phase_key": "evaluation"}
+            yield {"type": "done", "latency_ms": round((time.time() - start_time) * 1000, 2)}
+            return
+
         # 7. Handle Student Questions / Doubts during Teaching
         if action in (TeacherTurnActionEnum.ANSWER_QUESTION, TeacherTurnActionEnum.ANSWER_DOUBT):
             yield {"type": "phase_start", "phase": "Answering Question", "phase_key": "doubt"}
@@ -1483,11 +1559,11 @@ class InteractiveTeacherEngine:
                 custom_visual_block = f"![{image_asset.get('caption', 'Diagram')}]({image_asset['url']})\n\n{custom_visual_block}"
 
             if re.search(r"```[\s\S]*?```", clean_text):
-                clean_text = re.sub(r"```[\s\S]*?```", custom_visual_block, clean_text, count=1)
+                clean_text = re.sub(r"```[\s\S]*?```", lambda _: custom_visual_block, clean_text, count=1)
             elif visual_label.lower() in clean_text.lower():
                 clean_text = re.sub(
                     rf"({re.escape(visual_label)}|visual:)",
-                    rf"\1\n\n{custom_visual_block}",
+                    lambda m: f"{m.group(1)}\n\n{custom_visual_block}",
                     clean_text,
                     count=1,
                     flags=re.IGNORECASE,

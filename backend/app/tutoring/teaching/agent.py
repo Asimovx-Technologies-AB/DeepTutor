@@ -127,13 +127,11 @@ Before answering, analyze the student's question intent and choose the optimal p
   - Display block math: `$$ formula $$` on standalone lines for display equations.
   - CRITICAL: NEVER put plain English sentences or labels inside `$ ... $` or `$$ ... $$` unless enclosed in `\\text{...}`.
 
-=== STRICT OUT-OF-MATERIAL GUARDRAIL (MATERIAL-GROUNDED MODE) ===
-- You are operating in STRICT MATERIAL-GROUNDED MODE. You are ONLY a tutor for the specific context provided.
-- You MUST base your answers entirely on the verified context excerpts, figures, and tables provided below.
-- Do NOT draw from external knowledge to answer factual questions. If the provided context does not contain the answer, you must state that the material does not cover it.
-- If the student's question is unrelated to the provided study material, or if the material does not contain the necessary information:
-  Politely decline with:
-  "I am your dedicated tutor for this study material. Your question about **[Topic / Subject]** is not covered in the uploaded document. To keep your learning focused and productive, please ask questions related to the provided material, or upload documents that cover this subject."
+=== MATERIAL-GROUNDED & GENERAL ACADEMIC KNOWLEDGE ===
+- Prioritize the verified context excerpts, figures, and tables provided below.
+- If the student specifically asks about what is contained in the uploaded document/notes and it is not found, state that the material does not cover it.
+- If the student asks a general academic, factual, scientific, or mathematical question (e.g. general periodic table questions, math calculations), answer it accurately and directly from academic knowledge without refusing.
+- NEVER produce robotic refusal boilerplate such as "I am your dedicated tutor for this study material...". Keep responses natural and helpful.
 - MANDATORY IN-SCOPE EXCEPTIONS (NEVER REFUSE):
   1. Main Topics & Curriculum Overview: Questions asking "what are the main topics", "what does this document cover", "give me a summary", or "syllabus" are ALWAYS IN-SCOPE.
   2. Pedagogical & Dialogue Requests: Requests for practice questions, quizzes, problem solving, explaining simpler, or asking about earlier conversation turns in this session are ALWAYS IN-SCOPE.
@@ -275,7 +273,7 @@ _VISUAL_KEYWORDS = (
     "flow", "structure", "vs ", "versus", "difference between",
 )
 
-_MIN_LIVE_RESPONSE_CHARS = 40
+_MIN_LIVE_RESPONSE_CHARS = 1
 
 
 class TeachingAgent:
@@ -382,7 +380,7 @@ class TeachingAgent:
 
     @classmethod
     def _build_prompts(
-        cls, query_meta: QueryMetadata, context_bundle: ContextBundle
+        cls, query_meta: QueryMetadata, context_bundle: ContextBundle, is_teacher_mode: bool = False
     ) -> Tuple[str, str]:
         """
         Constructs system + user prompts for the live LLM.
@@ -434,8 +432,8 @@ class TeachingAgent:
                 visual_constraint_str = "VISUAL CONSTRAINT [conditional]: Include a diagram (Mermaid or Inline SVG) only if it significantly enhances student understanding."
 
             followup_constraint_str = ""
-            if plan.skip_followup_question or plan.depth == "answer_only":
-                followup_constraint_str = "INTERACTIVE CHECKPOINT CONSTRAINT: DO NOT include the `### 💡 Interactive Checkpoint` follow-up question. End the response cleanly after the answer."
+            if not is_teacher_mode or plan.skip_followup_question or plan.depth == "answer_only":
+                followup_constraint_str = "INTERACTIVE CHECKPOINT CONSTRAINT: DO NOT include any `### 💡 Interactive Checkpoint` or follow-up question. End the response cleanly after the answer."
             else:
                 followup_constraint_str = "INTERACTIVE CHECKPOINT CONSTRAINT: Conclude with the `### 💡 Interactive Checkpoint` active recall question."
 
@@ -469,6 +467,12 @@ class TeachingAgent:
                     hard_constraints_block += "- STEPS CONSTRAINT: DO NOT show step-by-step working, provide only the final answer.\n"
 
             hard_constraints_block += "===========================================================\n\n"
+        elif not is_teacher_mode:
+            hard_constraints_block = (
+                "=== PRE-GENERATION HARD CONSTRAINTS (MANDATORY TO OBEY) ===\n"
+                "- INTERACTIVE CHECKPOINT CONSTRAINT: DO NOT include any `### 💡 Interactive Checkpoint` or active recall questions. Keep response clean and focused.\n"
+                "===========================================================\n\n"
+            )
 
         is_study_notes_request = (
             query_meta.intent == "STUDY_NOTES"
@@ -900,7 +904,11 @@ class TeachingAgent:
 
     @classmethod
     def _enforce_response_contract(
-        cls, content: str, topic_title: str, query_meta: Optional[QueryMetadata] = None
+        cls,
+        content: str,
+        topic_title: str,
+        query_meta: Optional[QueryMetadata] = None,
+        is_teacher_mode: bool = False,
     ) -> str:
         """
         Guarantees clean formatting:
@@ -961,7 +969,7 @@ class TeachingAgent:
         content = "\n".join(lines).strip()
 
         # If this is practice questions, student requested only questions, table solving, pasted MCQ/batch solving, or answer_only depth, do not append artificial checkpoint
-        is_exempt = query_meta and (
+        is_exempt = not is_teacher_mode or (query_meta and (
             query_meta.intent == "PRACTICE_QUESTIONS"
             or (query_meta.format_directives and query_meta.format_directives.get("questions_only"))
             or (query_meta.format_directives and query_meta.format_directives.get("solve_table"))
@@ -969,11 +977,13 @@ class TeachingAgent:
             or getattr(query_meta, "is_pasted_mcq", False)
             or getattr(query_meta, "is_batch_questions", False)
             or (query_meta.pre_gen_plan and (query_meta.pre_gen_plan.skip_followup_question or query_meta.pre_gen_plan.depth == "answer_only"))
-        )
+        ))
         if is_exempt:
+            content = re.sub(r"###\s*💡\s*Interactive Checkpoint.*", "", content, flags=re.DOTALL).strip()
+            content = re.sub(r"\*\*Would you like me to continue to the next subtopic\?\*\*", "", content, flags=re.IGNORECASE).strip()
             return content
 
-        # 5. Ensure Interactive Checkpoint exists for teaching explanations
+        # 5. Ensure Interactive Checkpoint exists for teaching explanations when in teaching mode
         if "### 💡 Interactive Checkpoint" not in content and not content.endswith("?"):
             content += (
                 f"\n\n### 💡 Interactive Checkpoint\n"
@@ -1065,7 +1075,7 @@ class TeachingAgent:
 
     @classmethod
     def generate_teaching_response(
-        cls, query_meta: QueryMetadata, context_bundle: ContextBundle
+        cls, query_meta: QueryMetadata, context_bundle: ContextBundle, is_teacher_mode: bool = False
     ) -> TeachingResponse:
         """
         Every query is processed by the configured live LLM using the retrieved
@@ -1075,7 +1085,7 @@ class TeachingAgent:
         topic_title = cls._clean_topic_title(context_bundle.topic_title)
         question_subject = topic_title if topic_title != "this concept" else "this concept"
 
-        system_prompt, user_prompt = cls._build_prompts(query_meta, context_bundle)
+        system_prompt, user_prompt = cls._build_prompts(query_meta, context_bundle, is_teacher_mode=is_teacher_mode)
 
         if default_llm_service.is_live_model_configured():
             try:
@@ -1084,17 +1094,17 @@ class TeachingAgent:
                 )
                 if (
                     llm_content
-                    and len(llm_content.strip()) > _MIN_LIVE_RESPONSE_CHARS
+                    and len(llm_content.strip()) >= _MIN_LIVE_RESPONSE_CHARS
                     and "reconnecting to the AI language model service" not in llm_content
                 ):
-                    content = cls._enforce_response_contract(llm_content.strip(), topic_title, query_meta)
+                    content = cls._enforce_response_contract(llm_content.strip(), topic_title, query_meta, is_teacher_mode=is_teacher_mode)
                     is_refusal = "outside the scope of your uploaded" in content.lower()
                     return TeachingResponse(
                         content=content,
                         intent=query_meta.intent,
                         citations=[] if is_refusal else context_bundle.citations,
                         grounding_score=0.3 if is_refusal else 0.98,
-                        socratic_follow_up="" if is_refusal else cls._default_follow_up(topic_title),
+                        socratic_follow_up="" if (not is_teacher_mode or is_refusal) else cls._default_follow_up(topic_title),
                         suggested_questions=[] if is_refusal else [
                             f"How does {question_subject} apply to practical problems?",
                             "What are the key mechanisms and assumptions?",
@@ -1112,13 +1122,13 @@ class TeachingAgent:
 
         # Fallback: format retrieved chunks directly (clean LaTeX, no hardcoded text)
         content = cls._context_grounded_fallback(query, topic_title, context_bundle)
-        content = cls._enforce_response_contract(content, topic_title, query_meta)
+        content = cls._enforce_response_contract(content, topic_title, query_meta, is_teacher_mode=is_teacher_mode)
         return TeachingResponse(
             content=content,
             intent=query_meta.intent,
             citations=context_bundle.citations,
             grounding_score=0.85,
-            socratic_follow_up=cls._default_follow_up(topic_title),
+            socratic_follow_up=cls._default_follow_up(topic_title) if is_teacher_mode else "",
             suggested_questions=[
                 "Can you explain this concept in a different way?",
                 "What are the main differences vs. alternative approaches?",
@@ -1128,7 +1138,7 @@ class TeachingAgent:
 
     @classmethod
     def stream_teaching_tokens(
-        cls, query_meta: QueryMetadata, context_bundle: ContextBundle
+        cls, query_meta: QueryMetadata, context_bundle: ContextBundle, is_teacher_mode: bool = False
     ) -> Generator[str, None, None]:
         """
         Streams response tokens via SSE.
@@ -1137,7 +1147,7 @@ class TeachingAgent:
         """
         query = query_meta.resolved_query
         topic_title = cls._clean_topic_title(context_bundle.topic_title)
-        system_prompt, user_prompt = cls._build_prompts(query_meta, context_bundle)
+        system_prompt, user_prompt = cls._build_prompts(query_meta, context_bundle, is_teacher_mode=is_teacher_mode)
 
         if default_llm_service.is_live_model_configured():
             try:
@@ -1151,7 +1161,7 @@ class TeachingAgent:
                 if (
                     full_streamed
                     and "reconnecting to the AI language model service" not in full_streamed
-                    and len(full_streamed.strip()) > _MIN_LIVE_RESPONSE_CHARS
+                    and len(full_streamed.strip()) >= _MIN_LIVE_RESPONSE_CHARS
                 ):
                     for tok in tokens_accum:
                         yield tok
@@ -1162,7 +1172,7 @@ class TeachingAgent:
 
         # Fallback: stream the context-grounded excerpt word by word
         response_text = cls._context_grounded_fallback(query, topic_title, context_bundle)
-        response_text = cls._enforce_response_contract(response_text, topic_title, query_meta)
+        response_text = cls._enforce_response_contract(response_text, topic_title, query_meta, is_teacher_mode=is_teacher_mode)
         words = response_text.split(" ")
         for i, word in enumerate(words):
             yield word if i == 0 else " " + word
