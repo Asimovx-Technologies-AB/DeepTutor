@@ -109,7 +109,9 @@ class PreGenerationClassifier:
 
     VISUAL_REQUIRED_PATTERNS = [
         re.compile(r"\b(?:draw|show|generate|create|render|make)\s+(?:a\s+|an\s+|the\s+)?(?:diagram|flowchart|mindmap|svg|image|figure|picture|chart|illustration|vector)\b", re.IGNORECASE),
-        re.compile(r"\b(?:diagram\s+of|flowchart\s+of|mindmap\s+of|illustration\s+of|architecture\s+diagram|circuit\s+diagram|anatomical)\b", re.IGNORECASE)
+        re.compile(r"\b(?:diagram\s+of|flowchart\s+of|mindmap\s+of|illustration\s+of|architecture\s+diagram|circuit\s+diagram|anatomical)\b", re.IGNORECASE),
+        re.compile(r"\b(?:with\s+(?:a\s+)?(?:figure|diagram|illustration|image|chart|visual))\b", re.IGNORECASE),
+        re.compile(r"\b(?:explain|describe)\s+with\s+(?:a\s+)?(?:figure|diagram|illustration|image|chart|visual)\b", re.IGNORECASE),
     ]
 
     IS_VISUAL_CANDIDATE_PATTERN = re.compile(

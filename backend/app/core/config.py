@@ -62,7 +62,7 @@ class Settings(BaseSettings):
 
     # LLM (Language Model) Settings
     LLM_PROVIDER: Literal["gemini", "openai", "groq", "azure_openai", "anthropic", "mock"] = "mock"
-    LLM_MODEL: str = "gemini-3.1-flash-lite"
+    LLM_MODEL: str = "gemini-3.8-flash"
     LLM_TEMPERATURE: float = 0.8
 
     # Embedding Settings
@@ -72,7 +72,7 @@ class Settings(BaseSettings):
 
     # Vision-Language Model (VLM)
     VLM_PROVIDER: Literal["mock", "gemini", "azure_openai", "openai"] = "mock"
-    VLM_MODEL: str = "gemini-3.5-flash-lite"
+    VLM_MODEL: str = "gemini-3.8-flash"
 
     # API Keys
     GEMINI_API_KEY: Optional[str] = None

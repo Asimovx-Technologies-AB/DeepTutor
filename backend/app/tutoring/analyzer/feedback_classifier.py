@@ -40,7 +40,7 @@ _CLARIFICATION_PATTERNS = [
 ]
 
 _TEACH_PATTERNS = [
-    re.compile(r"\b(?:teach\s+me|act\s+as\s+a\s+teacher|start\s+teacher\s+mode|teach\s+step\s+by\s+step)\b", re.IGNORECASE),
+    re.compile(r"\b(?:teach\s+me|teach\s+us|act\s+as\s+a\s+teacher|start\s+teaching|start\s+teacher\s+mode|start\s+teaching\s+mode|teach\s+step\s+by\s+step|teach\s+topic|teach\s+lesson)\b", re.IGNORECASE),
 ]
 
 _STUDY_MATERIAL_KEYWORDS = [
@@ -58,21 +58,23 @@ Analyze the user's latest message together with the preceding conversation conte
 
 Determine which category best describes the user's message:
 1. "FEEDBACK_CORRECTION": The user is disputing, correcting, or providing negative feedback about the AI's previous answer or explanation (e.g., "wrong", "that's wrong", "incorrect", "no", "not correct", "you are wrong", "that's not what I meant", "actually it is 4 not 5").
-2. "GENERAL_FACTUAL": A simple, standalone factual, mathematical, or scientific question that can be answered from general world knowledge without needing a specific uploaded PDF (e.g., "what is 81?", "what is eight one?", "what is the second element in periodic table?", "what is the speed of light?", "who invented the telephone?").
-3. "STUDY_MATERIAL_QUESTION": A question specifically about or referencing the uploaded study document, course notes, specific chapter, or page text.
-4. "UNRELATED_CHAT": Casual conversation, everyday greetings, or off-topic chit-chat unrelated to academic learning.
-5. "STATEMENT_EVALUATION": The student is asserting a factual claim, sharing an attempted answer, or answering an earlier question.
-6. "CLARIFICATION_CONTINUATION": Confirming, continuing, asking for simpler explanation, or asking a direct follow-up on the current topic.
-7. "TEACH_TOPIC_REQUEST": An explicit request to teach a topic interactively step-by-step.
+2. "NEW_QUESTION_REQUEST": A new student question or request to explain, define, or understand a topic, concept, formula, or algorithm (e.g., "What is gradient descent?", "Can you explain backpropagation?", "what is svm , explain with a figure", "explain decision trees").
+3. "GENERAL_FACTUAL": A simple, standalone factual, mathematical, or scientific question that can be answered from general world knowledge without needing a specific uploaded PDF (e.g., "what is 81?", "what is eight one?", "what is the second element in periodic table?", "what is the speed of light?", "who invented the telephone?").
+4. "STUDY_MATERIAL_QUESTION": A question specifically about or referencing the uploaded study document, course notes, specific chapter, page text, or document content (e.g. "what does page 4 say?", "according to chapter 2", "in the uploaded slides").
+5. "UNRELATED_CHAT": Casual conversation, everyday greetings, or off-topic chit-chat unrelated to academic learning.
+6. "STATEMENT_EVALUATION": The student is asserting a factual claim, sharing an attempted answer, or answering an earlier question.
+7. "CLARIFICATION_CONTINUATION": Confirming, continuing, asking for simpler explanation, or asking a direct follow-up on the current topic.
+8. "TEACH_TOPIC_REQUEST": An explicit request to enter interactive teaching/lecture mode (e.g., "teach me SVM", "act as a teacher and teach me Decision Trees", "start teacher mode", "start teaching").
 
 CRITICAL RULES:
 - Short feedback messages like "wrong", "wrong answer", "that's wrong", "incorrect", "no", "not correct", "this is wrong", "that's not what I meant" must ALWAYS be classified as FEEDBACK_CORRECTION, NEVER as a new question!
 - If the user asks a simple general factual question (like "what is 81", "what is eight one", "what is the second element"), classify as GENERAL_FACTUAL.
 - Never classify a general factual question as UNRELATED_CHAT.
+- CRITICAL: "TEACH_TOPIC_REQUEST" requires the user to EXPLICITLY use words like "teach me", "act as a teacher", "start teacher mode", "start teaching", "teach step by step". Standard questions and requests to explain (such as "what is X", "explain X", "explain with a figure", "how does X work", "why...") must NEVER be classified as TEACH_TOPIC_REQUEST! Classify them as NEW_QUESTION_REQUEST or GENERAL_FACTUAL.
 
 Respond ONLY with a JSON object:
 {
-  "category": "FEEDBACK_CORRECTION" | "GENERAL_FACTUAL" | "STUDY_MATERIAL_QUESTION" | "UNRELATED_CHAT" | "STATEMENT_EVALUATION" | "CLARIFICATION_CONTINUATION" | "TEACH_TOPIC_REQUEST",
+  "category": "FEEDBACK_CORRECTION" | "NEW_QUESTION_REQUEST" | "GENERAL_FACTUAL" | "STUDY_MATERIAL_QUESTION" | "UNRELATED_CHAT" | "STATEMENT_EVALUATION" | "CLARIFICATION_CONTINUATION" | "TEACH_TOPIC_REQUEST",
   "confidence": 0.0 to 1.0,
   "reasoning": "Brief rationale"
 }"""
@@ -253,6 +255,13 @@ class UserMessageContextClassifier:
                     cat_enum = UserMessageClassificationEnum(cat_str)
                 except ValueError:
                     cat_enum = UserMessageClassificationEnum.NEW_QUESTION_REQUEST
+
+                # Programmatic guardrail: TEACH_TOPIC_REQUEST requires explicit teaching phrasing
+                if cat_enum == UserMessageClassificationEnum.TEACH_TOPIC_REQUEST:
+                    has_explicit_teach = any(pat.search(query_clean) for pat in _TEACH_PATTERNS)
+                    if not has_explicit_teach:
+                        cat_enum = UserMessageClassificationEnum.NEW_QUESTION_REQUEST
+                        logger.info(f"[UserMessageContextClassifier] Guardrail: demoted TEACH_TOPIC_REQUEST without explicit teaching phrasing to NEW_QUESTION_REQUEST for query: {query_clean!r}")
 
                 return UserMessageClassificationResult(
                     category=cat_enum,

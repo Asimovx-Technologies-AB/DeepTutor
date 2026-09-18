@@ -103,11 +103,11 @@ PEDAGOGICAL CONTRACT (CRITICAL RULES):
    - "The Role of the Margin"
    The heading MUST accurately represent the current subtopic and must NOT duplicate any previous heading in the same lesson.
 
-4. EXPLANATION: Explain the subtopic in EXACTLY ONE simple, clear paragraph.
-   The paragraph MUST:
-   - Explain what the concept is and its primary role.
-   - Give an intuitive, concrete example or purpose.
-   - Use plain language appropriate for the student's level.
+4. EXPLANATION: Explain the subtopic simply and clearly so students can easily understand.
+   - Explain what the concept is and its primary role using simple, clear language.
+   - If there are important subtopics, components, or key points, explain each clearly in concise bullet points:
+     * **[Key Point / Subtopic]**: Simple 1-sentence explanation.
+   - Keep the response clean and avoid unrequested filler or unrelated fluff.
    - GROUNDING: Base explanation strictly on the retrieved study material excerpts. Do not hallucinate or invent unsupported details.
 
 5. PROGRESSIVE VISUAL LEARNING (NO SUBJECT HARDCODING):
@@ -165,7 +165,7 @@ RULES:
 _QUESTION_ANSWERER_SYSTEM_PROMPT = """You are DeepTutor in Teacher Mode. The student has asked a question or doubt about the current subtopic during the lesson.
 
 RULES:
-1. ANSWER DIRECTLY: Answer the student's question clearly, warmly, and concisely in 1-2 short paragraphs (under 160 words).
+1. ANSWER DIRECTLY & SPECIFICALLY: When the student asks specifically about something, answer directly, clearly, and concisely based strictly on their query without unrequested bloat. Keep explanations simple and easy for the student to understand.
 2. GROUNDING & ANTI-HALLUCINATION: Ground your answer strictly in the provided study material. If the study material does not provide enough information on a detail, state clearly that the material does not cover it. Do NOT fabricate details.
 3. DO NOT ADVANCE: Keep the answer related to the current learning context. Do not move to the next subtopic.
 4. ASK PERMISSION TO CONTINUE: Conclude by asking:
@@ -799,7 +799,9 @@ class InteractiveTeacherEngine:
         "entire topic", "full topic", "complete syllabus", "entire syllabus",
         "whole syllabus", "all concepts", "every concept", "anything", "something",
         "nothing", "it", "this", "that", "this topic", "the topic", "this chapter",
-        "the chapter", "lesson", "the lesson", "portion", "the portion"
+        "the chapter", "lesson", "the lesson", "portion", "the portion",
+        "detail", "in detail", "a figure", "figure", "a diagram", "diagram", "image", "illustration",
+        "more detail", "deep detail", "full detail", "steps", "step by step"
     }
 
     @classmethod
@@ -873,14 +875,14 @@ class InteractiveTeacherEngine:
             if cand and not cls.is_quantifier_or_meta(cand) and len(cand) >= 2:
                 return cand, None
 
-        # 5. Specific portion within topic, e.g. "Teach me Root Node of Decision Tree"
+        # 5. Specific portion within topic, e.g. "Teach me Root Node of Decision Tree", "Explain Decision Node in Decision Tree"
         portion_match = re.search(r"\b(?:teach|explain)\s+(?:to\s+)?(?:me\s+)?(?:about\s+)?(.+?)\s+(?:of|in|from)\s+(.+)$", cleaned, re.IGNORECASE)
         if portion_match:
             portion = portion_match.group(1).strip(" ?.!:,;")
             topic = portion_match.group(2).strip(" ?.!:,;")
             portion = re.sub(r"^(?:just\s+the|only\s+the|the|a|an)\s+", "", portion, flags=re.IGNORECASE).strip()
             topic = re.sub(r"^(?:the|a|an)\s+", "", topic, flags=re.IGNORECASE).strip()
-            if not cls.is_quantifier_or_meta(topic):
+            if not cls.is_quantifier_or_meta(topic) and not cls.is_quantifier_or_meta(portion):
                 return topic, portion
 
         just_portion_match = re.search(r"\b(?:teach|explain)\s+(?:to\s+)?(?:me\s+)?(?:about\s+)?(?:just\s+|only\s+)?(?:the\s+)?(?:portion|part|section|concept)\s+(?:of\s+)?(.+)$", cleaned, re.IGNORECASE)
@@ -890,22 +892,25 @@ class InteractiveTeacherEngine:
             if not cls.is_quantifier_or_meta(portion):
                 return portion, portion
 
-        pat1 = re.compile(r"^(?:act\s+as\s+(?:a\s+)?(?:teacher|tutor)\s+(?:and\s+)?(?:to\s+)?)?(?:please\s+)?(?:can\s+you\s+)?(?:teach\s+(?:me\s+)?|guide\s+(?:me\s+)?|explain\s+(?:to\s+me\s+|me\s+)?)\s*(?:about\s+)?(.+)$", re.IGNORECASE)
+        pat1 = re.compile(r"^(?:act\s+as\s+(?:a\s+)?(?:teacher|tutor)\s+(?:and\s+)?(?:to\s+)?)?(?:please\s+)?(?:can\s+you\s+)?(?:teach\s+(?:me|us)?|guide\s+(?:me|us)?)\s*(?:about\s+)?(.+)$", re.IGNORECASE)
         pat2 = re.compile(r"^(?:i\s+want\s+to\s+learn|help\s+me\s+learn|let(?:'s|\s+us)\s+learn)\s+(?:about\s+)?(.+)$", re.IGNORECASE)
-        pat3 = re.compile(r"\b(?:teach\s+(?:me\s+)?about|teach\s+me|teach|start\s+teaching|teach\s+topic|teach\s+lesson|explain\s+me\s+about|explain\s+me|explain\s+to\s+me)\s*(.*)$", re.IGNORECASE)
+        pat3 = re.compile(r"\b(?:teach\s+(?:me\s+|us\s+)?about|teach\s+me|teach\s+us|start\s+(?:teaching|teacher\s+mode)|teach\s+topic|teach\s+lesson)\s*(.*)$", re.IGNORECASE)
         pat4 = re.compile(r"^(?:please\s+)?(?:can\s+you\s+)?explain\s+(?:this|the)\s+topic\b", re.IGNORECASE)
         pat5 = re.compile(r"^(?:please\s+)?(?:can\s+you\s+)?teach\s+(?:me\s+)?(?:this\s+)?chapter\b", re.IGNORECASE)
+        pat6 = re.compile(r"^(?:please\s+)?(?:can\s+you\s+)?start\s+(?:teaching|teacher\s+mode)\b", re.IGNORECASE)
 
         if pat4.search(cleaned):
             return "this topic", None
         if pat5.search(cleaned):
             return "this chapter", None
+        if pat6.search(cleaned):
+            return "this topic", None
 
         for p in [pat1, pat2, pat3]:
             m = p.search(cleaned)
             if m and m.lastindex and m.group(m.lastindex):
                 raw = m.group(m.lastindex).strip(" ?.!:,;")
-                raw = re.sub(r"^(?:me\s+|to\s+me\s+|about\s+)", "", raw, flags=re.IGNORECASE).strip(" ?.!:,;")
+                raw = re.sub(r"^(?:me\s+|us\s+|to\s+me\s+|about\s+)", "", raw, flags=re.IGNORECASE).strip(" ?.!:,;")
                 raw = re.sub(r"^(?:just\s+the|only\s+the|the|a|an)\s+", "", raw, flags=re.IGNORECASE).strip()
                 raw = re.sub(r"\b(?:step\s+by\s+step|from\s+scratch|thoroughly|completely|deeply|in\s+detail|please)\b", "", raw, flags=re.IGNORECASE).strip(" ?.!:,;")
                 if raw and not cls.is_quantifier_or_meta(raw) and len(raw) >= 2:
@@ -1637,6 +1642,9 @@ class InteractiveTeacherEngine:
                 chosen_heading = extracted_heading
             else:
                 chosen_heading = unique_heading
+
+            if subtopic.lower() not in clean_text.lower():
+                chosen_heading = f"{chosen_heading} ({subtopic})"
 
             main_topic_header = f"📚 {topic}\n\n### {chosen_heading}\n\n"
             if "📚" not in clean_text:

@@ -50,9 +50,9 @@ IMPORTANT:
 - For document-level requests (identifying important topics, generating questions from the material, summarizing), do not treat Top-K retrieval as sufficient evidence. Use DOCUMENT_ANALYSIS.
 - If the user asks for questions and answers, explicitly determine whether answers are requested and extract the requested number.
 - If ambiguity exists, generate a concise, specific clarification question using the available context. Do not be vague.
-- If the user disputes, corrects, or challenges the correctness of your previous answer (e.g. "I think you are giving the wrong answers", "that is incorrect"), you MUST set intent="ANSWER_CHALLENGE" and decision="CLARIFY".
 - If the user asks to be taught a topic or learn interactively step-by-step (e.g. "Teach me SVM", "Act as a teacher and teach me Decision Trees", "I want to learn Newton's Laws"), you MUST choose intent="TEACH_TOPIC", action="TEACH_TOPIC", decision="ANSWER", and extract the clean target topic (e.g. "SVM", "Decision Tree").
-- If the user is responding to an ongoing teaching interaction (answering a check question, asking a doubt, or saying "continue"), set intent="TEACH_TOPIC", action="TEACH_TOPIC", decision="ANSWER".
+- If the user explicitly confirms or continues an ongoing lesson (e.g. "continue", "next", "proceed", "yes", "explain again", "ready"), set intent="TEACH_TOPIC", action="TEACH_TOPIC", decision="ANSWER".
+- CRITICAL: Standard concept questions and explanation requests (e.g. "what is SVM", "explain SVM with a figure", "how does backpropagation work", "explain decision trees") must NEVER be classified as TEACH_TOPIC! Always classify them as EXPLAIN_TOPIC or ANSWER_QUESTION.
 
 Decision States:
 - ANSWER: Clear query, normal RAG or fact answering.
@@ -266,7 +266,7 @@ class QueryUnderstanding:
     TEACH_TOPIC_PATTERNS = [
         re.compile(
             r"^(?:act\s+as\s+(?:a\s+)?(?:teacher|tutor)\s+(?:and\s+)?(?:to\s+)?)?"
-            r"(?:please\s+)?(?:can\s+you\s+)?(?:teach|guide|explain\s+to|explain\s+me\s+about|explain\s+me)\s+(?:me\s+)?(?:about\s+)?(.+)$",
+            r"(?:please\s+)?(?:can\s+you\s+)?(?:teach\s+(?:me|us)?|guide\s+(?:me|us)?)\s*(?:about\s+)?(.+)$",
             re.IGNORECASE
         ),
         re.compile(
@@ -274,7 +274,7 @@ class QueryUnderstanding:
             re.IGNORECASE
         ),
         re.compile(
-            r"\b(?:teach\s+me\s+about|teach\s+me|start\s+teaching|teach\s+topic|teach\s+lesson|explain\s+me\s+about|explain\s+me|explain\s+to\s+me)\s*(.*)$",
+            r"\b(?:teach\s+(?:me\s+|us\s+)?about|teach\s+me|teach\s+us|start\s+(?:teaching|teacher\s+mode)|teach\s+topic|teach\s+lesson)\s*(.*)$",
             re.IGNORECASE
         ),
         re.compile(
@@ -283,6 +283,10 @@ class QueryUnderstanding:
         ),
         re.compile(
             r"^(?:please\s+)?(?:can\s+you\s+)?teach\s+(?:me\s+)?(?:this\s+)?chapter\b",
+            re.IGNORECASE
+        ),
+        re.compile(
+            r"^(?:please\s+)?(?:can\s+you\s+)?start\s+(?:teaching|teacher\s+mode)\b",
             re.IGNORECASE
         ),
     ]
@@ -693,10 +697,18 @@ class QueryUnderstanding:
                     if isinstance(parsed, dict) and "intent" in parsed:
                         raw_intent = str(parsed.get("intent", "DOCUMENT_QA")).upper()
                         # Map extended intent to canonical pipeline intent if needed
-                        legacy_intent = raw_intent
+                        # Check if user is confirming or continuing an ongoing teacher session
+                        is_continuation_turn = bool(
+                            has_active_teacher and (
+                                raw_intent in ("CONFIRMATION", "CONTINUE_LEARNING")
+                                or any(raw_query.lower().strip().startswith(w) for w in ["yes", "continue", "next", "proceed", "sure", "ok", "okay", "go ahead", "explain again", "make it simpler", "ready"])
+                                or raw_query.lower().strip() in ["yep", "yeah", "carry on", "next please", "next subtopic", "next concept"]
+                            )
+                        )
+
                         if raw_intent == "TEACH_TOPIC" or explicit_teach_topic:
                             legacy_intent = "TEACH_TOPIC"
-                        elif has_active_teacher and raw_intent not in ("CREATE_STUDY_PLAN", "MODIFY_STUDY_PLAN"):
+                        elif is_continuation_turn:
                             legacy_intent = "TEACH_TOPIC"
                         elif raw_intent in ("EXPLAIN_TOPIC", "SIMPLIFY", "CLARIFY_CONCEPT"):
                             legacy_intent = "EXPLANATION"
@@ -1182,7 +1194,10 @@ class QueryUnderstanding:
         elif explicit_teach_topic or any(pat.search(cleaned) for pat in cls.TEACH_TOPIC_PATTERNS):
             intent = "TEACH_TOPIC"
             target_topic = explicit_teach_topic or cls.extract_teach_topic(raw_query)
-        elif has_active_teacher and not is_follow_up:
+        elif has_active_teacher and (
+            any(cleaned.startswith(w) for w in ["yes", "continue", "next", "proceed", "sure", "ok", "okay", "go ahead", "explain again", "make it simpler", "ready"])
+            or cleaned in ["yep", "yeah", "carry on", "next please", "next subtopic", "next concept"]
+        ):
             intent = "TEACH_TOPIC"
             target_topic = teacher_state.get("topic") if teacher_state else None
         elif is_follow_up:

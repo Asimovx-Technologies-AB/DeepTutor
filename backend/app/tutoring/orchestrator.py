@@ -717,7 +717,7 @@ class TutoringQueryOrchestrator:
             teaching_resp = TeachingAgent.generate_teaching_response(
                 query_meta,
                 context_bundle,
-                is_teacher_mode=is_teacher_session
+                is_teacher_mode=(is_teacher_session and query_meta.intent == "TEACH_TOPIC")
             )
             res_dict = {
                 "content": teaching_resp.content,
@@ -1463,7 +1463,7 @@ class TutoringQueryOrchestrator:
 
         # True live token streaming
         full_content_chunks = []
-        for token in TeachingAgent.stream_teaching_tokens(query_meta, context_bundle, is_teacher_mode=is_teacher_session):
+        for token in TeachingAgent.stream_teaching_tokens(query_meta, context_bundle, is_teacher_mode=(is_teacher_session and query_meta.intent == "TEACH_TOPIC")):
             full_content_chunks.append(token)
             yield {"type": "token", "token": token, "data": token}
 
@@ -1475,6 +1475,7 @@ class TutoringQueryOrchestrator:
         
         is_exempt = bool(
             not is_teacher_session
+            or query_meta.intent != "TEACH_TOPIC"
             or query_meta.intent == "PRACTICE_QUESTIONS"
             or (query_meta.format_directives and query_meta.format_directives.get("questions_only"))
             or (query_meta.format_directives and query_meta.format_directives.get("solve_table"))

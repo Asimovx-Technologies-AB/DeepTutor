@@ -559,5 +559,25 @@ def test_explicit_single_topic_query_preserves_specific_scope():
     assert meta.target_topic == "Decision Trees"
 
 
+def test_topic_explanation_and_query_specificity_contract():
+    """Verify that TeachingAgent and InteractiveTeacher prompts enforce simple explanation, bulleted subtopics, and query-specific constraints."""
+    from app.tutoring.teaching.agent import _RESPONSE_CONTRACT
+    from app.tutoring.teaching.interactive_teacher import _SUBTOPIC_TEACHER_SYSTEM_PROMPT, _QUESTION_ANSWERER_SYSTEM_PROMPT
+
+    # 1. Check _RESPONSE_CONTRACT in agent.py
+    assert "DEFINITION & TOPIC EXPLANATION" in _RESPONSE_CONTRACT
+    assert "ONE Short Paragraph" in _RESPONSE_CONTRACT
+    assert "Key Points (bullet list)" in _RESPONSE_CONTRACT
+    assert "NO UNREQUESTED FLUFF" in _RESPONSE_CONTRACT
+    assert "BREVITY IS KEY" in _RESPONSE_CONTRACT
+    assert "STRICT QUERY-SPECIFIC FOCUS" in _RESPONSE_CONTRACT
+
+    # 2. Check interactive teacher prompts
+    assert "Explain the subtopic simply and clearly" in _SUBTOPIC_TEACHER_SYSTEM_PROMPT
+    assert "concise bullet points" in _SUBTOPIC_TEACHER_SYSTEM_PROMPT
+    assert "ANSWER DIRECTLY & SPECIFICALLY" in _QUESTION_ANSWERER_SYSTEM_PROMPT
+
+
+
 
 
