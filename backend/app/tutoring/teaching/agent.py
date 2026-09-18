@@ -267,11 +267,14 @@ DO NOT default to a radial mindmap! You must cognitively reason about the struct
    - Do NOT use external script tags or foreignObject.
 
 8. MANDATORY VISUAL BREAKDOWN (Below Every Diagram/Image):
-   - Immediately below ANY generated ```mermaid or ```svg diagram, you MUST include a simple, student-friendly explanation breakdown:
-     #### 🔍 Visual Breakdown (How to Read this Diagram)
-     - 🔵 **[Component / Shape 1]**: Plain English explanation of what this element represents.
-     - 🔴 **[Component / Line 2]**: Plain English explanation of what this line/boundary/arrow represents.
-     - 🎯 **[Key Insight]**: One sentence explaining the main takeaway shown in the image.
+   - When a diagram/image is generated, structure the response cleanly:
+     1. The visual diagram block (```svg ... ``` or ```mermaid ... ```).
+     2. Exactly ONE simple, intuitive explanation in a single concise paragraph explaining the core concept in plain English.
+     3. Followed by the visual breakdown:
+        #### 🔍 Visual Breakdown (How to Read this Diagram)
+        - 🔵 **[Component / Shape 1]**: Plain English explanation of what this element represents.
+        - 🔴 **[Component / Line 2]**: Plain English explanation of what this line/boundary/arrow represents.
+        - 🎯 **[Key Insight]**: One sentence explaining the main takeaway shown in the image.
    - Never output a diagram in isolation without explaining how to read its shapes, colors, or arrows.
 
 GENERAL SYNTAX RULES FOR MERMAID:
@@ -829,9 +832,12 @@ class TeachingAgent:
 
         if is_image_only_intent:
             visual_directive = (
-                f"5. VISUAL GENERATION (IMAGE ONLY): The student explicitly requested an image or diagram of {target_visual_subject}. "
-                "Generate a high-clarity, beautiful Inline SVG vector diagram (```svg <svg viewBox=\"0 0 650 350\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```). "
-                "CRITICAL: Do NOT output any other teaching text, introductions, or conclusions. Just the SVG block, followed immediately by '#### 🔍 Visual Breakdown (How to Read this Diagram)' with a concise bulleted explanation of the visual elements. "
+                f"5. VISUAL GENERATION & EXPLANATION: The student requested an image or diagram of {target_visual_subject}. "
+                "Structure your response strictly in the following order:\n"
+                "1. Generate a high-clarity, beautiful Inline SVG vector diagram (```svg <svg viewBox=\"0 0 650 350\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\"> ... </svg> ```).\n"
+                "2. Immediately beneath the diagram, provide exactly ONE simple, intuitive explanation in a single concise paragraph explaining the concept in clear, plain language.\n"
+                "3. Follow with '#### 🔍 Visual Breakdown (How to Read this Diagram)' with a concise bulleted explanation of what each shape, color, line/arrow represents, concluding with the Key Insight.\n"
+                "4. Conclude with the '### 💡 Interactive Checkpoint' active recall question.\n"
             )
         elif getattr(query_meta, "query_scope", None) == "ambiguous_scope" or is_pasted_mcq or is_batch_questions or query_meta.visual_modality == "none":
             visual_directive = ""

@@ -140,6 +140,49 @@ def test_answer_validator_visual_breakdown_scoring():
     assert result.pedagogy_score >= 0.8
 
 
+def test_visual_query_with_figure_includes_single_paragraph_and_breakdown():
+    """Verify that visual queries with figure request prompt for diagram, single explanation paragraph, and visual breakdown."""
+    meta = QueryMetadata(
+        raw_query="what is Circles and Angle with a figure",
+        normalized_query="what is Circles and Angle with a figure",
+        resolved_query="what is Circles and Angle with a figure",
+        intent="EXPLANATION",
+        visual_modality="svg",
+        visual_diagram_type="svg",
+        visual_prompt_focus="Circle with central angle and inscribed angle subtended by the same arc",
+    )
+    bundle = ContextBundle(topic_title="Circle Geometry")
+    sys_prompt, user_prompt = TeachingAgent._build_prompts(meta, bundle)
+
+    assert "Inline SVG vector diagram" in user_prompt
+    assert "ONE simple, intuitive explanation in a single concise paragraph" in user_prompt
+    assert "#### 🔍 Visual Breakdown (How to Read this Diagram)" in user_prompt
+    assert "Interactive Checkpoint" in user_prompt
+
+    from app.tutoring.validation.validator import AnswerValidator
+
+    response_text = (
+        "```svg\n"
+        "<svg viewBox=\"0 0 650 350\" xmlns=\"http://www.w3.org/2000/svg\" class=\"w-full\">\n"
+        "<circle cx=\"325\" cy=\"175\" r=\"120\" fill=\"none\" stroke=\"#64748B\" stroke-dasharray=\"4\" />\n"
+        "</svg>\n"
+        "```\n\n"
+        "In circle geometry, the Inscribed Angle Theorem establishes that an angle subtended at the center of a circle "
+        "is always twice the angle subtended by the same arc at any point on the circle's circumference.\n\n"
+        "#### 🔍 Visual Breakdown (How to Read this Diagram)\n"
+        "- 🔵 **Center Point ($O$) and Radii**: The red dot at the center connected by blue lines to points $A$ and $B$, forming the central angle ($2x^\\circ$).\n"
+        "- 🟢 **The Arc ($AB$)**: The highlighted green arc along the edge of the circle subtending both angles.\n"
+        "- 🟠 **Angle at Circumference ($P$)**: The angle on the circle ($x^\\circ$) which is exactly half the central angle.\n"
+        "- 🎯 **Key Insight**: An arc subtends twice the angle at the center as it does at any point on the remaining circumference.\n\n"
+        "### 💡 Interactive Checkpoint\n"
+        "If the central angle measures 100 degrees, what is the measure of the angle subtended at the circumference by the same arc?"
+    )
+
+    validation = AnswerValidator.validate_response(response_text, bundle)
+    assert validation.is_valid is True
+    assert validation.pedagogy_score >= 0.85
+
+
 def test_teaching_agent_missing_table_anti_hallucination():
     """Verify that TeachingAgent alerts for missing table and demands clarification rather than hallucination."""
     meta = QueryMetadata(
